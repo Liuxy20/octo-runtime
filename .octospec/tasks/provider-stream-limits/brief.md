@@ -10,7 +10,7 @@ timestamp: 2026-10-18T00:00:00Z
 
 ## 1. 状态、基线与结论
 
-状态：**已按用户确认的推荐方案完成代码实施和本地仓库级验证；尚未提交或创建 PR。**
+状态：**已按用户确认的推荐方案完成代码实施、本地验证和 topic branch 提交；PR/合并状态以 GitHub 为准。**
 
 - 规划基线：`main` commit `4fa5a8a536aa815e6a35872748d39a5e98470d27`。
 - 外部问题：[GitHub Issue #21](https://github.com/Mininglamp-OSS/octo-runtime/issues/21)。

@@ -425,6 +425,9 @@ export class AdapterHost {
       this.#active.get(request.invocationId)?.abort(error);
       await source.return(undefined);
       state = { type: "state", state: "failed" };
+      const causeCode = errorCode(error);
+      const controlCode = isStreamCapacityReason(causeCode) ? causeCode : "HOST_FRAME_INVALID";
+      failureCode = controlCode;
       for (const requestId of pendingInteractions)
         yield {
           ...receipt,
@@ -438,7 +441,7 @@ export class AdapterHost {
         seq: ++seq,
         control: {
           type: "error",
-          code: "HOST_FRAME_INVALID",
+          code: controlCode,
           message: "Host output violated the selected stream contract"
         }
       };

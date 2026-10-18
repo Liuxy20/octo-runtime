@@ -224,7 +224,8 @@ export class HostRunService implements AdapterHostRpc {
       run.events.length > run.streamLimits.replayRunMaxItems
     )
       this.#drop(run);
-    const globalMaxBytes = Math.min(
+    // A stricter per-adapter override must not evict replay retained for another active adapter.
+    const globalMaxBytes = Math.max(
       ...[...this.#runs.values()].map((value) => value.streamLimits.replayGlobalMaxBytes)
     );
     while (this.#bytes > globalMaxBytes) {

@@ -133,3 +133,47 @@ test("default HostFrame policy accepts the observed 1.43 MB completion payload",
   assert.equal(frames.at(-1).control.state, "completed");
   await host.shutdown();
 });
+
+test("HostFrame capacity failures retain their precise control reason", async () => {
+  const host = new AdapterHost();
+  host.register({
+    metadata: {
+      type: "oversized-frame",
+      agentSources: ["provisioned"],
+      protocolSupport: {
+        protocol: "oversized-frame.canonical",
+        modes: ["canonical"],
+        nativeMethods: []
+      }
+    },
+    async *invoke() {
+      yield {
+        protocolVersion: 2,
+        type: "message.update",
+        payload: { channel: "final", status: "completed", text: "x".repeat(2048) }
+      };
+    }
+  });
+  const input = invocationInput(
+    invokeRequest({ approvalMode: "full_access" }),
+    "canonical",
+    "oversized-frame"
+  );
+  const frames = [];
+  for await (const frame of host.invokeFrames(input, {
+    streamLimits: resolveStreamLimitPolicy({
+      hostFrameMaxBytes: 1024,
+      rpcQueueMaxBytes: 2048,
+      replayRunMaxBytes: 2048,
+      replayGlobalMaxBytes: 4096
+    })
+  }))
+    frames.push(frame);
+  assert.equal(
+    frames.find((frame) => frame.kind === "control" && frame.control.type === "error")?.control
+      .code,
+    "HOST_FRAME_TOO_LARGE"
+  );
+  assert.equal(frames.at(-1).control.state, "failed");
+  await host.shutdown();
+});
