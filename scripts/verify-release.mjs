@@ -158,8 +158,19 @@ try {
   assert.match(build.commit, /^[a-f0-9]{40,64}$/);
   if (expectedCommit !== null) assert.equal(build.commit, expectedCommit);
   if (requireClean) assert.equal(build.dirty, false);
-  const versionInfo = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}`;
-  assert.equal((await run(["--version"])).stdout.trim(), versionInfo);
+  assert.match(build.buildTime, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+  assert.equal(new Date(build.buildTime).toISOString(), build.buildTime);
+  const archivedBuild = JSON.parse(
+    (await execute("tar", ["-xOf", archive, "package/apps/cli/dist/build-info.json"])).stdout
+  );
+  assert.deepEqual(build, archivedBuild);
+  const versionInfo = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;
+  for (const args of [["--version"], ["-v"], ["version"]]) {
+    assert.equal((await run(args)).stdout.trim(), versionInfo);
+  }
+  for (const args of [[], ["--help"], ["-h"], ["help"]]) {
+    assert.ok((await run(args)).stdout.includes(`\nbuild:${build.buildTime}\n`));
+  }
   assert.match(
     (await run([])).stdout,
     new RegExp(`Octo Runtime CLI \\(${metadata.version.replaceAll(".", "\\.")}\\)`)
