@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { resolveReleaseBuildTime } from "../scripts/resolve-release-build-time.mjs";
+import { readReleaseBuildInfo } from "../scripts/read-release-build-info.mjs";
 
 const commit = "1234567890abcdef1234567890abcdef12345678";
 const buildTime = "2026-10-18T12:34:56.789Z";
@@ -33,7 +34,7 @@ test("same-version recovery reuses verified published metadata without weakening
   const resolveBuild = async (build, alter = (metadata) => metadata) => {
     await writeFile(join(dist, "build-info.json"), JSON.stringify(build));
     const filename = join(directory, "package.tgz");
-    execFileSync("tar", ["-czf", filename, "-C", directory, "package"]);
+    execFileSync("tar", ["-czf", "package.tgz", "package"], { cwd: directory });
     const archive = await readFile(filename);
     const metadata = alter({
       name: "@mininglamp-oss/octo-runtime",
@@ -81,4 +82,16 @@ test("same-version recovery reuses verified published metadata without weakening
     })),
     /archive origin/
   );
+});
+
+test("archive metadata extraction avoids interpreting drive letters or parent-path colons as remote hosts", async (t) => {
+  const prefix = process.platform === "win32" ? "octo-archive-" : "octo:archive-";
+  const directory = await mkdtemp(join(tmpdir(), prefix));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  const dist = join(directory, "package/apps/cli/dist");
+  await mkdir(dist, { recursive: true });
+  const build = { commit, dirty: false, buildTime };
+  await writeFile(join(dist, "build-info.json"), JSON.stringify(build));
+  execFileSync("tar", ["-czf", "release.tgz", "package"], { cwd: directory });
+  assert.deepEqual(readReleaseBuildInfo(join(directory, "release.tgz")), build);
 });

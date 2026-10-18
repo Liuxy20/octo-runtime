@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { readReleaseBuildInfo } from "./read-release-build-info.mjs";
 
 export async function resolveReleaseBuildTime(version, commit, request = fetch) {
   const response = await request(
@@ -29,11 +29,7 @@ export async function resolveReleaseBuildTime(version, commit, request = fetch) 
   try {
     const filename = join(directory, "release.tgz");
     await writeFile(filename, archive);
-    const build = JSON.parse(
-      execFileSync("tar", ["-xOf", filename, "package/apps/cli/dist/build-info.json"], {
-        encoding: "utf8"
-      })
-    );
+    const build = readReleaseBuildInfo(filename);
     if (build.commit !== commit || build.dirty !== false) {
       throw new Error("Published build source does not match the clean release commit");
     }

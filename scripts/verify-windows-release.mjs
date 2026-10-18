@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
+import { readReleaseBuildInfo } from "./read-release-build-info.mjs";
 
 const execute = promisify(execFile);
 const diagnosticLimit = 4_000;
@@ -151,9 +152,7 @@ export async function verifyWindowsRelease(archiveInput, expectedCommit) {
     assert.equal(build.dirty, false);
     assert.match(build.buildTime, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
     assert.equal(new Date(build.buildTime).toISOString(), build.buildTime);
-    const archivedBuild = JSON.parse(
-      (await execute("tar", ["-xOf", archive, "package/apps/cli/dist/build-info.json"])).stdout
-    );
+    const archivedBuild = readReleaseBuildInfo(archive);
     assert.deepEqual(build, archivedBuild);
 
     const command = join(directory, "octo-runtime.cmd");
