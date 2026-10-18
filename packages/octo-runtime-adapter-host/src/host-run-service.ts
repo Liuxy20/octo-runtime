@@ -51,7 +51,10 @@ export class HostRunService implements AdapterHostRpc {
   #tasks = new Set<Promise<void>>();
   #starting = new Set<string>();
   readonly #cleanup: NodeJS.Timeout;
-  constructor(readonly transport: AdapterHostRpc) {
+  constructor(
+    readonly transport: AdapterHostRpc,
+    private readonly resolveStreamLimits?: (input: InvokeInput) => InvokeEnvironment["streamLimits"]
+  ) {
     this.#cleanup = setInterval(() => this.#prune(), 10_000);
     this.#cleanup.unref();
   }
@@ -81,7 +84,9 @@ export class HostRunService implements AdapterHostRpc {
     input: ReturnType<typeof identifyInvokeInput>,
     environment: InvokeEnvironment
   ): Promise<Run> {
-    const streamLimits = resolveStreamLimitPolicy(environment.streamLimits);
+    const streamLimits = resolveStreamLimitPolicy(
+      this.resolveStreamLimits ? this.resolveStreamLimits(input) : environment.streamLimits
+    );
     const frozenEnvironment = { ...environment, streamLimits };
     assertInvokeRequestSize(input, frozenEnvironment);
     this.#prune();

@@ -437,7 +437,7 @@ function safeWatchdogEvidence(value: unknown): Record<string, unknown> {
   return result;
 }
 
-function safeCapacityEvidence(value: unknown): Record<string, string | number> {
+export function safeCapacityEvidence(value: unknown): Record<string, string | number> {
   const input = asRecord(value) ?? {};
   const result: Record<string, string | number> = {};
   if (typeof input.boundary === "string" && /^[a-z0-9][a-z0-9._-]{0,127}$/i.test(input.boundary))

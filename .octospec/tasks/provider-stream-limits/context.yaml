@@ -37,10 +37,10 @@ sources:
   - packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts
   - packages/octo-runtime-extra-channel-wecom/src/presentation/run-projector.ts
   - https://github.com/Mininglamp-OSS/octo-runtime/issues/21
-status: planned-awaiting-user-decisions
+status: implemented-pr-review-in-progress
 baseline: 4fa5a8a536aa815e6a35872748d39a5e98470d27
 priority: P0
-feasibility_score: 86
+feasibility_score: 94
 confirmed_facts:
   current_raw_message_limit_bytes: 262144
   reproduced_valid_message_bytes: 412123
@@ -48,7 +48,7 @@ confirmed_facts:
   reproduced_public_code: OH-PRV-4099
   reproduced_retryable: true
   largest_observed_trajectory_record_bytes: 1430765
-recommendations_pending_approval:
+confirmed_decisions:
   raw_message_max_bytes: 16777216
   host_frame_max_bytes: 20971520
   per_invocation_queue_max_bytes: 33554432
@@ -57,10 +57,7 @@ recommendations_pending_approval:
   configuration_owner: trusted-host-adapter-execution-config
   automatic_retry_on_limit_failure: false
   first_release_chunking: false
-pending_decisions:
-  - default-and-hard-maximum-by-limit-category
-  - host-frame-queue-and-replay-budget-relationship
-  - trusted-per-adapter-override-location
-  - public-failure-code-granularity
-  - channel-large-public-text-delivery
-  - p0-release-provider-matrix
+pending_verification:
+  - real-provider-and-channel-test-environment-matrix
+  - controlled-concurrent-peak-memory-measurement
+  - post-review-fix-ci

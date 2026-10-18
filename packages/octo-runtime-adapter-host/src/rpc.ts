@@ -9,7 +9,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   createInputInvoke,
-  MAX_STREAM_LIMIT_POLICY,
+  HOST_RPC_MAX_LINE_BYTES,
   INVOKE_REQUEST_MAX_BYTES,
   resolveStreamLimitPolicy,
   streamCapacityError,
@@ -465,7 +465,7 @@ export class AdapterHostRpcClient implements AdapterHostRpc {
     input,
     output,
     trace,
-    maximumInputBytes = MAX_STREAM_LIMIT_POLICY.hostFrameMaxBytes
+    maximumInputBytes = HOST_RPC_MAX_LINE_BYTES
   }: {
     input: Readable;
     output: Writable;

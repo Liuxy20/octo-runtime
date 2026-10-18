@@ -75,6 +75,7 @@ export type HostControl =
       type: "error";
       code: RunProtocolErrorCode;
       message: string;
+      failure?: FailureEnvelope;
     }
   | {
       type: "interaction";

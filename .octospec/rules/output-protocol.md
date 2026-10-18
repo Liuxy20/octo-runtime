@@ -50,6 +50,10 @@ native 帧的 `messageKind` 为 `response / notification / request / message`。
 有效 JSON 及 Unicode scalar 字符串规则仍适用。
 
 控制状态为 `running / completed / failed / cancelled / lost`。
+容量错误控制帧可携带由中央 failure 机制创建的可选 `failure`，保留公开码、诊断编号、时间和安全测量；
+`params` 仅接受 `boundary / measuredBytes / limitBytes / itemCount / limitItems` 白名单。
+canonical 视图将该事实及测量透传到异常，不把 Host 投递失败伪造为 Provider 的 `run.failed` 或成功结果。
+无 `failure` 的既有错误控制帧仍有效；接收新增字段需同步更新 Schema、生成类型及运行时校验器。
 `lost` 表达执行联系丢失，不能作为成功依据。`isHostTerminal` 只识别 Host 终态控制帧；
 即使 native payload 含有 `result` 或 `completed`，公共层也不据此推断执行终态。
 Codex Driver 依据当前 `turn/completed` 报告真实状态；Claude Driver 依据 `result` 报告状态。
@@ -91,6 +95,9 @@ Daemon 缓冲真实 HostFrame，保留原身份、模式、序号和载荷。默
 受信 Adapter execution 配置可在中央硬最大值内覆盖容量；每次 invocation 冻结有效策略，
 低预算运行不得借全局清理淘汰其他 Adapter 已保留的帧。
 IPC 队列同样有上限，慢输出使用背压。重放不启动 Provider、不转换事件、不重复写响应。
+Host RPC 与 daemon SDK 的 NDJSON 接收上限共用中央 HostFrame 硬最大值加 64 KiB 包装预算，
+覆盖有界身份的 JSON 转义与重复字段；实际帧、队列和重放仍执行本 invocation 的有效策略。
+SDK 在换行前逐段累计 UTF-8 字节，不用字符长度代替容量，也不反复扫描或拼接完整在途大行。
 daemon SDK 在丢失 ACK 后通过 `agent_run.get` 查回已接纳身份，再订阅原 stream；已知缺口与
 过期明确失败，不能重新 invoke。重启后旧 stream 不可恢复。
 

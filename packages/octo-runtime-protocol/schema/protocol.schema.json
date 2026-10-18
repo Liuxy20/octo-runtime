@@ -274,6 +274,9 @@
             },
             "message": {
               "type": "string"
+            },
+            "failure": {
+              "$ref": "#/definitions/FailureEnvelope"
             }
           }
         },

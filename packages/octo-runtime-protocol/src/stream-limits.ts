@@ -34,6 +34,8 @@ export const MAX_STREAM_LIMIT_POLICY: Readonly<StreamLimitPolicy> = Object.freez
   ) as unknown as StreamLimitPolicy
 );
 
+export const HOST_RPC_MAX_LINE_BYTES = MAX_STREAM_LIMIT_POLICY.hostFrameMaxBytes + 64 * 1024;
+
 export function resolveStreamLimitPolicy(
   overrides: StreamLimitOverrides | undefined
 ): Readonly<StreamLimitPolicy> {

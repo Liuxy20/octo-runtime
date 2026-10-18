@@ -13,6 +13,7 @@ import {
   type AdapterInvocationContext,
   type InvokeRequest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { isStreamCapacityReason } from "@mininglamp-oss/octo-runtime-protocol";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -482,6 +483,8 @@ export function createAntigravityAdapter({
           if (normalizer.hasResult) break;
         }
       } catch (error) {
+        if (error instanceof Error && isStreamCapacityReason(Reflect.get(error, "code")))
+          throw error;
         providerError ??= error instanceof Error ? error : new Error(String(error));
       } finally {
         clearInterval(timer);

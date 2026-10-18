@@ -286,15 +286,11 @@ export async function startDaemonServer({
         }
       : request;
   };
-  const withLocalEnvironment = (
-    request: InvokeInput,
-    environment: InvokeEnvironment = {}
-  ): InvokeEnvironment => {
+  const configuredStreamLimits = (request: InvokeInput): InvokeEnvironment["streamLimits"] => {
     const selectedAdapter = contextItem(request.contexts, "octo.execution", "adapter")?.payload
       .type;
     const adapterType = typeof selectedAdapter === "string" ? selectedAdapter : "codex";
-    const streamLimits = localConfigurations(request.runMetadata)?.[adapterType]?.streamLimits;
-    return { ...environment, ...(streamLimits ? { streamLimits } : {}) };
+    return localConfigurations(request.runMetadata)?.[adapterType]?.streamLimits;
   };
   const transportHost: AdapterHostRpc = {
     list: async (configurations) =>
@@ -321,7 +317,7 @@ export async function startDaemonServer({
       try {
         for await (const event of readyHost().client.invokeFrames(
           withLocalConfiguration(input),
-          withLocalEnvironment(input, environment)
+          environment
         )) {
           yield event;
         }
@@ -415,7 +411,7 @@ export async function startDaemonServer({
   }
 
   monitorAdapterHost(hostProcess);
-  const host = new HostRunService(transportHost);
+  const host = new HostRunService(transportHost, configuredStreamLimits);
   const modules = new DaemonModules(
     registrations,
     {

@@ -77,15 +77,10 @@ export async function startHostSocketServer(options: {
     respondInteraction: (id, response) => processHost.client.respondInteraction(id, response),
     respondNative: (id, response) => processHost.client.respondNative(id, response),
     invoke: createInputInvoke((input, environment) => transport.invokeFrames(input, environment)),
-    invokeFrames: (input, environment = {}) => {
-      const streamLimits = configuredStreamLimits(input);
-      return processHost.client.invokeFrames(configure(input), {
-        ...environment,
-        ...(streamLimits ? { streamLimits } : {})
-      });
-    }
+    invokeFrames: (input, environment) =>
+      processHost.client.invokeFrames(configure(input), environment)
   };
-  const host = new HostRunService(transport);
+  const host = new HostRunService(transport, configuredStreamLimits);
   const connections = new Set<net.Socket>();
   let closing = false;
   const server = net.createServer((socket) => {

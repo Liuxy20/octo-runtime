@@ -428,6 +428,17 @@ export class AdapterHost {
       const causeCode = errorCode(error);
       const controlCode = isStreamCapacityReason(causeCode) ? causeCode : "HOST_FRAME_INVALID";
       failureCode = controlCode;
+      const failure = isStreamCapacityReason(causeCode)
+        ? failurePayload(
+            { code: causeCode, ...capacityFailureDetails(error) },
+            {
+              stage: "adapter_host.frame",
+              defaultDomain: "adapter",
+              runId: request.runId,
+              source: { component: "octo-runtime", adapter: adapterType }
+            }
+          ).failure
+        : undefined;
       for (const requestId of pendingInteractions)
         yield {
           ...receipt,
@@ -442,7 +453,8 @@ export class AdapterHost {
         control: {
           type: "error",
           code: controlCode,
-          message: "Host output violated the selected stream contract"
+          message: "Host output violated the selected stream contract",
+          ...(failure ? { failure } : {})
         }
       };
       yield { ...receipt, kind: "control", seq: ++seq, control: state };
@@ -836,7 +848,8 @@ export class AdapterHost {
                   : isStreamCapacityReason(nativeFailureCode)
                     ? nativeFailureCode
                     : "HOST_EXECUTION_FAILED",
-              message: String(failure.message)
+              message: String(failure.message),
+              ...(isStreamCapacityReason(nativeFailureCode) ? { failure: failure.failure } : {})
             }
           };
         yield {
