@@ -62,6 +62,13 @@ export async function startHostSocketServer(options: {
         }
       : request;
   };
+  const configuredStreamLimits = (request: InvokeInput) => {
+    const adapterType = contextItem(request.contexts, "octo.execution", "adapter")?.payload.type;
+    const type = typeof adapterType === "string" ? adapterType : "codex";
+    return options.configurations?.(
+      typeof request.runMetadata?.runtimeId === "string" ? request.runMetadata.runtimeId : undefined
+    )?.[type]?.streamLimits;
+  };
   const transport: AdapterHostRpc = {
     list: (configs) => processHost.client.list(configs ?? options.configurations?.()),
     probe: (type, config) =>
@@ -70,8 +77,13 @@ export async function startHostSocketServer(options: {
     respondInteraction: (id, response) => processHost.client.respondInteraction(id, response),
     respondNative: (id, response) => processHost.client.respondNative(id, response),
     invoke: createInputInvoke((input, environment) => transport.invokeFrames(input, environment)),
-    invokeFrames: (input, environment) =>
-      processHost.client.invokeFrames(configure(input), environment)
+    invokeFrames: (input, environment = {}) => {
+      const streamLimits = configuredStreamLimits(input);
+      return processHost.client.invokeFrames(configure(input), {
+        ...environment,
+        ...(streamLimits ? { streamLimits } : {})
+      });
+    }
   };
   const host = new HostRunService(transport);
   const connections = new Set<net.Socket>();

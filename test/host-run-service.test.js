@@ -169,7 +169,10 @@ test("byte pressure reports a gap while terminal state remains independently que
     yield { protocolVersion: 2, type: "run.completed", payload: {} };
   });
   const request = input();
-  await preparedSubmit(host, "fixture", request, { protocolMode: "canonical" });
+  await preparedSubmit(host, "fixture", request, {
+    protocolMode: "canonical",
+    streamLimits: { hostFrameMaxBytes: 128 * 1024, replayRunMaxBytes: 512 * 1024 }
+  });
   await waitFor(() => host.get(request.runId).terminal);
   assert.throws(
     () => host.read(request.runId, undefined, 0),
