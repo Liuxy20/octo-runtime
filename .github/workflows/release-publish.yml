@@ -109,7 +109,7 @@ jobs:
           VERSION: ${{ needs.publish-npm.outputs.version }}
         run: |
           set -euo pipefail
-          printf '\n%s\n' '//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}' >> "$NPM_CONFIG_USERCONFIG"
+          printf '\n%s\n' "//npm.pkg.github.com/:_authToken=\${GH_PACKAGES_TOKEN}" >> "$NPM_CONFIG_USERCONFIG"
           if [ "$DRY_RUN" = true ]; then
             node scripts/reconcile-release-latest.mjs --dry-run --candidate "$VERSION"
           else

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { checkRegistryVersion } from "../scripts/check-release-registry.mjs";
 
@@ -137,22 +139,32 @@ test("tag workflow directly publishes one verified artifact to npm and actual Gi
     /matrix\.registry == 'github-packages' && github\.token \|\| secrets\.NPM_TOKEN/
   );
   assert.match(release, /OCTO_RELEASE_GITHUB_PACKAGES: "true"/);
-  assert.match(release, /\/\/npm\.pkg\.github\.com\/:_authToken=\$\{GH_PACKAGES_TOKEN\}/);
+  assert.match(release, /\/\/npm\.pkg\.github\.com\/:_authToken=\\\$\{GH_PACKAGES_TOKEN\}/);
   assert.match(release, /printf '\\n%s\\n'/);
 });
 
 test(
   "promotion auth starts on a new line when setup-node config has no trailing newline",
   { skip: process.platform === "win32" },
-  () => {
-    const configuration = execFileSync(
-      "sh",
-      [
-        "-c",
-        "printf 'registry=https://registry.npmjs.org/'; printf '\\n%s\\n' '//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}'"
-      ],
-      { encoding: "utf8" }
+  async (context) => {
+    const directory = await mkdtemp(join(tmpdir(), "octo-promotion-auth-"));
+    context.after(() => rm(directory, { recursive: true, force: true }));
+    const filename = join(directory, "npmrc");
+    await writeFile(filename, "registry=https://registry.npmjs.org/");
+    const release = await readFile(
+      new URL("../.github/workflows/release-publish.yml", import.meta.url),
+      "utf8"
     );
+    const command = release.match(/^\s+printf[^\n]+NPM_CONFIG_USERCONFIG[^\n]+/m)?.[0].trim();
+    assert.ok(command);
+    execFileSync("sh", ["-c", command], {
+      env: {
+        ...process.env,
+        NPM_CONFIG_USERCONFIG: filename,
+        GH_PACKAGES_TOKEN: "fixture-only-must-not-expand"
+      }
+    });
+    const configuration = await readFile(filename, "utf8");
     assert.deepEqual(configuration.trim().split("\n"), [
       "registry=https://registry.npmjs.org/",
       "//npm.pkg.github.com/:_authToken=${GH_PACKAGES_TOKEN}"

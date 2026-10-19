@@ -36,6 +36,8 @@ promotion 从三端现状选取最高完整稳定版，把所有 latest 作为�
   `git diff --check` 通过；workflow YAML 可解析且没有重复键。
 - Standards 与 Spec 分别评审；发现的摘要校验、端点、认证换行、附件内容及无效 metadata
   问题均已修复，最终剩余发现分别为 0、0。
+- PR #35 首轮远端 shellcheck 指出字面 npmrc 环境变量的单引号写法；改用显式转义的双引号，
+  并直接执行 workflow 中实际的追加命令验证：保留换行，且 token 值不写入配置文件。
 
 不创建或移动 tag，不真实发布包，不修改组织策略、package 可见性或 registry 暂存状态。
 本地测试不能替代合并后新 tag 的真实双 registry 发布验收。全仓 OKF lint 的现存跨仓库相对
