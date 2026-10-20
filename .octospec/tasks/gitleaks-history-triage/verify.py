@@ -17,6 +17,7 @@ REPO = Path(__file__).resolve().parents[3]
 PATCH_FILES = [
     ".gitleaksignore", ".github/CI.md", ".octospec/index.md",
     ".octospec/rules/engineering.md", ".octospec/log.md",
+    "scripts/lint-names.mjs", "test/name-lint.test.js",
 ]
 TASK = ".octospec/tasks/gitleaks-history-triage"
 JOURNAL = ".octospec/journal/shared/2026-10-19-gitleaks-history-triage.md"

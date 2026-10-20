@@ -37,6 +37,7 @@ upstream: https://github.com/Mininglamp-OSS/octo-runtime/issues/22
 5. 在原路径、原行号及邻近行加入非功能性 canary，完整历史和 PR 扫描均须拦截全部 19 条。
 6. 验证显式配置缺失、无效 TOML 仍退出非零；证据和日志不包含候选值。
 7. 本地结果与 GitHub 托管结果分别记录。
+8. 命名检查仅允许已核验历史证据的固定内容快照保留原路径；内容变更、追加旧名及其他文件中的旧名仍须失败。
 
 45 条均已核验为非秘密内容，待确认 0，确认凭据泄露 0。
 详见[逐条台账](findings.md)和[验证记录](../../journal/shared/2026-10-19-gitleaks-history-triage.md)。

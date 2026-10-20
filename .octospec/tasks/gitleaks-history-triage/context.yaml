@@ -18,6 +18,8 @@ sources:
   - .octospec/rules/collaboration.md
   - .github/workflows/secret-scan.yml
   - .github/CI.md
+  - scripts/lint-names.mjs
+  - test/name-lint.test.js
   - https://github.com/Mininglamp-OSS/octo-runtime/issues/22
   - https://github.com/gitleaks/gitleaks/blob/v8.30.1/README.md
 global_cache_available: false
@@ -32,4 +34,9 @@ validation:
   verified_false_positives: 45
   unresolved_classifications: 0
   canary_findings: 19
-  hosted_ci_run: false
+  hosted_ci_run: true
+  hosted_ci_head: 20f39e27b62ed31998efd7d95f12f428f61778e5
+  hosted_ci_secret_scan: passed
+  hosted_ci_overall: failed-naming-check
+  name_lint_passed: true
+  name_lint_regressions: 7
