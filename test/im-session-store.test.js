@@ -60,3 +60,39 @@ test("IM mappings bound count, bytes and lifetime and disappear on close", (t) =
   assert.equal(restarted.read("fresh"), undefined);
   restarted.close();
 });
+
+test("rules invalidation preserves scope, generation, history and binding expiry", (t) => {
+  const store = new MemoryImSessionStore();
+  t.after(() => store.close());
+  let now = Date.now();
+  t.mock.method(Date, "now", () => now);
+  const identity = { sessionId: "s", generation: 1 };
+  const supplied = { providerSessionId: "p", group: { version: 1, status: "present" } };
+  store.save("group", {
+    id: "s",
+    generation: 1,
+    gap: { revision: 7 },
+    rulesContext: { revision: 0, supplied }
+  });
+  store.save("other", { id: "s", generation: 1, rulesContext: { revision: 0, supplied } });
+  now += 23 * 60 * 60_000;
+  store.invalidateRules((key) => key === "group");
+  assert.deepEqual(store.read("group").rulesContext, { revision: 1 });
+  assert.deepEqual(store.read("group").gap, { revision: 7 });
+  assert.equal(store.read("other").rulesContext.supplied.group.version, 1);
+  assert.equal(
+    store.patchRules("missing", identity, () => ({ revision: 0 })),
+    false
+  );
+  assert.equal(
+    store.patchRules("group", { ...identity, generation: 2 }, () => ({ revision: 0 })),
+    false
+  );
+  assert.equal(
+    store.patchRules("group", identity, () => undefined),
+    false
+  );
+  assert.deepEqual(store.read("group").rulesContext, { revision: 1 });
+  now += 2 * 60 * 60_000;
+  assert.equal(store.read("group"), undefined);
+});

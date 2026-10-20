@@ -64,7 +64,11 @@ Octo 与 WeCom 的 Bot 配置不包含渠道 `type`；平台由加载的 Extra �
 
 Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，不使用字段白名单拒绝整个配置。可选 bot_name 为本地展示名称，省略时使用 bot_id，不参与身份或授权。CLI 的 channel-gateway 六动作只管理这个独立 Extra；extraset 原样保存并替换整份声明，restart 读取新配置。多机器人由 config.bots 表达；Bot 校验、默认值与连接管理属于插件。WeCom 等其他 Extra 由 SDK 宿主独立管理。
 
-业务渠道决定 Actor、Trigger、Target、Input 和本轮 Context，并在调用前处理业务 defaults/mandatory。Octo 群固定加载 GROUP.md，话题固定加载群和本话题规则，不设置 group_rules/topic_rules 开关；404 明确记录不存在，权限或网络失败不伪装成空规则。规则、历史读取和消息 selection 均属于渠道业务选择，不是 Host 的自动采集能力。F18 的开关清理已实施，验证见[实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
+业务渠道决定 Actor、Trigger、Target、Input 和本轮 Context，并在调用前处理业务 defaults/mandatory。Octo 群每轮核验 GROUP.md，话题同时核验群和本话题规则，不设置 group_rules/topic_rules 开关；404 明确记录不存在，权限或网络失败不伪装成空规则。首次请求、reset/new 后、规则版本或状态改变时携带完整规则；可续接的同一 Provider 会话成功接收过相同版本时，省略自动规则 Context。显式业务 Context 不参与省略。规则、历史读取和消息 selection 均属于渠道业务选择，不是 Host 的自动采集能力。F18 的开关清理已实施，验证见[实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
+
+结构化 `group_md_updated/deleted`、`thread_md_updated/deleted` 通知在普通任务准入前分流，只使当前连接、Space 和群范围内已有 binding 的 `rulesContext` 失效，不执行、不排队、不发卡或回复；父群更新覆盖已有话题，话题更新只影响自身。不按通知文案匹配，不把通知版本当作规则真值。每轮 API 核验覆盖漏通知；自身 Bot 通知也进入失效路径。已知事件结构无效时不执行也不更新状态。
+
+规则状态只存于现有有界 binding；事件 patch 不续 TTL、不改变淘汰顺序。成功终态按 sessionId/generation/revision 条件确认版本及实际 Provider sessionId，旧完成不得覆盖新失效；失败或准备失败使下次重新携带。自定义 store 未提供规则 patch/失效能力时每轮携带。省略规则的普通续聊通过既有 `freshFallbackModelInput`/`freshFallbackModelInputParts` 冻结完整规则及原 inputs，供同轮新 Provider 恢复使用；冻结卡片重试保留此备用输入，不重新采集。详见[修复任务](../tasks/group-md-refresh-cursor/brief.md)和[验证记录](../journal/shared/2026-10-20-group-md-refresh-cursor.md)。
 
 文档、网盘文件及内部附件采用[资源地址 Context 决策](../journal/shared/2026-10-16-resource-context-access-decision.md)：Channel 从本条真实报文组织资源类型、来源、标识/地址及获取指引，放入 extra.im。在线文档、网盘文件和内部 file 的读取方法分别由实际 octo-cli/工具提供，Provider/Harness 内的 Agent 按需调用；Channel 不要求 Adapter 预下载或转换原生附件，Host 不按资源类型预取。业务指引与执行凭据分开，读取沿当前 Bot 的权限和工具环境进行，不在提示词暴露 Token。F04 资源 Context 接线已实施并通过 im-test 附件投影；完整文档/网盘取材矩阵未验，不扩大 Codex 独立图片范围或更改真实 mention 准入。
 

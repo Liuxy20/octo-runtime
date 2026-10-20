@@ -2,6 +2,7 @@ import type { ImInvocationInput } from "../execution/dispatcher.js";
 import type { ProviderSession } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImTaskAttempt } from "../contracts.js";
 import type { ImGapMetadata, ImGapTurnToken } from "./context-gap.js";
+import type { ImRulesContext } from "./rules-context.js";
 
 export interface ImSessionOccurrence {
   text: string;
@@ -18,6 +19,7 @@ export interface ImSessionBinding {
   lastRunId?: string;
   initialContextPrepared?: boolean;
   gap?: ImGapMetadata;
+  rulesContext?: ImRulesContext;
 }
 export interface ImSessionStore {
   read(key: string): ImSessionBinding | undefined;
@@ -29,6 +31,12 @@ export interface ImSessionStore {
     key: string,
     identity: Pick<ImGapTurnToken, "sessionId" | "generation">,
     update: (current: ImGapMetadata | undefined) => ImGapMetadata
+  ): boolean;
+  invalidateRules?(matches: (key: string) => boolean): void;
+  patchRules?(
+    key: string,
+    identity: { sessionId: string; generation: number },
+    update: (current: ImRulesContext | undefined) => ImRulesContext | undefined
   ): boolean;
   close?(): void;
 }
@@ -64,6 +72,10 @@ class BoundedEntries<T> {
   prune(): void {
     const now = Date.now();
     for (const [key, entry] of this.#entries) if (entry.expires <= now) this.#delete(key);
+  }
+  keys(): string[] {
+    this.prune();
+    return [...this.#entries.keys()];
   }
   /** 同步合并最新条目；观察不续TTL、不改变淘汰顺序，超预算拒绝辅助patch而不淘汰其他binding。 */
   patch(key: string, update: (value: T) => T | undefined): boolean {
@@ -126,6 +138,31 @@ export class MemoryImSessionStore implements ImSessionStore {
       const previous = binding.gap;
       binding.gap = update(previous);
       binding.gap.revision = (previous?.revision ?? 0) + 1;
+      return binding;
+    });
+  }
+  invalidateRules(matches: (key: string) => boolean): void {
+    for (const key of this.#bindings.keys()) {
+      if (!matches(key)) continue;
+      this.#bindings.patch(key, (binding) => {
+        if (!binding.id) return undefined;
+        // 只改规则状态，不续 TTL、不推进聊天水位，也不为通知创建会话。
+        binding.rulesContext = { revision: (binding.rulesContext?.revision ?? 0) + 1 };
+        return binding;
+      });
+    }
+  }
+  patchRules(
+    key: string,
+    identity: { sessionId: string; generation: number },
+    update: (current: ImRulesContext | undefined) => ImRulesContext | undefined
+  ): boolean {
+    return this.#bindings.patch(key, (binding) => {
+      if (binding.id !== identity.sessionId || binding.generation !== identity.generation)
+        return undefined;
+      const next = update(binding.rulesContext);
+      if (!next) return undefined;
+      binding.rulesContext = next;
       return binding;
     });
   }

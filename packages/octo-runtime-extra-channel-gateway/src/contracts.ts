@@ -130,6 +130,7 @@ export interface ImTaskAttempt {
 }
 
 export interface ChannelCallbacks {
+  onRulesChanged?(change: { groupNo: string; shortId?: string }): void;
   onPosition?(position: ImPositionObservation): void;
   authorizeSpace?: (spaceId: string) => void;
   onMessage(message: ImInboundMessage): void;

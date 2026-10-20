@@ -10,7 +10,7 @@ import type { ImCredentialSource } from "../ports.js";
 import { imBotIdentity } from "../lifecycle/configuration.js";
 import { verifyBotIdentity } from "./auth.js";
 import { registerBot, WukongConnection } from "./wukong.js";
-import { acceptsImMessage, groupScope } from "./normalize.js";
+import { acceptsImMessage, groupScope, isRulesNotification, rulesChange } from "./normalize.js";
 import { build_im_contexts } from "./contexts.js";
 import { OctoConnector, stableEffectKey } from "./connector.js";
 import { CardSession } from "./card-session.js";
@@ -92,8 +92,23 @@ export class GatewayTransport {
     if (registration.robot_id !== this.config.bot_id) throw new Error("IM_BOT_IDENTITY_MISMATCH");
     const connection = new WukongConnection(
       (message) => {
-        if (this.#closed || !acceptsImMessage(this.scopedConfig, registration.owner_uid, message))
+        if (this.#closed) return;
+        // 服务端规则通知即使 @ 全部 Bot，也只失效上下文，不能进入任务/卡片路径。
+        if (isRulesNotification(message)) {
+          const change = rulesChange(message);
+          if (
+            change &&
+            observesImScope(
+              this.scopedConfig,
+              message.channelId,
+              message.channelType,
+              message.payload.space_id
+            )
+          )
+            this.callbacks.onRulesChanged?.(change);
           return;
+        }
+        if (!acceptsImMessage(this.scopedConfig, registration.owner_uid, message)) return;
         let finalReply: { key: string; value: ReturnType<typeof prepareFinalMention> } | undefined;
         let historyTurn: ImGapTurnToken | undefined;
         const outputObserver = () => {

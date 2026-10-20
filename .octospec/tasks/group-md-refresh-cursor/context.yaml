@@ -1,0 +1,97 @@
+status: implemented-local-validation-passed
+recorded_on: 2026-10-20
+issues:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/55
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/54
+baseline: 6f5f25f97ec4b2ca879ac78ca2990ee2019f9eeb
+branch: fix/group-md-refresh-cursor
+rules:
+  - runtime-architecture
+  - runtime-channel
+  - runtime-session-reset
+  - runtime-context-input
+  - runtime-stateless
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/.claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/tasks/channel-context-gap/context.yaml
+  - .octospec/tasks/channel-group-admission/brief.md
+  - .octospec/tasks/channel-new-session-history/brief.md
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/api/rules.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts
+  - packages/octo-runtime-extra-channel-gateway/src/contracts.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/task.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts
+  - packages/octo-runtime-executor-core/src/model-input.ts
+  - packages/octo-runtime-executor-core/src/invoke-input.ts
+  - packages/octo-runtime-protocol/schema/protocol.schema.json
+external_evidence:
+  octo_server:
+    commit: 5cf83f5725a6ce71f4944a9ce1a17038268375cf
+    source: existing-clean-local-checkout-not-refetched
+    files:
+      - modules/group/api.go
+      - modules/group/db.go
+      - modules/bot_api/groups.go
+      - modules/bot_api/threads.go
+      - modules/thread/api.go
+  octo_lib:
+    file: common/msg.go
+    observation: common.Text-is-content-type-1
+decisions:
+  scope: octo-channel-gateway-rule-events-and-local-rule-cursor
+  event_triggers_execution: false
+  cursor_is_chat_history_cursor: false
+  state_persistence: bounded-process-local-metadata-only
+  injection_target: first-turn-reset-new-session-or-rule-revision-change
+  authoritative_check_without_broadcast: true
+  unchanged_revision_omits_automatic_rule_item: true
+  http_request_elimination_promised: false
+  new_command_currently_supported: true
+  new_command_semantics: alias-existing-reset-branch
+  cursor_storage: single-rulesContext-field-in-existing-session-binding
+  cursor_commit_boundary: run-completed-with-valid-provider-binding-and-matching-session-generation-revision
+  invalidation: increment-revision-and-clear-supplied-on-existing-bindings-only
+  failed_turn: do-not-advance-and-require-rules-on-next-turn
+  stale_binding_save: preserve-current-store-rulesContext
+  fallback_context: frozen-full-rules-and-original-inputs-via-existing-freshFallbackModelInput-fields
+  separate_group_registry: false
+  custom_store_without_atomic_rules_methods: always-provide-rules
+  feasibility_score: 96
+  feasibility_score_is_completion: false
+verification:
+  source_inspection: completed
+  runtime_implementation: completed
+  live_incident_reproduction: not-performed
+  provider_session_acceptance: not-performed
+  live_test_accounts_configured: false
+  documentation_checks: passed
+  documentation_check_command: uv run --with pyyaml python .octospec/scripts/lint.py
+  okf_units: 249
+  indexed_rules: 20
+  local_markdown_links: 1570
+  tracked_diff_whitespace_check: passed
+  focused_tests: 14-passed
+  full_node_tests: 1281-passed-10-skipped
+  webui_tests: 35-passed
+  typecheck: passed
+  lint: passed
+  naming: passed
+  formatting: passed

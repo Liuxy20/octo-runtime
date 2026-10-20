@@ -64,6 +64,7 @@ test("gateway observation keeps scope gates, separates execution admission and b
   const admitted = [];
   const observed = [];
   const sends = [];
+  const changes = [];
   context.mock.method(globalThis, "fetch", async (url, options) => {
     if (url.endsWith("/auth/verify-bot"))
       return Response.json({ bot_uid: "bot", space_id: "space" });
@@ -104,6 +105,7 @@ test("gateway observation keeps scope gates, separates execution admission and b
     async () => "bf_fixture",
     {
       onMessage: (message) => admitted.push(message),
+      onRulesChanged: (change) => changes.push(change),
       onPosition: (position) => observed.push(position),
       onDisconnect() {}
     }
@@ -127,6 +129,33 @@ test("gateway observation keeps scope gates, separates execution admission and b
   ])
     wire.onPosition({ ...position, ...override });
   assert.equal(observed.length, 1);
+  const notification = {
+    ...position,
+    payload: {
+      type: 1,
+      content: "GROUP.md updated",
+      space_id: "space",
+      mention: { uids: ["bot"] },
+      event: { type: "thread_md_updated", version: 2 }
+    }
+  };
+  for (const fromUid of ["owner", "stranger", "bot"]) wire.onMessage({ ...notification, fromUid });
+  assert.deepEqual(changes, Array(3).fill({ groupNo: "group", shortId: "topic" }));
+  for (const override of [
+    { channelId: "other____topic" },
+    { payload: { ...notification.payload, space_id: "other" } },
+    { payload: { ...notification.payload, event: { type: "thread_md_updated", version: -1 } } },
+    {
+      payload: {
+        ...notification.payload,
+        event: { type: "thread_md_updated", version: 3, group_no: "other" }
+      }
+    }
+  ])
+    wire.onMessage({ ...notification, ...override });
+  assert.equal(changes.length, 3);
+  assert.equal(admitted.length, 0);
+  assert.equal(sends.length, 0);
   wire.onMessage({ ...position, payload: { type: 1, content: "/reset" } });
   assert.equal(admitted.length, 0);
   wire.onMessage({
@@ -135,6 +164,12 @@ test("gateway observation keeps scope gates, separates execution admission and b
     payload: { type: 1, content: "summary", mention: { uids: ["bot"] } }
   });
   assert.equal(admitted.length, 1);
+  wire.onMessage({
+    ...notification,
+    fromUid: "owner",
+    payload: { ...notification.payload, event: undefined }
+  });
+  assert.equal(admitted.length, 2);
   const original = { sessionId: "old-session", generation: 1, processEpoch: "epoch" };
   admitted[0].bindHistoryTurn(original);
   await admitted[0].reply("output", "effect");
@@ -273,13 +308,19 @@ test("wire positions distinguish SENDACK client/message sequences, observe own R
   assert.deepEqual(acknowledgements, [701]);
   for (const [fromUid, sequence] of [
     ["bot", 702],
-    ["peer", 703]
+    ["peer", 703],
+    ["bot", 704]
   ]) {
     const clientNo = `fixture-${sequence}`;
     const timestamp = 1;
     const messageId = 1000 + sequence;
     const encrypted = encrypt(
-      JSON.stringify({ type: 1, content: "unmentioned", space_id: "space" })
+      JSON.stringify({
+        type: 1,
+        content: "unmentioned",
+        space_id: "space",
+        ...(sequence === 704 ? { event: { type: "thread_md_updated", version: 2 } } : {})
+      })
     );
     const signature = hash(
       encrypt(`${messageId}${sequence}${clientNo}${timestamp}${fromUid}group____topic5${encrypted}`)
@@ -303,14 +344,14 @@ test("wire positions distinguish SENDACK client/message sequences, observe own R
       )
     );
   }
-  for (let attempt = 0; positions.length < 2 && attempt < 1000; attempt++) await settle();
+  for (let attempt = 0; positions.length < 3 && attempt < 1000; attempt++) await settle();
   assert.deepEqual(
     positions.map((position) => position.messageSeq),
-    [702, 703]
+    [702, 703, 704]
   );
   assert.deepEqual(
     messages.map((message) => message.fromUid),
-    ["peer"]
+    ["peer", "bot"]
   );
   assert.equal(
     positions.some((position) => Object.hasOwn(position, "payload")),

@@ -37,6 +37,7 @@ export function acceptsImMessage(
 ): boolean {
   if (
     message.fromUid === config.bot_id ||
+    isRulesNotification(message) ||
     !message.messageId ||
     !message.channelId ||
     ![1, 2, 8, 11, 14, 18].includes(message.payload.type as number) ||
@@ -53,6 +54,39 @@ export function acceptsImMessage(
   if (!observesImScope(config, message.channelId, message.channelType, message.payload.space_id))
     return false;
   return mentionsBot(message.payload.mention, config.bot_id) && contentSupported();
+}
+
+export function isRulesNotification(message: ImMessage): boolean {
+  const event = message.payload.event;
+  return (
+    [2, 5].includes(message.channelType) &&
+    event !== null &&
+    typeof event === "object" &&
+    !Array.isArray(event) &&
+    ["group_md_updated", "group_md_deleted", "thread_md_updated", "thread_md_deleted"].includes(
+      String((event as Record<string, unknown>).type)
+    )
+  );
+}
+
+/** 事件只使规则缓存失效，内容及版本仍由授权 API 核验，不产生执行授权。 */
+export function rulesChange(message: ImMessage): { groupNo: string; shortId?: string } | undefined {
+  if (!isRulesNotification(message)) return;
+  const event = message.payload.event as Record<string, unknown>;
+  const scope = groupScope(message.channelId);
+  const topic = String(event.type).startsWith("thread_");
+  if (
+    !scope.groupNo ||
+    !Number.isSafeInteger(event.version) ||
+    Number(event.version) < 0 ||
+    (topic
+      ? message.channelType !== 5 || !scope.shortId
+      : message.channelType !== 2 || scope.shortId) ||
+    (event.group_no !== undefined && event.group_no !== scope.groupNo) ||
+    (event.short_id !== undefined && event.short_id !== scope.shortId)
+  )
+    return;
+  return scope;
 }
 
 export function mentionsBot(value: unknown, botId: string): boolean {

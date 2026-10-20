@@ -14,6 +14,7 @@ import {
 import WebSocket from "ws";
 import { ImSendError, ImTextSend } from "../delivery/text-send.js";
 import type { ImTextMention } from "./mentions.js";
+import { isRulesNotification } from "./normalize.js";
 import {
   connectionFetch,
   connectionJson,
@@ -413,16 +414,16 @@ export class WukongConnection {
       clientMsgNo: clientNo,
       spaceId: payload.space_id
     });
-    if (fromUid !== ownUid)
-      this.onMessage({
-        messageId: messageId.toString(),
-        messageSeq,
-        fromUid,
-        channelId: channelType === 1 ? fromUid : channelId,
-        channelType,
-        timestamp,
-        payload
-      });
+    const message: ImMessage = {
+      messageId: messageId.toString(),
+      messageSeq,
+      fromUid,
+      channelId: channelType === 1 ? fromUid : channelId,
+      channelType,
+      timestamp,
+      payload
+    };
+    if (fromUid !== ownUid || isRulesNotification(message)) this.onMessage(message);
     // 此 ACK 仅确认 IM 消息已接收，不代表 AgentRun 已执行完成。
     this.#socket?.send(frame(6, new Writer().u64(messageId).u32(messageSeq).finish()));
   }

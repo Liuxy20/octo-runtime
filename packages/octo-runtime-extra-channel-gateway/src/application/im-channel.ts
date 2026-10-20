@@ -30,6 +30,8 @@ import { ImDeliveryDispatcher } from "../delivery/dispatcher.js";
 import { ImRunProjector } from "../presentation/run-projector.js";
 import { deliveryNotice } from "../presentation/delivery-notice.js";
 import { MemoryImSessionStore, type ImSessionStore } from "./session-store.js";
+import { addRulesRecovery, selectRulesContext, type ImRulesVersions } from "./rules-context.js";
+import { groupScope } from "../transport/normalize.js";
 import { connectionFailure, ImConnectionError } from "../transport/connection-error.js";
 import {
   commitHistoryGap,
@@ -173,6 +175,10 @@ export class ImRuntime {
       authorizeSpace: this.dependencies.authorizeSpace,
       onPosition: (position) => {
         if (connector === this.#connector && !signal.aborted) this.#observePosition(position);
+      },
+      onRulesChanged: (change) => {
+        if (connector !== this.#connector || signal.aborted) return;
+        this.#invalidateRules(change);
       },
       onMessage: (message) => {
         if (connector === this.#connector && !signal.aborted) this.#receive(message);
@@ -330,6 +336,51 @@ export class ImRuntime {
       this.#diagnostic("IM_HISTORY_POSITION_UNAVAILABLE");
     }
   }
+  #invalidateRules(change: { groupNo: string; shortId?: string }): void {
+    try {
+      this.#sessionStore.invalidateRules?.((key) => {
+        const parts = key.split("/");
+        const kind = decodeURIComponent(parts.at(-2) ?? "");
+        const id = decodeURIComponent(parts.at(-1) ?? "");
+        if (kind !== "group" && kind !== "thread") return false;
+        if (key !== this.#key({ conversationKind: kind, conversationId: id })) return false;
+        const scope = groupScope(id);
+        return (
+          scope.groupNo === change.groupNo &&
+          (!change.shortId || (kind === "thread" && scope.shortId === change.shortId))
+        );
+      });
+    } catch {
+      this.#diagnostic("IM_RULES_STATE_UNAVAILABLE");
+    }
+  }
+  #finishRules(
+    key: string,
+    session: ImSession,
+    revision: number,
+    versions: ImRulesVersions | undefined,
+    completed: boolean
+  ): void {
+    if (!session.id) return;
+    try {
+      const provider = this.#sessionStore.read(key)?.providerSession;
+      this.#sessionStore.patchRules?.(
+        key,
+        { sessionId: session.id, generation: session.generation },
+        (current) => {
+          const latest = current?.revision ?? 0;
+          // 成功确认前重读状态；旧任务不得清除运行期间到达的更新通知。
+          if (completed && versions && provider?.sessionId && provider.resumable !== false) {
+            if (latest !== revision) return undefined;
+            return { revision, supplied: { ...versions, providerSessionId: provider.sessionId } };
+          }
+          return { revision: latest };
+        }
+      );
+    } catch {
+      this.#diagnostic("IM_RULES_STATE_UNAVAILABLE");
+    }
+  }
   #receive(message: ImInboundMessage): void {
     if (
       this.#closed ||
@@ -356,7 +407,7 @@ export class ImRuntime {
     let session: ImSession | undefined;
     try {
       session = this.#session(key);
-      if (command === "/reset") {
+      if (command === "/reset" || command === "/new") {
         try {
           const binding = this.#sessionStore.reset(key, message.messageId);
           this.#tasks.get(key)?.task.stopRetries();
@@ -709,6 +760,9 @@ export class ImRuntime {
     let prepared: ReturnType<typeof createImInvocation>;
     let gapPlan: ImGapPlan = { mode: "none" };
     let failureAfterSeq: number | null = null;
+    let rulesRevision = 0;
+    let rulesVersions: ImRulesVersions | undefined;
+    const rulesEnabled = message.conversationKind !== "direct";
     // Octospec F05: .octospec/tasks/gateway-august-feature-assessment/assessment.md
     // 仅普通任务开始时回执；通知失败不阻断 Context 准备和模型执行。
     if (message.markRead)
@@ -725,6 +779,15 @@ export class ImRuntime {
       initialization.attempted = true;
       if (session.id === executionSession.id) this.#saveBinding(key, session);
       const binding = this.#sessionStore.read(key);
+      const rulesCursor =
+        !message.historyRetry &&
+        typeof this.#sessionStore.patchRules === "function" &&
+        typeof this.#sessionStore.invalidateRules === "function" &&
+        binding?.id === executionSession.id &&
+        binding?.generation === executionSession.generation
+          ? binding.rulesContext
+          : undefined;
+      rulesRevision = rulesCursor?.revision ?? 0;
       const gapEnabled =
         message.conversationKind !== "direct" &&
         message.position !== undefined &&
@@ -746,7 +809,7 @@ export class ImRuntime {
           processEpoch: this.#processEpoch
         });
       }
-      const context = await message.buildContext(turnSignal, {
+      const fullContext = await message.buildContext(turnSignal, {
         configuredItems: message.historyRetry
           ? undefined
           : await this.dependencies.prepareContexts?.(
@@ -764,6 +827,13 @@ export class ImRuntime {
             }
           : {})
       });
+      const selection = selectRulesContext(
+        fullContext,
+        rulesCursor,
+        executionSession.providerSession
+      );
+      const context = selection.context;
+      rulesVersions = message.historyRetry ? undefined : selection.versions;
       if (gapEnabled) failureAfterSeq = gapPlan.afterSeq ?? null;
       // 资格先占用再异步读取；同代次队列共享标记，重试只使用本轮冻结快照。
       prepared = createImInvocation(
@@ -797,6 +867,16 @@ export class ImRuntime {
           throw new ImImageInputError("每条独立图片消息只接收一张图片。");
         prepared.request.inputs = parts;
       }
+      addRulesRecovery(prepared.request, selection.omitted);
+      if (message.historyRetry) {
+        const saved = this.#sessionStore.occurrence(key, message.messageId)?.snapshot;
+        if (saved?.freshFallbackModelInput !== undefined)
+          prepared.request.freshFallbackModelInput = saved.freshFallbackModelInput;
+        if (saved?.freshFallbackModelInputParts)
+          prepared.request.freshFallbackModelInputParts = structuredClone(
+            saved.freshFallbackModelInputParts
+          );
+      }
       if (session.id === prepared.request.sessionId) {
         session.lastEventId = executionSession.lastEventId;
         session.lastRunId = prepared.request.runId;
@@ -813,6 +893,7 @@ export class ImRuntime {
         snapshot
       });
     } catch (error) {
+      if (rulesEnabled) this.#finishRules(key, executionSession, rulesRevision, undefined, false);
       if (turnSignal.aborted) return;
       if (error instanceof Error && /^IM_CONTEXT_(?:LOADING|RESULT)_[A-Z_]+$/.test(error.message))
         this.#diagnostic(error.message);
@@ -1015,6 +1096,14 @@ export class ImRuntime {
         presentation?.update({ ...snapshot(), resultUnknown: true });
       }
     } finally {
+      if (rulesEnabled)
+        this.#finishRules(
+          key,
+          executionSession,
+          rulesRevision,
+          rulesVersions,
+          projector.snapshot().terminal === "completed"
+        );
       if (handedOff && projector.snapshot().terminal !== "completed") {
         try {
           this.#sessionStore.patchGap?.(
@@ -1084,6 +1173,11 @@ export class ImRuntime {
       lastEventId: session.lastEventId,
       lastRunId: session.lastRunId,
       initialContextPrepared: session.initialization?.attempted === true,
+      ...(binding?.id === session.id &&
+      binding?.generation === session.generation &&
+      binding.rulesContext
+        ? { rulesContext: binding.rulesContext }
+        : {}),
       ...(binding &&
       binding.id === session.id &&
       binding.generation === session.generation &&

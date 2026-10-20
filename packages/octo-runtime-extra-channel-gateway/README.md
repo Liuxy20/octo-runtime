@@ -18,6 +18,10 @@
 
 插件级 JSON 配置 `context_loading` 支持 `timeout_ms`（默认 5000，1..30000）和 `max_in_flight`（默认 8，1..32）。超时、异常或容量已满时本轮不调用模型；未结束的 IO 继续占名额，没有等待回调的队列或历史结果缓存。业务函数必须响应 signal；`/stop` 及卸载会取消加载。任意外部同步代码和自行建立的缓存不受框架内存预算约束。完整合同见[配置指南](../../.octospec/guides/extra-configuration.md)。
 
+## 群和话题规则
+
+GROUP.md/话题规则更新通知只标记规则需要刷新，不触发模型、排队、执行卡或回复。下一条满足准入条件的请求仍读取规则 API；首次会话、`/reset`/`/new` 后或版本变化时携带规则，同一可续接 Provider 会话成功执行过相同版本后省略自动规则正文。规则失效与已提供版本存于现有 binding 的 `rulesContext` 字段；每轮 API 核验覆盖漏通知，失败后下次重带。同轮 Provider 恢复使用冻结的完整规则及原输入。详见[Channel 合同](../../.octospec/rules/channel-integration.md)。
+
 ## CLI 配置多个 Bot
 
 完整配置合同见 [config-schema.json](config-schema.json)，包含外层 `module`、`enabled`、`config` 及全部嵌套字段的用途、必填关系、限制和占位示例。包括 Codex 重试预算和 OpenClaw 条件字段；`provider_agent_id` 是 Provider 已有 Agent 的 ID，不是 Octo Bot ID。schema 的使用及单一发行包公开入口见 [配置指南](../../.octospec/guides/extra-configuration.md#原始-json-schema-配置合同)。
