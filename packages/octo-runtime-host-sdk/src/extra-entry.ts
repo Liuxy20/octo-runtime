@@ -10,7 +10,6 @@ import {
 import { extraRegistration, type ExtraDescriptor } from "./extra-config.js";
 import { ExtraPlugins, type ExtraPluginModule } from "./extras.js";
 import type { ChannelDependencies } from "./context-loader.js";
-import { createExtraPort } from "./extra-port.js";
 import { attachKernel, acquireEndpoint } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createDependencyProxy } from "./dependencies.js";
 import { processChannel } from "./process-channel.js";
@@ -30,7 +29,6 @@ const index = process.argv.indexOf("--config");
 const channel = processChannel(process);
 const owner = new AbortController();
 let options: ExtraConfiguration;
-let execution: ReturnType<typeof createExtraPort> | undefined;
 let logs: RuntimeLogging | undefined;
 let plugins: ExtraPlugins | undefined;
 let kernel: ReturnType<typeof attachKernel> | undefined;
@@ -90,6 +88,7 @@ const stop = (requestId?: string): Promise<void> =>
       }
       process.exit(process.exitCode ?? 1);
     }, 4500).unref();
+    kernel?.invocations.stopAdmission();
     owner.abort();
     plugins?.stopAdmission();
     proxy?.close();
@@ -112,12 +111,18 @@ const stop = (requestId?: string): Promise<void> =>
     await Promise.all([
       attempt(async () => {
         try {
-          await execution?.cancelOwned();
+          if (kernel) {
+            const result = await kernel.invocations.drain({
+              deadline: until,
+              reason: "extra_shutdown"
+            });
+            if (!result.complete) throw new Error("EXTRA_RUN_CLEANUP_INCOMPLETE");
+          }
         } finally {
           try {
             await plugins?.close();
           } finally {
-            execution?.disconnect();
+            kernel?.close();
           }
         }
       }),
@@ -165,12 +170,11 @@ try {
     if (index < 0 || !process.argv[index + 1]) throw new Error("CONFIG_REQUIRED");
     options = JSON.parse(await readFile(process.argv[index + 1], "utf8")) as ExtraConfiguration;
     owner.signal.throwIfAborted();
-    execution = createExtraPort(options.endpoint, owner.signal);
+    kernel = attachKernel({ endpoint: options.endpoint });
     logs = new RuntimeLogging(options.logging);
-    plugins = new ExtraPlugins([extraRegistration(options.declaration)], execution.port, (name) =>
+    plugins = new ExtraPlugins([extraRegistration(options.declaration)], kernel, (name) =>
       logs!.extra(name)
     );
-    kernel = attachKernel({ endpoint: options.endpoint });
     const settings = options.declaration.config.context_loading;
     const timeout =
       settings &&

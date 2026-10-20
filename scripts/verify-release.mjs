@@ -110,7 +110,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
-    for (const name of ["plugin", "executor", "worker", "host"])
+    for (const name of ["plugin", "executor", "worker", "host", "kernel-invoke"])
       await cp(join(root, `test-support/public-extra/${name}.mts`), join(consumer, `${name}.mts`));
     await execute(
       process.execPath,
@@ -120,6 +120,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "executor.mts",
         "worker.mts",
         "host.mts",
+        "kernel-invoke.mts",
         "--module",
         "NodeNext",
         "--target",

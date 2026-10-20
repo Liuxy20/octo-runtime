@@ -84,7 +84,7 @@ RPC 从同一源的首个状态帧取得回执并 ACK，继续消费后才启动
 | ----------------------------------------------------------- | ----------------------------------------------------------- |
 | `executor-kernel/src/rpc.ts`                               | 接纳前拒绝不支持的选择；将 RPC ACK 与帧流绑定到同一执行     |
 | `executor-kernel/src/server.ts`、`host-run-service.ts`       | 转发冻结模式，缓冲原帧，按 Host 控制事实维护终态            |
-| `executor-kernel/src/client.ts`、`host-sdk/src/extra-port.ts` | 显式传递选择；续流继承回执模式；为 canonical 暴露类型化视图 |
+| `executor-kernel/src/client.ts` | App 与 Extra 共用 invoke；显式传递选择；续流继承回执模式；canonical 暴露类型化视图 |
 | `extra-channel-*/src/execution/dispatcher.ts`               | 执行、final 文本与投递链路显式 canonical                    |
 | Provider 内部 `adapter.invoke`                              | 仍为 Driver 与转换器的内部边界，不以旧签名推导 native 可用  |
 

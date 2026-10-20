@@ -8,7 +8,6 @@ import type {
   CanonicalEvent,
   InteractionResponse,
   InteractionRequestedPayload,
-  InvokeInput,
   InvokeEnvironment,
   ModelInputPart,
   ProviderSession
@@ -143,15 +142,6 @@ export interface ImAddress {
   channelType: number;
 }
 export type ImConnectionState = "stopped" | "connecting" | "online" | "retrying" | "failed";
-
-export interface ImExecutionPort {
-  invoke(
-    input: InvokeInput & { protocol_mode: "canonical" },
-    environment?: InvokeEnvironment
-  ): AsyncIterable<CanonicalEvent>;
-  cancel(invocationId: string, reason?: string): Promise<{ cancelled: boolean }>;
-  respondInteraction(invocationId: string, response: InteractionResponse): Promise<void>;
-}
 
 export interface ImSession {
   id?: string;

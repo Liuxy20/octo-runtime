@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -15,7 +15,41 @@ import { kernelFixture } from "./kernel-fixture.js";
 
 test("stopping an Extra cancels its own accepted Run while sibling and Kernel remain live", async (t) => {
   const { client, endpoint } = await kernelFixture(t);
-  const sibling = await client.submit(kernelInput("wait-for-host-exit"));
+  const app = attachKernel({ endpoint });
+  const appTask = (async () => {
+    for await (const _event of app.invoke(kernelInput("wait-for-cancel"))) void _event;
+  })();
+  void appTask.catch(() => undefined);
+  t.after(async () => {
+    app.close();
+    await appTask.catch(() => undefined);
+  });
+  await waitFor(() => app.invocations.snapshot()[0]?.ref !== undefined);
+  const appRef = app.invocations.snapshot()[0].ref;
+  const siblingInput = kernelInput("wait-for-cancel");
+  const siblingExtra = await startExtra({
+    endpoint,
+    declaration: {
+      name: "sibling-invoking",
+      module: resolve("test/fixtures/sibling-invoking-extra.mjs"),
+      config: { input: siblingInput }
+    }
+  });
+  t.after(() => siblingExtra.stop());
+  const siblingKey = {
+    run_id: siblingInput.runId,
+    invocation_id: siblingInput.invocationId,
+    agent_session_id: siblingInput.sessionId,
+    session_generation: siblingInput.sessionGeneration ?? 0,
+    protocol_mode: siblingInput.protocol_mode
+  };
+  await waitFor(async () =>
+    client.get(siblingKey).then(
+      () => true,
+      () => false
+    )
+  );
+  const sibling = await client.get(siblingKey);
   const input = kernelInput("wait-for-cancel");
   const extra = await startExtra({
     endpoint,
@@ -44,10 +78,33 @@ test("stopping an Extra cancels its own accepted Run while sibling and Kernel re
   assert.equal(cleanup.complete, true, JSON.stringify({ cleanup, own: await client.get(own.ref) }));
   assert.equal((await client.get(own.ref)).terminal.control.state, "cancelled");
   assert.equal((await client.get(sibling.ref)).terminal, undefined);
+  assert.equal((await client.get(appRef)).terminal, undefined);
+  assert.notEqual((await siblingExtra.status()).state, "failed");
   assert.equal((await client.status()).execution_ready, true);
-  await client.cancel(sibling.ref);
-  await frames(client, sibling.ref);
+  assert.equal((await siblingExtra.stop()).complete, true);
+  assert.equal((await client.get(appRef)).terminal, undefined);
+  await app.cancelInvocation(appRef.invocation_id);
+  await appTask;
 });
+
+for (const failDispose of [false, true])
+  test(`Extra cleanup awaits delivery after the source terminal (dispose failure=${failDispose})`, async (t) => {
+    const { directory, endpoint } = await kernelFixture(t);
+    const deliveryFile = join(directory, "delivery");
+    const extra = await startExtra({
+      endpoint,
+      declaration: {
+        name: "invoking",
+        module: resolve("test/fixtures/invoking-extra.mjs"),
+        config: { input: kernelInput(), deliveryFile, failDispose }
+      }
+    });
+    t.after(() => extra.stop());
+    await waitFor(async () => (await extra.status()).state === "delivering");
+    const cleanup = await extra.stop();
+    assert.equal(await readFile(deliveryFile, "utf8"), "delivered");
+    assert.equal(cleanup.complete, !failDispose);
+  });
 
 test("owned Kernel restarts explicitly, attached clients only own connections", async (t) => {
   const home = await mkdtemp(join(tmpdir(), "okh-"));

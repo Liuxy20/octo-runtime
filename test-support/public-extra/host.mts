@@ -5,6 +5,7 @@ import { startOwnedKernel, startExtra, componentEndpoint } from "@mininglamp-oss
 import { attachKernel, type RunRef } from "@mininglamp-oss/octo-runtime/executor-kernel";
 import { type InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
+import { verifyKernelInvoke } from "./kernel-invoke.mjs";
 
 const endpoint = componentEndpoint(resolve("h"));
 const owner = await startOwnedKernel({
@@ -27,6 +28,13 @@ try {
       invocationId: "release-native",
       runId: "release-native-run"
     };
+    await verifyKernelInvoke(endpoint, input);
+    for await (const _frame of owner.client.invoke({
+      ...input,
+      invocationId: "owned-invoke",
+      runId: "owned-invoke"
+    }))
+      void _frame;
     const { ref }: { ref: RunRef } = await client.submit(input);
     client.close();
     const observer = attachKernel({ endpoint });

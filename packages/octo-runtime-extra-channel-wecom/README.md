@@ -1,5 +1,7 @@
 # WeCom Channel
 
+执行直接使用 ctx.kernel.invoke(input, environment)，内部装配依赖名为 kernel。取消用 cancelInvocation 并读取 accepted，交互用 respondInteraction；它们均属于同一个 KernelClient。WeCom 消费执行结果完成自身 delivery，不维护提交/订阅或传输恢复实现。
+
 `@mininglamp-oss/octo-runtime-extra-channel-wecom` 独立持有企业微信 Bot WebSocket 鉴权、心跳、消息映射、stream 回复、ACK 顺序和连接替换处理。它不依赖 Octo Gateway Channel，不使用 Octo REST、悟空连接或卡片协议。
 
 目录与 gateway 类似：`transport/`、`application/`、`lifecycle/`、`execution/`、`delivery/`、`presentation/`。每个 channel 独立演进，没有跨平台 connector registry 或按 type 分发的底层工厂。

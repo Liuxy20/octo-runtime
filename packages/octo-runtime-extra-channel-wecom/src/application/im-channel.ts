@@ -286,7 +286,8 @@ export class ImRuntime {
           const cancelled = preparation
             ? true
             : invocationId
-              ? (await this.dependencies.host.cancel(invocationId, "IM user stop")).cancelled
+              ? (await this.dependencies.kernel.cancelInvocation(invocationId, "IM user stop"))
+                  .accepted
               : false;
           await this.#reply(
             message,
@@ -330,7 +331,7 @@ export class ImRuntime {
       failed: false,
       cancel: async () =>
         this.#sessions.get(key)?.activeInvocationId === invocationId &&
-        (await this.dependencies.host.cancel(invocationId, "IM card stop")).cancelled,
+        (await this.dependencies.kernel.cancelInvocation(invocationId, "IM card stop")).accepted,
       retry: (senderId: string, id: string): boolean =>
         controls.failed && this.#enqueue({ ...message, senderId }, key, id)
     };
@@ -431,7 +432,7 @@ export class ImRuntime {
     if (this.#responding.has(response.interactionId)) return;
     this.#responding.add(response.interactionId);
     try {
-      await this.dependencies.host.respondInteraction(entry.invocationId, response);
+      await this.dependencies.kernel.respondInteraction(entry.invocationId, response);
       this.#interactions.delete(response.interactionId);
     } finally {
       this.#responding.delete(response.interactionId);
@@ -524,7 +525,9 @@ export class ImRuntime {
     presentation?.update(projector.snapshot());
     session.activeInvocationId = request.invocationId;
     try {
-      for await (const event of this.dependencies.host.invoke(request, { signal: this.#signal })) {
+      for await (const event of this.dependencies.kernel.invoke(request, {
+        signal: this.#signal
+      })) {
         if (this.#closed || this.#signal.aborted) break;
         if (event.type === "session.update" && session.id === request.sessionId) {
           session.providerSession = event.payload.providerSession;
@@ -574,8 +577,8 @@ export class ImRuntime {
     } catch {
       if (!projector.snapshot().terminal) {
         // 流断开无法证明执行失败；尽力取消并提示核查，不自动重跑潜在的业务副作用。
-        await this.dependencies.host
-          .cancel(request.invocationId, "IM execution stream failed")
+        await this.dependencies.kernel
+          .cancelInvocation(request.invocationId, "IM execution stream failed")
           .catch(() => undefined);
         this.#diagnostic("IM_EXECUTION_RESULT_UNKNOWN", request.runId);
         presentation?.update({ ...projector.snapshot(), resultUnknown: true });
@@ -644,7 +647,9 @@ export class ImRuntime {
         [...this.#sessions.values()]
           .filter((session) => session.activeInvocationId)
           .map((session) =>
-            attempt(() => this.dependencies.host.cancel(session.activeInvocationId!, "IM shutdown"))
+            attempt(() =>
+              this.dependencies.kernel.cancelInvocation(session.activeInvocationId!, "IM shutdown")
+            )
           )
       );
       await attempt(() => this.#connecting);

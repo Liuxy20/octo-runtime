@@ -174,7 +174,7 @@ test("gateway observation keeps scope gates, separates execution admission and b
   admitted[0].bindHistoryTurn(original);
   await admitted[0].reply("output", "effect");
   admitted[0].beginPresentation("run", () => {}, {
-    async cancel() {
+    async cancelInvocation() {
       return false;
     },
     retry() {

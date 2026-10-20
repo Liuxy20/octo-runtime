@@ -1,5 +1,7 @@
 # Executor Core
 
+Core 的 invoke(input, environment) 与 [KernelClient.invoke](../octo-runtime-executor-kernel/README.md) 使用相同的 inputs/contexts 和 native/canonical 输出概念。Core 在宿主进程执行，关闭执行 iterator 会取消；Kernel 独立拥有已接纳 Run，关闭观察 iterator/client 不取消。Core 支持本地 streamLimits，Kernel 当前 wire 显式拒绝该选项。需要隔离和断线续流时使用 Kernel，owner shutdown/drain 的结果都必须显式检查。
+
 `AgentExecutor` is the single transport-independent execution implementation. The
 internal workspace package is private. Consumers of the distribution import
 `@mininglamp-oss/octo-runtime/executor-core`.

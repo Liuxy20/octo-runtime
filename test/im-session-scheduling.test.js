@@ -39,7 +39,7 @@ for (const [name, suffix, transportName, platform] of channels) {
         adapter: { adapter_type: "codex", workdir: process.cwd() }
       },
       {
-        host: {
+        kernel: {
           async *invoke(input, environment) {
             const { request } = prepareInvokeInput(input);
             calls.push(request);
@@ -53,7 +53,7 @@ for (const [name, suffix, transportName, platform] of channels) {
               yield { protocolVersion: 2, type: "run.completed", payload: {} };
             }
           },
-          cancel: async () => ({ cancelled: false }),
+          cancelInvocation: async () => ({ accepted: false }),
           respondInteraction: async () => {}
         },
         onDiagnostic: (code) => diagnostics.push(code)

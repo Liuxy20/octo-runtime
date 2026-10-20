@@ -1,0 +1,101 @@
+task: 69-kernel-client-invoke
+phase: pr-submission
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/69
+baseline: fae6333632010602506774b0648b639b70d25e22
+branch: feat/69-kernel-client-invoke
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-kernel-client-invoke
+read_at: 2026-10-20
+loaded:
+  - AGENTS.md
+  - CLAUDE.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/manifest.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/tasks/extra-initializer-context-dependencies/assessment.md
+  - .octospec/scripts/lint.py
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-host-sdk/src/types.ts
+  - packages/octo-runtime-host-sdk/src/extra-port.ts
+  - packages/octo-runtime-host-sdk/src/extra-entry.ts
+  - packages/octo-runtime-host-sdk/src/extras.ts
+  - packages/octo-runtime-host-sdk/src/kernel.ts
+  - packages/octo-runtime-protocol/src/invoke-input.ts
+  - packages/octo-runtime-protocol/src/run-protocol.ts
+  - packages/octo-runtime-protocol/src/generated/protocol-types.ts
+  - packages/octo-runtime-extra-channel-gateway/src/contracts.ts
+  - packages/octo-runtime-host-sdk/package.json
+  - public/executor-kernel.ts
+  - public/extra.ts
+  - public/protocol.ts
+  - package.json
+  - test/kernel-fixture.js
+  - test/kernel-clients.test.js
+  - test/host-sdk-lifecycle.test.js
+  - test/fixtures/invoking-extra.mjs
+  - scripts/pack-release.mjs
+  - .github/workflows/ci.yml
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+searched:
+  - ExtraAdapterHost/createExtraPort/adapterHost/ImExecutionPort and invocation/control consumers
+  - kernel errors, public fixtures, release verification, and active live scripts
+external_sources:
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/issues/69
+    result: OPEN; full body and comments read; comments empty
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/issues/66
+    result: OPEN; body read; Extra lifecycle and business exports remain related work
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/issues/30
+    result: OPEN; body read; Gateway final delivery policy remains separate
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/pull/65
+    result: OPEN; metadata read only; not merged and not the implementation baseline
+decisions:
+  confirmed:
+    - User authorizes a new feat worktree and OctoSpec planning, with acceptance and feasibility above 95.
+    - User explicitly allows breaking changes before stable and rejects old interface compatibility.
+    - Channel Gateway consumes invoke output for delivery data processing; execution submission and recovery belong to Kernel client.
+  implemented:
+    - Preserve InputInvoke overloads; inject ctx.kernel as actual KernelClient and delete old execution port.
+    - Keep invocation identity controls and owner bookkeeping on the Kernel client without a second invoke implementation.
+    - Caller signal requests cancellation with tail observation; owner shutdown uses an explicit bounded drain.
+    - Preserve original wire, Run 7, Context v3, and ownership distinction.
+  approval_status: User explicitly requested implementation after reviewing the plan; proceed within the documented scope.
+authorization:
+  planning_and_worktree: true
+  implementation_this_turn: true
+  commits: true
+  push_or_pr: true
+  merge_to_main: true
+  external_messages: false
+  git_identity: Preserve configured author; English commit/issue/PR text if later authorized; one Codex co-author trailer for Codex changes.
+validation:
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: untouched baseline
+    result: PASS; 249 OKF units, 20 rules, 1570 local links
+  - scope: final planning documents
+    result: PASS; 254 OKF units, 20 rules, 1582 local links; git diff --check clean; A01-A32 and M0-M5 enumerated
+  - scope: product build, types, lint, tests, platforms and live verification
+    result: PASS locally; typecheck/build, lint, names, format, focused 42/42, Node 1318 passed with 10 conditional skips, WebUI 35/35, explicit-GC 13/13, packed offline release/public types/runtime checks. Windows/Linux and live Provider/IM remain unverified. See implementation.md and the linked journal.
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: implementation documents and current rules
+    result: PASS; 256 OKF units, 20 rules, 1600 local links; git diff --check clean.

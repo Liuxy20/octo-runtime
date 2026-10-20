@@ -114,13 +114,13 @@ for (const terminal of ["run.completed", "run.cancelled"]) {
         adapter: { adapter_type: "codex" }
       },
       {
-        host: {
+        kernel: {
           async *invoke() {
             invokes++;
             yield { protocolVersion: 2, type: terminal, payload: {} };
           },
-          async cancel() {
-            return { cancelled: true };
+          async cancelInvocation() {
+            return { accepted: true };
           }
         }
       }

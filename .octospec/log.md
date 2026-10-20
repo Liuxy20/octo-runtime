@@ -1,5 +1,11 @@
 # 工程知识变更记录
 
+## 2026-10-20
+
+- 按用户确认补充[两种执行接入的架构选型](../ARCHITECTURE.md#接入选型产品默认推荐-kernelclient)：产品默认推荐 SDK/KernelClient，以独立进程、worker 监督和有界恢复提高宿主运行稳定性；直接 AgentExecutor 保留为显式进程内选项。共用输入输出契约，但取消、观察中断、清理和本地环境选项存在差异；仅更新架构、规则与索引，未改产品代码。
+
+- 实施 [Issue 69 统一 Kernel invoke](tasks/69-kernel-client-invoke/implementation.md)：App、owned.client、Extra 和 Playboard 共享入口，删除 Extra 执行桥，Gateway 继续负责 delivery。原身份 ACK 查询与游标恢复不重发执行，取消未知和 lost 保留真实状态；每个 client 有界登记与 owner 共用绝对期限排空。专项 42/42，全量 Node 1318 通过、10 跳过，UI 35/35，显式 GC 补测 13/13；类型、lint、格式、命名、仓外 tgz、OctoSpec 和 diff 检查通过。Windows/Linux 及真实 Provider/IM 未验，未提交、推送或发布，详见[验证 journal](journal/shared/2026-10-20-kernel-client-invoke.md)。
+
 ## 2026-10-19
 
 - [历史 Gitleaks 告警处置（Issue #22）](tasks/gitleaks-history-triage/brief.md)：45 条误报已核验并添加精确历史例外，19 条新增 canary 被拦截；完整历史与 PR 模式验证通过，见[验证记录](journal/shared/2026-10-19-gitleaks-history-triage.md)。

@@ -58,7 +58,7 @@ async function initialize(
   }
   const allowed = spaces as string[] | undefined;
   channels = new ImChannelManager({
-    host: context.adapterHost,
+    kernel: context.kernel,
     signal: context.signal,
     log: context.log,
     // 只保存调用入口，不预取提示词；宿主更新业务存储后，下一个接纳的逻辑轮重新读取。

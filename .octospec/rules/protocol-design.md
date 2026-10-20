@@ -4,13 +4,13 @@ title: Runtime 总体协议与调用设计
 description: 调用入口、分层协议、执行时序、审批追问往返及失败恢复的总体合同。
 tags: [protocol, invocation, interaction, adapter, architecture]
 timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/executor-kernel-host-lifecycle
+implementation_baseline: feat/69-kernel-client-invoke
 id: runtime-protocol-design
 tier: repo
 priority: 95
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**", "apps/**"]
+  paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**", "apps/**"]
   touches: [protocol, invocation, interaction, adapter, architecture]
 source: self
 supersedes: []
@@ -27,6 +27,8 @@ supersedes: []
 - /executor-core 是显式进程内方案；/executor-kernel 是 attached 客户端和 worker 装配入口；/host 提供 owned 组件。
 - 源帧和 canonical 事件保持原协议，native/canonical 模式在接纳时冻结，续流不得切换。
 - 业务 Context、Agent 定义、会话绑定、历史和可靠投递由业务方拥有；内核不补齐、摘要或重放业务请求。
+
+普通消费者调用 KernelClient.invoke(input, environment?)，App 无需 Extra，插件使用实际 ctx.kernel。submit/get/subscribe 是刻意选择的高级原语；身份控制与 owner 排空使用同一 client 的登记，不实现第二套 invoke。具体取消与未知语义见[本地执行](local-execution.md)。
 
 ## RPC 与身份
 
@@ -53,4 +55,4 @@ Core shutdown 的完整/未确认清理语义保持 [Core 合同](../../packages
 
 ## 核对位置
 
-[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[worker RPC](../../packages/octo-runtime-executor-kernel/src/rpc.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Extra 执行桥](../../packages/octo-runtime-host-sdk/src/extra-port.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。
+[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[worker RPC](../../packages/octo-runtime-executor-kernel/src/rpc.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[调用登记](../../packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。

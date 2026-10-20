@@ -110,12 +110,10 @@ export function createInputInvoke(source: InputFrames): InputInvoke {
   return async function* (input: InvokeInput, environment?: InvokeEnvironment) {
     environment?.signal?.throwIfAborted();
     const frames = source(input, environment);
-    try {
-      if (input.protocol_mode === "canonical") yield* canonicalEvents(frames);
-      else yield* frames;
-    } finally {
-      environment?.signal?.throwIfAborted();
-    }
+    if (input.protocol_mode === "canonical") yield* canonicalEvents(frames);
+    else yield* frames;
+    // Only normal exhaustion reports local abort; never replace a source error or iterator return.
+    environment?.signal?.throwIfAborted();
   } as InputInvoke;
 }
 export interface InputInvoke {

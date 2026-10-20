@@ -24,14 +24,14 @@ test("F05: read starts with accepted work, queued and duplicate messages wait; f
       allowed_sender_ids: ["owner"]
     },
     {
-      host: {
+      kernel: {
         async *invoke() {
           runs++;
           if (runs === 1) await gate;
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         },
-        async cancel() {
-          return { cancelled: true };
+        async cancelInvocation() {
+          return { accepted: true };
         },
         async respondInteraction() {}
       },

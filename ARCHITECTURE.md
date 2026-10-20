@@ -113,6 +113,31 @@ flowchart TB
 
 **设备底座负责本地执行，Extra 负责接入业务。** Loop、IM、Buddy 可以使用同一内核，不再各自造一套执行服务。关闭某个业务入口不会因此销毁设备身份；没有云端连接，也可以使用已就绪的本地执行入口。
 
+通过设备执行的 App 内部模块和所有 Extra 都直接调用公开 KernelClient.invoke；Extra 使用 ctx.kernel，没有独立的 Extra 执行 API。Kernel client 统一处理提交、身份、订阅及有界恢复，Gateway 消费结果做 delivery。宿主显式管理各 client 的调用排空，业务存储、展示及投递仍由对应消费者负责。
+
+### 接入选型：产品默认推荐 KernelClient
+
+**产品级接入默认推荐通过 Host SDK 使用 KernelClient，尤其是 Electron 等桌面应用和长期运行的宿主。** SDK 启动 Kernel 后使用 owned.client，连接已有 Kernel 时使用 attached client。独立 Kernel/worker 将执行与宿主进程分开，提供 worker 监督和有界断线恢复，有助于提高宿主的运行稳定性。AgentExecutor 是显式可选的进程内简化接入，适合宿主能够接受并管理同进程执行风险的场景。
+
+**两种方式使用相同的 invoke(input, environment?) 调用契约，但执行和生命周期不同。** 两者共用 InputInvoke 类型：InvokeInput 携带 inputs、contexts 和调用身份；省略 protocol_mode 或指定 native 返回 HostFrame，指定 canonical 返回 CanonicalEvent，均通过异步迭代消费。同一份业务输入可用于两种入口，实际可用能力仍取决于所注册的 Adapter、配置和运行环境。
+
+| 比较项 | KernelClient：产品默认推荐 | AgentExecutor：显式进程内接入 |
+| --- | --- | --- |
+| 公共导入 | @mininglamp-oss/octo-runtime/executor-kernel；Host SDK 返回实际 client | @mininglamp-oss/octo-runtime/executor-core |
+| 调用路径 | App → 本地 IPC → Kernel → worker 内的同一 AgentExecutor | App → 当前进程内的 AgentExecutor；宿主显式注册 Adapter |
+| 传输与故障影响 | macOS/Linux 为 Unix socket，Windows 为 Named Pipe；执行进程故障与宿主分开 | 直接函数调用，无 IPC；执行共享宿主进程和事件循环，不能隔离 process.exit、OOM 或同步阻塞 |
+| 观察中断 | 按原身份查询接纳结果，按原游标有界续流；不重发原执行 | 无 Kernel 源窗口、断线恢复或 worker 监督 |
+| 提前关闭执行/观察 iterator | 只停止观察，已接纳的 Run 继续执行；client.close 也不隐式取消 | 关闭执行 iterator 会请求取消，由 Core 执行有界清理 |
+| 显式取消 | signal 或 cancelInvocation；取消 ACK 不等于执行终态 | signal 或 cancel；返回 true 不等于 Provider 已退出 |
+| 所有者清理 | 对本 client 的高层调用 stopAdmission/drain，并检查 complete/unresolved；拥有 Kernel 的宿主还须按 SDK 生命周期停止 Kernel | 对实例调用 shutdown，并检查 cleanup/unresolvedInvocationIds |
+| 本地 streamLimits 选项 | 当前 wire 不支持，显式传入报 KERNEL_STREAM_LIMITS_UNSUPPORTED | 支持 InvokeEnvironment.streamLimits |
+
+Kernel 的隔离与恢复能力不保证每次执行成功。worker 重启只恢复后续调用的可用性，不恢复或重跑旧 Run；窗口缺失、lost 和结果未知仍需如实返回。直接 Core 也不需要加载 Extra 或连接云端。选型依据是宿主需要的隔离、恢复及生命周期能力，而不是另选一套业务输入协议。
+
+接入步骤见 [SDK 原生指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)，精确合同见[基础架构规则](.octospec/rules/architecture.md#kernelclient-与-agentexecutor-的选型合同)、[本地执行](.octospec/rules/local-execution.md)和 [Core API](packages/octo-runtime-executor-core/README.md)。
+
+### 远程接入的目标范围
+
 **上述架构图中的设备注册上线细节，以及移动端跨端调用 AgentRun 的流程逻辑，仅供参考和演示。相关模块当前待实现，具体生产级架构方案待确定。**
 
 本演示暂按 Extra 层的独立设备接入模块表达设备登记与在线状态保持，并以独立设备 Token 示意接入。远程服务连接接入模块，再由本地接入层调用执行内核。

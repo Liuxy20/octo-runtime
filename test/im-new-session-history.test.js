@@ -134,13 +134,13 @@ test("session initialization is attempted once without a Provider binding, inclu
   });
   t.mock.method(GatewayTransport.prototype, "close", async () => {});
   const runtime = new ImRuntime(config, {
-    host: {
+    kernel: {
       async *invoke(input) {
         calls.push(input);
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       },
-      async cancel() {
-        return { cancelled: false };
+      async cancelInvocation() {
+        return { accepted: false };
       },
       async respondInteraction() {}
     }

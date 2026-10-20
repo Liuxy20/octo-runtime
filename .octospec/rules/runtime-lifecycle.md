@@ -4,13 +4,13 @@ title: 本地身份、生命周期与就绪事实
 description: Home、账号与租户 profile 的身份隔离及本地 SDK 生命周期。
 tags: ["runtime","identity","lifecycle"]
 timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/executor-kernel-host-lifecycle
+implementation_baseline: feat/69-kernel-client-invoke
 id: runtime-lifecycle
 tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-host-sdk/**","apps/cli/**","test/*runtime*","test/embedded-*"]
+  paths: ["packages/octo-runtime-host-sdk/**", "packages/octo-runtime-executor-kernel/**", "apps/cli/**", "test/*runtime*", "test/embedded-*", "test/kernel-invoke*"]
   touches: ["runtime","identity","lifecycle"]
 source: self
 supersedes: []
@@ -23,6 +23,8 @@ supersedes: []
 #47/#48 联合实现独立 Executor Kernel、Host SDK、独立 Extra 和 CLI 生命周期。旧 daemon app、包、bin、API、CLI 命令组和 AdapterHost 类别名已删除。当前证据与尚待实机验证项见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 宿主拥有 Kernel 和各 Extra 的创建/停止顺序。Kernel 仅监督自己的 worker；Extra 不负责拉起 Kernel。附加客户端只拥有连接，关闭客户端、消费者 iterator 或 socket 不取消已接纳 Run，不停止服务。显式 owned handle 才拥有 stop/restart。
+
+KernelClient.invoke 在本 client 的 invocations 登记身份；App 与 Extra 使用相同方法。owner shutdown 显式调用 stopAdmission/drain，以绝对共享 deadline 返回 complete/unresolved；SDK 为独立 Extra 各建一个 client，停止 A 只排空 A。低层 submit 的所有权由高级调用方自行管理。执行完成、取消请求 ACK、业务 delivery/dispose 和进程退出分别确认，lost/未知不释放登记。具体语义见[本地执行](local-execution.md)。
 
 ## 身份保护
 

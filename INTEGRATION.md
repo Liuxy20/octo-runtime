@@ -12,6 +12,8 @@
 
 CLI 默认包含全部 Adapter、Extra，以及系统管理、开启自启等服务能力；默认包含不表示安装后全部启用或已注册自启。SDK 宿主自行选择需要的依赖和装配范围。
 
+普通执行统一使用 KernelClient.invoke(input, environment?)：App 直接 attach 或使用 owned.client，Extra 使用 ctx.kernel。无 Extra 也能执行；submit/get/subscribe 留给明确需要低层控制的调用方。取消、观察关闭及 owner 排空语义见 [Kernel](packages/octo-runtime-executor-kernel/README.md)。
+
 - 配置来源与对象契约：[SDK 配置说明](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-独立-extra)。
 - CLI Extra 文件配置：[接入 Octo IM](CLI_USAGE_GUIDE.md)。
 - SDK Extra 装配：[SDK Extra 管理](SDK_CHANNEL_GATEWAY_GUIDE.md#装配顺序)。

@@ -729,7 +729,9 @@ test("Delivery retries use one effect key and never rerun execution", async () =
 });
 
 test("Dynamic endpoints retain startup errors independently and remove idempotently", async (t) => {
-  const manager = new ImChannelManager({ host: { cancel: async () => ({ cancelled: true }) } });
+  const manager = new ImChannelManager({
+    kernel: { cancelInvocation: async () => ({ accepted: true }) }
+  });
   t.after(() => manager.close());
   await manager.upsert(config());
   await manager.upsert(config({ bot_id: "other" }));

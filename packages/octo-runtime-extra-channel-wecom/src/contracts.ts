@@ -5,9 +5,6 @@ import type {
   ApprovalMode,
   ContextEnvelope,
   ContextItem,
-  CanonicalEvent,
-  InteractionResponse,
-  InvokeInput,
   ProviderSession
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { RunPresentation } from "./presentation/run-projector.js";
@@ -86,15 +83,6 @@ export type ImConnectionState =
   | "online"
   | "retrying"
   | "authentication_failed";
-
-export interface ImExecutionPort {
-  invoke(
-    input: InvokeInput & { protocol_mode: "canonical" },
-    environment?: { signal?: AbortSignal }
-  ): AsyncIterable<CanonicalEvent>;
-  cancel(invocationId: string, reason?: string): Promise<{ cancelled: boolean }>;
-  respondInteraction(invocationId: string, response: InteractionResponse): Promise<void>;
-}
 
 export interface ImSession {
   id?: string;

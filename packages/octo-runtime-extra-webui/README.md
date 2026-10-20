@@ -65,7 +65,7 @@ await extra.status();
 await extra.stop();
 ```
 
-endpoint 指向已有 Kernel。Host SDK 在独立进程中加载 WebUI 并注入 adapterHost.list；停止 WebUI 不停止 Kernel，不安装 Provider。
+endpoint 指向已有 Kernel。Host SDK 在独立进程中加载 WebUI 并注入实际 ctx.kernel；list/invoke/cancelInvocation/respondInteraction 直接使用统一 KernelClient。停止 WebUI 不停止 Kernel，不安装 Provider。SSE 展示与会话存储属于 WebUI。
 
 ## 数据与接口
 

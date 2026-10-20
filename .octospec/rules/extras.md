@@ -1,10 +1,10 @@
 ---
 type: Rule
 title: Extra 加载与业务边界
-description: 插件归属、执行端口、停止清理与显式装配。
+description: 插件归属、统一 KernelClient、停止清理与显式装配。
 tags: ["extra","lifecycle","installation"]
 timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/executor-kernel-host-lifecycle
+implementation_baseline: feat/69-kernel-client-invoke
 id: runtime-extras
 tier: repo
 priority: 90
@@ -56,7 +56,9 @@ loadContexts: (jsonConfig,{signal}) => readonly ContextItem[] | Promise<readonly
 
 ## 执行、错误和状态
 
-ctx.adapterHost 保留 invoke/cancel/respondInteraction/list 合同。内部桥使用完整 RunRef，通过 Kernel IPC 执行，不创建第二套 AgentExecutor。只跟踪 Extra 拥有的调用，最多 128 个未清理引用；显式 abort 发起 cancel，关闭只取消本 Extra 的执行，等待终态后再断开。ACK 仍未知时清理不得宣称完整。
+ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list 与普通 App 使用同一合同；身份关联和恢复在 Kernel 包维护。旧 ctx.adapterHost、ExtraAdapterHost 和 extra-port 已删除，不保留兼容接口。
+
+每个独立 Extra 获得自己的 client，最多 128 个高层 invoke 登记（含在途/未知），只保留元数据。runner 停止时先关闭接纳，显式 drain 请求取消并核对原终态，在现有 4 秒共享期限内等待业务 onDispose 后才关闭 client。已关闭或暂停的 iterator 通过 get 核对，不额外创建订阅。单纯 client.close/iterator.return 不取消；SDK owner stop 是显式策略。未知/lost/未确认返回 incomplete，不清空登记冒充成功。执行终态不代表 delivery 或业务资源已完成，业务清理失败同样阻止替换。
 
 初始化、Kernel 不可达、业务连接失败、dispose 失败和进程退出分别报告；日志不携带凭据或私有错误正文。可选 logging.directory 使用统一元数据白名单。登录、云端登记和 IM 建联不是本地 Kernel 或其他 Extra 的前提。
 

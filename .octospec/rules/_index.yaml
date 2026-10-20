@@ -3,7 +3,7 @@ rules:
     priority: 95
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**", "apps/**"]
+      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**", "apps/**"]
       touches: [protocol, invocation, interaction, adapter, architecture]
   - id: runtime-adapter-metadata
     priority: 90
@@ -105,7 +105,7 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-host-sdk/**", "apps/cli/**", "test/*runtime*", "test/embedded-*"]
+      paths: ["packages/octo-runtime-host-sdk/**", "packages/octo-runtime-executor-kernel/**", "apps/cli/**", "test/*runtime*", "test/embedded-*", "test/kernel-invoke*"]
       touches: ["runtime","identity","lifecycle"]
   - id: runtime-session-reset
     priority: 90

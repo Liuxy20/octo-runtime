@@ -80,7 +80,7 @@ test("Extra and manager accept 64 bots; a 65th endpoint is rejected", async () =
   await load(
     {
       signal: new AbortController().signal,
-      adapterHost: {},
+      kernel: {},
       onStatus: (fn) => {
         status = fn;
       },
@@ -93,7 +93,7 @@ test("Extra and manager accept 64 bots; a 65th endpoint is rejected", async () =
   assert.equal(status().bots.length, 64);
   assert.deepEqual(status().errors, []);
   await dispose();
-  const manager = new ImChannelManager({ host: {} });
+  const manager = new ImChannelManager({ kernel: {} });
   try {
     for (const config of bots) await manager.upsert(config);
     await assert.rejects(manager.upsert(bot("overflow")), /IM_ENDPOINT_CAPACITY_EXHAUSTED/);
@@ -115,7 +115,7 @@ test("blocked initialization retains at most 64 operations and close drains with
       await new Promise((resolve) => signal.addEventListener("abort", resolve, { once: true }));
   });
   const clone = t.mock.method(globalThis, "structuredClone", structuredClone);
-  const manager = new ImChannelManager({ host: {} });
+  const manager = new ImChannelManager({ kernel: {} });
   const first = manager.upsert(bot());
   await ready;
   const pending = [first];
@@ -135,7 +135,7 @@ test("blocked initialization retains at most 64 operations and close drains with
 test("single configuration boundary and failures return operation capacity", async () => {
   const config = bot();
   config.note = "x".repeat(262144 - Buffer.byteLength(JSON.stringify({ ...config, note: "" })));
-  const manager = new ImChannelManager({ host: {} });
+  const manager = new ImChannelManager({ kernel: {} });
   try {
     await manager.upsert(config);
     await assert.rejects(

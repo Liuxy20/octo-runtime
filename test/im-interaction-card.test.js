@@ -83,7 +83,7 @@ test("F09: card answer resumes original invocation once and stale reset cards ca
       adapter: { adapter_type: "codex" }
     },
     {
-      host: {
+      kernel: {
         async *invoke(input) {
           calls.push(input.invocationId);
           yield { protocolVersion: 2, type: "interaction.requested", payload: pending };
@@ -104,9 +104,9 @@ test("F09: card answer resumes original invocation once and stale reset cards ca
           responses.push({ id, response });
           release();
         },
-        async cancel() {
+        async cancelInvocation() {
           release();
-          return { cancelled: true };
+          return { accepted: true };
         }
       }
     }
@@ -178,7 +178,7 @@ test("F09: secret questions never fall back to ordinary chat input", async (t) =
       adapter: { adapter_type: "codex" }
     },
     {
-      host: {
+      kernel: {
         async *invoke() {
           yield {
             protocolVersion: 2,
@@ -193,10 +193,10 @@ test("F09: secret questions never fall back to ordinary chat input", async (t) =
           await gate;
           yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
         },
-        async cancel() {
+        async cancelInvocation() {
           cancelCount++;
           release();
-          return { cancelled: true };
+          return { accepted: true };
         },
         async respondInteraction() {
           assert.fail("Secret input must not be accepted in chat");

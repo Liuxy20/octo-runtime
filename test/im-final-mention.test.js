@@ -174,7 +174,7 @@ test("application uses final mention conversion only for successful final replie
       adapter: { adapter_type: "codex", workdir: process.cwd() }
     },
     {
-      host: {
+      kernel: {
         async *invoke() {
           yield {
             protocolVersion: 2,
@@ -194,8 +194,8 @@ test("application uses final mention conversion only for successful final replie
               }
             : { protocolVersion: 2, type: "run.completed", payload: {} };
         },
-        async cancel() {
-          return { cancelled: false };
+        async cancelInvocation() {
+          return { accepted: false };
         },
         async respondInteraction() {}
       }

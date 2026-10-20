@@ -1,5 +1,4 @@
-import type { InputInvoke, InteractionResponse } from "@mininglamp-oss/octo-runtime-protocol";
-import type { HostedAdapterMetadata } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import type { KernelClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export type { ChannelDependencies, LoadContexts } from "./context-loader.js";
 export type { RuntimeLog, RuntimeLogLevel } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -11,19 +10,11 @@ export interface JsonObject {
 export type ExtraDisposer = () => void | Promise<void>;
 export type ExtraStatusHandler = () => JsonObject;
 
-/** 插件复用宿主执行实例，不依赖 HostRunService 的内部实现。 */
-export interface ExtraAdapterHost {
-  list?(): Promise<HostedAdapterMetadata[]>;
-  invoke: InputInvoke;
-  cancel(invocationId: string, reason?: string): Promise<{ cancelled: boolean }>;
-  respondInteraction(invocationId: string, response: InteractionResponse): Promise<void>;
-}
-
 /** This execution environment is unrelated to the model Context envelope. */
 export interface ExtraContext {
   /** F31：.octospec/tasks/gateway-august-feature-assessment/assessment.md；无日志宿主也提供 no-op。 */
   readonly log: RuntimeLog;
-  readonly adapterHost: ExtraAdapterHost;
+  readonly kernel: KernelClient;
   readonly signal: AbortSignal;
   onDispose(dispose: ExtraDisposer): void;
   onStatus(handler: ExtraStatusHandler): void;
@@ -95,7 +86,7 @@ export class ExtraPlugins {
 
   constructor(
     registrations: readonly ExtraRegistration[],
-    private readonly adapterHost: ExtraContext["adapterHost"],
+    private readonly kernel: KernelClient,
     private readonly logForExtra: (name: string) => RuntimeLog = () => noopRuntimeLog
   ) {
     ExtraPlugins.validate(registrations);
@@ -239,7 +230,7 @@ export class ExtraPlugins {
         instance.controller.signal.throwIfAborted();
         const initialize = plugin.default(
           {
-            adapterHost: this.adapterHost,
+            kernel: this.kernel,
             log: (level, event, data) => {
               try {
                 this.logForExtra(name)(level, event, data);

@@ -57,7 +57,7 @@ test("lambda scope loads once, keeps running after return, and disposes in rever
           default(ctx, config) {
             return async () => {
               context = ctx;
-              assert.equal(ctx.adapterHost, host);
+              assert.equal(ctx.kernel, host);
               assert.deepEqual(config, { custom: [1, "a"] });
               ctx.onDispose(() => calls.push("first"));
               ctx.onDispose(async () => calls.push("second"));

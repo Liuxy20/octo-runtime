@@ -42,15 +42,15 @@ async function fixture(t, invoke, retry = {}) {
       codex_retry: { initial_delay_ms: 100, max_delay_ms: 100, ...retry }
     },
     {
-      host: {
+      kernel: {
         async *invoke(input, environment) {
           const { request } = prepareInvokeInput(input);
           calls.push(request);
           yield* invoke(request, environment, calls);
         },
-        async cancel(id) {
+        async cancelInvocation(id) {
           cancellations.push(id);
-          return { cancelled: true };
+          return { accepted: true };
         },
         async respondInteraction() {}
       }

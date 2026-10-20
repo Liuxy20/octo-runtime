@@ -72,7 +72,7 @@ test("both channels load as extras and dispose their own resources", async () =>
     let status;
     await load(
       {
-        adapterHost: {},
+        kernel: {},
         signal: new AbortController().signal,
         onDispose: (dispose) => disposers.push(dispose),
         onStatus: (callback) => {

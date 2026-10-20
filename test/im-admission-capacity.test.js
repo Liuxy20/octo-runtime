@@ -24,7 +24,7 @@ test("F26: Bot working 64 and session waiting 4 are independent; rejection never
       adapter: { adapter_type: "codex" }
     },
     {
-      host: {
+      kernel: {
         async *invoke(input, environment) {
           calls.push(input);
           await Promise.race([
@@ -35,9 +35,9 @@ test("F26: Bot working 64 and session waiting 4 are independent; rejection never
           ]);
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         },
-        async cancel() {
+        async cancelInvocation() {
           release();
-          return { cancelled: true };
+          return { accepted: true };
         },
         async respondInteraction() {}
       }

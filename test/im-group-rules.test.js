@@ -52,7 +52,7 @@ async function fixture(context, behavior, legacyStore = false) {
   });
   const runtime = new ImRuntime(config, {
     sessions: store,
-    host: {
+    kernel: {
       async *invoke(request) {
         requests.push(request);
         yield {
@@ -63,8 +63,8 @@ async function fixture(context, behavior, legacyStore = false) {
         if (behavior) yield* behavior(request, requests.length);
         else yield { protocolVersion: 2, type: "run.completed", payload: {} };
       },
-      async cancel() {
-        return { cancelled: true };
+      async cancelInvocation() {
+        return { accepted: true };
       }
     }
   });

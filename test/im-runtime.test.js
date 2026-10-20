@@ -230,11 +230,11 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
   const host = {
     list: async () => [],
     probe: async () => ({}),
-    cancel: async (invocationId) => {
+    cancelInvocation: async (invocationId) => {
       cancellations.push(invocationId);
       releaseCancellation?.();
       releaseInteraction?.();
-      return { cancelled: true };
+      return { accepted: true };
     },
     respondInteraction: async (invocationId, response) => {
       responses.push({ invocationId, response });
@@ -309,7 +309,7 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
       adapter: { adapter_type: "codex", workdir: dir },
       context: { schema: "octo.context-envelope/v3", items: [] }
     },
-    { host }
+    { kernel: host }
   );
   t.after(async () => {
     await runtime.close();

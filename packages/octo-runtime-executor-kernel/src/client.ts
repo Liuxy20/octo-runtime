@@ -4,6 +4,7 @@ import {
   assertHostFrame,
   assertHostFrameIdentity,
   assertHostRunReceipt,
+  createInputInvoke,
   identifyInvokeInput,
   isHostTerminal,
   HOST_RPC_MAX_LINE_BYTES,
@@ -20,6 +21,7 @@ import {
   type RunRef,
   type RunSnapshot
 } from "./types.js";
+import { InvocationRegistry, type TrackedInvocation } from "./invocation-lifecycle.js";
 
 /** 连接只拥有 IPC 资源；关闭连接或迭代器从不隐式取消已接纳 Run。 */
 export function attachKernel(options: { endpoint: string }): KernelClient {
@@ -41,11 +43,14 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
         clearTimeout(timer);
         socket.off("connect", connected);
         socket.off("error", failed);
+        socket.off("close", disconnected);
         if (error) reject(error);
         else resolve();
       };
       const connected = () => finish();
       const failed = (error: Error) => finish(error);
+      const disconnected = () =>
+        finish(new KernelError(closed ? "CLIENT_CLOSED" : "CONNECTION_CLOSED"));
       const timer = setTimeout(
         () => {
           socket.destroy();
@@ -55,6 +60,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       );
       socket.once("connect", connected);
       socket.once("error", failed);
+      socket.once("close", disconnected);
     }).catch(() => {
       socket.destroy();
       throw new KernelError(closed ? "CLIENT_CLOSED" : "KERNEL_UNAVAILABLE");
@@ -64,17 +70,23 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
   const exchange = async (
     method: string,
     params: unknown = {},
-    timeout = 5000
+    timeout = 5000,
+    signal?: AbortSignal,
+    beforeSend?: () => void,
+    sent?: () => void
   ): Promise<unknown> => {
     const until = Date.now() + timeout;
-    const socket = await open(undefined, timeout);
+    const socket = await open(signal, timeout);
     const timer = setTimeout(
       () => socket.destroy(new KernelError("KERNEL_TIMEOUT")),
       Math.max(1, until - Date.now())
     );
     const id = randomUUID();
     try {
+      signal?.throwIfAborted();
+      beforeSend?.();
       send(socket, id, method, params);
+      sent?.();
       for await (const value of lines(socket)) return response(value, id);
       throw new KernelError(closed ? "CLIENT_CLOSED" : "CONNECTION_CLOSED");
     } catch (error) {
@@ -85,6 +97,58 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       socket.destroy();
     }
   };
+  const query = async (
+    key: LookupKey,
+    expectedInstance?: string,
+    deadline = Date.now() + 5000,
+    signal?: AbortSignal
+  ): Promise<RunSnapshot> => {
+    const info = (await exchange(
+      "agent_run.get",
+      {
+        key: lookupForKey(key),
+        kernel_instance_id: expectedInstance
+      },
+      remaining(deadline),
+      signal
+    )) as RunSnapshot;
+    assertHostRunReceipt(receiptFor(info.ref));
+    if (expectedInstance !== undefined && info.ref.kernel_instance_id !== expectedInstance)
+      throw new KernelError("KERNEL_INSTANCE_CHANGED");
+    if (!sameLookup(info.ref, key)) throw new KernelError("RUN_IDENTITY_MISMATCH");
+    if (info.terminal) {
+      assertHostFrame(info.terminal);
+      assertHostFrameIdentity(info.terminal, receiptFor(info.ref));
+      if (!isHostTerminal(info.terminal)) throw new KernelError("HOST_FRAME_INVALID");
+    }
+    registry.reconcile(info.ref, info.terminal);
+    return info;
+  };
+  const cancel = async (
+    ref: RunRef,
+    reason?: string,
+    deadline = Date.now() + 5000,
+    signal?: AbortSignal
+  ): Promise<{ accepted: boolean }> => {
+    try {
+      const result = (await exchange(
+        "agent_run.cancel",
+        { ref, reason },
+        remaining(deadline),
+        signal
+      )) as { accepted: boolean };
+      if (typeof result?.accepted !== "boolean") throw new KernelError("OPERATION_OUTCOME_UNKNOWN");
+      return result;
+    } catch (error) {
+      if (
+        error instanceof KernelError &&
+        !["CONNECTION_CLOSED", "KERNEL_TIMEOUT", "SUBSCRIPTION_ABORTED"].includes(error.code)
+      )
+        throw error;
+      throw new KernelError("OPERATION_OUTCOME_UNKNOWN");
+    }
+  };
+  const registry = new InvocationRegistry({ get: query, cancel });
   const control = async (method: string, params: unknown): Promise<void> => {
     try {
       await exchange(method, params);
@@ -100,83 +164,68 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
   const client: KernelClient = {
     topology: "kernel-ipc",
     ownership: "attached",
-    status: async () => (await exchange("status")) as KernelStatus,
-    list: async () => (await exchange("adapter.list")) as Awaited<ReturnType<KernelClient["list"]>>,
-    get: async (key, expectedInstance) =>
-      (await exchange("agent_run.get", {
-        key: {
-          run_id: key.run_id,
-          invocation_id: key.invocation_id,
-          agent_session_id: key.agent_session_id,
-          session_generation: key.session_generation,
-          protocol_mode: key.protocol_mode
-        },
-        kernel_instance_id: expectedInstance
-      })) as RunSnapshot,
-    async submit(input: InvokeInput, environment: InvokeEnvironment = {}) {
+    invocations: registry,
+    invoke: createInputInvoke(async function* (input, environment = {}) {
+      if (closed) throw new KernelError("CLIENT_CLOSED");
       environment.signal?.throwIfAborted();
       const request = identifyInvokeInput(input);
-      const requestLine = JSON.stringify({
-        jsonrpc: "2.0",
-        id: "0".repeat(36),
-        method: "agent_run.invoke",
-        params: { input: request, executionEnvOverrides: environment.executionEnvOverrides }
-      });
-      if (Buffer.byteLength(requestLine) + 1 > INVOKE_REQUEST_MAX_BYTES)
-        throw new KernelError("INVOKE_REQUEST_TOO_LARGE");
-      const instance = (await client.status()).kernel_instance_id;
-      let ref: RunRef;
+      const record = registry.begin(lookupFor(request));
+      const abort = () => {
+        void registry.cancel(record, "caller_aborted").catch(() => undefined);
+      };
+      environment.signal?.addEventListener("abort", abort, { once: true });
       try {
-        const result = (await exchange(
-          "agent_run.invoke",
-          {
-            input: request,
-            executionEnvOverrides: environment.executionEnvOverrides,
-            kernel_instance_id: instance
-          },
-          30_000
-        )) as { kernel_instance_id: string; receipt: RunRef };
-        assertHostRunReceipt(result.receipt);
-        if (result.kernel_instance_id !== instance)
-          throw new KernelError("KERNEL_INSTANCE_CHANGED");
-        ref = { ...result.receipt, kernel_instance_id: result.kernel_instance_id };
-      } catch (error) {
-        if (
-          error instanceof KernelError &&
-          !["KERNEL_TIMEOUT", "CONNECTION_CLOSED"].includes(error.code)
-        )
+        let ref: RunRef;
+        try {
+          ref = (await submit(request, environment, record)).ref;
+          registry.accepted(record, ref);
+        } catch (error) {
+          registry.rejected(record, error);
           throw error;
-        // ACK 丢失后只按原身份查询，不重新提交，避免创建第二次执行。
-        const key = lookupFor(request);
-        let recovered: RunRef | undefined;
-        const until = Date.now() + 10_000;
-        for (const delay of [100, 250, 500]) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
-          if (Date.now() >= until) break;
-          try {
-            recovered = (
-              (await exchange(
-                "agent_run.get",
-                { key, kernel_instance_id: instance },
-                Math.min(5000, until - Date.now())
-              )) as RunSnapshot
-            ).ref;
-            break;
-          } catch (queryError) {
-            if (
-              queryError instanceof KernelError &&
-              ["KERNEL_INSTANCE_CHANGED", "RUN_IDENTITY_MISMATCH"].includes(queryError.code)
-            )
-              throw queryError;
-          }
         }
-        if (!recovered) throw new KernelError("ACCEPTANCE_UNKNOWN");
-        ref = recovered;
+        let terminal = false;
+        for await (const frame of client.subscribe(ref)) {
+          terminal = isHostTerminal(frame);
+          if (
+            request.protocol_mode === "canonical" &&
+            frame.kind === "control" &&
+            frame.control.type === "error"
+          ) {
+            const snapshot = await query(ref, ref.kernel_instance_id).catch(() => undefined);
+            if (
+              snapshot?.terminal?.kind === "control" &&
+              snapshot.terminal.control.type === "state" &&
+              snapshot.terminal.control.state === "lost"
+            )
+              throw new KernelError("RUN_OUTCOME_UNKNOWN");
+          }
+          yield frame;
+          if (
+            terminal &&
+            frame.kind === "control" &&
+            frame.control.type === "state" &&
+            frame.control.state === "lost"
+          )
+            throw new KernelError("RUN_OUTCOME_UNKNOWN");
+        }
+        if (!terminal) throw new KernelError("HOST_ENDED_WITHOUT_TERMINAL");
+        if (record.cancelTask) await record.cancelTask;
+      } catch (error) {
+        registry.interrupted(record, error);
+        throw error;
+      } finally {
+        environment.signal?.removeEventListener("abort", abort);
+        registry.interrupted(record);
       }
-      if (environment.signal?.aborted)
-        await client.cancel(ref, "caller_aborted").catch(() => undefined);
-      return { ref };
-    },
+    }),
+    cancelInvocation: async (id, reason) => registry.cancel(registry.active(id), reason),
+    respondInteraction: async (id, response) => client.respond(registry.ref(id), response),
+    respondNativeInteraction: async (id, response) =>
+      client.respondNative(registry.ref(id), response),
+    status: async () => (await exchange("status")) as KernelStatus,
+    list: async () => (await exchange("adapter.list")) as Awaited<ReturnType<KernelClient["list"]>>,
+    get: query,
+    submit: (input, environment) => submit(input, environment),
     async *subscribe(ref, afterSeq = 0, signal) {
       let after = afterSeq;
       let repair = 0;
@@ -207,9 +256,22 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
               const info = response(value, id) as RunSnapshot;
               if (info.ref.kernel_instance_id !== ref.kernel_instance_id)
                 throw new KernelError("KERNEL_INSTANCE_CHANGED");
+              assertHostRunReceipt(receiptFor(info.ref));
+              if (
+                !sameLookup(info.ref, ref) ||
+                info.ref.stream_id !== ref.stream_id ||
+                info.ref.protocol !== ref.protocol
+              )
+                throw new KernelError("RUN_IDENTITY_MISMATCH");
               acknowledged = true;
               clearTimeout(timer);
-              if (info.terminal) terminalAt = info.latest_seq;
+              if (info.terminal) {
+                assertHostFrame(info.terminal);
+                assertHostFrameIdentity(info.terminal, receiptFor(ref));
+                if (!isHostTerminal(info.terminal)) throw new KernelError("HOST_FRAME_INVALID");
+                registry.reconcile(info.ref, info.terminal);
+                terminalAt = info.latest_seq;
+              }
               if (terminalAt !== undefined && after >= terminalAt) return;
               continue;
             }
@@ -230,14 +292,12 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
             )
               throw new KernelError("HOST_FRAME_INVALID");
             const frame = notification.params.event;
-            const { kernel_instance_id, ...receipt } = ref;
-            if (kernel_instance_id !== notification.params.kernel_instance_id)
-              throw new KernelError("KERNEL_INSTANCE_CHANGED");
             assertHostFrame(frame);
-            assertHostFrameIdentity(frame, receipt);
+            assertHostFrameIdentity(frame, receiptFor(ref));
             if (frame.seq !== after + 1 || notification.params.seq !== frame.seq)
               throw new KernelError("STREAM_GAP");
             after = frame.seq;
+            registry.observe(ref, frame);
             yield frame;
             if (isHostTerminal(frame)) return;
           }
@@ -245,6 +305,13 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
         } catch (error) {
           if (closed) throw new KernelError("CLIENT_CLOSED");
           signal?.throwIfAborted();
+          if (
+            !(error instanceof KernelError) &&
+            error instanceof Error &&
+            "code" in error &&
+            typeof error.code === "string"
+          )
+            throw new KernelError(error.code);
           if (
             error instanceof KernelError &&
             !["CONNECTION_CLOSED", "KERNEL_UNAVAILABLE", "KERNEL_TIMEOUT"].includes(error.code)
@@ -260,26 +327,121 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
         }
       }
     },
-    async cancel(ref, reason) {
-      try {
-        return (await exchange("agent_run.cancel", { ref, reason })) as { accepted: boolean };
-      } catch (error) {
-        if (
-          error instanceof KernelError &&
-          !["CONNECTION_CLOSED", "KERNEL_TIMEOUT"].includes(error.code)
-        )
-          throw error;
-        throw new KernelError("OPERATION_OUTCOME_UNKNOWN");
-      }
-    },
+    cancel,
     respond: (ref, response) => control("agent_run.respond", { ref, response }),
     respondNative: (ref, response) => control("agent_run.native.respond", { ref, response }),
     close() {
       closed = true;
+      registry.close();
       for (const socket of sockets) socket.destroy();
     }
   };
+  async function submit(
+    input: InvokeInput,
+    environment: InvokeEnvironment = {},
+    record?: TrackedInvocation
+  ): Promise<{ ref: RunRef }> {
+    if (closed) throw new KernelError("CLIENT_CLOSED");
+    environment.signal?.throwIfAborted();
+    if (environment.streamLimits !== undefined)
+      throw new KernelError("KERNEL_STREAM_LIMITS_UNSUPPORTED");
+    const request = identifyInvokeInput(input);
+    const requestLine = JSON.stringify({
+      jsonrpc: "2.0",
+      id: "0".repeat(36),
+      method: "agent_run.invoke",
+      params: { input: request, executionEnvOverrides: environment.executionEnvOverrides }
+    });
+    if (Buffer.byteLength(requestLine) + 1 > INVOKE_REQUEST_MAX_BYTES)
+      throw new KernelError("INVOKE_REQUEST_TOO_LARGE");
+    const instance = (await client.status()).kernel_instance_id;
+    environment.signal?.throwIfAborted();
+    if (record) record.instance = instance;
+    let ref: RunRef;
+    let submitted = false;
+    try {
+      const result = (await exchange(
+        "agent_run.invoke",
+        {
+          input: request,
+          executionEnvOverrides: environment.executionEnvOverrides,
+          kernel_instance_id: instance
+        },
+        30_000,
+        undefined,
+        () => {
+          environment.signal?.throwIfAborted();
+          if (record) registry.assertSubmission();
+        },
+        () => {
+          submitted = true;
+          if (record) record.submitted = true;
+        }
+      )) as { kernel_instance_id: string; receipt: RunRef };
+      assertHostRunReceipt(result.receipt);
+      if (result.kernel_instance_id !== instance) throw new KernelError("KERNEL_INSTANCE_CHANGED");
+      ref = { ...result.receipt, kernel_instance_id: result.kernel_instance_id };
+      if (!sameLookup(ref, lookupFor(request))) throw new KernelError("RUN_IDENTITY_MISMATCH");
+    } catch (error) {
+      if (!submitted) throw error;
+      if (
+        error instanceof KernelError &&
+        !["KERNEL_TIMEOUT", "CONNECTION_CLOSED"].includes(error.code)
+      )
+        throw error;
+      // ACK 丢失后只按原身份查询，不重新提交，避免创建第二次执行。
+      const key = lookupFor(request);
+      let recovered: RunRef | undefined;
+      const until = Date.now() + 10_000;
+      for (const delay of [100, 250, 500]) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        if (Date.now() >= until) break;
+        try {
+          recovered = (await query(key, instance, Math.min(until, Date.now() + 5000))).ref;
+          break;
+        } catch (queryError) {
+          if (
+            queryError instanceof KernelError &&
+            ["KERNEL_INSTANCE_CHANGED", "RUN_IDENTITY_MISMATCH"].includes(queryError.code)
+          )
+            throw queryError;
+        }
+      }
+      if (!recovered) throw new KernelError("ACCEPTANCE_UNKNOWN");
+      ref = recovered;
+    }
+    if (!record && environment.signal?.aborted) await client.cancel(ref, "caller_aborted");
+    return { ref };
+  }
   return client;
+}
+function remaining(deadline: number): number {
+  const timeout = deadline - Date.now();
+  if (timeout <= 0) throw new KernelError("KERNEL_TIMEOUT");
+  return timeout;
+}
+function receiptFor(ref: RunRef) {
+  const { kernel_instance_id: _instance, ...receipt } = ref;
+  void _instance;
+  return receipt;
+}
+function lookupForKey(key: LookupKey): LookupKey {
+  return {
+    run_id: key.run_id,
+    invocation_id: key.invocation_id,
+    agent_session_id: key.agent_session_id,
+    session_generation: key.session_generation,
+    protocol_mode: key.protocol_mode
+  };
+}
+function sameLookup(left: LookupKey, right: LookupKey): boolean {
+  return (
+    left.run_id === right.run_id &&
+    left.invocation_id === right.invocation_id &&
+    left.agent_session_id === right.agent_session_id &&
+    left.session_generation === right.session_generation &&
+    left.protocol_mode === right.protocol_mode
+  );
 }
 function lookupFor(input: ReturnType<typeof identifyInvokeInput>): LookupKey {
   return {

@@ -151,8 +151,8 @@ test("shared runtime dispatches WeCom text to Codex and replies using the origin
       adapter: { adapter_type: "codex", workdir: process.cwd() }
     },
     {
-      host: {
-        cancel: async () => ({ cancelled: true }),
+      kernel: {
+        cancelInvocation: async () => ({ accepted: true }),
         respondInteraction: async () => {},
         async *invoke(input, environment) {
           const { adapterType: type, request } = prepareInvokeInput(input);
@@ -290,7 +290,7 @@ test("WeCom plugin validates Bot lists and honors explicit disabled", async (t) 
   const config = bot;
   let reads = 0;
   const runtime = new ImRuntime(config, {
-    host: {},
+    kernel: {},
     credentials: async () => {
       reads++;
       return "secret";

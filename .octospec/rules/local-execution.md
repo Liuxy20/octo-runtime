@@ -4,7 +4,7 @@ title: 本地执行、传输与回执
 description: 公共输入、内部 RPC、源流修复与外部授权的责任边界。
 tags: ["ipc","invoke","stream"]
 timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/executor-kernel-host-lifecycle
+implementation_baseline: feat/69-kernel-client-invoke
 id: runtime-local-execution
 tier: repo
 priority: 90
@@ -23,12 +23,20 @@ supersedes: []
 ```mermaid
 flowchart LR
   App[HostApp] -->|owned / attached SDK| K[Executor Kernel]
-  Extra[独立 Extra] -->|注入执行端口 / IPC| K
+  Extra[独立 Extra] -->|ctx.kernel.invoke / IPC| K
   K -->|stdio NDJSON| W[worker / 唯一 AgentExecutor]
   W --> A[Provider Adapter]
 ```
 
 业务输入为 InvokeInput，环境 signal 不序列化，executionEnvOverrides 独立传递。唯一 Core 负责执行配置解析和输入准备；Extra 不提前解析内部计划，不补模型历史。
+
+App 的 attached/owned.client 和 Extra 的 ctx.kernel 都直接使用 KernelClient.invoke(input, environment?)，普通消费者不组合 submit/subscribe。首次 next 才登记和提交；native/default 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合。没有 Extra 加载要求，也没有第二个 Extra invoke。高级调用方保留原语并自行管理其所有权。
+
+caller signal 在写出前取消时不发 invoke；写出后按原身份恢复接纳并发一次 cancel，原观察保留尾事件。正常耗尽后抛实际 signal.reason，具体传输/控制错误优先保留。iterator.return/client.close/订阅 signal 只关闭观察。native lost 先保留源帧再报 RUN_OUTCOME_UNKNOWN；canonical 在错误处查询确认 lost 后报同码，不造 Provider 事件。若确认查询失败，保留原控制错误。
+
+invocations 只登记本 client 的高层 invoke 元数据，最多 128（包括在途/未知）。cancelInvocation/respondInteraction/respondNativeInteraction 按 invocationId 关联原 ref；非本 client 登记拒绝。owner 先 stopAdmission，再 drain({deadline,reason})，使用绝对共享期限；重复排空共享首次操作，最多 4 查询和 4 取消并发，不增加重放订阅。确认 completed/failed/cancelled 才释放登记，lost/未知/未确认仍返回 unresolved，不能把 ACK 当完成。低层 submit 不进入登记。
+
+environment.streamLimits 在现有 Kernel wire 不支持，显式传入拒绝 KERNEL_STREAM_LIMITS_UNSUPPORTED；直接 Core 仍支持。执行终态与 delivery/业务写入完成分别验证，SDK 继续等待 onDispose 的剩余期限。当前实现和证据见 [#69 实施](../tasks/69-kernel-client-invoke/implementation.md)。
 
 ## IPC v1
 

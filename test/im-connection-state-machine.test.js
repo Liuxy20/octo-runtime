@@ -46,7 +46,7 @@ function fixture(t, options = {}) {
   t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 0 });
   t.mock.method(performance, "now", () => Date.now());
   const runtime = new ImRuntime(bot(options.config), {
-    host: {},
+    kernel: {},
     signal: options.signal,
     onDiagnostic: (code) => diagnostics.push(code)
   });
@@ -289,7 +289,7 @@ test("Extra status keeps per-Bot startup failures visible and isolates healthy/d
   await load(
     {
       signal: new AbortController().signal,
-      adapterHost: {},
+      kernel: {},
       onStatus: (fn) => {
         status = fn;
       },

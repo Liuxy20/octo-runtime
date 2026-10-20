@@ -3,7 +3,7 @@ type: Rule
 title: Octo Runtime 基础架构
 description: 运行时设备、统一执行内核与 Extra 的责任边界及执行约束。
 tags: [architecture, runtime, adapter, extra, context, installation]
-timestamp: 2026-10-19T00:00:00Z
+timestamp: 2026-10-20T00:00:00Z
 id: runtime-architecture
 tier: repo
 priority: 100
@@ -19,7 +19,7 @@ supersedes: []
 
 ## ExecutorCore 抽取后的执行边界
 
-接入选型以稳定性为优先：推荐宿主通过 SDK 经 IPC 调用独立 Executor Kernel，尤其是
+接入选型以稳定性为优先：产品级接入默认推荐宿主通过 SDK 使用 KernelClient，经 IPC 调用独立 Executor Kernel，尤其是
 Electron 等长期运行的宿主。允许宿主显式选择直接嵌入 Core，作为 SDK 简易接入方案；
 直接入口的存在不改变隔离执行的推荐优先级。实现证据见 [Kernel/Host 实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
 
@@ -33,6 +33,18 @@ worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 Adapte
 业务历史。实例所有者必须检查 shutdown 的 cleanup 结果，closed 不等于资源已回收或 Home
 锁可释放。失败或未确认的 iterator 清理持续报告 incomplete，不得用再次 return 的空操作
 宣称清理成功；后续 shutdown 只能继续观察尚未结束的清理。具体 API 和限制见 [Core](../../packages/octo-runtime-executor-core/README.md)。
+
+### KernelClient 与 AgentExecutor 的选型合同
+
+两种入口共用 InputInvoke 类型和 invoke(input, environment?) 签名：相同的 InvokeInput 业务结构、独立的本地环境，以及 native/default 的 HostFrame 或 canonical 的 CanonicalEvent 异步输出。相同输入契约不表示相同的执行拓扑、故障影响、环境选项或控制 API；Adapter、配置和运行环境仍须由相应宿主装配。
+
+产品默认推荐 KernelClient，依据是执行与宿主的进程隔离、worker 监督和原身份/原游标的有界恢复。Host SDK 返回的 owned.client、attached client 及 Extra 的 ctx.kernel 使用此路径；本地 IPC 在 macOS/Linux 使用 Unix socket，在 Windows 使用 Named Pipe。直接 AgentExecutor 无需 IPC，适用于宿主明确接受同进程故障影响并自行管理 Adapter 与实例清理的接入。
+
+提前关闭 Core 执行 iterator 会请求取消；关闭 Kernel 观察 iterator 或 client 仅停止观察，不隐式取消已接纳 Run。Core 所有者调用 shutdown 并检查 cleanup，Kernel client 所有者显式 stopAdmission/drain 并检查 complete/unresolved；拥有 Kernel 进程的宿主继续按 SDK 生命周期停止它。两条路径的 signal 都请求取消，不能把取消接纳当作执行终态。直接 Core 支持 environment.streamLimits，当前 Kernel wire 对该本地选项明确拒绝。
+
+不得把产品推荐解释为每次执行必定成功：worker 重启不重跑旧 Run，恢复预算或源窗口不足明确失败，lost/结果未知仍不得报告完成。选型对照和适用场景见[架构讲解](../../ARCHITECTURE.md#接入选型产品默认推荐-kernelclient)，精确恢复合同见[本地执行](local-execution.md)。
+
+App 和 Extra 直接使用同一个 KernelClient.invoke，Extra 通过 ctx.kernel 获得实际 client。提交、身份关联、订阅与有界恢复由 Kernel 包统一维护，Gateway 消费调用结果做 delivery；不建立第二个 Extra 执行 API。owner 显式使用 invocations.stopAdmission/drain 管理本 client 调用，未知或 lost 不得视为清理完成。
 
 Executor Kernel 提供本地 IPC、源窗口和 worker 监督；Host SDK 独立管理 Kernel 与各 Extra。
 旧 daemon app、包、bin、CLI 命令和 API 已删除，不保留兼容包装。LoopDaemon 是另一项目的
@@ -123,7 +135,7 @@ F30 进一步明确宿主及其凭据保护责任：大多数接入通过 SDK �
 
 宿主可能将 Agent 提示词和业务 Context 存在内存、SQLite 或远端服务。仅在启动配置里复制这些值，会使后续任务读到旧快照；每次业务数据变化都重载 Extra，又会中断其内部连接。框架也不应为了读取新值而接管宿主的数据库、配置来源或业务查询。
 
-为解决这个目标，Extra 使用两阶段入口 `extra(ctx, jsonConfig)(dependencies)`：第一阶段同步返回 initializer，由 SDK 在第二阶段传入宿主依赖并等待初始化完成。宿主调用 `startExtra({declaration, endpoint, dependencies: {loadContexts}})` 创建独立 Extra。JSON 配置可校验、复制和传输；函数留在宿主 Node 进程，经有界调用代理读取，每个真实 Promise 完成前持续占额度。执行端口经 IPC 接到 Kernel，不在 Kernel 内加载 Extra。
+为解决这个目标，Extra 使用两阶段入口 `extra(ctx, jsonConfig)(dependencies)`：第一阶段同步返回 initializer，由 SDK 在第二阶段传入宿主依赖并等待初始化完成。宿主调用 `startExtra({declaration, endpoint, dependencies: {loadContexts}})` 创建独立 Extra。JSON 配置可校验、复制和传输；函数留在宿主 Node 进程，经有界调用代理读取，每个真实 Promise 完成前持续占额度。实际 ctx.kernel 经 IPC 接到 Kernel，不在 Kernel 内加载 Extra。
 
 **两阶段初始化与逐轮回调是两个不同时间点。** initializer 在每次加载时执行一次，其完成表示插件初始化完成；Channel 在每个已接纳任务开始准备时，再调用同一个 loadContexts 函数获取本轮材料。宿主修改函数读取的数据后，下一轮读取新值，不重载连接；替换函数引用或 JSON 配置时才整体卸载后重载。SDK 不读取宿主业务存储，不自动决定 Context 内容、顺序或历史补齐。
 
@@ -280,7 +292,7 @@ Agent 定义、业务任务、会话历史及 Provider session binding 由业务
 
 #### IM Agent 与通用 invoke 不得混淆
 
-2026-10-16 执行准备边界补充：Extra 可以读取所选 adapter 以执行自身业务判断，组装公开 `InvokeInput` 后调用注入的 `host.invoke(input, environment)`。`prepareInvokeInput()` 和其中的 `resolveLocalContext()` 属于 AgentExecutor 的共享执行准备路径；Extra 不得自行解析内部执行计划，或先构造 `InvokeRequest` 再转回公开输入。业务默认值、固定目录约束、渠道会话与本轮材料仍归业务入口。所有入口复用该准备流程，不得通过放宽执行 resolver 接纳完整 Context 来掩盖分层错误。
+2026-10-16 执行准备边界补充：Extra 可以读取所选 adapter 以执行自身业务判断，组装公开 `InvokeInput` 后调用注入的 `ctx.kernel.invoke(input, environment)`。`prepareInvokeInput()` 和其中的 `resolveLocalContext()` 属于 AgentExecutor 的共享执行准备路径；Extra 不得自行解析内部执行计划，或先构造 `InvokeRequest` 再转回公开输入。业务默认值、固定目录约束、渠道会话与本轮材料仍归业务入口。所有入口复用该准备流程，不得通过放宽执行 resolver 接纳完整 Context 来掩盖分层错误。
 
 2026-10-17 已删除 Octo / WeCom dispatcher 的重复执行解析，双渠道直接提交公开 InvokeInput；验证和未完成范围见[交付记录](../journal/shared/2026-10-17-extra-initializer-delivery.md)。调用视图见[执行准备与系统指令](../guides/im-agent-invocation-boundary.md#执行准备与系统指令调用视图)，故障证据和经验见[排查记录](../journal/shared/2026-10-16-im-invoke-preparation-lessons.md)，全面准备失败展示等后续工作见[任务计划](../tasks/unify-execution-and-simplify-instructions/brief.md)。
 

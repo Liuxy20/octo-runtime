@@ -7,6 +7,7 @@
 | 主题 | 入口 |
 | --- | --- |
 | SDK 主要接入、CLI 特殊宿主、产品意图、Context v3 与模块责任归属 | [基础架构](rules/architecture.md) |
+| 产品默认推荐 KernelClient；与进程内 AgentExecutor 共用输入但生命周期不同 | [两种接入方式](rules/architecture.md#kernelclient-与-agentexecutor-的选型合同) |
 | 业务团队共同维护的 Go 工具 octo-cli、Octo API 能力与 IM 预置价值 | [octo-cli 定位](rules/architecture.md#octo-cli-的业务定位与产品价值) |
 | 总体协议、调用时序与审批／追问往返 | [协议与调用设计](rules/protocol-design.md) |
 | 身份、Home、profile、安装与生命周期 | [本地 Runtime](rules/runtime-lifecycle.md) |
@@ -48,6 +49,8 @@
 根目录按场景分为 [CLI 使用指南](../CLI_USAGE_GUIDE.md)、[SDK 完整原生接入指南](../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md) 和 [SDK Channel Gateway 指南](../SDK_CHANNEL_GATEWAY_GUIDE.md)；[INTEGRATION.md](../INTEGRATION.md)仅作选型导航，[DEPLOYMENTS.md](../DEPLOYMENTS.md)说明发行部署。包 README 保留包级用法。
 
 ## 当前任务
+
+- [Issue 69：Kernel client 统一 invoke](tasks/69-kernel-client-invoke/brief.md)：基于 `main@fae6333`，分支 `feat/69-kernel-client-invoke`，用户确认破坏性更新后已实施。App、owned.client、Extra 和 Playboard 共用 KernelClient.invoke，删除旧执行端口；Gateway 消费结果做 delivery。见[接口设计](tasks/69-kernel-client-invoke/design.md)、[32 项验收证据](tasks/69-kernel-client-invoke/implementation.md)和[验证记录](journal/shared/2026-10-20-kernel-client-invoke.md)。本地 Node 1318 通过、10 跳过，UI 35 通过，仓外 tgz 验证通过；Windows/Linux 与真实 Provider/IM 未验，尚未提交。规划[96 分](tasks/69-kernel-client-invoke/assessment.md)仅表示当时可执行性。
 
 - [GROUP.md 更新事件与本地规则游标（Issue #54/#55）](tasks/group-md-refresh-cursor/brief.md)：基于 `main@6f5f25f`，分支 `fix/group-md-refresh-cursor`。通知分流后只使现有 binding 的单个 rulesContext 字段失效，普通请求按版本决定携带；成功后条件确认，/new 复用 /reset，同轮恢复使用已有备用输入。已实现，自动化通过；线上多 Bot/真实 Provider 待联验，见[验证记录](journal/shared/2026-10-20-group-md-refresh-cursor.md)。
 

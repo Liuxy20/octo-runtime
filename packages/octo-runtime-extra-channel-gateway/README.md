@@ -1,5 +1,7 @@
 # Octo Gateway Channel
 
+执行直接使用 ctx.kernel.invoke(input, environment)，与 App 的 KernelClient 相同。Gateway 准备业务输入并消费结果完成 delivery；提交、身份关联、ACK 查询和订阅修复由 Kernel client 维护。内部装配依赖名为 kernel，取消用 cancelInvocation 并读取 accepted；没有单独的渠道执行端口。
+
 `@mininglamp-oss/octo-runtime-extra-channel-gateway` 只负责 Octo IM 接入：Bot 认证、悟空长连接、消息与卡片、typing、Context v3 和结果回发。企业微信由独立的 `octo-runtime-extra-channel-wecom` 持有。
 
 本包是 IM Event 发起方，决定本轮 Context 的内容、顺序和发送时机。允许空上下文或显式重复；Host 只校验、转发和固定渲染，不从历史补齐上下文。执行配置与模型上下文独立，Run=7、Context=v3。

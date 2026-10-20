@@ -47,7 +47,7 @@ async function fixture(context, behavior, historyResponse) {
       prepares++;
       return [];
     },
-    host: {
+    kernel: {
       async *invoke(request) {
         requests.push(request);
         if (behavior) yield* behavior(request, requests.length);
@@ -60,8 +60,8 @@ async function fixture(context, behavior, historyResponse) {
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         }
       },
-      async cancel() {
-        return { cancelled: true };
+      async cancelInvocation() {
+        return { accepted: true };
       }
     }
   });
@@ -361,13 +361,13 @@ test("a resumed topic receives two discussion messages through API before model 
         })
   );
   const runtime = new ImRuntime(config, {
-    host: {
+    kernel: {
       async *invoke(request) {
         requests.push(request);
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       },
-      async cancel() {
-        return { cancelled: true };
+      async cancelInvocation() {
+        return { accepted: true };
       }
     }
   });

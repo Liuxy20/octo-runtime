@@ -1,10 +1,11 @@
+import type { ImModuleDependencies } from "../ports.js";
 import type { ImInvocationInput } from "./dispatcher.js";
 /** IM 业务恢复编排。Host 每次仍只执行一个 invoke，不承担重放决策。 */
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
 import { type CanonicalEvent, type InvokeEnvironment } from "@mininglamp-oss/octo-runtime-protocol";
-import type { ImBotConfig, ImExecutionPort, ImTaskAttempt } from "../contracts.js";
+import type { ImBotConfig, ImTaskAttempt } from "../contracts.js";
 
 export const DEFAULT_CODEX_RETRY = Object.freeze({
   enabled: true,
@@ -42,7 +43,7 @@ export class ImTask {
   readonly #retryStop = new AbortController();
   readonly #signal: AbortSignal;
   #active?: string;
-  #cancelPending?: Promise<{ cancelled: boolean }>;
+  #cancelPending?: Promise<{ accepted: boolean }>;
   #total = 0;
   #consecutive = 0;
   #recoveryStarted?: number;
@@ -51,7 +52,7 @@ export class ImTask {
   #started = false;
   stopReason?: string;
   constructor(
-    readonly host: ImExecutionPort,
+    readonly kernel: ImModuleDependencies["kernel"],
     readonly request: ImInvocationInput,
     readonly adapterType: string,
     config: ImBotConfig,
@@ -72,8 +73,8 @@ export class ImTask {
   async cancel(reason = "IM user stop"): Promise<boolean> {
     this.#abort.abort(reason);
     if (!this.#active) return true; // 退避阶段也属于可停止的业务任务。
-    this.#cancelPending ??= this.host.cancel(this.#active, reason);
-    return (await this.#cancelPending).cancelled;
+    this.#cancelPending ??= this.kernel.cancelInvocation(this.#active, reason);
+    return (await this.#cancelPending).accepted;
   }
   #stop(reason: string): void {
     this.stopReason ??= reason;
@@ -190,7 +191,7 @@ export class ImTask {
         this.attempts.push(attempt);
         let terminal: CanonicalEvent | undefined;
         try {
-          for await (const event of this.host.invoke(request, {
+          for await (const event of this.kernel.invoke(request, {
             ...this.environment,
             signal: this.#signal
           })) {

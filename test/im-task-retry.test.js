@@ -84,9 +84,9 @@ function fixture(invoke, options = {}) {
       calls.push(prepared);
       yield* invoke({ time, calls, request: prepared, signal: environment.signal });
     },
-    async cancel(id) {
+    async cancelInvocation(id) {
       cancellations.push(id);
-      return { cancelled: true };
+      return { accepted: true };
     }
   };
   const task = new ImTask(

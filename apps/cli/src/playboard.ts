@@ -15,7 +15,6 @@ import { join } from "node:path";
 import {
   type InvokeInput,
   identifyInvokeInput,
-  createInputInvoke,
   isHostTerminal,
   isTerminal
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -104,18 +103,7 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
       env: options.env ?? process.env,
       adapterConfigurations: readAdapterConfigurations(paths.profileRoot, configuration?.adapters)
     });
-    const invoke = createInputInvoke(async function* (input, environment) {
-      const { ref } = await kernel!.client.submit(input, environment);
-      const cancel = () => {
-        void kernel!.client.cancel(ref, "caller_aborted").catch(() => undefined);
-      };
-      controller.signal.addEventListener("abort", cancel, { once: true });
-      try {
-        yield* kernel!.client.subscribe(ref);
-      } finally {
-        controller.signal.removeEventListener("abort", cancel);
-      }
-    });
+    const invoke = kernel.client.invoke;
     let exitCode = 1;
     for await (const frame of invoke(input, { signal: controller.signal })) {
       await output(JSON.stringify(frame));

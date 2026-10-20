@@ -35,7 +35,7 @@ try {
   await load(
     {
       signal: AbortSignal.timeout(30000),
-      adapterHost: {},
+      kernel: {},
       onStatus: (fn) => {
         status = fn;
       },

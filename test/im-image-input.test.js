@@ -122,13 +122,13 @@ test("image-only IM reaches Codex as image inputs; unsupported engine does not d
         }
       },
       {
-        host: {
+        kernel: {
           async *invoke(input) {
             calls.push(input);
             yield { protocolVersion: 2, type: "run.completed", payload: {} };
           },
-          async cancel() {
-            return { cancelled: false };
+          async cancelInvocation() {
+            return { accepted: false };
           },
           async respondInteraction() {}
         }

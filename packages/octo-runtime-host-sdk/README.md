@@ -4,10 +4,12 @@
 
 - startOwnedKernel：创建独立 Kernel，提供 client、exited、stop 和显式 restart。
 - attachKernel：只连接现有 Kernel，没有 start/stop/restart 权限。
-- startExtra：在独立 Node 进程加载一个完整插件声明，注入连接端口和宿主依赖。
+- startExtra：在独立 Node 进程加载一个完整插件声明，注入实际 KernelClient 和宿主依赖。
 - startNativeComponent：按绝对 executable、argv、cwd、configPath、endpoint 启动原生组件；shell=false，按声明的 stdin-json 或 signal 合同关闭。
 
 stop 返回 CleanupResult，complete、processExited、pendingResources 和稳定错误码分别表达清理事实。进程退出不等于插件 dispose 或宿主依赖已完成；失败实例保留所有权，禁止同名替换。
+
+App 使用 attachKernel(...).invoke 或 owned.client.invoke；插件使用 ctx.kernel.invoke。SDK 不实现第二个 invoke。每个独立 Extra 获得自己的 client，停止时关闭其接纳，按共享 deadline 排空它的调用，再等待 onDispose 和释放连接。旧 ExtraAdapterHost、ctx.adapterHost、extra-port 已删除；插件取消改用 ctx.kernel.cancelInvocation，回执字段为 accepted。详见 [Kernel 合同](../octo-runtime-executor-kernel/README.md)。
 
 spawn 后启动失败抛出 ComponentStartError，保留 cause 与 cleanup；依赖未结束也计入回滚 incomplete。初始化期间的 owner 断开和 stop 会取消启动并回收迟到资源，不在清理后发布 ready。Kernel restart 失败时仍保留新实例的清理结果，不回退使用旧实例的成功 stop 结果。Native IPC readiness 的 status.result.pid 必须匹配本次新建进程。
 

@@ -275,13 +275,13 @@ if (process.argv.includes("--complex")) {
       typing: false
     },
     {
-      host: {
+      kernel: {
         async *invoke(input) {
           requests.push(input);
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         },
-        async cancel() {
-          return { cancelled: true };
+        async cancelInvocation() {
+          return { accepted: true };
         },
         async respondInteraction() {
           throw Error("Unexpected interaction");
@@ -502,7 +502,7 @@ if (
           yield event;
         }
       },
-      cancel: async (id, reason) => ({ cancelled: host.cancel(id, reason) }),
+      cancelInvocation: async (id, reason) => ({ accepted: host.cancel(id, reason) }),
       respondInteraction: (id, response) => host.respondInteraction(id, response)
     },
     (name) => logging.extra(name)
@@ -664,15 +664,15 @@ if (process.argv.includes("--capacity")) {
       adapter: { adapter_type: "codex", workdir: "/tmp" }
     },
     {
-      host: {
+      kernel: {
         async *invoke() {
           calls++;
           await gate;
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         },
-        async cancel() {
+        async cancelInvocation() {
           release();
-          return { cancelled: true };
+          return { accepted: true };
         },
         async respondInteraction() {}
       }

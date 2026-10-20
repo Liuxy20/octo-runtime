@@ -136,8 +136,8 @@ test("canonical SSE passes unchanged and cleanup waits for active invocation can
         )
       );
     },
-    async cancel() {
-      return { cancelled: true };
+    async cancelInvocation() {
+      return { accepted: true };
     },
     async respondInteraction(id, response) {
       responded = { id, response };

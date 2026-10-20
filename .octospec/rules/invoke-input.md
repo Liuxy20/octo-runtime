@@ -22,7 +22,7 @@ supersedes: []
 
 只有 `inputs`、`contexts` 必填；其他字段可选。默认值在执行边界解析，不写回调用方对象。未知可选扩展忽略，已识别字段继续校验。Context=v3、Run schema_version=7、内部 Adapter protocolVersion=2 是三个独立合同；统一包装不机械修改版本。
 
-AgentExecutor.invoke 与 worker RPC 使用 input/environment；公开 Kernel client 通过 submit(input, environment) 接纳，再以完整 ref 订阅源流。Extra 注入端口将 invoke 映射为 submit+subscribe，不复制执行准备。只有 Core 调用 prepareInvokeInput 解析默认值和内部请求；createInputInvoke 仅选择同一源流视图。signal 不进入 JSON，取消通过明确控制请求表达。完整 wire 和所有权见[本地执行合同](local-execution.md)。
+AgentExecutor.invoke、worker RPC 和公开 KernelClient.invoke 使用相同 input/environment 概念。App 与 Extra 直接使用同一 client.invoke，Kernel 包复用 submit/get/subscribe 完成接纳和观察；没有 Extra 执行端口。只有 Core 调用 prepareInvokeInput 解析默认值和内部请求；createInputInvoke 仅选择同一源流视图，并只在正常耗尽时报告 signal.reason，不能覆盖具体 source 错误或主动 return。signal 不进入 JSON，取消通过明确控制请求表达；Kernel 不支持 streamLimits 时明确拒绝。完整 wire 和所有权见[本地执行合同](local-execution.md)。
 
 这是通用单次执行合同，不是长期 IM Agent 管理接口。sessionId 标识会话，不决定 workdir；Provider 会话续接与目录选择分别按本轮输入及真实 Provider 约束处理。IM 固定工作目录、reset 和历史采集由 Channel 负责，不能推导为通用 Host 按 session 建目录或补业务背景。详见[责任边界](../guides/im-agent-invocation-boundary.md)。
 

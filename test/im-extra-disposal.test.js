@@ -40,8 +40,8 @@ for (const kind of ["gateway", "wecom"]) {
         requests.push(prepareInvokeInput(input).request);
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       },
-      async cancel() {
-        return { cancelled: true };
+      async cancelInvocation() {
+        return { accepted: true };
       }
     });
     const config = {
@@ -179,7 +179,7 @@ for (const kind of ["gateway", "wecom"]) {
         signal = value;
       });
       t.mock.method(Transport.prototype, "close", () => cleanup);
-      const runtime = new ImRuntime(bot("repeat"), { host: {} });
+      const runtime = new ImRuntime(bot("repeat"), { kernel: {} });
       await runtime.start();
       const first = runtime.close();
       assert.equal(first, runtime.close());
@@ -192,7 +192,7 @@ for (const kind of ["gateway", "wecom"]) {
       assert.equal(settled, false);
       release();
       await first;
-      const manager = new ImChannelManager({ host: {} });
+      const manager = new ImChannelManager({ kernel: {} });
       await manager.upsert(bot("disabled", false));
       const closing = manager.close();
       assert.equal(closing, manager.close());
@@ -218,7 +218,7 @@ for (const kind of ["gateway", "wecom"]) {
           invocationSignal = options.signal;
           await execution;
         },
-        async cancel(id) {
+        async cancelInvocation(id) {
           cancelled.push(id);
         }
       };

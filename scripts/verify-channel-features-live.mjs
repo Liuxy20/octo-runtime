@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import { startOwnedKernel } from "../packages/octo-runtime-host-sdk/dist/index.js";
-import { createExtraPort } from "../packages/octo-runtime-host-sdk/dist/extra-port.js";
+import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { canonicalEvents } from "../packages/octo-runtime-protocol/dist/index.js";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -69,11 +69,15 @@ async function cli(account, args, body) {
 const directory = await mkdtemp(join(tmpdir(), "octo-channel-live-"));
 let kernel;
 const socket = join(directory, "kernel.sock");
-const execution = createExtraPort(socket, new AbortController().signal);
+const execution = attachKernel({ endpoint: socket });
 const host = {
-  ...execution.port,
+  ...execution,
   shutdown: async () => {
-    await execution.close();
+    await execution.invocations.drain({
+      deadline: Date.now() + 4000,
+      reason: "verification_shutdown"
+    });
+    execution.close();
     if (kernel) assert.equal((await kernel.stop()).complete, true);
   }
 };
@@ -208,7 +212,7 @@ try {
     }
   };
   runtime = new ImRuntime(config, {
-    host: {
+    kernel: {
       async *invoke(input, environment) {
         const { request } = prepareInvokeInput(input);
         calls.push(request);
@@ -244,7 +248,7 @@ try {
           yield { protocolVersion: 2, type: "run.completed", payload: {} };
         }
       },
-      cancel: (...args) => host.cancel(...args),
+      cancelInvocation: (...args) => host.cancelInvocation(...args),
       respondInteraction: (...args) => host.respondInteraction(...args)
     },
     onDiagnostic: (code) => diagnostics.push(code)
