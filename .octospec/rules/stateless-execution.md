@@ -10,7 +10,7 @@ tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-executor-core/**","packages/octo-runtime-daemon/**","packages/octo-runtime-adapter-host/**","packages/octo-runtime-extra-channel-*/**","test/stateless-*"]
+  paths: ["packages/octo-runtime-executor-core/**","packages/octo-runtime-host-sdk/**","packages/octo-runtime-executor-kernel/**","packages/octo-runtime-extra-channel-*/**","test/stateless-*"]
   touches: ["storage","stream","stateless"]
 source: self
 supersedes: []
@@ -24,7 +24,7 @@ Runtime 接收已准备的请求、校验执行配置、调用 Provider、传递
 
 ## 源流窗口
 
-以中央 `StreamLimitPolicy`、[HostRunService](../../packages/octo-runtime-adapter-host/src/host-run-service.ts) 及容量检查为准：
+以中央 `StreamLimitPolicy`、[HostRunService](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts) 及容量检查为准：
 
 | 项目 | 当前上限 |
 | --- | --- |
@@ -37,7 +37,7 @@ Runtime 接收已准备的请求、校验执行配置、调用 Provider、传递
 
 超过窗口淘汰旧帧，游标缺口和过期明确报错。保留不依赖消费者 ACK；不能用慢连接固定占住无限旧帧。字节上限不是进程 RSS 上限，Provider、对象、队列和复制还有额外开销。
 
-daemon/Host 重启后旧 stream 不恢复，不自动重放业务请求，不从历史补模型上下文。终态和过期状态必须按窗口合同释放；停止时回收执行资源。
+Kernel/worker 重启后旧 stream 不恢复，不自动重放业务请求，不从历史补模型上下文。终态和过期状态必须按窗口合同释放；停止时回收执行资源。
 
 ## Provider 接收缓冲
 
@@ -65,12 +65,12 @@ Octo 和 WeCom 各自使用有界内存会话映射，具体容量及 reset 见 
 
 ## 受管日志
 
-F31 已实施可选的统一内核与 Extra 元数据日志。宿主显式指定 logging.directory/--logs-dir；默认不创建日志资源。Extra 经加载器绑定来源的 ctx.log 输出事件，内核只记生命周期、身份、稳定错误码和本轮输入/非 Adapter Context 项数，Adapter 只记安全执行选择。正文、原始错误、完整配置、凭据、预览及内容哈希均不记录。SDK/launcher 停止原始进程输出重复落盘，必要 stderr 继续可见。
+F31 已实施统一内核与 Extra 元数据日志。SDK Extra 显式指定 logging.directory，worker 可通过 OCTO_RUNTIME_LOGS_DIRECTORY 配置；当前 CLI 使用 home/logs，不提供 --logs-dir。未配置的 SDK 实例不创建日志资源。Extra 经加载器绑定来源的 ctx.log 输出事件，内核只记生命周期、身份、稳定错误码和本轮输入/非 Adapter Context 项数，Adapter 只记安全执行选择。正文、原始错误、完整配置、凭据、预览及内容哈希均不记录。SDK/launcher 不重复落盘原始进程输出。
 
 F31 已确认并实施：按 UTC 小时命名，每序列保留最近 3 个实际文件（包含当前文件），单文件 100 MiB；不按最近 3 小时年龄删除，跨天停机后仍保留最后文件。新小时实际写入第四个文件时淘汰最旧归档，不创建无日志小时的空文件。专用 Worker 隔离磁盘写入，每进程最多 128 条在途和 128 个序列，满额、锁竞争或写入失败可丢诊断，不保证审计完整性；关闭最多等待 1 秒，不影响 Agent 执行。轮转沿用非等待互斥和普通文件校验，不删除身份、Provider 文件、用户文件或旧固定日志。详情与原生服务定义更新见[运维](../guides/operations.md)及[实施记录](../tasks/gateway-august-feature-assessment/implementation.md#f31-核心改造已实施)。
 
 ## 核对入口
 
-[Core 导出](../../packages/octo-runtime-executor-core/src/index.ts)、[HostRunService](../../packages/octo-runtime-adapter-host/src/host-run-service.ts)、[进程清理清单](../../packages/octo-runtime-daemon/src/invocation-manifest.ts)、[无数据库回归](../../test/stateless-executor.test.js)。
+[Core 导出](../../packages/octo-runtime-executor-core/src/index.ts)、[HostRunService](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[进程清理清单](../../packages/octo-runtime-executor-kernel/src/invocation-manifest.ts)、[无数据库回归](../../test/stateless-executor.test.js)。
 
 SQLite 移除时的测试数量与真实执行仅保留为 [历史验证摘要](../journal/shared/provider-validation-history.md)，不作为当前工作树的新验收。

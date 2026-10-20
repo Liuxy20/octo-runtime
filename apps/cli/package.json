@@ -12,12 +12,13 @@
   },
   "types": "./dist/index.d.ts",
   "dependencies": {
-    "@mininglamp-oss/octo-runtime-daemon": "workspace:*",
+    "json5": "^2.2.3",
+    "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*",
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-openclaw": "workspace:*",
     "@mininglamp-oss/octo-runtime-cross-service": "workspace:*",
-    "@mininglamp-oss/octo-runtime-daemon-app": "workspace:*",
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
-    "@mininglamp-oss/octo-runtime-adapter-host": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-core": "workspace:*"
   }
 }

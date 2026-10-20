@@ -78,7 +78,7 @@ OpenClaw 使用 CLI dotenv 预配置，保持每轮非空 envs 不支持的现�
 
 F24 合同：前述顺序覆盖只允许启用、合法的 `adapter_type=openclaw` 配置参与，同一实例取最后一项。用户可以调整 items 顺序选择实例工具身份；其他 Adapter 配置不得覆盖，无候选时不借用其他 Provider 身份。CLI 同步循环已实施筛选，混合排序与无候选回归通过；文件写入与运行实例重启加载仍分别判断，见[实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
 
-2026-10-16 F23 用户确认：OpenClaw Gateway 作为独立 Agent 实例，使用实例固定环境满足当前需求。由 CLI daemon 启动编排配置其实际读取的 `.env`，默认 `~/.openclaw/.env`；不修改上游 OpenClaw 设计或源码，不新增特殊 `session.create` 环境注入。Codex/Claude Code 等通用执行路径按其原生能力逐轮传递。不将两者生命周期差异作为覆盖度缺口；文件落盘与运行实例加载仍分别判断，既有人工重启约定不变。
+2026-10-16 F23 用户确认：OpenClaw Gateway 作为独立 Agent 实例，使用实例固定环境满足当前需求。由 CLI executor-kernel 启动编排配置其实际读取的 `.env`，默认 `~/.openclaw/.env`；不修改上游 OpenClaw 设计或源码，不新增特殊 `session.create` 环境注入。Codex/Claude Code 等通用执行路径按其原生能力逐轮传递。不将两者生命周期差异作为覆盖度缺口；文件落盘与运行实例加载仍分别判断，既有人工重启约定不变。
 
 ## 验证入口
 

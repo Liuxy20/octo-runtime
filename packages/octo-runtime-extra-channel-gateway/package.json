@@ -8,10 +8,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./daemon-module": {
-      "types": "./dist/daemon-module.d.ts",
-      "import": "./dist/daemon-module.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -25,10 +21,10 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@mininglamp-oss/octo-runtime-adapter-host": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-core": "workspace:*",
-    "@mininglamp-oss/octo-runtime-daemon": "workspace:*",
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
     "mdast-util-from-markdown": "^2.1.0",
     "ws": "^8.22.0"

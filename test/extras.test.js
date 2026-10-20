@@ -12,11 +12,9 @@ import { once } from "node:events";
 import {
   ExtraPlugins,
   readExtraDirectory,
-  extraRegistration,
-  startDaemonServer,
-  createDaemonRuntime
-} from "../packages/octo-runtime-daemon/dist/index.js";
-import { runCli, callDaemon } from "../apps/cli/dist/main.js";
+  extraRegistration
+} from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { runCli } from "../apps/cli/dist/main.js";
 import { invokeRequest, waitFor } from "./runtime-fixture.js";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 

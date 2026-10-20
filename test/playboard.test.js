@@ -6,9 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { prepareInvokeInput as preparePlayboard } from "@mininglamp-oss/octo-runtime-executor-core";
-import { startTemporaryDaemon } from "../apps/cli/dist/temporary-daemon.js";
-import { startDaemonServer } from "@mininglamp-oss/octo-runtime-daemon";
-import { callDaemon } from "@mininglamp-oss/octo-runtime-daemon/runtime/runtime-contract";
 import { once } from "node:events";
 import { WebSocketServer } from "ws";
 import {
@@ -242,7 +239,7 @@ test("temporary daemon renders ordered context and leaves no identity or process
   assert.equal(wire.controlInstructions, "control-only");
   assert.ok(wire.modelInput.indexOf("business-b") < wire.modelInput.indexOf("business-a"));
   assert.doesNotMatch(wire.modelInput, /control-only|test-model/);
-  assert.match(result.stderr, /playboard fixture diagnostic/);
+  assert.doesNotMatch(result.stderr, /playboard fixture diagnostic/);
   assert.doesNotMatch(result.stdout, /playboard fixture diagnostic/);
   assert.throws(() => process.kill(wire.hostPid, 0), { code: "ESRCH" });
   assert.throws(() => process.kill(wire.daemonPid, 0), { code: "ESRCH" });
@@ -331,8 +328,8 @@ test("malformed stdin, unknown arguments and unsupported native mode fail clearl
     assert.doesNotMatch(result.stderr, /SECRET-do-not-echo/);
   }
   const args = await execute(settings, echoInput(), { args: ["--unknown", "value"] });
-  assert.equal(args.code, 1);
-  assert.match(args.stderr, /unknown option/);
+  assert.equal(args.code, 2);
+  assert.match(args.stdout, /INVALID_ARGUMENTS/);
   const unsupported = await execute(settings, { ...echoInput(), protocol_mode: "native" });
   assert.equal(unsupported.code, 1);
   assert.equal(unsupported.stdout, "");
@@ -374,68 +371,6 @@ test("closing the NDJSON consumer cleans up Host and provider execution", async 
   assert.equal(code, 1);
   assert.equal(typeof hostPid, "number");
   assert.throws(() => process.kill(hostPid, 0), { code: "ESRCH" });
-});
-
-test("temporary IPC and parallel playboards preserve a resident daemon and persistent profile", async (t) => {
-  const settings = await fixture(t);
-  const home = join(settings.directory, "unconfigured-home");
-  const profileRoot = join(home, "work");
-  await mkdir(join(profileRoot, "identity"), { recursive: true });
-  const identity = join(profileRoot, "identity/runtime.json");
-  await writeFile(identity, "existing-runtime-identity\n");
-  const extra = join(home, "extras");
-  await mkdir(extra, { recursive: true });
-  // Parsing this file would fail: temporary execution must not load the channels.
-  await writeFile(join(extra, "channel-gateway.json"), "not valid JSON");
-  const resident = await startDaemonServer({
-    homePath: home,
-    socketPath: join(settings.directory, "resident.sock"),
-    manifestPath: settings.manifest,
-    hostEntrypoint: join(root, "packages/octo-runtime-adapter-host/dist/runner.js")
-  });
-  try {
-    const ledger = join(home, "run/invocations.json");
-    const before = await readFile(ledger, "utf8");
-    const temporary = await startTemporaryDaemon({
-      home,
-      profile: "work",
-      manifest: settings.manifest,
-      env: {
-        ...process.env,
-        OPENCLAW_HOME: join(settings.directory, "absent-openclaw"),
-        OPENCLAW_GATEWAY_URL: undefined,
-        OPENCLAW_GATEWAY_TOKEN: undefined
-      },
-      signal: new AbortController().signal
-    });
-    const status = await callDaemon(temporary.socket, { method: "status" });
-    assert.equal(status.ready, true);
-    assert.deepEqual(status.extras, {});
-    assert.notEqual(status.adapterHost.pid, resident.hostProcess.child.pid);
-    await temporary.close();
-    assert.throws(() => process.kill(status.pid, 0), { code: "ESRCH" });
-    assert.throws(() => process.kill(status.adapterHost.pid, 0), { code: "ESRCH" });
-    if (process.platform !== "win32")
-      await assert.rejects(stat(temporary.socket), { code: "ENOENT" });
-    const runs = await Promise.all([
-      execute(settings, echoInput(), { args: ["--profile", "work"] }),
-      execute(settings, echoInput(), { args: ["--profile", "work"] })
-    ]);
-    for (const run of runs) {
-      assert.equal(run.code, 0, run.stderr);
-      terminal(run, "completed");
-      assert.equal(observed(run).runMetadata.profile, "work");
-    }
-    assert.notEqual(observed(runs[0]).daemonPid, observed(runs[1]).daemonPid);
-    assert.equal(await readFile(ledger, "utf8"), before);
-    assert.equal(await readFile(identity, "utf8"), "existing-runtime-identity\n");
-    assert.equal((await callDaemon(resident.runtime.socketPath, { method: "status" })).ready, true);
-    const conflict = await execute(settings, { ...echoInput(), runMetadata: { profile: "other" } });
-    assert.equal(conflict.code, 1);
-    assert.match(conflict.stderr, /request profile differs/);
-  } finally {
-    await resident.close();
-  }
 });
 
 test("OpenClaw uses daemon startup configuration, refreshes its source and retains device identity", async (t) => {
@@ -557,49 +492,6 @@ test("daemon startup failure removes temporary process state and keeps stdout em
   );
   assert.equal(result.code, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /ENOENT/);
+  assert.match(result.stderr, /KERNEL_START_FAILED/);
   assert.deepEqual(await readdir(isolated), []);
-});
-
-test("cancelling daemon startup waits for resource cleanup and preserves prepared configuration", async (t) => {
-  const settings = await fixture(t);
-  const gateway = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-  await once(gateway, "listening");
-  t.after(() => {
-    for (const client of gateway.clients) client.terminate();
-    return new Promise((resolve) => gateway.close(resolve));
-  });
-  const controller = new AbortController();
-  // Hold the Provider probe at its authentication handshake, then cancel startup.
-  gateway.once("connection", () => controller.abort());
-  const home = join(settings.directory, "runtime");
-  const isolated = await mkdtemp(
-    join(process.platform === "darwin" ? "/tmp" : tmpdir(), "op-state-")
-  );
-  t.after(() => rm(isolated, { recursive: true, force: true }));
-  const temporaryVariable = process.platform === "win32" ? "TEMP" : "TMPDIR";
-  const previous = process.env[temporaryVariable];
-  process.env[temporaryVariable] = isolated;
-  try {
-    await assert.rejects(
-      startTemporaryDaemon({
-        home,
-        profile: "work",
-        manifest: settings.manifest,
-        env: {
-          ...process.env,
-          OPENCLAW_HOME: undefined,
-          OPENCLAW_GATEWAY_URL: `ws://127.0.0.1:${gateway.address().port}`,
-          OPENCLAW_GATEWAY_TOKEN: "test-startup-token"
-        },
-        signal: controller.signal
-      }),
-      /startup cancelled/
-    );
-  } finally {
-    if (previous === undefined) delete process.env[temporaryVariable];
-    else process.env[temporaryVariable] = previous;
-  }
-  assert.deepEqual(await readdir(isolated), []);
-  assert.ok(await stat(join(home, "work/credentials/openclaw-device.json")));
 });

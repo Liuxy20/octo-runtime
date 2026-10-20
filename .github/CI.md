@@ -12,7 +12,8 @@ filter that could leave its required check waiting indefinitely.
 
 Ubuntu, macOS, and Windows use **Node.js 24.x**, read from `.nvmrc`, and the pnpm version
 declared in `package.json#packageManager`. CI explicitly installs ripgrep for the
-naming check rather than relying on the runner image. The Ubuntu/macOS matrix executes:
+naming check rather than relying on the runner image. The Ubuntu/macOS matrix also
+installs Go 1.25.x to compile the native-component fixture, then executes:
 
 1. `pnpm install --frozen-lockfile`.
 2. `pnpm lint`, `pnpm lint:names` and `pnpm format:check`.
@@ -24,14 +25,13 @@ naming check rather than relying on the runner image. The Ubuntu/macOS matrix ex
 The complete test entry point includes the existing local debugging WebUI plugin
 tests. No production UI or new browser end-to-end gate is introduced. Provider tests
 use fakes unless their existing live-test opt-in is explicitly enabled. A dedicated
-Windows job builds and packs the distribution, then executes the installed `.cmd`
-daemon shim and terminates its full process tree before uninstalling the package.
-It also proves that the installed CLI and daemon derive the same named pipe from one
-Runtime Home. Platform-independent contract tests exercise the same production path
-functions with an explicit Windows platform, but only the hosted Windows job proves
-that `.cmd`, PowerShell, named-pipe and `taskkill` behavior works natively. Readiness
-uses a bounded overall deadline and reports the last CLI status failure plus bounded
-daemon stderr on failure.
+Windows job builds and packs the distribution, runs Core/Kernel/Host lifecycle and
+IPC contract tests, and verifies the installed CLI with independent Kernel and Extra
+processes before uninstalling the package. Readiness uses a bounded overall deadline
+and reports the last status failure plus bounded component stderr on failure.
+These checks do not register native user services. Windows cleanup of descendants
+whose process leader has already exited still lacks a Job Object-level guarantee;
+passing package verification does not close that release gap.
 
 `CI Gate` is the stable required check. It runs after the Ubuntu/macOS matrix and the
 Windows release verification, including on failure, and rejects any aggregate result other than `success`. Branch protection
@@ -44,9 +44,9 @@ are outside this formatting gate. `pnpm format` and `pnpm format:check` use iden
 file patterns and `.prettierignore`.
 
 Linux uploads the verified `octo-runtime-release` artifact for seven days. Verification
-covers empty-cache offline global installation, CLI/daemon entry points, third-party
-Extra compilation/loading, and unloading without deleting Home. It does not install
-Providers automatically.
+covers empty-cache offline global installation, public type consumption, Core,
+owned Kernel, independent Extra and CLI entry points, and uninstalling without
+deleting Home. It does not install Providers automatically.
 
 Additional workflows provide common-history validation, secret scanning, dependency
 review, weekly CodeQL, workflow sanity, PR title checks, labels and release drafting.

@@ -2,12 +2,12 @@
 
 本项目是内部 TypeScript monorepo。沟通和文档直接使用中文。
 
-先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是统一执行内核，原 AdapterHost 是过渡别名；外部接入由 Extra 负责。本地存在和执行不以登录、云端登记或 IM 建联为前提。
+先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是唯一执行实现；Executor Kernel 监督独立 worker，宿主独立管理 Extra。本地存在和执行不以登录、云端登记或 IM 建联为前提。
 
 ## 目录与命令
 
-- `apps/`：CLI 和 daemon 入口；独立 Host 子进程使用 adapter-host package 的 runner。
-- `packages/`：协议、执行内核、daemon SDK、Provider Adapter 和 Extra。
+- `apps/`：CLI 宿主入口；不再包含 daemon app。
+- `packages/`：协议、Executor Core/Kernel、Host SDK、Provider Adapter 和 Extra。
 - `test/`：跨包测试；包内测试按各包目录维护。
 - `.octospec/rules/`、`.octospec/guides/`：当前合同与操作指南；历史结论放 journal。
 - `CLI_USAGE_GUIDE.md`：云端设备的 CLI 使用、部署和运维。

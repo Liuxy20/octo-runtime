@@ -4,7 +4,7 @@ import {
   type ExtraInitializer,
   type ExtraContext,
   type JsonObject
-} from "@mininglamp-oss/octo-runtime-daemon";
+} from "@mininglamp-oss/octo-runtime-host-sdk";
 import { ImChannelManager } from "./lifecycle/manager.js";
 import {
   validateImBots,

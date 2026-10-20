@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { AdapterHost, readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
   MAX_STREAM_LIMIT_POLICY,
@@ -96,7 +97,7 @@ test("capacity failures have stable non-retryable public classifications and saf
 });
 
 test("default HostFrame policy accepts the observed 1.43 MB completion payload", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   const text = "x".repeat(1_430_765);
   host.register({
     metadata: {
@@ -135,7 +136,7 @@ test("default HostFrame policy accepts the observed 1.43 MB completion payload",
 });
 
 test("HostFrame capacity failures retain their precise control reason", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "oversized-frame",

@@ -102,7 +102,7 @@ try {
       });
     }
   }
-  for (const app of ["cli", "daemon"]) {
+  for (const app of ["cli"]) {
     await cp(join(root, "apps", app, "dist"), join(temporary, "apps", app, "dist"), {
       recursive: true
     });
@@ -110,7 +110,7 @@ try {
   await cp(join(root, "dist/public"), join(temporary, "dist/public"), { recursive: true });
   // 将公开的原始 schema 原样交付，接入方自行选择校验或类型生成工具。
   for (const target of Object.values(manifest.exports)) {
-    if (typeof target !== "string" || !target.endsWith("/config-schema.json")) continue;
+    if (typeof target !== "string" || !target.endsWith(".json")) continue;
     await mkdir(dirname(join(temporary, target)), { recursive: true });
     await cp(join(root, target), join(temporary, target));
   }
@@ -143,7 +143,14 @@ try {
         bin: manifest.bin,
         exports: manifest.exports,
         engines: { node: manifest.engines.node },
-        files: ["apps", "dist/public", "packages/*/config-schema.json", "LICENSE", "NOTICE"],
+        files: [
+          "apps",
+          "dist/public",
+          "packages/*/config-schema.json",
+          "packages/octo-runtime-protocol/schema/*.json",
+          "LICENSE",
+          "NOTICE"
+        ],
         publishConfig: { access: "public" },
         dependencies,
         bundleDependencies: Object.keys(dependencies)

@@ -11,7 +11,7 @@ import {
   invocationInput,
   resolveStreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import {
   AntigravityEventNormalizer,
   antigravityLogError,
@@ -50,7 +50,7 @@ const step = (index, overrides = {}) => ({
 });
 
 test("Antigravity preserves non-retryable provider capacity evidence through the Host", async (context) => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(create());
   context.after(() => host.shutdown());
   const frames = [];
@@ -125,7 +125,7 @@ test("Antigravity rejects unsupported permissions and managed arguments before s
     "-psecret"
   ])
     assert.throws(() => buildAntigravityCommand(request, "agy", [flag]), /MANAGED_ARGUMENT/);
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(create());
   await assert.rejects(
     collect(

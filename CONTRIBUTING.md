@@ -10,6 +10,8 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) and the
 - Use the exact pnpm version declared in `package.json#packageManager`.
 - Install ripgrep (`rg`) for the naming check: `brew install ripgrep` on macOS or
   `sudo apt-get install ripgrep` on Ubuntu. CI installs this prerequisite explicitly.
+- Install Go 1.25.x to compile the native-component test fixture. CI installs it
+  explicitly; Runtime users do not need Go to run the distribution.
 - Install and authenticate a Provider CLI only for explicitly requested live runs.
   Automated tests use fake Providers and do not require real models.
 
@@ -31,28 +33,27 @@ Use `pnpm test` to build and run the same suites in one command.
 
 ## Project Structure and Responsibilities
 
-| Location                                      | Responsibility                                                       |
-| --------------------------------------------- | -------------------------------------------------------------------- |
-| `apps/cli`                                    | The bundled `octo-runtime` host, configuration and service commands  |
-| `apps/daemon`                                 | Daemon entry points and process composition                          |
-| `packages/octo-runtime-daemon`                | SDK, local IPC and shared process lifecycle                          |
-| `packages/octo-runtime-executor-core`         | Single AgentExecutor implementation and explicit in-process API      |
-| `packages/octo-runtime-adapter-host`          | Transitional isolated worker, NDJSON transport and standalone runner |
-| `packages/octo-runtime-adapter-*`             | Provider-specific protocol translation                               |
-| `packages/octo-runtime-protocol`              | Execution contracts, schemas and generated types                     |
-| `packages/octo-runtime-extra-channel-gateway` | Octo IM admission, sessions and replies                              |
-| `public`                                      | Published Extra and protocol entry points                            |
-| `test`, `test-support`                        | Cross-package tests, fixtures and fake Providers                     |
-| `.octospec`                                   | Current rules, task plans and verification records                   |
+| Location                                      | Responsibility                                                      |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| `apps/cli`                                    | The bundled `octo-runtime` host, configuration and service commands |
+| `packages/octo-runtime-host-sdk`              | Independent component ownership and host lifecycle                  |
+| `packages/octo-runtime-executor-core`         | Single AgentExecutor implementation and explicit in-process API     |
+| `packages/octo-runtime-executor-kernel`       | Local IPC, source streams and isolated worker supervision           |
+| `packages/octo-runtime-adapter-*`             | Provider-specific protocol translation                              |
+| `packages/octo-runtime-protocol`              | Execution contracts, schemas and generated types                    |
+| `packages/octo-runtime-extra-channel-gateway` | Octo IM admission, sessions and replies                             |
+| `public`                                      | Published Core, Kernel, Host, Extra and protocol entry points       |
+| `test`, `test-support`                        | Cross-package tests, fixtures and fake Providers                    |
+| `.octospec`                                   | Current rules, task plans and verification records                  |
 
 SDK integration is the primary application entry point. The bundled Runtime CLI
 is one SDK host; it is distinct from the `octo-cli` business API tool.
 Host applications own configuration sources, credential storage and installation
 decisions. Extras own their business integrations and load/unload as whole plugins.
 Prioritize stability: recommend SDK access over IPC to an independent Executor
-Kernel, especially for Electron and other long-running hosts. The new Kernel,
-IPC and supervision implementation belongs to issue #47; the existing isolated
-worker and NDJSON path remain in place during this transition. Explicit in-process
+Kernel, especially for Electron and other long-running hosts. The Kernel supervises
+its isolated worker over NDJSON; hosts independently own Kernel and Extra lifecycles.
+The old daemon packages, binary, API and CLI commands have been removed. Explicit in-process
 Core embedding is allowed as a simpler SDK integration option. Its host owns the
 lifecycle and shares the execution process failure domain. Both paths reuse the
 same AgentExecutor implementation. Keep business workflows out of the kernel and
@@ -70,10 +71,10 @@ Provider differences inside adapters.
   Architecture documents and historical Octospec records are outside this formatting
   gate; maintain their content and links through the existing documentation checks.
 
-Public PR titles and descriptions use English and Conventional Commit prefixes.
-Repository-internal plans, explanatory code comments and commit descriptions retain
-the Chinese collaboration convention in [AGENTS.md](AGENTS.md) and
-[the repository collaboration rule](.octospec/rules/collaboration.md).
+Public PR titles, descriptions and Git commit messages use English and Conventional
+Commit prefixes. Repository-internal plans and explanatory code comments retain
+the Chinese collaboration convention. The OSS English commit requirement takes
+precedence over the older repository collaboration rule.
 
 ## Testing and CI
 
@@ -90,7 +91,7 @@ Never commit credentials or include them in logs, screenshots or test reports.
 Linux and macOS CI run the frozen dependency install, ESLint, naming checks, formatting,
 type checking/build, generated-file drift checks, complete test suites, package creation
 and offline installation verification. A dedicated Windows job builds the package and
-verifies real global installation, daemon process-tree cleanup and uninstall. The final
+verifies real global installation, independent component cleanup and uninstall. The final
 `CI Gate` succeeds only when both paths succeed.
 See [GitHub CI and release operations](.github/CI.md) for workflow details.
 
@@ -99,8 +100,8 @@ See [GitHub CI and release operations](.github/CI.md) for workflow details.
 1. Use a focused `feat/`, `fix/`, `docs/`, `refactor/`, `test/` or `chore/` branch.
 2. Record substantial work in an Octospec task and follow the applicable rules.
 3. Run the relevant checks and inspect the staged diff for unrelated files or secrets.
-4. Use `type(scope): subject` for commit and PR titles. Repository-internal commit
-   subjects follow the collaboration rule; public PR titles and bodies use English.
+4. Use `type(scope): subject` for commit and PR titles. Commit messages and public
+   PR titles and bodies use English.
 5. Target `main` and rebase onto its latest state before requesting review.
 6. Explain the problem, resulting behavior, architecture impact, validation and any
    migration requirements. Link actual task or issue references, not placeholders.
@@ -119,7 +120,10 @@ approvals; the branch protection above requires at least one.
 
 ## Security and Local State
 
-Preserve existing Runtime Home, identities, profiles and configuration during updates.
+Preserve existing Runtime Home, identities, profiles and configuration during updates
+between new-architecture releases. The old 1.0.1 daemon architecture is deprecated
+and has no supported upgrade or migration path; follow the uninstall/reinstall
+instructions in [DEPLOYMENTS.md](DEPLOYMENTS.md).
 Historical reset or destructive migration notes do not authorize new deletion.
 The working directory is not an operating-system sandbox. Respect the execution
 permission contract and the host's installation decisions.

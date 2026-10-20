@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { ExtraPlugins } from "../packages/octo-runtime-daemon/dist/index.js";
+import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { waitFor } from "./runtime-fixture.js";
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
 

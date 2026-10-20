@@ -17,15 +17,14 @@ import {
   loadLocalOpenClawGateway,
   createOpenClawAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
-import { configureCliOpenClaw } from "@mininglamp-oss/octo-runtime-daemon-app/openclaw";
-import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer
-} from "@mininglamp-oss/octo-runtime-adapter-host";
+import { configureCliOpenClaw } from "../apps/cli/dist/openclaw.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 
 async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), "oh-connections-"));
+  const root = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ohc-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }
@@ -209,11 +208,11 @@ test("CLI daemon restart refreshes and authenticates rotated Home connection wit
     const child = spawn(
       process.execPath,
       [
-        join(repo, "apps/daemon/dist/index.js"),
+        join(repo, "apps/cli/dist/index.js"),
+        "executor-kernel",
+        "run",
         "--home",
         home,
-        "--socket",
-        join(root, "d.sock"),
         "--manifest",
         join(repo, "test/fixtures/adapters.json")
       ],
@@ -228,18 +227,17 @@ test("CLI daemon restart refreshes and authenticates rotated Home connection wit
     });
     const exited = once(child, "exit");
     try {
-      await waitFor(() => {
+      const client = attachKernel({ endpoint: componentEndpoint(home, "executor-kernel") });
+      t.after(() => client.close());
+      await waitFor(async () => {
         if (child.exitCode !== null) throw new Error(diagnostics);
-        const pid = join(home, "octo-daemon.pid");
-        return (
-          existsSync(pid) &&
-          readFileSync(pid, "utf8").trim() === String(child.pid) &&
-          existsSync(join(root, "d.sock")) &&
-          authenticated.filter((value) => value === token).length >= 2
+        return await client.status().then(
+          (status) => status.execution_ready && authenticated.includes(token),
+          () => false
         );
       }, 5000);
       const snapshot = await loadLocalOpenClawGateway(join(home, "default"));
-      assert.equal((await loadLocalOpenClawGateway(join(home, "work"))).token, token);
+      assert.equal((await loadLocalOpenClawGateway(join(home, "work"))).token, "before");
       assert.equal(snapshot.token, token);
       assert.equal(snapshot.url, `ws://127.0.0.1:${gateways[index].address().port}/`);
       if (previousDevice) assert.deepEqual(snapshot.device, previousDevice);
@@ -296,13 +294,13 @@ test("shared Host probes and invokes each Runtime connection and uses only the C
       };
     }
   });
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(adapter);
   const requests = new PassThrough(),
     responses = new PassThrough();
-  const server = new AdapterHostRpcServer({ host, input: requests, output: responses });
+  const server = new WorkerRpcServer({ host, input: requests, output: responses });
   server.listen(requests);
-  const client = new AdapterHostRpcClient({ input: responses, output: requests });
+  const client = new WorkerRpcClient({ input: responses, output: requests });
   t.after(() => {
     client.close();
     requests.destroy();

@@ -31,7 +31,7 @@ Run=7、Context=v3、Adapter transport=2 保持独立。未重建身份、Home�
 | F12 | Work App `c7d084c` | 三份测试桩同步已提交的本机项目与无标签 SDK 合同 |
 | F7 | 本记录所在提交 | 发行包、三仓检查、真实 renderer/Provider 验收及边界记录 |
 
-Work App 的[AGENTS.md](../../../../octo-work-app/AGENTS.md)明确覆盖上级旧 im-test 要求；[README 配置说明](../../../../octo-work-app/README.md#运行时配置)解释三个服务地址的派生、prod 启动和显式覆盖。未把其他任务的个人工作区、插件或服务拆分改动混入本任务提交。
+Work App 的AGENTS.md（历史外部路径 `octo-work-app/AGENTS.md`）明确覆盖上级旧 im-test 要求；README 配置说明（历史外部路径 `octo-work-app/README.md`，当前工作区未提供）解释三个服务地址的派生、prod 启动和显式覆盖。未把其他任务的个人工作区、插件或服务拆分改动混入本任务提交。
 
 ## 隔离验证
 

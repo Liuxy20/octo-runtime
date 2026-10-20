@@ -19,8 +19,6 @@ import {
   HOURLY_LOG_MAX_BYTES
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { resolveServiceControl } from "../apps/cli/dist/service-control.js";
-import { probeDaemon } from "../packages/octo-runtime-daemon/dist/runtime/runtime-contract.js";
-import { createDaemonRuntime } from "../packages/octo-runtime-daemon/dist/index.js";
 
 const hour = 3600000;
 function directory(t) {
@@ -184,106 +182,12 @@ test("concurrent processes cannot jointly exceed the same hourly file budget", a
 
 test("native service specs use explicit structured logging rather than implicit output capture", () => {
   for (const platform of ["darwin", "linux", "win32"]) {
-    const spec = resolveServiceControl({ platform, backend: {} }).spec({
-      home: "/tmp/runtime",
-      logs: "/tmp/runtime/logs"
-    });
+    const spec = resolveServiceControl({ platform, backend: {} }).spec(
+      "/tmp/runtime",
+      "executor-kernel"
+    );
     assert.equal(spec.args.includes("--managed-logs"), false);
     assert.equal(spec.stdoutPath, undefined);
     assert.equal(spec.stderrPath, undefined);
   }
 });
-
-test(
-  "real launcher enables only selected structured logs and preserves foreground output",
-  { timeout: 15000 },
-  async (t) => {
-    const root = directory(t);
-    const child = spawn(
-      process.execPath,
-      [
-        resolve("apps/daemon/dist/launcher.js"),
-        "--home",
-        root,
-        "--logs-dir",
-        join(root, "selected-logs"),
-        "--execution-only",
-        "--console",
-        "--manifest",
-        resolve("test/fixtures/adapters.json")
-      ],
-      {
-        env: { ...process.env, OCTO_RUNTIME_DEBUG: "1" },
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
-    const done = new Promise((resolve, reject) => {
-      child.once("error", reject);
-      child.once("close", (code, signal) => resolve({ code, signal }));
-    });
-    t.after(async () => {
-      if (child.exitCode === null && child.signalCode === null) child.kill("SIGTERM");
-      await done;
-    });
-    let stderr = "";
-    child.stdout.resume();
-    child.stderr.on("data", (chunk) => {
-      stderr = (stderr + chunk).slice(-4096);
-    });
-    await wait(
-      async () => (await probeDaemon(join(root, "sockets", "octo-runtime-daemon.sock"), 200))?.ready
-    );
-    await wait(() => {
-      try {
-        return files(join(root, "selected-logs")).some((name) => name.startsWith("kernel-"));
-      } catch (error) {
-        if (error.code === "ENOENT") return false;
-        throw error;
-      }
-    });
-    child.kill("SIGTERM");
-    const exit = await done;
-    assert.ok(exit.code === 0 || exit.signal === "SIGTERM", stderr);
-    assert.match(stderr, /daemon (ready|listening|stopping)/);
-    assert.equal(
-      files(join(root, "selected-logs")).some((name) =>
-        /^(service-|adapter-host-|embedded-runtime-)/.test(name)
-      ),
-      false
-    );
-  }
-);
-
-test(
-  "SDK explicit logging records Extra events and releases writers across account restarts",
-  { timeout: 20000 },
-  async (t) => {
-    const root = directory(t);
-    const runtime = createDaemonRuntime({
-      appId: "hourly-test",
-      home: root,
-      development: true,
-      logging: { directory: join(root, "selected-logs") },
-      extras: [
-        { name: "log-output", module: resolve("test/fixtures/log-output-extra.js"), config: {} }
-      ]
-    });
-    t.after(() => runtime.stop("quit"));
-    for (let i = 0; i < 2; i++) {
-      await runtime.startAccount({
-        subject: { type: "user", id: "test" },
-        tenants: [{ id: "space" }]
-      });
-      await runtime.stop("account-switch");
-    }
-    const account = readdirSync(join(root, "accounts"))[0];
-    const logs = join(root, "selected-logs", "extras");
-    const output = files(logs).filter((name) => name.startsWith("log-output-"));
-    assert.equal(output.length, 1);
-    const content = readFileSync(join(logs, output[0]), "utf8");
-    assert.equal(content.match(/fixture.started/g).length, 2);
-    assert.equal(content.match(/fixture.disposed/g).length, 2);
-    assert.doesNotMatch(content, /private body|bf_secret/);
-    assert.equal(readdirSync(join(root, "accounts", account)).includes("logs"), false);
-  }
-);

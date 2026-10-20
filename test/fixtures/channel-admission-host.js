@@ -1,11 +1,11 @@
-import { serveAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { appendFile } from "node:fs/promises";
 import { join } from "node:path";
 import { testAdapter } from "./test-adapter.js";
 
 // .octospec/tasks/channel-group-admission/plan.md：真实 IM/IPC 使用确定性执行端，
 // 只记录本轮测试标记，不调用模型、不记录 Context 或执行环境中的 Bot 凭据。
-serveAdapterHost([
+serveWorker([
   {
     ...testAdapter,
     async *invoke(request) {

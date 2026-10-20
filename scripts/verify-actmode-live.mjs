@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import codex from "../packages/octo-runtime-adapter-codex/dist/index.js";
 import claude from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import kimi from "../packages/octo-runtime-adapter-kimi-code/dist/index.js";
@@ -11,7 +11,7 @@ import opencode from "../packages/octo-runtime-adapter-opencode/dist/index.js";
 import mcode from "../packages/octo-runtime-adapter-mcode/dist/index.js";
 
 // 测试调用方显式选择模式与续接；不让 Runtime 决定产品策略。
-const host = new AdapterHost();
+const host = new AgentExecutor();
 for (const adapter of [codex, claude, kimi, opencode, mcode]) host.register(adapter);
 const workdir = await mkdtemp(join(tmpdir(), "octo-actmode-live-"));
 const results = [];

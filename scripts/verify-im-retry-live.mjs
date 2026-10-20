@@ -6,7 +6,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { AdapterHostRpcClient } from "../packages/octo-runtime-adapter-host/dist/rpc.js";
+import { WorkerRpcClient } from "../packages/octo-runtime-executor-kernel/dist/rpc.js";
 import { ImTask } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/task.js";
 import { createImInvocation } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/dispatcher.js";
 import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/auth.js";
@@ -48,7 +48,7 @@ const child = spawn(
   }
 );
 const exited = once(child, "exit");
-const rpc = new AdapterHostRpcClient({ input: child.stdout, output: child.stdin });
+const rpc = new WorkerRpcClient({ input: child.stdout, output: child.stdin });
 const marker = `IM_RETRY_${randomUUID().slice(0, 8)}`;
 const config = {
   bot_id: "live-retry-proof",

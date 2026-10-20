@@ -3,7 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import {
   createCodexAdapter,
   CodexEventNormalizer
@@ -45,7 +45,7 @@ test("Codex structured upstream failures survive canonical normalization and cat
 });
 
 async function failed(adapter, workdir = process.cwd()) {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(adapter);
   const events = [];
   for await (const frame of preparedFrames(

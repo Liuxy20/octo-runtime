@@ -1,4 +1,4 @@
-import { serveAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createExecutorFixture } from "../../test-support/executor-adapter.mjs";
 
-serveAdapterHost([createExecutorFixture()]);
+serveWorker([createExecutorFixture()]);

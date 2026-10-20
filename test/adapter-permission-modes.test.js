@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 import { createZcodeGuiAdapter } from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 
 const request = {
   protocolVersion: 2,
@@ -50,7 +50,7 @@ test("default adapters reject unsupported approval modes at their execution boun
 
 for (const approvalMode of ["ask", "assisted", "full_access"])
   test(`Host admits ${approvalMode} through the actual responder without feature labels`, async () => {
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     let invoked;
     host.register({
       metadata: {
@@ -77,7 +77,7 @@ for (const approvalMode of ["ask", "assisted", "full_access"])
 
 for (const protocolMode of ["canonical", "native"])
   test(`Host requires the actual ${protocolMode} responder for interactive approval`, async () => {
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     let invoked = false;
     host.register({
       metadata: {

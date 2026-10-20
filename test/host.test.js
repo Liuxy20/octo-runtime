@@ -4,12 +4,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Writable } from "node:stream";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer,
-  spawnAdapterHost
-} from "@mininglamp-oss/octo-runtime-adapter-host";
+  WorkerRpcClient,
+  WorkerRpcServer,
+  spawnWorker
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { contextHash, invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 
 const request = {
@@ -58,7 +58,7 @@ async function assertClosedRpcCalls(client, failure) {
 
 test("host rejects missing mandatory invocation inputs and untyped context before dispatch", async () => {
   let invoked = false;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -106,7 +106,7 @@ test("host rejects missing mandatory invocation inputs and untyped context befor
 
 test("host rejects legacy prompt, permission and reasoning contracts before dispatch", async () => {
   let invoked = false;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -167,7 +167,7 @@ test("host rejects legacy prompt, permission and reasoning contracts before disp
 
 test("host requires an actual responder for ask and assisted", async () => {
   let invoked = false;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -197,7 +197,7 @@ test("host requires an actual responder for ask and assisted", async () => {
 });
 
 test("host holds terminal until adapter stream cleanup succeeds", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: { protocol: "bad" + ".canonical", modes: ["canonical"], nativeMethods: [] },
@@ -227,7 +227,7 @@ test("host holds terminal until adapter stream cleanup succeeds", async () => {
 });
 
 test("host reports failure when adapter exits without terminal", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -254,7 +254,7 @@ test("host reports failure when adapter exits without terminal", async () => {
 });
 
 test("host classifies and redacts adapter-provided provider failures", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -295,7 +295,7 @@ test("host classifies and redacts adapter-provided provider failures", async () 
 });
 
 test("host normalizes unclassified analysis to an explicit fail-closed exposure", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -332,7 +332,7 @@ test("host normalizes unclassified analysis to an explicit fail-closed exposure"
 });
 
 test("host keeps step-scoped analysis messages separate and closes each round", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -403,7 +403,7 @@ test("host keeps step-scoped analysis messages separate and closes each round", 
 });
 
 test("host cancellation aborts provider and emits stopped once", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: { protocol: "slow" + ".canonical", modes: ["canonical"], nativeMethods: [] },
@@ -435,7 +435,7 @@ test("host cancellation aborts provider and emits stopped once", async () => {
 });
 
 test("host watchdog fails a provider that never emits its first protocol frame", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -482,7 +482,7 @@ test("host watchdog fails a provider that never emits its first protocol frame",
 });
 
 test("host watchdog uses the tool budget while a canonical tool call is open", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -536,7 +536,7 @@ test("host watchdog uses the tool budget while a canonical tool call is open", a
 });
 
 test("host shutdown aborts every active provider invocation before returning", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   let aborted = 0;
   host.register({
     metadata: {
@@ -586,10 +586,10 @@ test("host shutdown aborts every active provider invocation before returning", a
 test("RPC trace observes frame metadata without retaining payloads or changing the wire", async () => {
   const clientToServer = new PassThrough();
   const serverToClient = new PassThrough();
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   const traced = [];
-  new AdapterHostRpcServer({ host, output: serverToClient }).listen(clientToServer);
-  const client = new AdapterHostRpcClient({
+  new WorkerRpcServer({ host, output: serverToClient }).listen(clientToServer);
+  const client = new WorkerRpcClient({
     input: serverToClient,
     output: clientToServer,
     trace: (direction, frame) => traced.push({ direction, frame })
@@ -634,7 +634,7 @@ test(
       }
     });
     const frames = [];
-    const client = new AdapterHostRpcClient({
+    const client = new WorkerRpcClient({
       input,
       output,
       trace: (_direction, frame) => frames.push(JSON.parse(frame))
@@ -683,7 +683,7 @@ test(
       }
     });
     const frames = [];
-    const client = new AdapterHostRpcClient({
+    const client = new WorkerRpcClient({
       input,
       output,
       trace: (_direction, frame) => frames.push(JSON.parse(frame))
@@ -742,7 +742,7 @@ test(
       }
     });
     const frames = [];
-    const client = new AdapterHostRpcClient({
+    const client = new WorkerRpcClient({
       input,
       output,
       trace: (_direction, frame) => frames.push(JSON.parse(frame))
@@ -784,7 +784,7 @@ test(
       }
     });
     const frames = [];
-    const client = new AdapterHostRpcClient({
+    const client = new WorkerRpcClient({
       input,
       output,
       trace: (_direction, frame) => frames.push(JSON.parse(frame))
@@ -821,7 +821,7 @@ test(
         callback();
       }
     });
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     let started;
     const providerStarted = new Promise((resolve) => {
       started = resolve;
@@ -856,7 +856,7 @@ test(
       }
     });
     const frames = [];
-    new AdapterHostRpcServer({
+    new WorkerRpcServer({
       host,
       output,
       trace: (_direction, frame) => frames.push(JSON.parse(frame))
@@ -887,7 +887,7 @@ test(
   async (testContext) => {
     const clientToServer = new PassThrough();
     const serverToClient = new PassThrough();
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     let resume;
     const response = new Promise((resolve) => {
       resume = resolve;
@@ -944,8 +944,8 @@ test(
         resume(answer);
       }
     });
-    new AdapterHostRpcServer({ host, output: serverToClient }).listen(clientToServer);
-    const client = new AdapterHostRpcClient({ input: serverToClient, output: clientToServer });
+    new WorkerRpcServer({ host, output: serverToClient }).listen(clientToServer);
+    const client = new WorkerRpcClient({ input: serverToClient, output: clientToServer });
     testContext.after(() => {
       client.close();
       clientToServer.end();
@@ -1004,7 +1004,7 @@ test("RPC keeps AbortSignal local and cancels both pending ACK and active stream
         callback();
       }
     });
-    const client = new AdapterHostRpcClient({ input, output });
+    const client = new WorkerRpcClient({ input, output });
     t.after(() => {
       client.close();
       input.destroy();
@@ -1057,7 +1057,7 @@ test("pre-aborted RPC invocation sends no Provider command", async (t) => {
       callback();
     }
   });
-  const client = new AdapterHostRpcClient({ input, output });
+  const client = new WorkerRpcClient({ input, output });
   t.after(() => {
     client.close();
     input.destroy();

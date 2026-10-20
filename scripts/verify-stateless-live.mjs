@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { callDaemon } from "../packages/octo-runtime-daemon/dist/runtime/runtime-contract.js";
-import { invokeDaemonRun } from "../packages/octo-runtime-daemon/dist/runtime/run-stream.js";
+import { attachKernel } from "../packages/octo-runtime-executor-kernel/dist/index.js";
+import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { runCli } from "../apps/cli/dist/main.js";
 
 const home = process.env.OCTO_STATELESS_LIVE_HOME ?? "/tmp/octo-runtime-im-codex-test";
-const socketPath = join(home, "sockets", "octo-runtime-daemon.sock");
+const socketPath = componentEndpoint(home);
+const client = attachKernel({ endpoint: socketPath });
 const pages = await fetch("http://127.0.0.1:9222/json/list").then((response) => response.json());
 const page = pages.find((value) => value.type === "page" && value.url.includes("localhost"));
 assert.ok(page, "A real Work App renderer with CDP is required");
@@ -43,12 +45,18 @@ try {
   assert.equal(environment.server, "https://im-test.deepminer.com.cn");
   assert.equal(environment.loggedIn, true);
   assert.equal(environment.phase, "running");
-  const status = await callDaemon(socketPath, { method: "status" });
-  assert.equal(status.ready, true);
+  const status = await client.status();
+  assert.equal(status.execution_ready, true);
   assert.equal(status.storePath, undefined);
-  const channels = status.modules["channel-gateway"]?.state ?? [];
+  let componentStatus;
+  await runCli(["--home", home, "status"], {
+    output: (line) => {
+      componentStatus = JSON.parse(line);
+    }
+  });
+  const channels = componentStatus["channel-gateway"]?.runtime?.status?.bots ?? [];
   assert.ok(
-    channels.some((channel) => channel.type === "octo" && channel.connected),
+    channels.some((channel) => channel.state === "online"),
     "Live IM registration and connection required"
   );
   const legacyFiles = (await readdir(home)).filter((name) =>
@@ -77,11 +85,14 @@ try {
     workdir: process.cwd(),
     signal: AbortSignal.timeout(90_000)
   };
-  for await (const frame of invokeDaemonRun(
-    socketPath,
-    invocationInput(request, "canonical", "codex"),
-    { signal: request.signal }
-  )) {
+  const { ref } = await client.submit(invocationInput(request, "canonical", "codex"), {
+    signal: request.signal
+  });
+  const cancel = () => {
+    void client.cancel(ref, "QA timeout").catch(() => undefined);
+  };
+  request.signal.addEventListener("abort", cancel, { once: true });
+  for await (const frame of client.subscribe(ref)) {
     if (
       frame.kind === "canonical" &&
       frame.event.type === "message.delta" &&
@@ -90,6 +101,7 @@ try {
       answer += frame.event.payload.text ?? "";
     if (frame.kind === "control" && frame.control.type === "state") terminal = frame.control.state;
   }
+  request.signal.removeEventListener("abort", cancel);
   assert.equal(terminal, "completed");
   assert.equal(answer.trim(), marker);
   for (const file of before) assert.equal((await stat(join(home, file.name))).mtimeMs, file.mtime);
@@ -112,5 +124,6 @@ try {
     })
   );
 } finally {
+  client.close();
   cdp.close();
 }

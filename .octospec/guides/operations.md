@@ -3,8 +3,8 @@ type: Guide
 title: 本地 Runtime 运维
 description: 按身份、就绪、Provider 与扩展状态排障。
 tags: []
-timestamp: 2026-10-15T00:00:00Z
-implementation_baseline: df63c8f
+timestamp: 2026-10-20T00:00:00Z
+implementation_baseline: feat/executor-kernel-host-lifecycle
 ---
 
 # Runtime 运维
@@ -13,16 +13,17 @@ implementation_baseline: df63c8f
 
 ## 启动与检查
 
-HostApp 明确准备发行物及 Provider，本地 SDK 使用 `createDaemonRuntime → startAccount → invoke`。CLI 前台诊断：
+HostApp 准备所选模块和 Provider，通过 startOwnedKernel 或 attachKernel 取得执行端口，独立 startExtra。CLI 在两个终端分别运行组件：
 
 ```sh
-octo-runtime --home /absolute/runtime/state daemon run
+octo-runtime --home /absolute/runtime/state executor-kernel run
+octo-runtime --home /absolute/runtime/state channel-gateway run
 octo-runtime --home /absolute/runtime/state status
 octo-runtime --home /absolute/runtime/state adapter list
 octo-runtime --home /absolute/runtime/state adapter probe codex
 ```
 
-SDK 查看 `health.local.ready`、`adapterHostReady`、profiles 和扩展状态。socket 文件、历史 connected 值或扩展初始化成功均不能替代实际就绪／连接证据。Worker 接入包已移除，不再使用旧 worker-access 模块状态排障。
+SDK 查看 KernelClient.status 的 execution_ready、worker 状态及 Extra owned handle 的 status。socket 文件、历史 connected 值或 Extra 初始化成功均不能替代实际就绪／连接证据。全局 status 分别返回两个组件的 service/runtime 状态。
 
 ## 排障
 
@@ -40,7 +41,7 @@ SDK 查看 `health.local.ready`、`adapterHostReady`、profiles 和扩展状态�
 
 ## 日志与验收
 
-统一日志默认关闭。SDK 宿主显式传 `logging: { directory: "/absolute/logs" }`；Runtime CLI 使用 `octo-runtime daemon run --logs-dir /absolute/logs`，后台服务用 `daemon install --logs-dir /absolute/logs` 更新定义后重启。旧 OCTO_RUNTIME_DEBUG 不再创建独立 Host debug 文件；普通 start 不改已安装的服务定义。
+SDK Extra 的 logging 默认关闭，宿主可向 startExtra 显式传 `logging: { directory: "/absolute/logs" }`；owned Kernel 通过 worker 的 OCTO_RUNTIME_LOGS_DIRECTORY 环境指定目录。当前 CLI 为 Kernel worker 和 Gateway 配置 `<home>/logs`，不支持 --logs-dir/--verbose/--force。start 不改已安装的服务定义。旧 OCTO_RUNTIME_DEBUG 不创建独立 Host debug 文件。
 
 文件按 UTC 小时命名：内核 `<directory>/kernel-YYYYMMDDTHH.log`，Extra `<directory>/extras/<extra_type>-YYYYMMDDTHH.log`。每个序列保留最近 3 个实际日志文件，包含当前文件，单文件最多 100 MiB；没有新日志的小时不创建空文件。停机或空闲跨天不按时间年龄删除这 3 个文件，产生第四个文件后淘汰最旧归档。启动、首条小时写入及每 60 秒执行本序列清理，停止后不清理；其他类别、用户文件和旧固定文件不受影响。时钟回拨时保留当前活动文件，再按文件名时间保留两个最新归档。见[逐项实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
 

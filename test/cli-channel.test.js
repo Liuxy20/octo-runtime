@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { runCli } from "../apps/cli/dist/main.js";
-import { ExtraPlugins, readExtraDirectory } from "../packages/octo-runtime-daemon/dist/index.js";
+import { ExtraPlugins, readExtraDirectory } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import {
   validateImConfig,
   ImRuntime
@@ -23,18 +23,28 @@ const octo = (workdir, overrides = {}) => ({
 });
 
 test("generic extra configuration stays independent; CLI OpenClaw tool preparation is the only channel dependency", async () => {
-  for (const app of ["cli", "daemon"]) {
+  for (const app of ["cli"]) {
     const manifest = JSON.parse(
       await readFile(new URL(`../apps/${app}/package.json`, import.meta.url), "utf8")
     );
     assert.deepEqual(
       Object.keys(manifest.dependencies).filter((name) => name.includes("-extra-")),
-      app === "daemon" ? ["@mininglamp-oss/octo-runtime-extra-channel-gateway"] : []
+      ["@mininglamp-oss/octo-runtime-extra-channel-gateway"]
     );
   }
-  const daemon = await readFile(new URL("../apps/daemon/src/index.ts", import.meta.url), "utf8");
-  assert.doesNotMatch(daemon, /im-config|imBots|wecomBots|initializeCliImAdapters/);
-  assert.match(daemon, /readExtraDirectory/);
+  const kernel = JSON.parse(
+    await readFile(
+      new URL("../packages/octo-runtime-executor-kernel/package.json", import.meta.url),
+      "utf8"
+    )
+  );
+  assert.equal(
+    Object.keys(kernel.dependencies).some((name) => name.includes("-extra-")),
+    false
+  );
+  const cli = await readFile(new URL("../apps/cli/src/main.ts", import.meta.url), "utf8");
+  assert.match(cli, /startExtra/);
+  assert.match(cli, /startOwnedKernel/);
   let help = "";
   await runCli(["help"], {
     output: (line) => {

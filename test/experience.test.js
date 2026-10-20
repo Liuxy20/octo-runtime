@@ -2,11 +2,11 @@ import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { CodexEventNormalizer } from "../packages/octo-runtime-adapter-codex/dist/app-server.js";
 
 test("host emits activity without persisting private analysis and closes every activity", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {

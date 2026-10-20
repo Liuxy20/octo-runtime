@@ -30,7 +30,7 @@ Schema 定义 ProviderSession、AgentConfig、Context、执行计划、Host 帧�
 
 运行时常量、泛型 CanonicalEvent 以及带 `AbortSignal` 的 InvokeRequest 组合留在 [src/index.ts](../../packages/octo-runtime-protocol/src/index.ts)。函数、活对象及 AbortSignal 不通过 JSON wire 传输。
 
-当前 daemon 是 TypeScript 实现。跨仓库 Go 消费者的合同及生成流程由各消费者维护，不能把未来 Go daemon 写成当前实现或已批准的迁移目标。
+当前 Kernel、worker 入口及 Host SDK 是 TypeScript 实现。跨仓库 Go 消费者使用同一公开 Kernel IPC Schema/fixture，其生成流程由消费者维护。原生 binary 启停合同不表示本仓已实现 Go Loop 服务或生产 Go client。
 
 ## 修改流程
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { InvokeInput, invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { invokeRequest } from "./runtime-fixture.js";
 
 const bytes = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
@@ -84,7 +84,7 @@ test("removed channel snapshot metadata is ignored and never forwarded to execut
 
 test("every ingress can use the same plain JSON and exact model parts reach the adapter", async () => {
   let received;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "fixture",

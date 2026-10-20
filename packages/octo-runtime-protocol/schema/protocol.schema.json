@@ -7,6 +7,85 @@
   "type": "object",
   "additionalProperties": false,
   "definitions": {
+    "KernelLookupKey": {
+      "title": "KernelLookupKey",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "run_id",
+        "invocation_id",
+        "agent_session_id",
+        "session_generation",
+        "protocol_mode"
+      ],
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "invocation_id": { "type": "string", "minLength": 1 },
+        "agent_session_id": { "type": "string", "minLength": 1 },
+        "session_generation": { "type": "integer", "minimum": 0 },
+        "protocol_mode": { "enum": ["canonical", "native"] }
+      }
+    },
+    "KernelRunRef": {
+      "title": "KernelRunRef",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kernel_instance_id",
+        "run_id",
+        "invocation_id",
+        "stream_id",
+        "agent_session_id",
+        "session_generation",
+        "protocol_mode",
+        "protocol"
+      ],
+      "properties": {
+        "kernel_instance_id": { "type": "string", "minLength": 1 },
+        "run_id": { "type": "string", "minLength": 1 },
+        "invocation_id": { "type": "string", "minLength": 1 },
+        "stream_id": { "type": "string", "minLength": 1 },
+        "agent_session_id": { "type": "string", "minLength": 1 },
+        "session_generation": { "type": "integer", "minimum": 0 },
+        "protocol_mode": { "enum": ["canonical", "native"] },
+        "protocol": { "type": "string", "minLength": 1 }
+      }
+    },
+    "KernelRunSnapshot": {
+      "title": "KernelRunSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "oldest_seq", "latest_seq"],
+      "properties": {
+        "ref": { "$ref": "#/definitions/KernelRunRef" },
+        "oldest_seq": { "type": "integer", "minimum": 1 },
+        "latest_seq": { "type": "integer", "minimum": 0 },
+        "terminal": { "$ref": "#/definitions/HostFrame" }
+      }
+    },
+    "KernelStatus": {
+      "title": "KernelStatus",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ipc_version", "kernel_instance_id", "pid", "worker", "execution_ready"],
+      "properties": {
+        "ipc_version": { "const": 1 },
+        "kernel_instance_id": { "type": "string", "minLength": 1 },
+        "pid": { "type": "integer", "minimum": 1 },
+        "execution_ready": { "type": "boolean" },
+        "worker": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["generation", "state", "restart_attempt"],
+          "properties": {
+            "pid": { "type": "integer", "minimum": 1 },
+            "generation": { "type": "integer", "minimum": 0 },
+            "restart_attempt": { "type": "integer", "minimum": 0 },
+            "state": { "enum": ["starting", "ready", "recovering", "stopped", "exhausted"] }
+          }
+        }
+      }
+    },
     "RunProtocolErrorCode": {
       "title": "RunProtocolErrorCode",
       "enum": [

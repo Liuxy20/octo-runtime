@@ -119,4 +119,4 @@ Canonical `run.notice` 支持 `provider_diagnostic`，严重度固定 `warning`�
 
 - 负责：定义和校验统一执行、事件与 Context 合同。
 - 不负责：连接管理、provider 执行、业务状态。
-- 协作边界：见 [根架构与包边界](../../README.md#模块责任边界)。所有执行来源共用 adapter-host IPC；模块按职责提供协议、执行或宿主能力。
+- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。

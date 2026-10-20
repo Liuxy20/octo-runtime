@@ -70,7 +70,7 @@ R05/R06 的前提不依赖并发压测或恶意远端。安装缺失、可执行
 - files.ts 仍有正常使用：image-input.ts 使用 parseImageDimensions。若后续清理上传 helper，不得整文件删除或破坏首轮原生图片处理。
 - Node v24.19.0 下替换 fetch 为内存捕获函数，调用当前构建产物：groupNo 为 `a/../b?view=other#fragment` 时，Request URL 归一化为 `/v1/bot/groups/b?view=other#fragment`；带 fixture Authorization。fragment 不是发给服务端的内容，但改变了群 ID 的解析语义。
 - 同一次内存核实中，上传 helper 接受 `http://storage.example.invalid/object`，Request.redirect 为 follow，且不含 Authorization。所有值均为合成数据，无网络请求、真实凭据或文件上传；这仅证明请求构造，不是线上漏洞利用或业务验收。
-- [daemon server](../../../packages/octo-runtime-daemon/src/server.ts) 的 459–461 行已说明 Unix socket 是本地控制边界、0600 限定当前账号、无额外 RBAC。
+- [daemon server](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts) 的 459–461 行已说明 Unix socket 是本地控制边界、0600 限定当前账号、无额外 RBAC。
 - [同 SHA 的真实 CI](https://github.com/Mininglamp-OSS/octo-runtime/actions/runs/39001794839) 已完成 Ubuntu/macOS 的 Node 24 安装、Lint、类型构建、完整测试、打包和离线安装；CI Gate 成功。
 
 ## R01 / R02：缺陷成立，按已确认删除方案处理

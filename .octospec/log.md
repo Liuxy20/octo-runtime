@@ -23,7 +23,7 @@
 
 - 按用户要求将[SDK 动态 Context 计划](tasks/sdk-host-extra-contexts/brief.md)收敛为宿主完整接入流程：Buddy / 自研 CLI 经统一 SDK 启动、传函数、更新数据、查询、重载和退出，自带 CLI 保持 JSON。SDK 内部装配和竞态检查移入附录，移除额外 npm 分发前置条件；撤回内部加权 40 分作为整体 SDK 完成度，按 H01–H06 记录已有和待接能力。接入指南移除让宿主自建 loader 的示例，目标入口仍未实施，必要性与可执行性均 100。本轮仅文档，不修改 Runtime 或 demo 代码。
 
-- 按用户强调补充[Channel 逐轮加载宿主 Context 专题](guides/channel-dynamic-contexts.md)及[SDK 指南第 7 节](../SDK_CHANNEL_GATEWAY_GUIDE.md#7-逐轮加载-agent-系统提示词与业务-context)：函数引用初始化一次，宿主业务数据每轮读取，数据更新无需重载；同 key 动态整项覆盖静态项，固定人设需显式保留。同步架构/Extra 规则、原计划、README 和中文核心注释，区分当前 loader 与延期 SDK 接线，以及系统指令的 Provider 会话边界。构建、类型、lint、严格 TS 示例、相关回归及一万次强制 GC 加载通过，详见[验证记录](journal/shared/2026-10-17-channel-dynamic-context-docs.md)。
+- 按用户强调补充[Channel 逐轮加载宿主 Context 专题](guides/channel-dynamic-contexts.md)及[SDK 指南第 7 节](../SDK_CHANNEL_GATEWAY_GUIDE.md#逐轮-context)：函数引用初始化一次，宿主业务数据每轮读取，数据更新无需重载；同 key 动态整项覆盖静态项，固定人设需显式保留。同步架构/Extra 规则、原计划、README 和中文核心注释，区分当前 loader 与延期 SDK 接线，以及系统指令的 Provider 会话边界。构建、类型、lint、严格 TS 示例、相关回归及一万次强制 GC 加载通过，详见[验证记录](journal/shared/2026-10-17-channel-dynamic-context-docs.md)。
 
 - 按用户纠正统一 WebUI 包与目录为 `octo-runtime-extra-webui`，同步 workspace、锁文件、Schema、构建/打包引用、测试和当前指南；Extra 名称与配置目录仍为 webui，不保留旧包别名、不改写用户数据。按用户补充要求，为两阶段入口、动态 Context 覆盖、实际在途额度、取消和清理失败边界补充中文注释。历史命令保留原始名称，现行链接指向新目录，验证见[记录](journal/shared/2026-10-17-extra-webui-rename.md)。
 

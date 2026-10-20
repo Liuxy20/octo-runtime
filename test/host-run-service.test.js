@@ -1,10 +1,11 @@
 import { preparedFrames, preparedSubmit } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AdapterHost, HostRunService } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { HostRunService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { invokeRequest, waitFor } from "./runtime-fixture.js";
 function fixture(invoke, modes = ["canonical"]) {
-  const provider = new AdapterHost();
+  const provider = new AgentExecutor();
   provider.register({
     metadata: {
       protocolSupport: {
@@ -48,7 +49,7 @@ test("drain waits for direct invocation streams and closes admission", async () 
     await assert.rejects(host.drain(25), /HOST_DRAIN_TIMEOUT/);
     await assert.rejects(
       preparedSubmit(host, "fixture", input(), { protocolMode: "canonical" }),
-      /DAEMON_DRAINING/
+      /KERNEL_DRAINING/
     );
     release();
     await invocation;

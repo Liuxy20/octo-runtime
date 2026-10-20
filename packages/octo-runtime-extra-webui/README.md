@@ -35,10 +35,10 @@ octo-runtime extraset webui <<JSON
   }
 }
 JSON
-octo-runtime daemon run
+octo-runtime channel-gateway run
 ```
 
-`daemon run` 是前台启动；已安装后台服务时使用 `octo-runtime daemon restart` 读取新声明，再用 `octo-runtime status` 查看状态。保存声明不自动重启当前实例。CLI 没有单插件装卸命令；宿主可使用下述 SDK 装卸单个 Extra。旧 demo 的用户配置不会被自动删除，需要手动停用旧声明。
+`channel-gateway run` 是前台启动；已安装后台服务时使用 `octo-runtime channel-gateway restart` 读取新声明，再用 `octo-runtime status` 查看状态。保存声明不自动重启当前实例。CLI 没有单插件装卸命令；宿主可使用下述 SDK 装卸单个 Extra。旧 demo 的用户配置不会被自动删除，需要手动停用旧声明。
 
 ## SDK
 
@@ -46,8 +46,9 @@ SDK 不依赖 React。HostApp 安装并选择此包，显式加载时才导入�
 
 ```ts
 import { fileURLToPath } from 'node:url';
+import { startExtra } from '@mininglamp-oss/octo-runtime/host';
 
-await runtime.loadExtra({
+const extra = await startExtra({ endpoint, declaration: {
   name: 'webui',
   module: fileURLToPath(import.meta.resolve('@mininglamp-oss/octo-runtime-extra-webui')),
   config: {
@@ -59,12 +60,12 @@ await runtime.loadExtra({
         payload: { entries: [{ text: '我是明略科技的Octo助理' }] } }]
     }
   }
-});
-await runtime.extraStatus('webui');
-await runtime.unloadExtra('webui');
+} });
+await extra.status();
+await extra.stop();
 ```
 
-`runtime` 是已经启动的 `createDaemonRuntime()` 实例。也可把同一声明放进其 `extras` 数组。宿主须提供 Extra 的 `adapterHost.list` 只读端口；daemon 的共享 Host 已实现。旧宿主缺少此端口时返回 `ADAPTER_LIST_UNAVAILABLE`，不会虚构可用引擎，也不会安装 Provider。
+endpoint 指向已有 Kernel。Host SDK 在独立进程中加载 WebUI 并注入 adapterHost.list；停止 WebUI 不停止 Kernel，不安装 Provider。
 
 ## 数据与接口
 

@@ -2,18 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer
-} from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   INVOKE_REQUEST_MAX_BYTES,
   assertInvokeRequestSize,
   resolveStreamLimitPolicy
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { readBoundedLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { invokeDaemonRun } from "../packages/octo-runtime-daemon/dist/runtime/run-stream.js";
 import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
 import { fileURLToPath } from "node:url";
@@ -32,7 +28,7 @@ const input = () => ({
 });
 
 function fixture(t, invoke) {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "size-fixture",
@@ -47,8 +43,8 @@ function fixture(t, invoke) {
   });
   const upstream = new PassThrough(),
     downstream = new PassThrough();
-  new AdapterHostRpcServer({ host, output: downstream }).listen(upstream);
-  const client = new AdapterHostRpcClient({ input: downstream, output: upstream });
+  new WorkerRpcServer({ host, output: downstream }).listen(upstream);
+  const client = new WorkerRpcClient({ input: downstream, output: upstream });
   t.after(async () => {
     client.close();
     upstream.destroy();
@@ -88,47 +84,6 @@ test("RPC full frame accepts exactly 32 MiB and rejects one byte more without wr
     } else assert.equal((await collect(client.invoke(value))).at(-1).type, "run.completed");
   }
   assert.equal((await collect(client.invoke(input()))).at(-1).type, "run.completed");
-});
-
-test("direct Host, daemon sender and trusted environment include all submitted bytes", async (t) => {
-  let starts = 0;
-  const { host } = fixture(t, async function* () {
-    starts++;
-  });
-  const value = input();
-  value.runMetadata = { padding: "x".repeat(INVOKE_REQUEST_MAX_BYTES) };
-  await assert.rejects(collect(host.invoke(value)), /INVOKE_REQUEST_TOO_LARGE/);
-  await assert.rejects(
-    collect(invokeDaemonRun("/path/must-not-connect.sock", value)),
-    /INVOKE_REQUEST_TOO_LARGE/
-  );
-  assert.equal(starts, 0);
-  assert.throws(
-    () =>
-      assertInvokeRequestSize(input(), {
-        executionEnvOverrides: {
-          env_variables: [{ key: "LARGE_VALUE", value: "x".repeat(INVOKE_REQUEST_MAX_BYTES) }]
-        }
-      }),
-    /INVOKE_REQUEST_TOO_LARGE/
-  );
-  const image = randomBytes(2 * 1024 * 1024);
-  const part = {
-    type: "image",
-    mimeType: "image/png",
-    byteSize: image.length,
-    sha256: createHash("sha256").update(image).digest("hex"),
-    data: image.toString("base64")
-  };
-  assert.doesNotThrow(() => assertInvokeRequestSize({ ...input(), inputs: [part] }));
-  const images = Array.from({ length: 4 }, () => part);
-  const full = { ...input(), inputs: images, freshFallbackModelInputParts: images };
-  assert.doesNotThrow(() => assertInvokeRequestSize(full));
-  assert.throws(
-    () =>
-      assertInvokeRequestSize({ ...full, runMetadata: { padding: "x".repeat(11 * 1024 * 1024) } }),
-    /INVOKE_REQUEST_TOO_LARGE/
-  );
 });
 
 test("oversized raw line does not abort an active run or the next invocation", async (t) => {
@@ -205,7 +160,7 @@ test("unterminated oversized record has a finite discard timeout", async () => {
 test("oversized response errors are handled by both input and readline", async () => {
   const input = new PassThrough(),
     output = new PassThrough();
-  const client = new AdapterHostRpcClient({ input, output, maximumInputBytes: 512 * 1024 });
+  const client = new WorkerRpcClient({ input, output, maximumInputBytes: 512 * 1024 });
   const rejected = assert.rejects(client.request("list"), (error) => {
     assert.match(error.message, /HOST_FRAME_TOO_LARGE/);
     assert.equal(error.boundary, "host.rpc_transport");

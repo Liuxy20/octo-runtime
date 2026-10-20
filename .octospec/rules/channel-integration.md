@@ -22,7 +22,7 @@ supersedes: []
 
 Channel Gateway 是长期 IM Agent 的业务入口，管理固定 Agent workdir、频道与 session/binding 映射、reset、本轮历史与 mention 指引以及结果投递。固定目录和 reset 的关系是架构决策，不是通用 Host 的功能计划。sessionId 改变不产生新目录；Host 已有其他目录准备能力也不构成 IM 的每会话目录需求。
 
-通用 `AdapterHost.invoke` 处理已给定的一次执行，不管理上述 IM 策略。修改请求、会话或目录行为时必须先区分业务与执行责任，见[架构边界与评审要求](../guides/im-agent-invocation-boundary.md)。
+通用 `AgentExecutor.invoke` 处理已给定的一次执行，不管理上述 IM 策略。修改请求、会话或目录行为时必须先区分业务与执行责任，见[架构边界与评审要求](../guides/im-agent-invocation-boundary.md)。
 
 2026-10-16 F16 评审再次明确：不得混合 ChannelGateway 的渠道接入责任与 AgentRun 的执行责任。业务方/宿主确定长期 Agent 配置，Channel 使用该配置完成消息准入、本轮输入、会话关联与结果投递；执行层按已确定的合同处理目录准备、Provider 调用、权限/审批及执行生命周期。渠道 session/reset 不得隐式派生、切换、迁移或清理工作目录；通用执行层有目录能力不构成渠道新增目录管理的需求。AgentRun 在此表示执行职责，不新增组件或协议。详见[F16 责任边界评审](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf16-逐会话工作目录)。
 
@@ -38,15 +38,15 @@ Channel Gateway 是长期 IM Agent 的业务入口，管理固定 Agent workdir�
 
 具体改造见 [IM 长任务与 Codex 重试方案](../tasks/im-long-running-retry/brief.md)。已实现工具或交互出现前、明确 Codex 暂态失败的有界重试；原生提示仍不触发第二次 invoke，但纳入 Extra 恢复预算。工具执行后的安全恢复与 Host 断流续流仍待实施，结果未知不盲目重跑。源码默认值不能作为已部署或真实持续一天运行的证据；验证范围见任务记录。
 
-Octo 与 WeCom 使用各自的可选 Extra 包，通过注入的共享 Host 执行。代码分别有默认函数式 Extra 入口和对象式 daemon module 工厂；两者参数不同，不能混用。宿主显式携带和启用包，不要求 Worker 注册。
+Octo 与 WeCom 使用各自的可选 Extra 包，在独立子进程通过指定 Kernel endpoint 执行。仅保留默认函数式 Extra 入口；旧对象式 daemon module 工厂已删除。宿主通过 startExtra 显式携带和启用插件，不要求云端注册。
 
-ChannelGateway 与 WeCom 各自以整个 Extra 为加载、卸载和配置重载单位。宿主可编辑公开 Bot 配置，但不调用插件内部 manager、逐 Bot 运行控制或 WS 管理方法；逐 Bot 编辑界面转换为完整配置及对应 Extra 重载。主要单机单 Bot 场景不存在其他 Bot 的连带断线，不为少数多 Bot 在配置更新时短暂重连新增局部热更合同。原因与约束见 [Extra 整体生命周期规则](extras.md#整体生命周期与最小公开接口)。
+ChannelGateway 与 WeCom 各自以整个 Extra 为加载、卸载和配置重载单位。宿主可编辑公开 Bot 配置，但不调用插件内部 manager、逐 Bot 运行控制或 WS 管理方法；逐 Bot 编辑界面转换为完整配置及对应 Extra 重载。主要单机单 Bot 场景不存在其他 Bot 的连带断线，不为少数多 Bot 在配置更新时短暂重连新增局部热更合同。原因与约束见 [Extra 整体生命周期规则](extras.md#配置和重载)。
 
 ## 本轮输入
 
 2026-10-17 群准入合同：启停与范围分开表达。Octo Bot 的 groups_enabled 省略或 true 开启群/话题入口，false 关闭全部群/话题；group_ids 省略、null 或 [] 不增加群范围限制，非空数组按父群 ID 限定群及话题。两个字段均不影响私聊。groups_enabled 的 null/非布尔值及 group_ids 的错误类型/空 ID 必须拒绝。无旧空名单禁用群的兼容分支，需要禁用时明确写 groups_enabled: false。
 
-这里的“不限制”只针对群范围，不代表放开授权：allowed_sender_ids 省略仍仅允许认证所得 owner，显式名单替代默认 owner，[] 拒绝所有发送者，null 非法；自身、错 Space、非法消息和无真实 @ 的群消息继续拒绝。名单外群不会因直接点名而放行；话题按父群检查，但执行和回复留在原话题地址。配置解释和准入属于 Channel，不由宿主、Context renderer 或 AdapterHost 补救。事故证据、配置例子和验收见[群准入专项](../tasks/channel-group-admission/plan.md)。
+这里的“不限制”只针对群范围，不代表放开授权：allowed_sender_ids 省略仍仅允许认证所得 owner，显式名单替代默认 owner，[] 拒绝所有发送者，null 非法；自身、错 Space、非法消息和无真实 @ 的群消息继续拒绝。名单外群不会因直接点名而放行；话题按父群检查，但执行和回复留在原话题地址。配置解释和准入属于 Channel，不由宿主、Context renderer 或 Kernel/AgentExecutor 补救。事故证据、配置例子和验收见[群准入专项](../tasks/channel-group-admission/plan.md)。
 
 2026-10-16 F25 用户确认：尊重真实发送者的明确授权，不因发送者是其他已知 Bot 而额外拒绝。当前 allowed_sender_ids 同时用于私聊和群/话题，显式名单替代默认 owner；群/话题仍须满足允许群及真实 mention 条件，回复留在原频道或话题、按其权限可见。自身消息继续拒绝，不通过正文或名称猜测 Bot 身份，也不新增私聊/群聊拆分授权开关。
 
@@ -62,7 +62,7 @@ Octo 群/话题消息必须通过真实发送者、Space 与群范围准入，�
 
 Octo 与 WeCom 的 Bot 配置不包含渠道 `type`；平台由加载的 Extra 包确定。`adapter.adapter_type` 继续用于选择执行引擎，状态和执行元数据中的平台由插件自身输出。
 
-Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，不使用字段白名单拒绝整个配置。可选 `bot_name` 为本地展示名称，省略时使用 `bot_id`，不参与身份或授权。CLI/daemon 统一经 Extra 声明装配，不提供渠道专用命令或文件读取。`extraset` 原样保存并替换整份插件声明，多机器人由插件自己的 `config.bots` 数组表达；Bot 校验、默认值与连接管理属于插件。
+Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，不使用字段白名单拒绝整个配置。可选 bot_name 为本地展示名称，省略时使用 bot_id，不参与身份或授权。CLI 的 channel-gateway 六动作只管理这个独立 Extra；extraset 原样保存并替换整份声明，restart 读取新配置。多机器人由 config.bots 表达；Bot 校验、默认值与连接管理属于插件。WeCom 等其他 Extra 由 SDK 宿主独立管理。
 
 业务渠道决定 Actor、Trigger、Target、Input 和本轮 Context，并在调用前处理业务 defaults/mandatory。Octo 群固定加载 GROUP.md，话题固定加载群和本话题规则，不设置 group_rules/topic_rules 开关；404 明确记录不存在，权限或网络失败不伪装成空规则。规则、历史读取和消息 selection 均属于渠道业务选择，不是 Host 的自动采集能力。F18 的开关清理已实施，验证见[实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
 
@@ -102,11 +102,11 @@ octo-cli 是业务团队共同维护的 Go 二进制程序，提供 Octo 各业�
 
 - gateway 使用 `OCTO_BOT_TOKEN` 和 `OCTO_API_BASE_URL` 为 octo-cli 提供身份与地址。普通子进程 Adapter 每轮使用接收消息的连接已解析并通过身份校验的 Bot 凭据；OpenClaw 使用下述 CLI 预配置例外。API 地址取对应渠道配置的 `api_url` 并移除末尾 `/api` 和尾部斜杠。不得从 WS 消息、正文或请求 `envs` 获取这两个强制值。
 - 这两个值属于 gateway 为工具调用提供的执行环境，不追加到发起方 Context、控制指令、模型输入、业务快照或运行元数据。Context 的 `envs` 保持额外执行配置的既有语义；gateway 的两个强制值覆盖其中及设备环境中的同名值，其他变量保持原有规则。
-- 普通子进程 Adapter 的覆盖必须按调用隔离并实际到达 Provider 及其启动的 `octo-cli`，不得修改全局 `process.env` 或把某个 Bot 的凭据设置到共享 AdapterHost 进程环境。无法按轮应用时，必须在工具执行前明确失败，不得声称覆盖成功。
+- 普通子进程 Adapter 的覆盖必须按调用隔离并实际到达 Provider 及其启动的 `octo-cli`，不得修改全局 `process.env` 或把某个 Bot 的凭据设置到共享 worker 进程环境。无法按轮应用时，必须在工具执行前明确失败，不得声称覆盖成功。
 - 普通子进程 Adapter 的 Token、API 地址及连接代次必须绑定同一连接。重连或配置替换后，新执行使用新连接配置；旧连接排队消息不得改用新 Bot 凭据。凭据不写入日志、状态、错误详情或提交。
 - OpenClaw 例外：由 CLI 编排层按当前渠道配置，把这两个变量写入目标 OpenClaw 实际读取的全局 `.env`（通常为 `~/.openclaw/.env` 或 `$OPENCLAW_STATE_DIR/.env`）。复用 CLI 发现来源，必要时调用只读 `openclaw config file --json` 确认实例；不得在 Adapter/probe/invoke 中扫描或写文件。不同目标目录分别写入；同一文件按配置处理顺序后写覆盖前写，不拒绝多个 Bot 使用同一目标。只更新这两个变量，保留其他内容。Gateway 重启由人工处理，写入完成不表示正在运行的 Gateway 已生效。此路径使用实例共享身份，不承诺逐轮或逐 Agent 隔离；不向 OpenClaw 的每轮调用传入那两个内部覆盖项。
 - Host/Adapter 只承载按调用传递的执行值，不读取 gateway 配置、不理解 OCTO 变量的业务来源。实现所需的内部传递扩展不得改变 Context v3、Run 7 或桌面调用方自行选择身份并使用 `envs` 的合同。
-- F23 已确认：OpenClaw Gateway 按独立 Agent 实例使用固定环境，符合当前需求；CLI daemon 启动编排配置其实例 `.env`，不修改上游 OpenClaw 设计或源码，不增加特殊 `session.create` 注入。Codex/Claude Code 等通用执行路径按原生能力逐轮传递。不得将 OpenClaw 无逐轮环境载体重新列为待补功能；原生加载优先级、人工重启及真实生效验证边界继续保留。
+- F23 已确认：OpenClaw Gateway 按独立 Agent 实例使用固定环境，符合当前需求；CLI executor-kernel 启动编排配置其实例 `.env`，不修改上游 OpenClaw 设计或源码，不增加特殊 `session.create` 注入。Codex/Claude Code 等通用执行路径按原生能力逐轮传递。不得将 OpenClaw 无逐轮环境载体重新列为待补功能；原生加载优先级、人工重启及真实生效验证边界继续保留。
 - F24 用户确认的身份选择：普通调用以当前 Extra Bot 的合法身份及 API 配置为权威，覆盖进程级同名默认值，不能串用其他 Bot。OpenClaw 同一实例只从启用、合法且 `adapter_type=openclaw` 的配置中按顺序取最后一项，用户可通过调整 items 顺序主动选择实例工具身份；其他 Adapter 项不得成为候选，没有 OpenClaw 候选时不借用其他 Bot。此为实例级开放配置能力，不新增身份开关或逐轮注入。候选筛选修正已实施并通过临时目录回归；配置错误明确报告，排序不绕过原生环境优先级或人工重启要求，不声称用户当前运行实例已加载。
 - 两种注入原理分别保持：普通 Adapter 每次调用使用自己所属 Bot 的配置；OpenClaw 启动准备读取配置、写实例共享 `.env`，再由 Gateway 原生加载。只有后者采用同实例最后一个合法 OpenClaw 配置的选择规则，不让其他 Adapter 共用最后一项的身份或统一写共享 `.env`。
 - `octo-cli` 是否安装及版本由 HostApp 决定。gateway 不因收到消息而隐式下载或安装工具。本节不保证 Provider 专用配置或工具显式重新设置环境后仍使用相同身份，也不把 workdir 当作凭据隔离沙箱。
@@ -130,9 +130,9 @@ F22 补充在线状态归属：客户端维持 WS 长连接、参与既有协议
 
 2026-10-16 Octo Channel Gateway 已在源码中拆分首次启动与断线恢复：首次任何连接失败进入 failed，保留 error，不自动重试；本次启动曾完整上线后才允许暂态断线恢复，等待 5/10/20/30/30 秒。恢复过程保持 retrying/connected=false，完整成功才变回 online、清连接错误并归零计数。只有 online 为健康，Extra loaded 不表示 Bot 在线；主动停止为 stopped 且取消在途连接与重试。未知协议或明确终端拒绝进入 failed。配置错误仍为 config_error，不与连接失败混用。
 
-连接状态由 Extra 持有，Host/daemon 不解释字段或提供第二套重连。任务、Provider、卡片及投递诊断不污染连接 state/error；恢复不重新 invoke、不保证旧消息已送达。首次失败后的重试由宿主显式重新启动触发；不再后台轮询缺失凭据。详细状态图、并发与服务端错误证据要求见[状态机任务](../tasks/channel-connection-state-machine/brief.md)。源码实现不代替部署或实际合盖验收，结果按任务记录说明。
+连接状态由 Extra 持有，HostApp/Kernel 不解释字段或提供第二套重连。任务、Provider、卡片及投递诊断不污染连接 state/error；恢复不重新 invoke、不保证旧消息已送达。首次失败后的重试由宿主显式重新启动触发；不再后台轮询缺失凭据。详细状态图、并发与服务端错误证据要求见[状态机任务](../tasks/channel-connection-state-machine/brief.md)。源码实现不代替部署或实际合盖验收，结果按任务记录说明。
 
-2026-10-16 F22 进一步明确：恢复资格属于各连接本次启动周期，不引入跨 Bot 全局健康联动、全组启动回滚、全局恢复管理器或逐 Bot 持久协调锁。宿主可以汇总公开状态用于展示，但不得按汇总健康重启失败 Bot、整个 Extra 或 AdapterHost；显式整体配置重载继续按生命周期合同执行。首次失败就报告失败，只有本周期曾完整上线的连接才可自动恢复；终端拒绝和主动停止后不得自动争抢连接。
+2026-10-16 F22 进一步明确：恢复资格属于各连接本次启动周期，不引入跨 Bot 全局健康联动、全组启动回滚、全局恢复管理器或逐 Bot 持久协调锁。宿主可以汇总公开状态用于展示，但不得按汇总健康重启失败 Bot、整个 Extra 或 Kernel；显式整体配置重载继续按生命周期合同执行。首次失败就报告失败，只有本周期曾完整上线的连接才可自动恢复；终端拒绝和主动停止后不得自动争抢连接。
 
 这里的轻量/无状态要求是不依赖跨 Bot 全局业务状态或持久协调账本，并非删除连接必需的局部内存状态。socket、取消信号、当前错误、单连接恢复计数与计时器仍由插件封装。少数同机多 Bot 的特殊操作不构成扩大接口的理由；普通网络中断也会发生，不能因此删除既有逐连接恢复。此约束不授权清除身份、Home、用户配置或 Provider 原生状态。用户意见、旧方案事实与工程判断见 [F22 评审](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf22-就绪状态连接状态与单实例锁)。
 

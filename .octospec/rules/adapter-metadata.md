@@ -51,7 +51,7 @@ OpenClaw 声明两种来源，Adapter 边界都要求有效目标；公共 `Invo
 - `protocolSupport`：native／canonical 输出模式及原生协议标识。
 - `mcp`、`workspace`：本地 MCP 配置支持和工作目录行为。
 
-自有 `metadata.capabilities` 已删除。`react` 没有可检查的本地执行定义，不作为默认值、发现结果、注册要求或准入条件。业务标签及其匹配由业务方管理，不在 SDK、Host、daemon 或 Adapter 内建立能力目录、AbilityProvider、Binding 或业务执行目标注册中心。
+自有 `metadata.capabilities` 已删除。`react` 没有可检查的本地执行定义，不作为默认值、发现结果、注册要求或准入条件。业务标签及其匹配由业务方管理，不在 SDK、Kernel、Core 或 Adapter 内建立能力目录、AbilityProvider、Binding 或业务执行目标注册中心。
 
 Provider 的 `available`、认证、目标 Agent、当前输入可执行性与执行完成分别判断。可用性以实际 probe 为准，不证明当前输入可执行或执行成功。
 
@@ -65,7 +65,7 @@ Host 按执行合同校验来源、输出模式和实际交互 responder；审�
 
 - 执行计划不再定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知执行计划字段拒绝，不进行改名转换。
 - 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。通过既有 adapter 选择执行实现，Provider Agent 目标仍使用 `providerAgentId`。
-- SDK、AdapterHost 加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
+- SDK、worker 加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。
 
@@ -83,7 +83,7 @@ manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点�
 
 开发者用法、公开 import、完整 Extra/Adapter 示例及 SDK/CLI 兼容边界见[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)。公开合同属于增量导出，不能据此声称使用旧物理清单路径的宿主无需迁移。
 
-- [Adapter SDK](../../packages/octo-runtime-adapter-sdk/src/index.ts)、[Adapter Host](../../packages/octo-runtime-adapter-host/src/index.ts)。
+- [Adapter SDK](../../packages/octo-runtime-adapter-sdk/src/index.ts)、[Adapter Host](../../packages/octo-runtime-executor-kernel/src/index.ts)。
 - [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[本地执行配置解析](../../packages/octo-runtime-executor-core/src/context.ts)。
 - [context-mcp.test.js](../../test/context-mcp.test.js)、[native-host.test.js](../../test/native-host.test.js)。
 

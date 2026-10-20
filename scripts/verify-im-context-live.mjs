@@ -22,9 +22,9 @@ import {
 import { parseCardAction } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/card-action.js";
 import { interactionAnswer } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/interaction-card.js";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
-import { ExtraPlugins } from "../packages/octo-runtime-daemon/dist/index.js";
+import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
 import Ws from "ws";
 import {
@@ -452,7 +452,7 @@ if (
   });
   const root = await mkdtemp(join(tmpdir(), "octo-f31-live-"));
   const logging = new RuntimeLogging({ directory: join(root, "logs") });
-  const host = new AdapterHost({ log: logging.kernel });
+  const host = new AgentExecutor({ log: logging.kernel });
   const adapter = createCodexAdapter();
   const invoke = adapter.invoke.bind(adapter);
   host.register({

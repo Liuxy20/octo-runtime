@@ -10,7 +10,7 @@ tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["apps/cli/**","packages/octo-runtime-executor-core/**","packages/octo-runtime-protocol/**","packages/octo-runtime-adapter-host/**","packages/octo-runtime-daemon/**","packages/octo-runtime-extra-*/**"]
+  paths: ["apps/cli/**","packages/octo-runtime-executor-core/**","packages/octo-runtime-protocol/**","packages/octo-runtime-executor-kernel/**","packages/octo-runtime-host-sdk/**","packages/octo-runtime-extra-*/**"]
   touches: ["invoke","protocol","multimodal"]
 source: self
 supersedes: []
@@ -18,15 +18,15 @@ supersedes: []
 
 # 统一 Invoke JSON 合同
 
-原始 TS class 是本包的 `InvokeInput`，运行时用 `InvokeInput.check(value)` 校验。普通 JSON 对象满足结构类型即可，不要求 `new`。CLI playboard、SDK、AdapterHost、gateway、wecom、SSE 使用同一对象。示例不是字段全集。
+原始 TS class 是本包的 `InvokeInput`，运行时用 `InvokeInput.check(value)` 校验。普通 JSON 对象满足结构类型即可，不要求 new。CLI playboard、SDK、AgentExecutor、gateway、wecom、SSE 使用同一对象。示例不是字段全集。
 
 只有 `inputs`、`contexts` 必填；其他字段可选。默认值在执行边界解析，不写回调用方对象。未知可选扩展忽略，已识别字段继续校验。Context=v3、Run schema_version=7、内部 Adapter protocolVersion=2 是三个独立合同；统一包装不机械修改版本。
 
-AdapterHost.invoke、RpcClient.invoke 和 daemon SDK 共用 `invoke(input, environment)`。RPC 传输原输入，只有 Host 调用 prepareInvokeInput 解析执行默认值和内部请求；不得按入口或 native/canonical 模式另建执行准备路径。createInputInvoke 只选择同一源流视图，invokeFrames 也使用同一个 input/environment；旧三参数 HostInvoke/createHostInvoke、HostInvokeWireOptions 和模式序列化函数已删除。signal 留在 environment，RPC 映射为 cancel，服务端用自己的 AbortController 接回同一 Host 流程。实施与验收范围见[任务](../tasks/unify-invoke-transport/brief.md)。
+AgentExecutor.invoke 与 worker RPC 使用 input/environment；公开 Kernel client 通过 submit(input, environment) 接纳，再以完整 ref 订阅源流。Extra 注入端口将 invoke 映射为 submit+subscribe，不复制执行准备。只有 Core 调用 prepareInvokeInput 解析默认值和内部请求；createInputInvoke 仅选择同一源流视图。signal 不进入 JSON，取消通过明确控制请求表达。完整 wire 和所有权见[本地执行合同](local-execution.md)。
 
 这是通用单次执行合同，不是长期 IM Agent 管理接口。sessionId 标识会话，不决定 workdir；Provider 会话续接与目录选择分别按本轮输入及真实 Provider 约束处理。IM 固定工作目录、reset 和历史采集由 Channel 负责，不能推导为通用 Host 按 session 建目录或补业务背景。详见[责任边界](../guides/im-agent-invocation-boundary.md)。
 
-提前取消必须在发送 RPC 或启动 Provider 前失败。执行中取消沿原 invocationId 发送；接纳期间服务端也持有同一 AbortController，不能因回执尚未送达而丢失取消。客户端停止消费或连接断开时执行既有取消和资源清理合同；源帧的回执、排序和终态校验继续有效。
+提前取消必须在发送 RPC 或启动 Provider 前失败。执行中取消使用原 RunRef；接纳与取消竞态不能丢掉已接纳的身份。关闭 attached client、订阅 iterator 或 socket 不取消已接纳 Run。Extra.stop 显式取消它拥有的调用；Kernel.stop 负责内核排空与受管进程清理。源帧的回执、排序和终态校验继续有效。
 
 ## 完整顶层字段
 

@@ -1,0 +1,32 @@
+{
+  "name": "@mininglamp-oss/octo-runtime-host-sdk",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./extra": {
+      "types": "./dist/extras.d.ts",
+      "import": "./dist/extras.js"
+    },
+    "./extra-config": {
+      "types": "./dist/extra-config.d.ts",
+      "import": "./dist/extra-config.js"
+    },
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "dependencies": {
+    "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
+    "@mininglamp-oss/octo-runtime-protocol": "workspace:*"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

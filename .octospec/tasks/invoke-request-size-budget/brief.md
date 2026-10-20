@@ -12,7 +12,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 状态：已实现，并通过定向回归与 im-test 独立 Host 实测。用户将先前 5 MiB 的决定更新为“整个请求最多 32 MiB，单图保持 2 MiB，历史仍只取纯文本”。四张 2 MiB 图片经 base64 约 10.7 MiB，主输入及 fallback 重复约 21.3 MiB，因此采用 32 MiB。每份请求的文本、Context、图片 base64、显式恢复输入及实际发送的可信执行环境和包装都计入总量。验证见[交付记录](../../journal/shared/2026-10-16-invoke-size-delivery.md)。
 
-现有[独立图片专项](../channel-image-input/brief.md)支持 Codex 独立图片，[多模态协议](../../../packages/octo-runtime-protocol/src/multimodal.ts)允许单图 2 MiB、每组最多 4 张。审查用约 787 KiB 合法 PNG 构造约 1.05 MB RPC，触发 [RPC 服务端](../../../packages/octo-runtime-adapter-host/src/rpc.ts) 的 512 KiB 单行限制及未处理的 readline 错误，导致共享 Host 退出。原真实识图脚本直调 AdapterHost，没有覆盖 daemon 到独立 Host 的完整路径。
+现有[独立图片专项](../channel-image-input/brief.md)支持 Codex 独立图片，[多模态协议](../../../packages/octo-runtime-protocol/src/multimodal.ts)允许单图 2 MiB、每组最多 4 张。审查用约 787 KiB 合法 PNG 构造约 1.05 MB RPC，触发 [RPC 服务端](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/rpc.ts) 的 512 KiB 单行限制及未处理的 readline 错误，导致共享 Host 退出。原真实识图脚本直调 AdapterHost，没有覆盖 daemon 到独立 Host 的完整路径。
 
 ## 大小合同
 

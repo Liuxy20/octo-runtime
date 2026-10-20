@@ -7,11 +7,8 @@ import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { PassThrough } from "node:stream";
 import { octoCliEnvironment } from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
-import {
-  configureCliOpenClaw,
-  syncCliOpenClawToolEnvironment
-} from "@mininglamp-oss/octo-runtime-daemon-app/openclaw";
-import { spawnAdapterHost, AdapterHostRpcClient } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { configureCliOpenClaw, syncCliOpenClawToolEnvironment } from "../apps/cli/dist/openclaw.js";
+import { spawnWorker, WorkerRpcClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   assertInvokeRequest,
   invocationInput,
@@ -76,8 +73,8 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
       ]
     })
   );
-  const host = await spawnAdapterHost({
-    entrypoint: resolve("packages/octo-runtime-adapter-host/dist/runner.js"),
+  const host = await spawnWorker({
+    entrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
     manifest,
     env: {
       ...process.env,
@@ -156,7 +153,7 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
 test("old Host cannot silently ignore the tool environment", async (t) => {
   const input = new PassThrough(),
     output = new PassThrough();
-  const client = new AdapterHostRpcClient({ input, output });
+  const client = new WorkerRpcClient({ input, output });
   t.after(() => {
     client.close();
     input.destroy();

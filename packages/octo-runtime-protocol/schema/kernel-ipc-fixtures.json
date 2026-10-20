@@ -1,0 +1,53 @@
+{
+  "ipc_version": 1,
+  "cases": [
+    {
+      "name": "status",
+      "request": { "jsonrpc": "2.0", "id": "status-1", "method": "status", "params": {} },
+      "valid": true,
+      "result_definition": "KernelStatus"
+    },
+    {
+      "name": "list",
+      "request": { "jsonrpc": "2.0", "id": "list-1", "method": "adapter.list", "params": {} },
+      "valid": true
+    },
+    {
+      "name": "missing-run",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "get-1",
+        "method": "agent_run.get",
+        "params": {
+          "key": {
+            "run_id": "r1",
+            "invocation_id": "i1",
+            "agent_session_id": "s1",
+            "session_generation": 0,
+            "protocol_mode": "native"
+          }
+        }
+      },
+      "valid": true,
+      "error_code": "RUN_NOT_AVAILABLE"
+    },
+    {
+      "name": "numeric-id",
+      "request": { "jsonrpc": "2.0", "id": 1, "method": "status", "params": {} },
+      "valid": false,
+      "error_code": "INVALID_REQUEST"
+    },
+    {
+      "name": "unknown-params",
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "bad-1",
+        "method": "status",
+        "params": { "extra": true }
+      },
+      "valid": false,
+      "error_code": "INVALID_PARAMS"
+    },
+    { "name": "batch", "request": [], "valid": false, "error_code": "INVALID_REQUEST" }
+  ]
+}

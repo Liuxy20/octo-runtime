@@ -1,4 +1,4 @@
-import type { ChildProcess } from "node:child_process";
+import { execFile, type ChildProcess } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
 /**
@@ -8,7 +8,7 @@ import { setTimeout as delay } from "node:timers/promises";
  */
 export function createProcessCleanup(
   child: ChildProcess,
-  { processGroup = false, termGraceMs = 400, killGraceMs = 200 } = {}
+  { processGroup = false, processTree = false, termGraceMs = 400, killGraceMs = 200 } = {}
 ): () => Promise<void> {
   let cleanup: Promise<void> | undefined;
   let signalError: Error | undefined;
@@ -49,6 +49,29 @@ export function createProcessCleanup(
   };
   return () =>
     (cleanup ??= (async () => {
+      if (process.platform === "win32" && processTree && child.pid !== undefined && !exited()) {
+        await new Promise<void>((resolve, reject) => {
+          execFile(
+            "taskkill",
+            ["/PID", String(child.pid), "/T", "/F"],
+            { windowsHide: true, timeout: 5000 },
+            (error) => {
+              if (error && !exited())
+                reject(
+                  Object.assign(new Error("PROCESS_TREE_CLEANUP_INCOMPLETE"), {
+                    code: "PROCESS_TREE_CLEANUP_INCOMPLETE"
+                  })
+                );
+              else resolve();
+            }
+          );
+        });
+        if (!(await wait(Date.now() + killGraceMs)))
+          throw Object.assign(new Error("PROCESS_CLEANUP_TIMEOUT"), {
+            code: "PROCESS_CLEANUP_TIMEOUT"
+          });
+        return;
+      }
       // 无 PID 的 spawn 失败没有可回收的 OS 进程；测试注入的子进程仍接收终止通知。
       if (!exists()) {
         if (!exited() && child.pid === undefined) child.kill("SIGTERM");

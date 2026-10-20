@@ -18,7 +18,7 @@ timestamp: 2026-10-16T00:00:00Z
 - [连接错误](../../../packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts) 保留 HTTP 阶段和状态、网络/超时分类及 Retry-After；响应体中断仍为网络错误，非法 JSON 为终端错误。非预期错误只输出稳定码，不输出任意响应正文、URL 或凭据。
 - [WuKong 传输](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 保留握手及断开 reason，心跳超时为可恢复异常；服务端明确拒绝或协议错误为终端失败。同包握手成功后立即被踢不能返回健康连接，挂起 send 会随断线结束。
 - Provider/卡片/投递诊断继续走 onDiagnostic，不再覆盖连接 error；重连不重新 invoke 任务，不把上线当作旧投递已成功。
-- [Work App 设置](../../../../octo-work-app/src/renderer/src/settings/ImChannelsSettings.tsx) 接入失败文案，保留旧状态显示兼容，只标 online 为健康；每 3 秒轮询，窗口处于后台仍刷新。main 保持插件状态及错误透传。未增加宿主重连机器或第二个 preload 桥。
+- Work App 设置（历史外部路径 `octo-work-app/src/renderer/src/settings/ImChannelsSettings.tsx`，当前工作区未提供） 接入失败文案，保留旧状态显示兼容，只标 online 为健康；每 3 秒轮询，窗口处于后台仍刷新。main 保持插件状态及错误透传。未增加宿主重连机器或第二个 preload 桥。
 - README、INTEGRATION 和渠道规则同步说明启动、恢复及 loaded/online 的区别。Run=7 与 Context=v3 不变，未修改或部署 Worker。
 
 ## 自动化证据

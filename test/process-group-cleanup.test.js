@@ -51,8 +51,8 @@ for (const transport of ["ACP", "NDJSON", "Host"])
             ]
           };
           if (transport === "Host") {
-            const { spawnAdapterHost } = await import("@mininglamp-oss/octo-runtime-adapter-host");
-            client = await spawnAdapterHost({
+            const { spawnWorker } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
+            client = await spawnWorker({
               entrypoint: options.args[0],
               env: { ...process.env, OCTO_REVIEW_READY: readyPath, OCTO_REVIEW_TICKS: tickPath }
             });

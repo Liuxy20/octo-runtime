@@ -1,11 +1,11 @@
 ---
 name: octo-runtime
-description: Operate, build, link, diagnose, and troubleshoot the Octo Runtime local Agent Runtime with the octo-runtime CLI. Use for Runtime Home or profile selection, daemon services, provider adapters, logs, local AgentRun inspection, and source deployments. Do not use it as the cloud control plane for creating Runs, resetting Sessions, or managing business triggers.
+description: Operate, build, diagnose, and troubleshoot independent Octo Runtime executor-kernel and channel-gateway components, Home selection, provider adapters, logs, and source deployments. Do not use it as a cloud business control plane.
 ---
 
 # Octo Runtime
 
-Use `octo-runtime` as the current OS user's entrypoint for Runtime identity, native daemon lifecycle, provider checks, and local execution diagnostics. Keep Octo Runtime's local-runtime responsibility separate from Agent Worker and business-service control-plane responsibilities.
+Use octo-runtime for independent Kernel and Channel Gateway lifecycle, provider checks, and local diagnostics. Host SDK clients use public package APIs directly. Runtime does not manage cloud business tasks or Agent definitions.
 
 ## Establish The Target
 
@@ -14,11 +14,11 @@ Before a state-changing command, determine and state:
 - whether this is an installed package or this source checkout;
 - the Runtime Home, using `--home PATH` consistently when it is not the platform default;
 - the profile for adapter configuration or `doctor`, if it is not `default`;
-- whether the daemon runs in the foreground or through the native user service.
+- which component is targeted and whether it runs in the foreground or through a native user service.
 
-One Runtime Home runs one daemon and adapter-host and can contain multiple trusted profiles. Each profile owns a server-assigned `runtime_id`, Runtime credential, WSS connection, and durable outbox. All profiles share `<home>/machine.json`; its `machine_id` is an untrusted installation grouping label, never ownership proof or a unique Runtime key. Use separate OS accounts for mutually untrusted identities.
+One Home partitions component endpoints, service IDs, configuration and identity. ExecutorKernel supervises its worker; each Extra runs independently and owns its business connections. HostApp or CLI manages each component explicitly. An attached client owns connections only. Existing machine/profile identity formats remain unchanged; the Kernel does not require login or create a durable business outbox.
 
-Run `octo-runtime help` and the relevant `octo-runtime <group> --help` before relying on an option that may have changed. Normal successful output is JSON. Errors go to stderr and return nonzero.
+Run octo-runtime help before relying on version-specific options. Structured command errors contain an error.code and return nonzero; do not infer success from stdout alone.
 
 ## Choose The Correct Workflow
 
@@ -28,53 +28,56 @@ Start with the least invasive commands that answer the question:
 
 ```bash
 octo-runtime doctor
-octo-runtime daemon status
 octo-runtime status
 octo-runtime adapter list
 octo-runtime adapter probe codex
 ```
 
-Use `doctor` for installation, identity, credential permissions, native-service drift, IPC, or cloud-connectivity failures. Use `status` for the daemon's application state. Use `daemon status` when native service state also matters. Do not substitute log inspection for a failing `doctor` check.
+doctor reports native manager availability and component service/runtime checks. Global status reports executor-kernel and channel-gateway separately. Distinguish execution_ready, worker health, Extra initialization and business connectivity.
 
 ### Prepare The Local Home
 
-CLI 不提供 `login` 命令。直接运行 `octo-runtime daemon install` 或 `octo-runtime daemon run`；两者共用默认 Home，按需创建缺失的本地配置和 machine identity，保留已有配置、身份和凭据。显式 `--home` 优先于 `OCTO_RUNTIME_HOME`，然后使用平台默认目录。
+CLI 不提供 login。显式 --home 优先于 OCTO_RUNTIME_HOME，再使用平台默认目录。executor-kernel run 使用本地配置和显式 Adapter 集合；channel-gateway run 需要已保存的完整插件声明。运行组件不要求重新初始化或删除已有身份。
 
 登录、登记与共享属于可选 Extra，不是本地设备存在或执行的条件。不得以本地就绪推导云端注册或连接成功，也不得按历史重置说明删除现有身份。
 
-### Manage The Daemon
+### Manage Independent Components
 
 Use the native user-service commands for an installed Runtime:
 
 ```bash
-octo-runtime daemon install
-octo-runtime daemon start
-octo-runtime daemon stop
-octo-runtime daemon restart
-octo-runtime daemon uninstall
+octo-runtime executor-kernel install --autostart=false
+octo-runtime executor-kernel start
+octo-runtime executor-kernel restart
+octo-runtime executor-kernel stop
+octo-runtime executor-kernel uninstall
+octo-runtime executor-kernel run
+
+octo-runtime channel-gateway install --autostart=false
+octo-runtime channel-gateway start
+octo-runtime channel-gateway restart
+octo-runtime channel-gateway stop
+octo-runtime channel-gateway uninstall
+octo-runtime channel-gateway run
 ```
 
-Prefer graceful stop, restart, and uninstall so active Runs drain first. Use `--force` only when the user explicitly wants to skip draining or graceful shutdown has demonstrably failed. `daemon uninstall` removes the native service definition but preserves identity, credentials, databases, outbox, and logs. Do not delete Runtime Home data unless the user separately and explicitly requests that destructive action.
+Each command acts on its named component only. First install defaults to autostart false; later install without an option preserves the installed value. start/restart require an installed definition and never install implicitly. uninstall preserves Home data. There is no --force option. Never delete identity or configuration as an automatic recovery step.
 
-Use `daemon run` for foreground debugging. `--verbose` may expose detailed operational context; still avoid reproducing sensitive log content in responses.
+Use run for foreground debugging. Gateway may start before Kernel and report kernel_available=false; it must never start or maintain Kernel. A component restart does not restart its siblings.
 
 ### Inspect Local Execution
 
-Use these groups for the local reference and diagnostic projection:
+Use the public /executor-kernel client for Run lookup, subscription, cancellation and interaction. The CLI provides playboard for temporary local execution:
 
 ```bash
-octo-runtime agent-session list
-octo-runtime agent-session get SESSION_ID
-octo-runtime agent-run list
-octo-runtime agent-run get RUN_ID
-octo-runtime agent-run wait RUN_ID
+octo-runtime playboard < request.json
 ```
 
-For local Host logs, start with `OCTO_RUNTIME_DEBUG=1 octo-runtime daemon run` and read `$OCTO_RUNTIME_HOME/logs/adapter-host.log` (default Home: `~/.octo-runtime`). Logging is off by default. Complete AgentRun trajectory belongs to Worker.
+CLI logs use <home>/logs/kernel-YYYYMMDDTHH.log and <home>/logs/extras/<extra_type>-YYYYMMDDTHH.log. They contain operational metadata, not the complete business transcript. See the operations guide for retention and configuration.
 
-`agent-run cancel RUN_ID` changes live execution state. Confirm the exact Run ID from current state and use it only under an explicit cancellation request.
+Explicit Kernel client cancel affects the identified live Run; closing an attached client or subscription does not cancel it. Preserve the original receipt, Kernel instance and stream identity for replay; never reinvoke automatically after an unknown ACK.
 
-These commands do not create production Runs, reset provider sessions, or provide cloud-authoritative state. Route those operations to Agent Worker APIs or `octo-cli harness`. Route task scheduling, retries, triggers, IM delivery, and other business semantics to their owning service.
+The CLI has no agent-run/agent-session command groups. Business task scheduling, retry policy, session persistence and message delivery belong to their respective services or Extras.
 
 ## Build And Link From Source
 
@@ -97,7 +100,6 @@ Refresh the current zsh command cache when needed, then verify both commands and
 ```bash
 rehash
 command -v octo-runtime
-command -v octo-runtime-daemon
 octo-runtime help
 ```
 
@@ -118,7 +120,7 @@ Publishing is a separate external mutation. Read the deployment procedure and pe
 Match verification to the operation:
 
 - build/link: check command resolution, resolved symlink target, and `octo-runtime help`;
-- local initialization/service installation: run `doctor`, `daemon status`, and check actual local IPC readiness;
+- component installation: run doctor/status and check that component's actual IPC readiness;
 - adapter issue: run `adapter list` and probe only the affected adapter;
 - Run issue: capture the Run state, canonical events, and scoped logs without exposing credentials or unnecessary sensitive fields.
 

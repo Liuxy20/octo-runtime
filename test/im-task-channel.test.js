@@ -6,7 +6,7 @@ import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
 import { failurePayload } from "@mininglamp-oss/octo-runtime-protocol";
 import { canonicalEvents, invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { spawnAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { fileURLToPath } from "node:url";
 import { buildReasoningFrame } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/reasoning-frame.js";
 const event = (type, payload = {}) => ({ protocolVersion: 2, type, payload });
@@ -200,7 +200,7 @@ test("a successful retry discards partial failed-attempt text", async (t) => {
 
 for (const mode of ["normal", "recovered", "silent", "snapshot", "tool", "failed"]) {
   test(`Codex subprocess → Host/RPC → IM: ${mode}`, { timeout: 10000 }, async (t) => {
-    const hosted = await spawnAdapterHost({
+    const hosted = await spawnWorker({
       entrypoint: fileURLToPath(new URL("../test-support/im-diagnostic-host.mjs", import.meta.url))
     });
     t.after(() => hosted.close());

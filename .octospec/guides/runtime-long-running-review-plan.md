@@ -10,6 +10,8 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 状态与依据
 
+本文保留 2026-10-16 的风险调查及当时实施结果。当前架构已删除 daemon module 入口；后续日志保留规则也已调整为最近 3 个实际文件。现行合同以[运维指南](operations.md)、[Extra 规则](../rules/extras.md)和[独立组件实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)为准，不按下面的历史描述恢复旧入口。
+
 2026-10-16 用户要求审查整个当前 octo-runtime，额外核对 a959862 至 4a79d87 六批提交。审查确认四项风险，先形成独立计划及评分，随后用户明确要求在当前分支分四批开发、commit 和 push。四项代码均已实施；当前提交、验证及远端推送状态见[收尾记录](../journal/shared/2026-10-16-hourly-log-delivery.md)，不能把本地提交等同于成功推送。
 
 已复现事实：OpenClaw 慢消费时一万条无关事件使 GC 后堆增加约 40.8 MiB；约 787 KiB 合法 PNG 的 RPC 超过 512 KiB，触发共享 Host 退出；配置初始化阻塞时一千份配置占用约 33.2 MB；Runtime 自管日志存在无限追加路径。原 Channel 六项功能的验收不覆盖这些缺口，不能作为长期容量保证。

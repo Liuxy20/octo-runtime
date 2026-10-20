@@ -1,11 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
-import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer
-} from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   assertHostControl,
   assertHostFrame,
@@ -27,7 +24,7 @@ const limits = resolveStreamLimitPolicy({
 });
 
 function fixture(mode = "canonical", invoke) {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "capacity-fixture",
@@ -105,9 +102,9 @@ test("HostFrame diagnostics survive RPC and canonical errors without inventing a
   const { host, input } = fixture();
   const upstream = new PassThrough();
   const downstream = new PassThrough();
-  const server = new AdapterHostRpcServer({ host, output: downstream });
+  const server = new WorkerRpcServer({ host, output: downstream });
   server.listen(upstream);
-  const client = new AdapterHostRpcClient({ input: downstream, output: upstream });
+  const client = new WorkerRpcClient({ input: downstream, output: upstream });
   context.after(async () => {
     client.close();
     upstream.destroy();

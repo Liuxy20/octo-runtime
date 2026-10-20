@@ -173,7 +173,7 @@ Codex 没有专用的“默认模型环境变量”。默认模型来自 `$CODEX
 ## 相关文档
 
 - 事件契约与三层事件模型：[Protocol](../octo-runtime-protocol/README.md)
-- 适配器的调用生命周期与终态兜底：[Adapter Host](../octo-runtime-adapter-host/README.md)
+- 适配器的调用生命周期与终态兜底：[Adapter Host](../octo-runtime-executor-kernel/README.md)
 - provider adapter 概览与编写指南：[docs/05](../../.octospec/guides/providers.md)、[docs/08](../../.octospec/guides/adapter-authoring.md)
 - 源码：[`src/index.ts`](src/index.ts)（本地配置装配）、[`src/app-server.ts`](src/app-server.ts)（协议状态机 + JSON-RPC client + 事件映射）
 
@@ -181,4 +181,4 @@ Codex 没有专用的“默认模型环境变量”。默认模型来自 `$CODEX
 
 - 负责：将 codex 原生执行协议映射为 InvokeRequest / CanonicalEvent，由 adapter-host 调用。
 - 不负责：Worker/IM WS、聊天历史、Event/AgentRun 登记。
-- 协作边界：见 [根架构与包边界](../../README.md#模块责任边界)。所有执行来源共用 adapter-host IPC；模块按职责提供协议、执行或宿主能力。
+- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。

@@ -29,7 +29,7 @@ JSON-RPC 两层传输分别对应 SDK → daemon 和 daemon → Host 的不同�
 
 ## 核对入口
 
-- [执行计划校验](../../../packages/octo-runtime-protocol/src/context.ts)、[本地计划解析](../../../packages/octo-runtime-executor-core/src/context.ts)、[Host 执行接纳](../../../packages/octo-runtime-adapter-host/src/index.ts)。
+- [执行计划校验](../../../packages/octo-runtime-protocol/src/context.ts)、[本地计划解析](../../../packages/octo-runtime-executor-core/src/context.ts)、[Host 执行接纳](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/index.ts)。
 - 旧场景白名单已删除，原定义可从删除前 Git 版本追溯；当前边界见[Context 扩展](../../rules/context-extensions.md)。
 - [公共输入与渠道快照校验](../../../packages/octo-runtime-protocol/src/invoke-input.ts)、[内部请求准备](../../../packages/octo-runtime-executor-core/src/invoke-input.ts)。
 - [多份输入一致性](../../../packages/octo-runtime-protocol/src/execution-plan.ts)、[协议 Schema](../../../packages/octo-runtime-protocol/schema/protocol.schema.json)。

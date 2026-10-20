@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access, chmod, mkdir, open, readFile, rename, rm, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { runtimeControlEndpoint } from "@mininglamp-oss/octo-runtime-daemon/runtime-endpoint";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const RESERVED_PROFILE_NAMES = new Set([
@@ -113,8 +113,8 @@ export function runtimePaths(
     credential: join(profileRoot, "credentials", "runtime-token.json"),
     openclawRoot: join(profileRoot, "adapters", "openclaw"),
     setupLock: join(absoluteHome, "run", "setup.lock"),
-    pid: join(absoluteHome, "octo-daemon.pid"),
-    socket: runtimeControlEndpoint(absoluteHome, platform),
+    pid: join(absoluteHome, "run", "executor-kernel.pid"),
+    socket: componentEndpoint(absoluteHome, "executor-kernel", platform),
     logs: join(absoluteHome, "logs")
   };
 }

@@ -14,7 +14,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 这是“更改 Bot 配置”的队列，不是收到聊天消息后的任务队列。举例：第一次 upsert 还在等待连接，调用者又发来一千份 upsert；[manager](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts) 立即 structuredClone 每份配置，再通过一个 Promise 链串行处理。16 个 Bot 的端点限制只在操作实际开始后才检查，不能限制排队的一千份配置。已复现一千份约 32 KB 配置使 GC 后堆增加约 33.2 MB，即使只有一个活动端点。
 
-审查时 [Extra](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 最多接收 16 个 Bot，逐个 await 启动，常规路径风险较低；本次已将 Extra 加载校验与 manager 活动端点上限统一调整为 64。导出的 manager 与 [保留的 daemon module](../../../packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts) 的 handle(upsert) 可并发提交，也受同一队列准入限制。
+审查时 [Extra](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 最多接收 16 个 Bot，逐个 await 启动，常规路径风险较低；本次已将 Extra 加载校验与 manager 活动端点上限统一调整为 64。导出的 manager 与 [保留的 daemon module](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts) 的 handle(upsert) 可并发提交，也受同一队列准入限制。
 
 ## 架构边界
 

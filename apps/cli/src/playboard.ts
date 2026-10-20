@@ -1,8 +1,17 @@
-import { defaultRuntimeHome, runtimePaths } from "./state.js";
+import {
+  defaultRuntimeHome,
+  runtimePaths,
+  readJsonFile,
+  type ProfileConfiguration
+} from "./state.js";
+import { initializeCliOpenClaw } from "./openclaw.js";
+import { readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startTemporaryDaemon } from "./temporary-daemon.js";
-import { invokeDaemonRun } from "@mininglamp-oss/octo-runtime-daemon/runtime/run-stream";
+import { startOwnedKernel, componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type InvokeInput,
   identifyInvokeInput,
@@ -77,21 +86,36 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   if (!options.output) process.stdout.on("error", onOutputError);
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
-  let daemon: Awaited<ReturnType<typeof startTemporaryDaemon>> | undefined;
+  let kernel: Awaited<ReturnType<typeof startOwnedKernel>> | undefined;
+  const temporary = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   try {
-    daemon = await startTemporaryDaemon({
-      home,
-      profile,
+    const paths = runtimePaths(home, profile);
+    await initializeCliOpenClaw(paths.profileRoot, options.env ?? process.env);
+    const configuration = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
+    kernel = await startOwnedKernel({
+      endpoint:
+        process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
+      workerEntrypoint: fileURLToPath(
+        import.meta.resolve("@mininglamp-oss/octo-runtime-executor-kernel/runner")
+      ),
       manifest: options.manifest
         ? resolve(options.manifest)
         : fileURLToPath(new URL("./default_adapters.json", import.meta.url)),
       env: options.env ?? process.env,
-      signal: controller.signal
+      adapterConfigurations: readAdapterConfigurations(paths.profileRoot, configuration?.adapters)
     });
-    const socket = daemon.socket;
-    const invoke = createInputInvoke((input, environment) =>
-      invokeDaemonRun(socket, input, environment)
-    );
+    const invoke = createInputInvoke(async function* (input, environment) {
+      const { ref } = await kernel!.client.submit(input, environment);
+      const cancel = () => {
+        void kernel!.client.cancel(ref, "caller_aborted").catch(() => undefined);
+      };
+      controller.signal.addEventListener("abort", cancel, { once: true });
+      try {
+        yield* kernel!.client.subscribe(ref);
+      } finally {
+        controller.signal.removeEventListener("abort", cancel);
+      }
+    });
     let exitCode = 1;
     for await (const frame of invoke(input, { signal: controller.signal })) {
       await output(JSON.stringify(frame));
@@ -124,7 +148,8 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     throw error;
   } finally {
     try {
-      await daemon?.close();
+      await closeKernel(kernel);
+      await rm(temporary, { recursive: true, force: true });
     } finally {
       if (!options.output) process.stdout.removeListener("error", onOutputError);
       process.removeListener("SIGINT", onInterrupt);
@@ -137,4 +162,10 @@ function writeLine(line: string): Promise<void> {
   return new Promise((resolve, reject) => {
     process.stdout.write(`${line}\n`, (error) => (error ? reject(error) : resolve()));
   });
+}
+async function closeKernel(
+  kernel: Awaited<ReturnType<typeof startOwnedKernel>> | undefined
+): Promise<void> {
+  const result = await kernel?.stop();
+  if (result && !result.complete) throw new Error("COMPONENT_CLEANUP_INCOMPLETE");
 }

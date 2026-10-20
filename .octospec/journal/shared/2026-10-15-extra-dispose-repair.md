@@ -21,7 +21,7 @@ timestamp: 2026-10-15T09:00:00Z
 
 # 自动检查
 
-新增 [IM disposal 回归](../../../test/im-extra-disposal.test.js)和 [SDK disposal 回归](../../../test/extra-sdk-disposal.test.js)，共 16 项，覆盖加载取消、活跃 invocation、重复清理、失败传播、真实本地 WebSocket 握手、账号切换、恢复和 typing 发送退出。模拟传输和故障注入仅证明这些控制行为，不作为线上连接成功证据。
+新增 [IM disposal 回归](../../../test/im-extra-disposal.test.js)和 [SDK disposal 回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)，共 16 项，覆盖加载取消、活跃 invocation、重复清理、失败传播、真实本地 WebSocket 握手、账号切换、恢复和 typing 发送退出。模拟传输和故障注入仅证明这些控制行为，不作为线上连接成功证据。
 
 - Runtime：pnpm typecheck（含构建）、pnpm lint 通过；全量 Node 测试 775 项通过、7 项跳过。最后两处错误 cause/类型修正后再次编译 SDK、运行根类型检查与 lint 通过。
 - App：pnpm typecheck、pnpm build 通过；195 个测试文件通过、1 个跳过，1620 项通过、1 项跳过。

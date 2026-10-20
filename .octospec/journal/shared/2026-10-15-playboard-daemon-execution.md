@@ -11,10 +11,10 @@ timestamp: 2026-10-15T00:00:00Z
 依据[任务决策](../../tasks/playboard-daemon-execution/brief.md)，在当前 `octo-runtime` 分支工作树实施，不切换分支、不提交或推送。已有其他任务的修改保留。
 
 - [playboard.ts](../../../apps/cli/src/playboard.ts) 不再导入 OpenClaw 配置函数或直接启动 Host。准备统一输入后启动临时 daemon，通过现有 `invokeDaemonRun` 与输出视图返回 native/canonical 事件；所选 profile 经执行元数据传递，与请求中显式 profile 冲突时拒绝。
-- [temporary-daemon.ts](../../../apps/cli/src/temporary-daemon.ts) 为本次调用建立独立临时目录，隔离 socket/Pipe、PID 和执行账本。启动独立 daemon 子进程，经 IPC 就绪消息和实际 socket 状态确认可用；诊断进入 stderr。结束时等待 daemon 清理，异常退出使用本次账本回收已确认身份的孤儿 Host，不触碰常驻目录。
-- [daemon 统一入口](../../../apps/daemon/src/index.ts) 通过 `--execution-only` 选择单一 profile，复用既有 Provider 初始化；跳过 Extra 目录读取及有业务配置的渠道工具同步。临时执行不启动第二个 IM 消费者，不重启外部 OpenClaw Gateway。
-- [runtime-options.ts](../../../apps/daemon/src/runtime-options.ts) 透传临时执行选项；[server.ts](../../../packages/octo-runtime-daemon/src/server.ts) 新增可选运行状态目录，默认路径保持原行为，daemon 到 Host 继续使用 stdio `AdapterHostRpcClient`。
-- daemon 在启动期间也接收停止信号，并在启动完成后统一清理；临时调用方 IPC 消失时请求停止。Host 启动失败时发现进程组退出竞态会返回 `EPERM`，在 [process.ts](../../../packages/octo-runtime-adapter-host/src/process.ts) 回退为终止所属子进程，保留原始启动错误。
+- [temporary-daemon.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/cli/src/temporary-daemon.ts) 为本次调用建立独立临时目录，隔离 socket/Pipe、PID 和执行账本。启动独立 daemon 子进程，经 IPC 就绪消息和实际 socket 状态确认可用；诊断进入 stderr。结束时等待 daemon 清理，异常退出使用本次账本回收已确认身份的孤儿 Host，不触碰常驻目录。
+- [daemon 统一入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/daemon/src/index.ts) 通过 `--execution-only` 选择单一 profile，复用既有 Provider 初始化；跳过 Extra 目录读取及有业务配置的渠道工具同步。临时执行不启动第二个 IM 消费者，不重启外部 OpenClaw Gateway。
+- [runtime-options.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/daemon/src/runtime-options.ts) 透传临时执行选项；[server.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts) 新增可选运行状态目录，默认路径保持原行为，daemon 到 Host 继续使用 stdio `AdapterHostRpcClient`。
+- daemon 在启动期间也接收停止信号，并在启动完成后统一清理；临时调用方 IPC 消失时请求停止。Host 启动失败时发现进程组退出竞态会返回 `EPERM`，在 [process.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts) 回退为终止所属子进程，保留原始启动错误。
 
 CLI 参数、stdin 大小约束、输出模式、退出码及待交互失败合同保留。Run=7、Context=v3 未修改，不涉及 Worker 或桌面协议变更。新构建由每次 CLI 启动的临时进程直接加载，未重启任何既有 Runtime，也未删除既有 Home、profile 或 Provider 身份。
 

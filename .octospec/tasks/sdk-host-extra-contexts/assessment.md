@@ -35,8 +35,8 @@ timestamp: 2026-10-17T00:00:00Z
 
 | 内部检查 | 当前依据与 gap | 宿主看到的结果 |
 | --- | --- | --- |
-| JSON 与函数分开 | [SDK 入口](../../../packages/octo-runtime-daemon/src/runtime/daemon-runtime.ts)快照 config、浅冻结 dependencies，复用[loader](../../../packages/octo-runtime-daemon/src/extras.ts)；函数不进入 runner session | 已通过同步/异步函数、配置快照及磁盘声明检查 |
-| 共享执行端口 | [SDK 内部端口](../../../packages/octo-runtime-daemon/src/runtime/local-extras.ts)关联活动 invocation/run 并绑定所属 Extra；复用原源流 | 已通过 native 帧、canonical 回答、所属实例取消及可信执行环境透传 |
+| JSON 与函数分开 | [SDK 入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/daemon-runtime.ts)快照 config、浅冻结 dependencies，复用[loader](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/extras.ts)；函数不进入 runner session | 已通过同步/异步函数、配置快照及磁盘声明检查 |
+| 共享执行端口 | [SDK 内部端口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/local-extras.ts)关联活动 invocation/run 并绑定所属 Extra；复用原源流 | 已通过 native 帧、canonical 回答、所属实例取消及可信执行环境透传 |
 | 唯一实例与状态 | 装配位置共享命名与 64 声明容量；轮询合并本地状态 | 已通过两位置互斥、状态、容量和重启恢复检查 |
 | 生命周期 | 立即 abort，沿 loader 清理；失败阻止新代次装配，仍继续停 runner | 已通过初始化失败、卸载/停止/账号切换/故障的自动化 |
 | 日志与引用释放 | 本地装配注入原 RuntimeLogging，并在容器关闭时关闭 writer；实例清理释放活动映射 | 复用原白名单与日志合同；独立 SDK GC 压测和真实宿主长稳仍未新增验证 |

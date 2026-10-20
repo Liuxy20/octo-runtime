@@ -905,7 +905,7 @@ SDK/Extra 仍负责输入约束校验，并按接入协议携带凭据完成实�
 | 当前完成状态 | 日志容量管理和内部诊断身份已具备，默认 Extra 诊断出口未接。不是完整覆盖，不标删除线；撤销原混合目标 70% 口径，不将不同层能力强行折算为当前完成率 |
 | 待用户决策 | 是否接受“宿主管存储，不做每 Bot 文件；仅补齐默认 Extra 的脱敏诊断输出”作为后续范围。当前没有实施授权 |
 
-依据：旧 [slice-log](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/slice-log.ts)；当前 [容量管理](../../../packages/octo-runtime-adapter-sdk/src/hourly-log.ts)、[统一日志](../../../packages/octo-runtime-adapter-sdk/src/runtime-log.ts)、[诊断产生](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[内部诊断依赖](../../../packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[默认 Extra 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[对象式入口](../../../packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts)及[受管日志规则](../../rules/stateless-execution.md#受管日志)。本轮未做真实日志验收。本项后只剩 F32 一项。
+依据：旧 [slice-log](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/slice-log.ts)；当前 [容量管理](../../../packages/octo-runtime-adapter-sdk/src/hourly-log.ts)、[统一日志](../../../packages/octo-runtime-adapter-sdk/src/runtime-log.ts)、[诊断产生](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[内部诊断依赖](../../../packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[默认 Extra 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[对象式入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts)及[受管日志规则](../../rules/stateless-execution.md#受管日志)。本轮未做真实日志验收。本项后只剩 F32 一项。
 
 ## 逐项 Review：F32 工程验证与操作说明
 
@@ -946,7 +946,7 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 | 当前状态 | 基础工程能力已有；各项新行为的回归、真实验收和说明更新随实施完成，不给混合完成百分比，不标整项删除线 |
 | 待用户评审 | 是否接受“沿现有工程体系，验收随各改造实施，不单独迁入旧 CI/runbook/Worker 测试模型”这一范围 |
 
-依据：[现有构建/测试入口](../../../package.json)、[CI](../../../.github/workflows/ci.yml)、[Extra 生命周期测试](../../../test/extras.test.js)、[SDK 清理测试](../../../test/extra-sdk-disposal.test.js)、[双渠道清理测试](../../../test/im-extra-disposal.test.js)、[连接状态回归](../../../test/im-connection-state-machine.test.js)、[部署说明](../../../DEPLOYMENTS.md)与[工程验证规则](../../rules/engineering.md)。本轮仅静态核对及文档更新，未执行功能测试、构建或线上调试。
+依据：[现有构建/测试入口](../../../package.json)、[CI](../../../.github/workflows/ci.yml)、[Extra 生命周期测试](../../../test/extras.test.js)、[SDK 清理测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[双渠道清理测试](../../../test/im-extra-disposal.test.js)、[连接状态回归](../../../test/im-connection-state-machine.test.js)、[部署说明](../../../DEPLOYMENTS.md)与[工程验证规则](../../rules/engineering.md)。本轮仅静态核对及文档更新，未执行功能测试、构建或线上调试。
 
 ## 关键传递边界
 
@@ -1013,5 +1013,5 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 | R24 | 本机 octo-cli message send --help：POST /v1/bot/sendMessage，channel-id 与 channel-type 必填，1=DM、2=group、5=thread；并核对本机 octo-shared/octo-messaging 技能文档。仅命令合同与本地源码核对，未调用线上发送 |
 | R25 | 本机 octo-cli file upload --help、schema file.upload 与 schema message.send：上传返回 name/size/url，消息接受 payload。对照旧 cli-client.ts 的 uploadFile/sendFileMessage，确认显式文件交付沿 CLI 组合路径；未在本轮上传/发送 |
 | R26 | 本机 octo-cli api/thread/bot/message --help；旧 octo-tools.ts 的 octo_thread_delete、octo_resolve_targets、octo_voice_context_* 经 buildApiArgs 调用 CLI；本地 octo-server/modules/bot_api/bot_api.go 注册对应路由。仅静态核对，无线上业务调用 |
-| R27 | [Extra dispose 修复及既有验收](../../journal/shared/2026-10-15-extra-dispose-repair.md)、[双渠道清理回归](../../../test/im-extra-disposal.test.js)、[SDK 清理回归](../../../test/extra-sdk-disposal.test.js)、[loader](../../../packages/octo-runtime-daemon/src/extras.ts)、[共享 Host 装配与 Extra RPC](../../../packages/octo-runtime-daemon/src/server.ts)；本轮静态复核，不作为本轮重跑结果 |
-| R28 | [连接状态及既有真实验收](../../journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)、[SDK Home owner lock](../../../packages/octo-runtime-daemon/src/runtime/home.ts)、[daemon PID 及启动回归](../../../test/cli.test.js)、[状态查询回归](../../../test/cli-status.test.js)；状态机合盖与外部故障的未验收范围仍按专项记录维护 |
+| R27 | [Extra dispose 修复及既有验收](../../journal/shared/2026-10-15-extra-dispose-repair.md)、[双渠道清理回归](../../../test/im-extra-disposal.test.js)、[SDK 清理回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[loader](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/extras.ts)、[共享 Host 装配与 Extra RPC](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts)；本轮静态复核，不作为本轮重跑结果 |
+| R28 | [连接状态及既有真实验收](../../journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)、[SDK Home owner lock](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/home.ts)、[daemon PID 及启动回归](../../../test/cli.test.js)、[状态查询回归](../../../test/cli-status.test.js)；状态机合盖与外部故障的未验收范围仍按专项记录维护 |

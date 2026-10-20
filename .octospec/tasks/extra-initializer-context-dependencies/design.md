@@ -110,7 +110,7 @@ export default function extra(context: ExtraContext, config: JsonObject) {
 
 当前 `DaemonRuntimeOptions.extras` 和 `loadExtra(descriptor)` 接收纯 JSON。supervisor 将 extras 写入 runner session 文件；runner 在子进程将 descriptor 变成 registration，server 创建 ExtraPlugins。仅给 ExtraPlugin 加泛型不能让 HostApp 的闭包出现在 runner 中。
 
-源码依据：[SDK 类型](../../../packages/octo-runtime-daemon/src/runtime/types.ts)、[SDK 加载](../../../packages/octo-runtime-daemon/src/runtime/daemon-runtime.ts)、[supervisor](../../../packages/octo-runtime-daemon/src/runtime/supervisor.ts)、[runner](../../../packages/octo-runtime-daemon/src/runtime/runner.ts)、[server](../../../packages/octo-runtime-daemon/src/server.ts)。
+源码依据：[SDK 类型](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/types.ts)、[SDK 加载](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/daemon-runtime.ts)、[supervisor](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/supervisor.ts)、[runner](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/runner.ts)、[server](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts)。
 
 ### 已确认选择：Extra 在调用方的 Node 组合层执行
 

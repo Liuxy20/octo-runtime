@@ -16,9 +16,9 @@ if (process.argv[2] === "--check-endpoint") {
   await writeFile(process.argv[3], JSON.stringify(receipt), { flag: "wx", mode: 0o600 });
   console.log(receipt.marker);
 } else {
-  const { AdapterHost } = await import("../packages/octo-runtime-adapter-host/dist/index.js");
+  const { AgentExecutor } = await import("../packages/octo-runtime-executor-kernel/dist/index.js");
   const { default: codex } = await import("../packages/octo-runtime-adapter-codex/dist/index.js");
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(codex);
   const directory = await mkdtemp(join(tmpdir(), "octo-codex-forwarding-"));
   const receiptPath = join(directory, "receipt.json");

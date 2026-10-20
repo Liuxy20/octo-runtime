@@ -151,8 +151,8 @@ test("full access never grants an allow-always option when allow-once is unavail
 });
 
 test("Host rejects interactive approval with no response implementation", async () => {
-  const { AdapterHost } = await import("@mininglamp-oss/octo-runtime-adapter-host");
-  const host = new AdapterHost();
+  const { AgentExecutor } = await import("@mininglamp-oss/octo-runtime-executor-core");
+  const host = new AgentExecutor();
   let started = false;
   host.register({
     metadata: {

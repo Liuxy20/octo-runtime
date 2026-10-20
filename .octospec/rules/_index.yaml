@@ -3,7 +3,7 @@ rules:
     priority: 95
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-daemon/**", "packages/octo-runtime-extra-*/**", "apps/**"]
+      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-adapter-*/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**", "apps/**"]
       touches: [protocol, invocation, interaction, adapter, architecture]
   - id: runtime-adapter-metadata
     priority: 90
@@ -33,7 +33,7 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-protocol/**","packages/octo-runtime-adapter-host/**", "packages/octo-runtime-executor-core/**","test/context-extension*"]
+      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-executor-core/**", "test/context-extension*"]
       touches: ["context","extension"]
   - id: runtime-context-input
     priority: 90
@@ -57,19 +57,19 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-daemon/src/extra*","packages/octo-runtime-extra-*/**","apps/cli/src/extras.ts","apps/daemon/**","test/extras*"]
+      paths: ["packages/octo-runtime-host-sdk/src/extra*", "packages/octo-runtime-extra-*/**", "apps/cli/src/extras.ts", "test/extras*"]
       touches: ["extra","lifecycle","installation"]
   - id: runtime-invoke-input
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["apps/cli/**","packages/octo-runtime-executor-core/**","packages/octo-runtime-protocol/**","packages/octo-runtime-adapter-host/**","packages/octo-runtime-daemon/**","packages/octo-runtime-extra-*/**"]
+      paths: ["apps/cli/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-extra-*/**"]
       touches: ["invoke","protocol","multimodal"]
   - id: runtime-local-execution
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-daemon/**","packages/octo-runtime-adapter-host/**", "packages/octo-runtime-executor-core/**","apps/**","test/host-run*","test/embedded-invoke*"]
+      paths: ["packages/octo-runtime-host-sdk/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-executor-core/**", "apps/**", "test/host-run*", "test/embedded-invoke*"]
       touches: ["ipc","invoke","stream"]
   - id: runtime-mcp
     priority: 90
@@ -87,7 +87,7 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-protocol/**","packages/octo-runtime-adapter-host/**", "packages/octo-runtime-executor-core/**","packages/octo-runtime-daemon/**","packages/octo-runtime-adapter-sdk/**","test/native-*","test/host-*"]
+      paths: ["packages/octo-runtime-protocol/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-executor-core/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-adapter-sdk/**", "test/native-*", "test/host-*"]
       touches: ["protocol","native","canonical","stream"]
   - id: runtime-protocol-schema
     priority: 90
@@ -105,7 +105,7 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-daemon/**","apps/daemon/**","apps/cli/**","test/*runtime*","test/embedded-*"]
+      paths: ["packages/octo-runtime-host-sdk/**", "apps/cli/**", "test/*runtime*", "test/embedded-*"]
       touches: ["runtime","identity","lifecycle"]
   - id: runtime-session-reset
     priority: 90
@@ -117,5 +117,5 @@ rules:
     priority: 90
     load_bearing: true
     inject_when:
-      paths: ["packages/octo-runtime-executor-core/**","packages/octo-runtime-daemon/**","packages/octo-runtime-adapter-host/**","packages/octo-runtime-extra-channel-*/**","test/stateless-*"]
+      paths: ["packages/octo-runtime-executor-core/**", "packages/octo-runtime-host-sdk/**", "packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-extra-channel-*/**", "test/stateless-*"]
       touches: ["storage","stream","stateless"]

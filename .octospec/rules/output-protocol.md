@@ -10,7 +10,7 @@ tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-protocol/**","packages/octo-runtime-adapter-host/**", "packages/octo-runtime-executor-core/**","packages/octo-runtime-daemon/**","packages/octo-runtime-adapter-sdk/**","test/native-*","test/host-*"]
+  paths: ["packages/octo-runtime-protocol/**","packages/octo-runtime-executor-kernel/**", "packages/octo-runtime-executor-core/**","packages/octo-runtime-host-sdk/**","packages/octo-runtime-adapter-sdk/**","test/native-*","test/host-*"]
   touches: ["protocol","native","canonical","stream"]
 source: self
 supersedes: []
@@ -77,28 +77,28 @@ Driver 维护唯一控制者，响应写入确认后才发布 resolved；重复 
 Host 在唯一执行源内解析输入、校验执行模式和配置，冻结身份及输入；prepare 为私有实现，不再对外暴露两阶段调用。
 RPC 从同一源的首个状态帧取得回执并 ACK，继续消费后才启动 Provider。
 `invoke(input)` 默认返回 native 源帧；`invoke({ ...input, protocol_mode: "canonical" })` 返回 canonical 类型化视图。
-`invokeFrames(input, environment)` 使用相同输入，返回完整源帧；`createInputInvoke` 只负责 native/canonical 输出视图，不解析执行配置。旧 HostInvoke/createHostInvoke 三参数合同已删除。Host、RPC、daemon SDK 不按消费者名字选择模式。
+`invokeFrames(input, environment)` 使用相同输入，返回完整源帧；`createInputInvoke` 只负责 native/canonical 输出视图，不解析执行配置。旧 HostInvoke/createHostInvoke 三参数合同已删除。Host、RPC、Kernel client 不按消费者名字选择模式。
 同一接纳身份改模式、改请求或重复执行均拒绝；恢复用已有源窗口订阅。
 
 | 已接线的调用点                                              | 当前行为                                                    |
 | ----------------------------------------------------------- | ----------------------------------------------------------- |
-| `adapter-host/src/rpc.ts`                                   | 接纳前拒绝不支持的选择；将 RPC ACK 与帧流绑定到同一执行     |
-| `daemon/src/server.ts`、`adapter-host/src/host-run-service.ts` | 转发冻结模式，缓冲原帧，按 Host 控制事实维护终态            |
-| `daemon/src/runtime/daemon-runtime.ts`、`run-stream.ts`      | 显式传递选择；续流继承回执模式；为 canonical 暴露类型化视图 |
+| `executor-kernel/src/rpc.ts`                               | 接纳前拒绝不支持的选择；将 RPC ACK 与帧流绑定到同一执行     |
+| `executor-kernel/src/server.ts`、`host-run-service.ts`       | 转发冻结模式，缓冲原帧，按 Host 控制事实维护终态            |
+| `executor-kernel/src/client.ts`、`host-sdk/src/extra-port.ts` | 显式传递选择；续流继承回执模式；为 canonical 暴露类型化视图 |
 | `extra-channel-*/src/execution/dispatcher.ts`               | 执行、final 文本与投递链路显式 canonical                    |
 | Provider 内部 `adapter.invoke`                              | 仍为 Driver 与转换器的内部边界，不以旧签名推导 native 可用  |
 
 Work App 等外部 HostApp 应在组合入口显式选择模式，并保持交互与回放一致；其当前接线和验收由各宿主仓库核对，不列为本仓已验证的实现。
 
-Daemon 缓冲真实 HostFrame，保留原身份、模式、序号和载荷。默认窗口：每 Run 32 MiB / 4096 帧，
+Kernel 缓冲真实 HostFrame，保留原身份、模式、序号和载荷。默认窗口：每 Run 32 MiB / 4096 帧，
 总计 128 MiB，TTL 120 秒，最多 128 Run、16 订阅、每页 32 帧；完整单帧上限 20 MiB。
 受信 Adapter execution 配置可在中央硬最大值内覆盖容量；每次 invocation 冻结有效策略，
 低预算运行不得借全局清理淘汰其他 Adapter 已保留的帧。
 IPC 队列同样有上限，慢输出使用背压。重放不启动 Provider、不转换事件、不重复写响应。
-Host RPC 与 daemon SDK 的 NDJSON 接收上限共用中央 HostFrame 硬最大值加 64 KiB 包装预算，
+Host RPC 与 Kernel client 的 NDJSON 接收上限共用中央 HostFrame 硬最大值加 64 KiB 包装预算，
 覆盖有界身份的 JSON 转义与重复字段；实际帧、队列和重放仍执行本 invocation 的有效策略。
 SDK 在换行前逐段累计 UTF-8 字节，不用字符长度代替容量，也不反复扫描或拼接完整在途大行。
-daemon SDK 在丢失 ACK 后通过 `agent_run.get` 查回已接纳身份，再订阅原 stream；已知缺口与
+Kernel client 在丢失 ACK 后通过 `agent_run.get` 查回已接纳身份，再订阅原 stream；已知缺口与
 过期明确失败，不能重新 invoke。重启后旧 stream 不可恢复。
 
 ## 3. 原生支持范围
@@ -126,6 +126,6 @@ native 日志只记录元数据、数量、字节和转换次数，不记录原�
 
 ## 核对入口
 
-[模式与帧校验](../../packages/octo-runtime-protocol/src/run-protocol.ts)、[统一输入解析](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[Core 接纳](../../packages/octo-runtime-executor-core/src/index.ts)、[源窗口](../../packages/octo-runtime-adapter-host/src/host-run-service.ts)、[native-host.test.js](../../test/native-host.test.js)。
+[模式与帧校验](../../packages/octo-runtime-protocol/src/run-protocol.ts)、[统一输入解析](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[Core 接纳](../../packages/octo-runtime-executor-core/src/index.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[native-host.test.js](../../test/native-host.test.js)。
 
 同一接纳身份不得改变模式、改请求或重复执行。已识别身份、权限、代次、游标和交互范围继续严格校验；未知可选 Provider 字段保留不意味着可以绕过这些边界。

@@ -1,4 +1,4 @@
-import type { JsonObject } from "@mininglamp-oss/octo-runtime-daemon";
+import type { JsonObject } from "@mininglamp-oss/octo-runtime-host-sdk";
 /**
  * 单 Bot 编排：把授权 IM 消息转换成一次统一执行，并把公开结果投递回原会话。
  * 管理会话、排队、取消和交互归属；平台协议交给 connector，领域业务交给发起方。

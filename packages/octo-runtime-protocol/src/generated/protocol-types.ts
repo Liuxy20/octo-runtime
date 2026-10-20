@@ -6,35 +6,9 @@
 
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "RunProtocolErrorCode".
+ * via the `definition` "HostFrame".
  */
-export type RunProtocolErrorCode =
-  | "PROTOCOL_MODE_INVALID"
-  | "PROTOCOL_MODE_UNSUPPORTED"
-  | "EXECUTION_PROTOCOL_MISMATCH"
-  | "EXECUTION_IDENTITY_CONFLICT"
-  | "NATIVE_METHOD_UNSUPPORTED"
-  | "NATIVE_RESPONSE_INVALID"
-  | "INTERACTION_NOT_ACTIVE"
-  | "HOST_EXECUTION_FAILED"
-  | "HOST_ENDED_WITHOUT_TERMINAL"
-  | "PROVIDER_MESSAGE_TOO_LARGE"
-  | "HOST_FRAME_TOO_LARGE"
-  | "STREAM_QUEUE_ITEM_TOO_LARGE"
-  | "STREAM_QUEUE_BYTES_EXCEEDED"
-  | "STREAM_QUEUE_ITEMS_EXCEEDED"
-  | "STREAM_GAP"
-  | "STREAM_EXPIRED"
-  | "REMOTE_NATIVE_UNSUPPORTED"
-  | "HOST_FRAME_INVALID"
-  | "HOST_CONTROL_INVALID"
-  | "HOST_RECEIPT_INVALID"
-  | "PROTOCOL_SUPPORT_INVALID";
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ProtocolMode".
- */
-export type ProtocolMode = "native" | "canonical";
+export type HostFrame = NativeHostFrame | CanonicalHostFrame | ControlHostFrame;
 /**
  * Provider-neutral assistant output channel. analysis is reasoning-class content gated by exposure; commentary is public in-run progress; final is answer content delivered only after the Run reaches a completed terminal state.
  *
@@ -49,7 +23,11 @@ export type MessageChannel = "analysis" | "commentary" | "final";
  * via the `definition` "MessageExposure".
  */
 export type MessageExposure = "public_reasoning" | "public_summary" | "public_plan" | "private_reasoning" | "unknown";
-export type ProtocolMode1 = "native" | "canonical";
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ProtocolMode".
+ */
+export type ProtocolMode = "native" | "canonical";
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "HostControl".
@@ -91,9 +69,31 @@ export type HostControl =
     };
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "HostFrame".
+ * via the `definition` "RunProtocolErrorCode".
  */
-export type HostFrame = NativeHostFrame | CanonicalHostFrame | ControlHostFrame;
+export type RunProtocolErrorCode =
+  | "PROTOCOL_MODE_INVALID"
+  | "PROTOCOL_MODE_UNSUPPORTED"
+  | "EXECUTION_PROTOCOL_MISMATCH"
+  | "EXECUTION_IDENTITY_CONFLICT"
+  | "NATIVE_METHOD_UNSUPPORTED"
+  | "NATIVE_RESPONSE_INVALID"
+  | "INTERACTION_NOT_ACTIVE"
+  | "HOST_EXECUTION_FAILED"
+  | "HOST_ENDED_WITHOUT_TERMINAL"
+  | "PROVIDER_MESSAGE_TOO_LARGE"
+  | "HOST_FRAME_TOO_LARGE"
+  | "STREAM_QUEUE_ITEM_TOO_LARGE"
+  | "STREAM_QUEUE_BYTES_EXCEEDED"
+  | "STREAM_QUEUE_ITEMS_EXCEEDED"
+  | "STREAM_GAP"
+  | "STREAM_EXPIRED"
+  | "REMOTE_NATIVE_UNSUPPORTED"
+  | "HOST_FRAME_INVALID"
+  | "HOST_CONTROL_INVALID"
+  | "HOST_RECEIPT_INVALID"
+  | "PROTOCOL_SUPPORT_INVALID";
+export type ProtocolMode1 = "native" | "canonical";
 /**
  * Public, channel-neutral project notification. No runtime context, reasoning, credentials, or tool payloads belong in this envelope.
  *
@@ -335,6 +335,76 @@ export type ContextReferenceEntry = {
 export interface OctoRuntimeProtocolSchema {}
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "KernelLookupKey".
+ */
+export interface KernelLookupKey {
+  run_id: string;
+  invocation_id: string;
+  agent_session_id: string;
+  session_generation: number;
+  protocol_mode: "canonical" | "native";
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "KernelRunRef".
+ */
+export interface KernelRunRef {
+  kernel_instance_id: string;
+  run_id: string;
+  invocation_id: string;
+  stream_id: string;
+  agent_session_id: string;
+  session_generation: number;
+  protocol_mode: "canonical" | "native";
+  protocol: string;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "KernelRunSnapshot".
+ */
+export interface KernelRunSnapshot {
+  ref: KernelRunRef;
+  oldest_seq: number;
+  latest_seq: number;
+  terminal?: HostFrame;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "NativeHostFrame".
+ */
+export interface NativeHostFrame {
+  run_id: string;
+  invocation_id: string;
+  stream_id: string;
+  agent_session_id: string;
+  session_generation: number;
+  seq: number;
+  protocol_mode: "native";
+  protocol: string;
+  kind: "native";
+  messageKind: "response" | "notification" | "request" | "message";
+  payload: {
+    [k: string]: unknown;
+  };
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "CanonicalHostFrame".
+ */
+export interface CanonicalHostFrame {
+  run_id: string;
+  invocation_id: string;
+  stream_id: string;
+  agent_session_id: string;
+  session_generation: number;
+  seq: number;
+  protocol_mode: "canonical";
+  protocol: string;
+  kind: "canonical";
+  event: CanonicalEventWire;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "CanonicalEventWire".
  */
 export interface CanonicalEventWire {
@@ -520,6 +590,51 @@ export interface FailureCause {
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ControlHostFrame".
+ */
+export interface ControlHostFrame {
+  run_id: string;
+  invocation_id: string;
+  stream_id: string;
+  agent_session_id: string;
+  session_generation: number;
+  seq: number;
+  protocol_mode: ProtocolMode;
+  protocol: string;
+  kind: "control";
+  control: HostControl;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ExecutionEvidence".
+ */
+export interface ExecutionEvidence {
+  actmode: {
+    requested: "default" | "plan";
+    effective: "default" | "plan" | null;
+    status: "applied" | "fallback" | "unknown";
+    nativeMode?: string;
+    reason?: "provider_unsupported" | "adapter_unmapped" | "provider_unconfirmed";
+  };
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "KernelStatus".
+ */
+export interface KernelStatus {
+  ipc_version: 1;
+  kernel_instance_id: string;
+  pid: number;
+  execution_ready: boolean;
+  worker: {
+    pid?: number;
+    generation: number;
+    restart_attempt: number;
+    state: "starting" | "ready" | "recovering" | "stopped" | "exhausted";
+  };
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "HostInvokeOptions".
  */
 export interface HostInvokeOptions {
@@ -560,70 +675,6 @@ export interface NativeInteractionResponse {
   payload: {
     [k: string]: unknown;
   };
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ExecutionEvidence".
- */
-export interface ExecutionEvidence {
-  actmode: {
-    requested: "default" | "plan";
-    effective: "default" | "plan" | null;
-    status: "applied" | "fallback" | "unknown";
-    nativeMode?: string;
-    reason?: "provider_unsupported" | "adapter_unmapped" | "provider_unconfirmed";
-  };
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "NativeHostFrame".
- */
-export interface NativeHostFrame {
-  run_id: string;
-  invocation_id: string;
-  stream_id: string;
-  agent_session_id: string;
-  session_generation: number;
-  seq: number;
-  protocol_mode: "native";
-  protocol: string;
-  kind: "native";
-  messageKind: "response" | "notification" | "request" | "message";
-  payload: {
-    [k: string]: unknown;
-  };
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "CanonicalHostFrame".
- */
-export interface CanonicalHostFrame {
-  run_id: string;
-  invocation_id: string;
-  stream_id: string;
-  agent_session_id: string;
-  session_generation: number;
-  seq: number;
-  protocol_mode: "canonical";
-  protocol: string;
-  kind: "canonical";
-  event: CanonicalEventWire;
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ControlHostFrame".
- */
-export interface ControlHostFrame {
-  run_id: string;
-  invocation_id: string;
-  stream_id: string;
-  agent_session_id: string;
-  session_generation: number;
-  seq: number;
-  protocol_mode: ProtocolMode;
-  protocol: string;
-  kind: "control";
-  control: HostControl;
 }
 export interface NotificationMessage1 {
   schema: "octo.notification.v2";

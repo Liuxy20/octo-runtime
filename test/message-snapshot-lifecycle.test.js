@@ -3,7 +3,7 @@ import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { InvocationExperience } from "../packages/octo-runtime-executor-core/dist/experience.js";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 
 const metadata = {
   messageId: "thought",
@@ -44,7 +44,7 @@ test("streaming message snapshots keep one activity until an explicit terminal",
 });
 
 test("Host closes a still-streaming snapshot on root completion", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {

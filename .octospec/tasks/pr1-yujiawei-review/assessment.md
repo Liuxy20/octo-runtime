@@ -56,7 +56,7 @@ Jerry-Xin 的风格是核对资源所有权、错误是否越界、取消是否�
 | 编号 | 同类缺失及源码位置 | 证据状态 / 后果 | 建议级别 | 必要性 / 可执行性 | 是否修改 / 处理 |
 | --- | --- | --- | --- | --- | --- |
 | S01 | [Codex app-server](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)的 stdin 未监听 error；write 回调不等于流错误处理 | 真实管道探针已复现未处理 EPIPE、执行所在 Node 进程退出码 1；未重复真实 Host RPC 兄弟流验证 | P1 | 100 / 100 | 已修复并提交，Codex 正式回归通过 |
-| S02 | [Host launcher](../../../packages/octo-runtime-adapter-host/src/process.ts)的 terminateProcessTree 也在 leader 退出时提前返回 | public spawnAdapterHost 探针已复现：close 约 1 ms 返回，1.3 秒后工具仍工作，随后 150 ms 新写 6 字节 | P1 | 95 / 100 | 已修复并提交；仅回收本次受管组 |
+| S02 | [Host launcher](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts)的 terminateProcessTree 也在 leader 退出时提前返回 | public spawnAdapterHost 探针已复现：close 约 1 ms 返回，1.3 秒后工具仍工作，随后 150 ms 新写 6 字节 | P1 | 95 / 100 | 已修复并提交；仅回收本次受管组 |
 | S03 | [ZCode app-server](../../../packages/octo-runtime-adapter-zcode-gui/src/app-server.ts)的 close 同样由父进程退出决定是否升级 KILL | 源码确认同类条件，且以 detached 创建组；后续已补真实 ZCode 协议 fixture，验证 leader 先退时工具仍被回收 | P2 暂定 | 90 / 100 | 已修复并提交，预算已明确；平台范围见实施记录 |
 | S04 | [ACP AsyncQueue/readline](../../../packages/octo-runtime-acp-client/src/index.ts)和 ZCode 的对应接收缓冲没有显式队列字节/条数上限及单行上限 | 源码确认；Provider 持续快发、下游慢消费或单行过大时存在内存增长条件。未做 RSS/吞吐实测，不声称已经 OOM | P2 | 85 / 100 | 已修复并提交；容量和正常终态保留回归通过 |
 | S05 | Host launcher 给 stdio RPC 安装了流错误处理，但 spawn 的 ChildProcess 本身没有 error 监听 | 源码确认；固定 process.execPath 降低命令缺失概率，但资源不足等实际 spawn 失败仍可能发 error。未注入真实 OS 资源故障 | P2 暂定 | 85 / 100 | 已修复并提交；真实 ENOENT 注入验证通过 |

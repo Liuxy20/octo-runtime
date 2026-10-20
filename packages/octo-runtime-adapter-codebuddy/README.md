@@ -101,7 +101,7 @@ Agent Revision 使用 `execution_profile.agent_config.model`。新建 provider s
 ## 相关文档
 
 - 底层 ACP 传输客户端：[ACP Client](../octo-runtime-acp-client/README.md)
-- 事件修整与终态兜底：[Adapter Host](../octo-runtime-adapter-host/README.md)
+- 事件修整与终态兜底：[Adapter Host](../octo-runtime-executor-kernel/README.md)
 - Provider adapter 总览：[Provider Adapters](../../.octospec/guides/providers.md)
 - Adapter 编写指南：[Adapter Authoring](../../.octospec/guides/adapter-authoring.md)
 
@@ -109,4 +109,4 @@ Agent Revision 使用 `execution_profile.agent_config.model`。新建 provider s
 
 - 负责：将 codebuddy 原生执行协议映射为 InvokeRequest / CanonicalEvent，由 adapter-host 调用。
 - 不负责：Worker/IM WS、聊天历史、Event/AgentRun 登记。
-- 协作边界：见 [根架构与包边界](../../README.md#模块责任边界)。所有执行来源共用 adapter-host IPC；模块按职责提供协议、执行或宿主能力。
+- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。

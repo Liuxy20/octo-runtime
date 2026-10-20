@@ -21,12 +21,12 @@ supersedes: []
 
 接入选型以稳定性为优先：推荐宿主通过 SDK 经 IPC 调用独立 Executor Kernel，尤其是
 Electron 等长期运行的宿主。允许宿主显式选择直接嵌入 Core，作为 SDK 简易接入方案；
-直接入口的存在不改变隔离执行的推荐优先级。新 Kernel 的实现状态按下方 #47 边界记录。
+直接入口的存在不改变隔离执行的推荐优先级。实现证据见 [Kernel/Host 实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 #46 将唯一执行实现收敛到 `octo-runtime-executor-core` 的 `AgentExecutor`。主发行物公开
 `@mininglamp-oss/octo-runtime/executor-core`，宿主可显式注册 Adapter 并直接执行，不需要
-Kernel、IPC、Extra、云端账号或进程信号接线。默认生产链路仍通过原 adapter-host 独立
-worker 和 stdio NDJSON 调用同一实现；旧包的 AdapterHost 导出只是同一类的过渡别名。
+Kernel、IPC、Extra、云端账号或进程信号接线。默认链路由 executor-kernel 监督独立
+worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 AdapterHost 类别名已删除。
 
 直接执行与宿主共享进程故障域，不能隔离 process.exit、OOM 或同步阻塞。Core 负责输入准备、
 本轮固定渲染、接纳身份、执行、交互路由、取消和正常终态；不加载业务、安装 Provider 或保存
@@ -34,9 +34,9 @@ worker 和 stdio NDJSON 调用同一实现；旧包的 AdapterHost 导出只是�
 锁可释放。失败或未确认的 iterator 清理持续报告 incomplete，不得用再次 return 的空操作
 宣称清理成功；后续 shutdown 只能继续观察尚未结束的清理。具体 API 和限制见 [Core](../../packages/octo-runtime-executor-core/README.md)。
 
-ExecutorKernel 的新包、IPC 命令及监督由 #47 实施，当前不能把旧传输壳称为已完成的新 Kernel。
-Extra 独立运行、CLI 重组与 SDK 模式选择分别属于后续 issue。LoopDaemon 是另一个项目的 Go
-二进制，不在 Core 实施范围；既有 daemon 包和 CLI 命令的历史名称在各自迁移完成前保留。
+Executor Kernel 提供本地 IPC、源窗口和 worker 监督；Host SDK 独立管理 Kernel 与各 Extra。
+旧 daemon app、包、bin、CLI 命令和 API 已删除，不保留兼容包装。LoopDaemon 是另一项目的
+Go 二进制，不在本仓实现；平台和真实业务验收按各自实际证据报告。
 
 ## CLI 使用与 SDK 原生接入
 
@@ -48,7 +48,7 @@ Runtime CLI（octo-runtime）是 Runtime 团队基于 SDK 维护、提供开箱�
 
 CLI 面向云端设备的定制接入、部署和运维，默认包含全部 Adapter、Extra，以及系统管理、开启自启等服务能力。发行物包含组件不表示安装后全部 Extra 已启用或系统自启已注册；启用与注册按各自配置和命令执行。
 
-Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。宿主通过 SDK 管理装配、配置、执行及生命周期，不把 CLI 可执行程序、终端输出解析或 CLI 系统服务作为业务接入层。SDK 管理 daemon、Host、Provider 子进程及 Adapter 依赖 Provider CLI 不违反此约束。SDK 宿主自行选择依赖和配置来源，不继承 CLI 的全量集合或文件约定。
+Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。宿主通过 SDK 管理装配、配置、执行及生命周期，不把 CLI 可执行程序、终端输出解析或 CLI 系统服务作为业务接入层。SDK 管理 Kernel、worker、Provider 子进程及 Adapter 依赖 Provider CLI 不违反此约束。SDK 宿主自行选择依赖和配置来源，不继承 CLI 的全量集合或文件约定。
 
 ## octo-cli 的业务定位与产品价值
 
@@ -117,13 +117,13 @@ F30 进一步明确宿主及其凭据保护责任：大多数接入通过 SDK �
 
 此规则仅定义本地 IPC 信任，不将经网络进入的业务请求视为可信。Extra 和外部系统继续承担各自的身份、租户及资源授权检查。后续架构评审不得仅因本地 IPC 未区分同账号 APP，就要求补建应用级鉴权体系。
 
-传输合同见[本地执行](local-execution.md#本地客户端信任)，决策来源及文档验证见[同账号互信记录](../journal/shared/2026-10-17-local-ipc-account-trust.md)。
+传输合同见[本地执行](local-execution.md#ipc-v1)，决策来源及文档验证见[同账号互信记录](../journal/shared/2026-10-17-local-ipc-account-trust.md)。
 
 ## 宿主函数注入与逐轮业务数据读取
 
 宿主可能将 Agent 提示词和业务 Context 存在内存、SQLite 或远端服务。仅在启动配置里复制这些值，会使后续任务读到旧快照；每次业务数据变化都重载 Extra，又会中断其内部连接。框架也不应为了读取新值而接管宿主的数据库、配置来源或业务查询。
 
-为解决这个目标，Extra 使用两阶段入口 `extra(ctx, jsonConfig)(dependencies)`：第一阶段同步返回 initializer，由 SDK 在第二阶段传入宿主函数并等待初始化完成。宿主调用 `runtime.loadExtra(module, jsonConfig, { loadContexts })`，不用创建插件 manager 或模型执行桥。JSON 配置可校验、复制和传输；不可序列化的函数留在宿主 Node 进程，不写入配置或跨 IPC 传递。模型执行仍由 SDK 接到原 daemon 和独立 AdapterHost。
+为解决这个目标，Extra 使用两阶段入口 `extra(ctx, jsonConfig)(dependencies)`：第一阶段同步返回 initializer，由 SDK 在第二阶段传入宿主依赖并等待初始化完成。宿主调用 `startExtra({declaration, endpoint, dependencies: {loadContexts}})` 创建独立 Extra。JSON 配置可校验、复制和传输；函数留在宿主 Node 进程，经有界调用代理读取，每个真实 Promise 完成前持续占额度。执行端口经 IPC 接到 Kernel，不在 Kernel 内加载 Extra。
 
 **两阶段初始化与逐轮回调是两个不同时间点。** initializer 在每次加载时执行一次，其完成表示插件初始化完成；Channel 在每个已接纳任务开始准备时，再调用同一个 loadContexts 函数获取本轮材料。宿主修改函数读取的数据后，下一轮读取新值，不重载连接；替换函数引用或 JSON 配置时才整体卸载后重载。SDK 不读取宿主业务存储，不自动决定 Context 内容、顺序或历史补齐。
 
@@ -131,7 +131,7 @@ loadContexts 的返回合同为 `readonly ContextItem[] | Promise<readonly Conte
 
 回调第二参数提供 `{ signal }`。宿主应在调用前后检查取消，并在底层 IO 支持时传递 signal；不能声称任意 SQLite 驱动都支持中断。超时会终止本轮等待，未结束的实际操作仍占在途额度，迟到结果不进入模型。它不是任意业务代码的线程沙箱。
 
-该通用 SDK 接口与生命周期已完成本地自动化；第三方 App 接入及真实 IM 验证按后续范围开展。接口、使用示例及验证边界见[SDK 指南第 7 节](../../SDK_CHANNEL_GATEWAY_GUIDE.md#7-逐轮加载-agent-系统提示词与业务-context)和[本地 SDK 交付记录](../journal/shared/2026-10-17-sdk-host-extra-contexts.md)。
+当前独立 Extra 与依赖代理已完成本地自动化；第三方 App 与真实 IM 验证单列待验。接口及用法见[SDK 动态 Context 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md#逐轮-context)，当前证据见[实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。旧同进程 SDK 的交付记录不能替代独立进程验收。
 
 ## 设备执行内核、Extra 与外部工具的职责权限边界
 
@@ -159,7 +159,7 @@ Context 内容、顺序和发送时机仍由 Event 发起方决定；本规则�
 
 2026-10-16 用户在 F17 评审中明确：人格、persona、SOUL 属于提示词指令内容，其选择、构造及注入策略必须完全归业务方；IM 场景由 ChannelGateway 作为业务 Event 发起方，构造 octo.context-envelope/v3 并提交本轮快照。是否发送、文本内容、顺序、更新及重复发送时机均由业务方决定，不能下沉为通用 Runtime 或 AgentRun 的人格管理功能。
 
-Worker、Access、daemon、Host、renderer 和 Adapter 只按已有合同校验、转发、固定渲染或适配本轮显式输入，不得自行扫描、读取或合并 SOUL.md、persona 配置及其他人格文件，不得选择默认人格、强制注入、从历史补齐、按 session 缓存或去重人格内容。业务方需要使用文件或配置中的人格时，由业务方取得并构造 Context；不得以 Provider 隐式读取人格文件代替这条业务注入链路。
+Kernel、worker、HostApp、renderer 和 Adapter 只按已有合同校验、转发、固定渲染或适配本轮显式输入，不得自行扫描、读取或合并 SOUL.md、persona 配置及其他人格文件，不得选择默认人格、强制注入、从历史补齐、按 session 缓存或去重人格内容。业务方需要使用文件或配置中的人格时，由业务方取得并构造 Context；不得以 Provider 隐式读取人格文件代替这条业务注入链路。
 
 普通人格指引可使用业务 extra item，IM 使用 extra.im，无需新增人格专用协议或处理器。指令文本不因名为 SOUL、persona 或由 Channel 提交就自动成为可信控制指令；确需控制通道时必须满足既有来源校验与 octo.control/instructions 合同。人格指引不授予权限、不替代审批，也不授权 Channel 硬编码业务执行流程。
 
@@ -167,9 +167,9 @@ Worker、Access、daemon、Host、renderer 和 Adapter 只按已有合同校验�
 
 ## 资源地址 Context 与按需取材
 
-2026-10-16 架构决策：文档、网盘文件和内部附件按资源上下文处理。业务发起方选择本轮资源，将真实类型、来源、标识/地址及匹配的获取指引放入统一 Context；IM 使用 extra.im。Provider/Harness 内的 Agent 在正常工具循环中根据任务决定是否及如何调用 octo-cli、下载或读取工具。这里的 Harness 不表示 AdapterHost 新增资源抓取调度器。
+2026-10-16 架构决策：文档、网盘文件和内部附件按资源上下文处理。业务发起方选择本轮资源，将真实类型、来源、标识/地址及匹配的获取指引放入统一 Context；IM 使用 extra.im。Provider/Harness 内的 Agent 在正常工具循环中根据任务决定是否及如何调用 octo-cli、下载或读取工具。这里的 Harness 不表示 AgentExecutor 新增资源抓取调度器。
 
-Host、AdapterHost 和 Adapter 不管理文档/网盘业务，不按资源类型自动下载、提取、转写、预取或注入正文。Adapter 继续负责显式输入和工具交互的原生适配；资源地址不必先转换为原生附件才能使用。获取、授权及工具结果归实际工具与服务端，工具安装仍由 HostApp 决定；执行层保留现有权限、审批、取消及预算校验。
+Kernel、AgentExecutor 和 Adapter 不管理文档/网盘业务，不按资源类型自动下载、提取、转写、预取或注入正文。Adapter 继续负责显式输入和工具交互的原生适配；资源地址不必先转换为原生附件才能使用。获取、授权及工具结果归实际工具与服务端，工具安装仍由 HostApp 决定；执行层保留现有权限、审批、取消及预算校验。
 
 资源 Context 与首轮原生媒体输入分别表达意图：前者提供可按需读取的材料，后者由发起方明确要求本轮直接使用图像等原始内容，并走统一 inputs。当前 Codex 独立图片合同保持不变；两条路径均不要求新增业务能力标签、Context Schema 或 Provider 自动改选。统一 Context 的覆盖度按业务材料及行为比较，不因替代旧特殊提示词拼接而扣减。
 
@@ -177,7 +177,7 @@ Host、AdapterHost 和 Adapter 不管理文档/网盘业务，不按资源类型
 
 ## 设备定义与寻址目标
 
-2026-10-16 用户明确：本架构中的**设备是某台机器上，由特定 Runtime Home 承载的本地执行实例**，不是整台电脑或手机。普通目录或单个 Provider 工作目录不构成设备；HostApp 初始化的 Home 承载设备身份、配置与本地状态，daemon 管理 IPC 与共享 AdapterHost。不同 Home 不因位于同一台机器而自动合并。
+2026-10-16 用户明确：本架构中的**设备是某台机器上，由特定 Runtime Home 承载的本地执行实例**，不是整台电脑或手机。普通目录或单个 Provider 工作目录不构成设备；HostApp 初始化的 Home 承载设备身份、配置与本地状态，ExecutorKernel 管理 IPC 与共享 worker。不同 Home 不因位于同一台机器而自动合并。
 
 统一设备的目标是先确定执行位置，再选择传输：
 
@@ -190,9 +190,9 @@ Host、AdapterHost 和 Adapter 不管理文档/网盘业务，不按资源类型
 - 线上设备接入当前考虑由 Extra 层的独立模块承担设备登记与在线状态保持，使用独立设备 Token；具体模块方案、Token 合同及远程调用接线待架构确认，不在此展开其他职责，不把移动端业务或云端注册逻辑写入执行内核。
 - 本地设备在初始化后客观存在，云端注册只管理相应业务内的可见性、归属和跨端寻址映射。未注册、注册失败或登记失效不得阻断已就绪的本地内核与 IPC，不得因此重建身份或停止设备；缺少有效映射会使相应跨端寻址失败。注册成功不等于在线、已获执行权限或执行必定成功。
 - 调用方及业务接入解析目标身份，确认指向本地可访问的设备实例后，必须直接使用 Unix Socket / Windows Named Pipe 等本地 IPC；该调用链不经过网络，也不经 localhost HTTP、WS/SSE 或云端绕行。Provider 模型和工具是否访问网络按其自身合同处理。
-- 目标位于其他设备时，业务接入通过云端服务完成相应授权与目标寻址，经设备侧 Extra 层接入模块，再由本地接入层调用执行内核。远程服务不得直接连接 AdapterHost。WS/SSE 等可作为远程通道选择，具体模块方案与协议待架构确认；SSE 仅承载服务端事件，需要配套请求通道。独立设备 Token 属于远程接入方案，不得因此把云端注册或该 Token 变成普通本地 IPC 调用的前置条件。
+- 目标位于其他设备时，业务接入通过云端服务完成相应授权与目标寻址，经设备侧 Extra 层接入模块，再由本地接入层调用执行内核。远程服务不得直接连接 Kernel 本地执行端点。WS/SSE 等可作为远程通道选择，具体模块方案与协议待架构确认；SSE 仅承载服务端事件，需要配套请求通道。独立设备 Token 属于远程接入方案，不得因此把云端注册或该 Token 变成普通本地 IPC 调用的前置条件。
 - 选定设备后不得在目标离线或不可访问时静默改投其他设备。等待、重新选择或重新发起由业务方决定；标识和本地发现均不代替权限校验。
-- 本地与远程入口最终复用同一个 AdapterHost。业务登记、连接、任务策略和投递留在对应 Extra 或业务服务，不进入设备执行底座。
+- 本地与远程入口最终复用同一个 Kernel 和唯一 AgentExecutor 执行实现。业务登记、连接、任务策略和投递留在对应 Extra 或业务服务，不进入设备执行底座。
 
 设备独立存在、跨业务复用及本地直连是已确定的架构目标。本地 SDK、IPC 与执行内核已有实现；设备登记与在线状态保持模块、远程接入和云端统一寻址的具体架构待确认，通用本地发现/远端选择也尚未完成，不能写成已有 SDK API 或已验收能力。讲解及新旧对比见 [为什么统一设备](../../ARCHITECTURE.md)。本次不修改协议或代码，不重置任何现有身份、Home、profile 或配置。
 
@@ -202,7 +202,7 @@ Host、AdapterHost 和 Adapter 不管理文档/网盘业务，不按资源类型
 
 2026-10-15 用户进一步确认：实体设备提供执行资源，Runtime 是设备上的虚拟标识；多个 runtimeId 可以引用同一 machineId，并由业务插件分别登记给个人或组织。Extra 属于设备 Host，不属于某个虚拟 Runtime/profile。下文将“运行时设备”与“稳定 Runtime 身份”合并叙述的部分不再作为身份归属依据。目标结构、原定义问题、profile 收敛和迁移验收见 [设备与虚拟 Runtime 决策](../tasks/device-virtual-runtime-boundary/brief.md)。这项澄清尚未完成代码改造，现有身份与配置不得自动重置。
 
-Octo Runtime 提供上述**设备实例的执行底座**：本地身份与状态、IPC 及统一内核 `AdapterHost`。虚拟 Runtime 身份与设备本体分别定义。设备是否接入外部系统、是否加载 Extra、是否在线，分别描述接入状态，不决定本地设备是否存在。
+Octo Runtime 提供上述**设备实例的执行底座**：本地身份与状态、IPC 及统一执行实现 `AgentExecutor`。虚拟 Runtime 身份与设备本体分别定义。设备是否接入外部系统、是否加载 Extra、是否在线，分别描述接入状态，不决定本地设备是否存在。
 
 宿主应用通过内部 IPC 使用执行内核。外部系统通过 Extra 插件建立连接、下发执行请求并接收结果。两种入口使用同一个执行内核。
 
@@ -224,7 +224,7 @@ flowchart TB
                 Other["…其他 Extra（待确定）"]
             end
 
-            Kernel["AdapterHost 执行内核<br/><br/>支持 Codex / Claude Code / OpenClaw 等 Provider"]
+            Kernel["ExecutorKernel / AgentExecutor 执行内核<br/><br/>支持 Codex / Claude Code / OpenClaw 等 Provider"]
             Gateway -->|"ipc_invoke"| Kernel
             Other -->|"ipc_invoke"| Kernel
         end
@@ -243,11 +243,11 @@ flowchart TB
     style Extras fill:#f5f5f5,stroke:#333
 ```
 
-宿主 App / CLI 装配设备实例；该实例内包含上方的 Extra 层与下方的 AdapterHost 执行内核。IM-Server 位于宿主外，通过 ChannelGateway 接入；Extra 与本地模块复用同一内核，本地模块经 daemon IPC 调用。图中箭头表示请求进入方向，交互事件与结果沿对应调用链返回。
+宿主 App / CLI 装配设备实例；该实例内包含上方的 Extra 层与下方的 ExecutorKernel 与 worker 内的 AgentExecutor。IM-Server 位于宿主外，通过 ChannelGateway 接入；Extra 与本地模块复用同一内核，本地模块经 Kernel IPC 调用。图中箭头表示请求进入方向，交互事件与结果沿对应调用链返回。
 
-图中进入 AdapterHost 的调用统一标为 `ipc_invoke`，用于架构讲解；本次不新增或改名 SDK / RPC 方法，实际接口见[协议与调用设计](protocol-design.md)。
+图中进入 Kernel 的调用统一标为 `ipc_invoke`，用于架构讲解；图示不代替实际 SDK / RPC 方法，实际接口见[协议与调用设计](protocol-design.md)。
 
-图表示责任边界，不规定每个方框都对应一个独立进程。Extra 位于设备宿主上，不挂靠单个 Runtime/profile；插件内部的账号、连接数量与路由由插件管理。“其他 Extra”是待确定扩展的占位，不表示已有实现。
+图表示责任边界。当前实现中 Kernel、其 worker 和每个 Extra 分别独立运行，由宿主拥有生命周期。Extra 不挂靠单个 Runtime/profile；插件内部的账号、连接数量与路由由插件管理。“其他 Extra”是扩展占位，不表示已有实现。
 
 ## 按责任归属修复问题
 
@@ -270,21 +270,21 @@ HostApp 安装并初始化 Runtime 后，本地执行对象及其身份即存在
 
 与外部 IM 交互、设备登记及在线状态保持等接入需求，可以在设备本体之上按需扩展。设备接入当前考虑 Extra 层的独立模块与独立设备 Token，具体方案待架构确认；远程服务只通过设备侧接入层进入，不直接连接执行内核。停用相关接入或撤销线上登记只改变对应的对外可访问性，不销毁本地设备，也不阻止宿主通过内部 IPC 使用执行内核。
 
-当前实现由 daemon SDK 管理本地 Home、Runtime/profile 身份、生命周期及内部 IPC，并管理共享 AdapterHost。一个 Home 可以承载多个 Runtime/profile，共享执行内核。Home 级 `machine_id` 是安装分组标识，不是硬件指纹、认证凭据或跨产品全局设备身份。详见 [本地存在与接入边界](runtime-lifecycle.md)。
+当前实现由 Host SDK 管理 owned 组件，Kernel 提供 IPC 并监督执行 worker；Home、配置与身份辅助函数继续保留既有格式。一个 Home 可承载多个 Runtime/profile，Extra 属于设备宿主。Home 级 `machine_id` 是安装分组标识，不是硬件指纹、认证凭据或跨产品全局设备身份。详见 [本地存在与接入边界](runtime-lifecycle.md)。
 
-### 统一执行内核 AdapterHost
+### 统一执行内核 AgentExecutor
 
-AdapterHost 接收公开 `InvokeInput`，在共享流程中完成执行准备，再通过 Provider Adapter 调用对应 Provider，并输出执行事件、交互请求和真实终态。内核统一处理执行、交互响应及取消；具体 Provider 的协议差异由 Adapter 处理。
+AgentExecutor 接收公开 `InvokeInput`，在共享流程中完成执行准备，再通过 Provider Adapter 调用对应 Provider，并输出执行事件、交互请求和真实终态。内核统一处理执行、交互响应及取消；具体 Provider 的协议差异由 Adapter 处理。
 
-Agent 定义、业务任务、会话历史及 Provider session binding 由业务调用方管理。AdapterHost 执行调用方提供的请求，不维护业务 Agent 注册中心，也不决定业务背景。
+Agent 定义、业务任务、会话历史及 Provider session binding 由业务调用方管理。AgentExecutor 执行调用方提供的请求，不维护业务 Agent 注册中心，也不决定业务背景。
 
 #### IM Agent 与通用 invoke 不得混淆
 
-2026-10-16 执行准备边界补充：Extra 可以读取所选 adapter 以执行自身业务判断，组装公开 `InvokeInput` 后调用注入的 `host.invoke(input, environment)`。`prepareInvokeInput()` 和其中的 `resolveLocalContext()` 属于 AdapterHost 的共享执行准备路径；Extra 不得自行解析内部执行计划，或先构造 `InvokeRequest` 再转回公开输入。业务默认值、固定目录约束、渠道会话与本轮材料仍归业务入口。所有入口复用该准备流程，不得通过放宽执行 resolver 接纳完整 Context 来掩盖分层错误。
+2026-10-16 执行准备边界补充：Extra 可以读取所选 adapter 以执行自身业务判断，组装公开 `InvokeInput` 后调用注入的 `host.invoke(input, environment)`。`prepareInvokeInput()` 和其中的 `resolveLocalContext()` 属于 AgentExecutor 的共享执行准备路径；Extra 不得自行解析内部执行计划，或先构造 `InvokeRequest` 再转回公开输入。业务默认值、固定目录约束、渠道会话与本轮材料仍归业务入口。所有入口复用该准备流程，不得通过放宽执行 resolver 接纳完整 Context 来掩盖分层错误。
 
 2026-10-17 已删除 Octo / WeCom dispatcher 的重复执行解析，双渠道直接提交公开 InvokeInput；验证和未完成范围见[交付记录](../journal/shared/2026-10-17-extra-initializer-delivery.md)。调用视图见[执行准备与系统指令](../guides/im-agent-invocation-boundary.md#执行准备与系统指令调用视图)，故障证据和经验见[排查记录](../journal/shared/2026-10-16-im-invoke-preparation-lessons.md)，全面准备失败展示等后续工作见[任务计划](../tasks/unify-execution-and-simplify-instructions/brief.md)。
 
-2026-10-16 明确：Channel Gateway 管理长期 IM Agent 的固定工作目录、频道会话映射、reset、历史输入及消息投递；`AdapterHost.invoke` 只承接调用方确定的本次执行配置、输入和 Provider 会话。两层共用执行内核，不表示共享业务职责。Host 的单次执行可以显式续接 Provider 会话，不等于每次新建 Agent 或目录。
+2026-10-16 明确：Channel Gateway 管理长期 IM Agent 的固定工作目录、频道会话映射、reset、历史输入及消息投递；`AgentExecutor.invoke` 只承接调用方确定的本次执行配置、输入和 Provider 会话。两层共用执行内核，不表示共享业务职责。Host 的单次执行可以显式续接 Provider 会话，不等于每次新建 Agent 或目录。
 
 IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功能。Host 的目录配置能力不能推出 IM 需要每 session 一个新目录；IM 的固定目录策略也不得限制所有通用调用方必须使用同一个目录。不得从业务 sessionId 或 Provider sessionId 自动推导目录生命周期、历史采集、身份凭据或投递策略。通用协议与 Provider 的必要校验继续执行。
 
@@ -298,11 +298,11 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 2026-10-16 进一步明确：CLI、desktop 和其他 SDK 宿主管理所选 Adapter 及版本的功能支持范围；Adapter 负责显式输入的原生适配、转发和真实结果返回。Runtime 不再额外建立功能发现、标签匹配或能力准入体系；`executionFeatures` 自建声明的字段、常量、发现投影和消费者已删除，不得恢复标签或换成能力字段表。必要的参数、权限、身份和原生协议校验仍在各自边界执行，实际安装/认证/连接状态与功能目录分别处理。具体边界见 [Adapter 规则](adapter-metadata.md#宿主掌握支持范围adapter-适配转发)及[决策记录](../journal/shared/2026-10-16-adapter-forwarding-ownership.md)。
 
-当前 AdapterHost 运行在独立子进程中，daemon 负责启动和管理它。SDK、内部 IPC 和 Extra 都复用该内核，不为每种外部系统另建执行内核。
+当前 ExecutorKernel 监督独立 worker，worker 内的 AgentExecutor 是唯一执行实现。SDK 与 Extra 使用 Kernel IPC，不为每种外部系统另建执行实现。
 
-可执行 app 只保留 `apps/cli` 与 `apps/daemon`，不再维护 `apps/adapter-host` 启动壳。CLI JSON 使用 `@mininglamp-oss/octo-runtime-adapter-host/runner`；SDK 使用自己的直接 import 入口，二者共享 `serveAdapterHost` 注册、RPC 与退出清理。独立进程边界与独立 workspace 包是两件事：daemon 必须继续通过 stdio RPC 调用 Host，不得将 Provider Adapter 内联到 daemon 进程。宿主显式指定的 Host 入口覆盖仍然有效。
+可执行 app 只保留 `apps/cli`。CLI 使用 executor-kernel 的 runner 与自己的 Adapter JSON；SDK 显式提供 worker 入口，以 `serveWorker` 注册 Adapter、提供 RPC 和退出清理。Kernel 通过 stdio RPC 调用 worker，不在 Kernel 控制进程内执行 Provider。HostApp 独立管理 Kernel 和各 Extra。
 
-这次目录收敛必须保留 `octo-runtime` 的现有命令、参数和执行行为。构建、测试及单一 npm 发行物必须携带 runner 与 Adapter 生产依赖，不得再依赖旧 app 路径。更新程序后使用原 Home、身份、profile 和配置，不为入口迁移重新初始化 Runtime。验收范围见 [移除 Host app 任务](../tasks/remove-adapter-host-app/brief.md)。
+保留原 Home、身份、profile、配置和执行语义，不为入口迁移重新初始化 Runtime。旧 remove-adapter-host-app 任务保留命令的约定已被本轮明确删除 daemon 的决定替代；当前 CLI 是 executor-kernel/channel-gateway 两组六动作。单一 npm 发行物必须携带实际 runner 与生产依赖。当前验收范围见 [独立组件任务](../tasks/executor-kernel-host-lifecycle/acceptance.md)。
 
 #### Adapter 加载集合的归属
 
@@ -316,17 +316,17 @@ CLI 的默认清单必须位于 `apps/cli/src/default_adapters.json`，作为 CL
 
 此改造必须同步对接文档，并提供使用真实接口的完整加载示例。示例与加载关键实现必须用中文代码注释说明选择的用途、责任来源、字段、路径解析、子进程传递、失败与重启行为；只给一段无注释调用代码不满足交付要求。
 
-2026-10-15 已迁移默认入口并删除根清单和 SDK 复制脚本。SDK 自带入口在代码中保留原有 12 项选择，客户可指定自己的直接 import 入口；旧显式 manifest 覆盖保留兼容，不再是 SDK 隐式来源。第三方追加清单等后续范围和验证记录见 [Adapter 装配归属方案](../tasks/adapter-composition-ownership/brief.md)。
+CLI 保留自己的默认清单；startOwnedKernel 要求宿主显式提供 workerEntrypoint，自定义 worker 通过 serveWorker 注册宿主选择的 Adapter。SDK 不默认继承 CLI 全量集合。显式 manifest 仍是内置 runner 的配置输入。第三方追加清单等后续范围见 [Adapter 装配归属方案](../tasks/adapter-composition-ownership/brief.md)。
 
 ### Extra 外部接入插件
 
-每个 Extra 负责自己与外部系统的连接启动、认证、请求接收、业务路由、执行交互和结果投递。外部系统下发的请求由 Extra 转为统一执行请求，交给共享 AdapterHost；执行事件和结果由 Extra 按外部系统协议回传。
+每个 Extra 负责自己与外部系统的连接启动、认证、请求接收、业务路由、执行交互和结果投递。外部系统下发的请求由 Extra 转为统一执行请求，交给共享 AgentExecutor；执行事件和结果由 Extra 按外部系统协议回传。
 
 框架提供插件加载、停止信号、资源清理和注入的执行能力。插件内部的长连接、重连策略、账号状态、授权及可靠投递属于插件业务实现。HostApp 决定安装和启用哪些插件；没有 Extra 也可以通过内部 IPC 执行 Agent。详见 [Extra 插件合同](extras.md)。
 
 Extra 必须保持这一责任边界：宿主编排“卸载 → 修改并保存完整配置 → 使用最新配置加载”，不要求通用 loader 或插件承担逐 Bot 原地更新。各实例必须可查询内部状态，默认 `{}`，插件以同步回调提供自己定义的 JSON，宿主解释业务含义；框架只负责调用转发。独立卸载和重载不能连带影响其他 Extra 或重启共享执行内核。沿用当前函数式入口与 `onDispose`，不重建卸载接口。当前工作树已收敛动态配置和业务 RPC，实施状态与原因见 [责任边界决策](../tasks/extra-responsibility-boundary/brief.md)。
 
-2026-10-16 F20 进一步明确：宿主以整个 Extra 为运行控制单位，不跨模块操纵内部 Bot、连接或管理器；读取公开配置和展示状态不意味着拥有内部运行控制权。主要部署为单机单 Bot，整体重载通常没有其他 Bot 受连带影响；少数多 Bot 配置更新时的重连已被接受。不得为这个受益面有限的场景扩大通用接口、恢复逐 Bot reconcile 或通用业务 RPC。扩展性来自稳定且不依赖插件内部业务的核心合同，不来自预先暴露每种内部操作。需求价值、耦合成本和边界示例见 [Extra 整体生命周期决策](../journal/shared/2026-10-16-extra-whole-plugin-boundary.md)，强制合同见 [Extra 规则](extras.md#整体生命周期与最小公开接口)。
+2026-10-16 F20 进一步明确：宿主以整个 Extra 为运行控制单位，不跨模块操纵内部 Bot、连接或管理器；读取公开配置和展示状态不意味着拥有内部运行控制权。主要部署为单机单 Bot，整体重载通常没有其他 Bot 受连带影响；少数多 Bot 配置更新时的重连已被接受。不得为这个受益面有限的场景扩大通用接口、恢复逐 Bot reconcile 或通用业务 RPC。扩展性来自稳定且不依赖插件内部业务的核心合同，不来自预先暴露每种内部操作。需求价值、耦合成本和边界示例见 [Extra 整体生命周期决策](../journal/shared/2026-10-16-extra-whole-plugin-boundary.md)，强制合同见 [Extra 规则](extras.md#配置和重载)。
 
 Extra 的函数式入口负责封装内部流程：宿主传入完整配置和已有生命周期 context，插件内部持有连接与状态并注册清理/状态回调。Host App / Host CLI 不得接管内部 Bot、连接或队列的控制流程，不为此引入逐对象控制接口或公开插件对象。用户估计同机多 Bot 仅涉及约 1% 的用户或设备，该业务估计进一步说明局部热更受益有限，不能据此让所有宿主依赖插件内部结构；不将估计比例写成实测统计或运行逻辑。
 
@@ -334,11 +334,11 @@ Extra 的函数式入口负责封装内部流程：宿主传入完整配置和�
 
 静态 `config.bots[i].context.items` 与本轮函数结果在 Channel 业务边界合并：同 namespace/name 动态整项替换、保留静态位置，新 key 按动态顺序追加；不拼接 payload 或 instructions.entries，不保存上一轮动态结果。动态空数组保留静态项，加载失败不以旧结果兜底。Host/Adapter 只处理本轮显式快照，不读取宿主存储。动态系统指令取得成功与 Provider 续聊实际应用不同，沿既有可信指令会话合同，不自动 reset。
 
-共享 loader、两渠道和 createDaemonRuntime SDK 已实现上述合同。SDK 三参数 loadExtra 在宿主 Node 进程装配模块与函数，JSON descriptor 继续在 runner 加载；二者共享名称与声明容量，不能同名重复装配。执行仍复用原 daemon 和独立 AdapterHost。场景、完整覆盖示例、内存边界和 SDK 初始化方案见[逐轮 Context 专题](../guides/channel-dynamic-contexts.md)与[SDK 指南第 7 节](../../SDK_CHANNEL_GATEWAY_GUIDE.md#7-逐轮加载-agent-系统提示词与业务-context)；本轮仅验收本地 SDK 自动化，第三方 App 与真实 IM 接入另验。
+两渠道沿用两阶段函数式入口。Host SDK 的 `startExtra` 启动独立 Extra 子进程，通过有界依赖代理调用宿主函数，或在子进程加载显式 dependencyModule；函数不进入 JSON 或 Kernel。场景、覆盖语义与初始化见[逐轮 Context 专题](../guides/channel-dynamic-contexts.md)及[SDK 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。本地自动化与真实 IM 验收分别记录。
 
 | 插件方向 | 状态 | 边界 |
 | --- | --- | --- |
-| `channel-gateway` | 已确定；当前有独立包及 Extra 入口 | 处理 Octo IM 建联、消息触发、会话交互及结果投递，复用 AdapterHost |
+| `channel-gateway` | 已确定；当前有独立包及 Extra 入口 | 处理 Octo IM 建联、消息触发、会话交互及结果投递，复用 Kernel/AgentExecutor |
 | 设备接入 Extra | 待架构确认 | 独立模块，主要表达设备登记与在线状态保持，考虑使用独立设备 Token；具体模块方案与协议待确认，远程服务不直接连接执行内核，不作为设备本体存在的前置条件 |
 | 其他 Extra | 待确定 | 按具体外部系统或业务接入需求扩展 |
 

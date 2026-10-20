@@ -54,9 +54,9 @@ test(
   "ACP missing executable through Host RPC preserves a concurrent run and later invokes",
   { timeout: 5000 },
   async () => {
-    const { spawnAdapterHost } = await import("@mininglamp-oss/octo-runtime-adapter-host");
+    const { spawnWorker } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
     const { preparedFrames, invokeRequest } = await import("./runtime-fixture.js");
-    const host = await spawnAdapterHost({
+    const host = await spawnWorker({
       entrypoint: new URL("./fixtures/acp-failure-host.js", import.meta.url).pathname
     });
     const collect = async (type, id, ready = () => {}) => {

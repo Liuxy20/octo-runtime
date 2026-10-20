@@ -6,6 +6,17 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
+    "./executor-kernel/ipc-fixtures.json": "./packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json",
+    "./protocol/schema.json": "./packages/octo-runtime-protocol/schema/protocol.schema.json",
+    "./executor-kernel/ipc-schema.json": "./packages/octo-runtime-protocol/schema/kernel-ipc.schema.json",
+    "./executor-kernel": {
+      "types": "./dist/public/executor-kernel.d.ts",
+      "import": "./dist/public/executor-kernel.js"
+    },
+    "./host": {
+      "types": "./dist/public/host.d.ts",
+      "import": "./dist/public/host.js"
+    },
     "./executor-core": {
       "types": "./dist/public/executor-core.d.ts",
       "import": "./dist/public/executor-core.js"
@@ -23,16 +34,15 @@
     }
   },
   "bin": {
-    "octo-runtime": "apps/cli/dist/index.js",
-    "octo-runtime-daemon": "apps/daemon/dist/launcher.js"
+    "octo-runtime": "apps/cli/dist/index.js"
   },
   "files": [
+    "packages/octo-runtime-protocol/schema/*.json",
     "packages/*/config-schema.json",
     "dist/public",
     "apps/cli/dist/**/*.js",
     "apps/cli/dist/build-info.json",
     "apps/cli/README.md",
-    "apps/daemon/dist/**/*.js",
     "apps/cli/dist/default_adapters.json",
     "DEPLOYMENTS.md"
   ],
@@ -53,8 +63,7 @@
     "test": "pnpm build && pnpm test:suites",
     "test:suites": "pnpm --filter @mininglamp-oss/octo-runtime-extra-webui test:ui && node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
     "cli": "pnpm build && node apps/cli/dist/index.js",
-    "daemon": "pnpm build && node apps/daemon/dist/launcher.js",
-    "host": "pnpm build && node packages/octo-runtime-adapter-host/dist/runner.js --manifest apps/cli/dist/default_adapters.json",
+    "host": "pnpm build && node packages/octo-runtime-executor-kernel/dist/runner.js --manifest apps/cli/dist/default_adapters.json",
     "build": "pnpm --recursive --filter \"./packages/**\" --filter \"./apps/**\" run build && tsc -p public/tsconfig.json",
     "prepare": "pnpm run build",
     "typecheck": "pnpm build && tsc -p tsconfig.json --noEmit",
@@ -71,7 +80,7 @@
     "@mininglamp-oss/octo-runtime-adapter-codebuddy": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-codex": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-hermes": "workspace:*",
-    "@mininglamp-oss/octo-runtime-adapter-host": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-kimi-code": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-mcode": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-openclaw": "workspace:*",
@@ -82,15 +91,15 @@
     "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-core": "workspace:*",
     "@mininglamp-oss/octo-runtime-cross-service": "workspace:*",
-    "@mininglamp-oss/octo-runtime-daemon": "workspace:*",
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
     "ws": "^8.22.0",
     "@mininglamp-oss/octo-runtime-extra-channel-wecom": "workspace:*"
   },
   "devDependencies": {
+    "ajv": "^8.17.1",
     "@eslint/js": "^10.0.1",
     "@mininglamp-oss/octo-runtime-acp-client": "workspace:*",
-    "@mininglamp-oss/octo-runtime-daemon-app": "workspace:*",
     "@types/node": "^24.0.0",
     "eslint": "^10.12.0",
     "prettier": "3.9.10",

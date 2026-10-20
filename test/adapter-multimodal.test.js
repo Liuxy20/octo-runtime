@@ -28,7 +28,7 @@ import {
   buildAntigravityCommand,
   createAntigravityAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import { acpPromptParams } from "@mininglamp-oss/octo-runtime-acp-client";
 import { invokeRequest, preparedFrames, preparedTestInvoke } from "./runtime-fixture.js";
@@ -399,7 +399,7 @@ for (const recoveryOnly of [false, true]) {
 }
 
 test("Host forwards image blocks to an implementing Adapter without feature labels", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   let received;
   host.register({
     metadata: {

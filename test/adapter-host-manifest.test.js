@@ -4,12 +4,12 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { resolveAdapterModuleSpecifier } from "../packages/octo-runtime-adapter-host/dist/module-specifier.js";
+import { resolveAdapterModuleSpecifier } from "../packages/octo-runtime-executor-kernel/dist/module-specifier.js";
 import { invokeRequest, withTimeout } from "./runtime-fixture.js";
 
-const entrypoint = resolve("packages/octo-runtime-adapter-host/dist/runner.js");
+const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const fixture = resolve("test/fixtures/test-adapter.js");
 
 test("manifest module specifiers preserve packages and existing URLs", () => {
@@ -103,7 +103,7 @@ async function writeManifest(manifest, module, exportName = "testAdapter") {
 }
 
 async function startHost(t, root, manifest) {
-  const host = await spawnAdapterHost({
+  const host = await spawnWorker({
     entrypoint,
     manifest,
     env: { ...process.env, OCTO_RUNTIME_HOME: root, OCTO_RUNTIME_LOGS_DIRECTORY: "" },

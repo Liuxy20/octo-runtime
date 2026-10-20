@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:mininglamp-oss:octo-runtime:kernel-ipc:v1",
+  "title": "Kernel IPC v1",
+  "description": "One UTF-8 LF-terminated JSON-RPC request per local connection. No batches. Closing a connection never cancels execution. Source sequence numbers belong to the Kernel instance. Receipts and events retain the original Run protocol identities.",
+  "definitions": {
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "method", "params"],
+      "properties": {
+        "jsonrpc": { "const": "2.0" },
+        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "method": {
+          "enum": [
+            "status",
+            "adapter.list",
+            "agent_run.invoke",
+            "agent_run.get",
+            "agent_run.subscribe",
+            "agent_run.cancel",
+            "agent_run.respond",
+            "agent_run.native.respond"
+          ]
+        },
+        "params": { "type": "object" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "method": { "enum": ["status", "adapter.list"] } } },
+          "then": { "properties": { "params": { "maxProperties": 0 } } }
+        },
+        {
+          "if": { "properties": { "method": { "const": "agent_run.invoke" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["input"],
+                "properties": {
+                  "input": { "type": "object" },
+                  "executionEnvOverrides": { "type": "object" },
+                  "kernel_instance_id": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "const": "agent_run.get" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["key"],
+                "properties": {
+                  "key": {
+                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelLookupKey"
+                  },
+                  "kernel_instance_id": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "const": "agent_run.subscribe" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "after_seq"],
+                "properties": {
+                  "ref": {
+                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+                  },
+                  "after_seq": { "type": "integer", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "method": { "const": "agent_run.cancel" } } },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref"],
+                "properties": {
+                  "ref": {
+                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+                  },
+                  "reason": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": { "enum": ["agent_run.respond", "agent_run.native.respond"] }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["ref", "response"],
+                "properties": {
+                  "ref": {
+                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+                  },
+                  "response": { "type": "object" }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BusinessErrorCode": {
+      "enum": [
+        "KERNEL_UNAVAILABLE",
+        "KERNEL_INSTANCE_CHANGED",
+        "RUN_IDENTITY_MISMATCH",
+        "RUN_NOT_AVAILABLE",
+        "RUN_ALREADY_ACCEPTED",
+        "RUN_CAPACITY_EXHAUSTED",
+        "STREAM_GAP",
+        "STREAM_EXPIRED",
+        "STREAM_CURSOR_INVALID",
+        "STREAM_SUBSCRIBER_LIMIT",
+        "ACCEPTANCE_UNKNOWN",
+        "OPERATION_OUTCOME_UNKNOWN",
+        "CLIENT_CLOSED",
+        "WORKER_LOST",
+        "WORKER_RESTART_EXHAUSTED",
+        "INVOKE_REQUEST_TOO_LARGE",
+        "HOST_FRAME_TOO_LARGE"
+      ]
+    }
+  },
+  "$ref": "#/definitions/Request"
+}

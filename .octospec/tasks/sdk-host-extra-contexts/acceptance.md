@@ -10,11 +10,11 @@ timestamp: 2026-10-17T00:00:00Z
 
 本地 SDK 已实施，以下区分仓内自动化与后续宿主验收。用户本轮只要求 SDK 接口和 daemon 单测，不修改第三方 App；实际检查见[交付记录](../../journal/shared/2026-10-17-sdk-host-extra-contexts.md)。
 
-仓内已通过 [SDK 13 项测试](../../../test/sdk-host-extras.test.js)及[执行流回执在途取消测试](../../../test/embedded-invoke.test.js)。测试使用 fake Provider 与 SDK 自己启动的独立 Host；不连接真实 IM，不证明第三方 App 已接通。
+仓内已通过 [SDK 13 项测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/sdk-host-extras.test.js)及[执行流回执在途取消测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/embedded-invoke.test.js)。测试使用 fake Provider 与 SDK 自己启动的独立 Host；不连接真实 IM，不证明第三方 App 已接通。
 
 ## 面向宿主的一条完整流程
 
-后续以 [register-demo](../../../../octo-runtime-channel-gateway-register-demo/src/main/index.ts) 为主要样例，沿现有 submodule/workspace 编译和 SDK 接入方式验证。保持它的独立 Host 入口，不在 demo 中创建 ExtraPlugins 或执行桥。本轮暂不修改或运行该 App。
+后续以 register-demo（历史外部入口 `octo-runtime-channel-gateway-register-demo/src/main/index.ts`，当前工作区未提供） 为主要样例，沿现有 submodule/workspace 编译和 SDK 接入方式验证。保持它的独立 Host 入口，不在 demo 中创建 ExtraPlugins 或执行桥。本轮暂不修改或运行该 App。
 
 | 步骤 | 宿主操作 | 必须观察到的结果 |
 | --- | --- | --- |

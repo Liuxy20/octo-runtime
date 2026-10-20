@@ -8,6 +8,6 @@ if (manifestIndex >= 0 && process.argv[manifestIndex + 1]) {
   if (attempt === 2) {
     setInterval(() => undefined, 1_000);
   } else {
-    await import("../../packages/octo-runtime-adapter-host/dist/runner.js");
+    await import("../../packages/octo-runtime-executor-kernel/dist/runner.js");
   }
 }

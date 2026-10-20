@@ -57,10 +57,10 @@ CLI 默认集合使用 CLI 自己维护的 `apps/cli/src/default_adapters.json`�
 
 ### 改造前的问题（历史依据）
 
-1. 原根目录 `config/adapters.json` 列出全部 12 个默认 Adapter，[CLI daemon](../../../apps/daemon/src/runtime-options.ts) 和 [Playboard](../../../apps/cli/src/playboard.ts) 默认使用它；现已移入 CLI src。
-2. 原 `packages/octo-runtime-daemon/scripts/copy-manifest.mjs` 在 SDK 构建时复制同一清单，[SDK runner](../../../packages/octo-runtime-daemon/src/runtime/runner.ts) 默认加载副本。新增 CLI Adapter 因此会影响 SDK 默认集合，客户产品没有独立、明确的选择；复制脚本现已删除。
-3. [Host package.json](../../../packages/octo-runtime-adapter-host/package.json) 当前声明全部内置 Adapter 的生产依赖。此事实需要在对接文档中说明，不能把只加载 5 个解释为产物只包含 5 个。依赖和包体由宿主 App 管理，不将裁剪客户依赖树纳入本次 Runtime 改造目标。
-4. 原 SDK 示例要求填写 `manifestPath`，掩盖了本应由嵌入代码管理的决策。现在 [SDK distribution](../../../packages/octo-runtime-daemon/src/runtime/types.ts) 由 `adapterHostEntrypoint` 定位产品的代码入口。
+1. 原根目录 `config/adapters.json` 列出全部 12 个默认 Adapter，[CLI daemon](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/daemon/src/runtime-options.ts) 和 [Playboard](../../../apps/cli/src/playboard.ts) 默认使用它；现已移入 CLI src。
+2. 原 `packages/octo-runtime-daemon/scripts/copy-manifest.mjs` 在 SDK 构建时复制同一清单，[SDK runner](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/runner.ts) 默认加载副本。新增 CLI Adapter 因此会影响 SDK 默认集合，客户产品没有独立、明确的选择；复制脚本现已删除。
+3. [Host package.json](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/package.json) 当前声明全部内置 Adapter 的生产依赖。此事实需要在对接文档中说明，不能把只加载 5 个解释为产物只包含 5 个。依赖和包体由宿主 App 管理，不将裁剪客户依赖树纳入本次 Runtime 改造目标。
+4. 原 SDK 示例要求填写 `manifestPath`，掩盖了本应由嵌入代码管理的决策。现在 [SDK distribution](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/types.ts) 由 `adapterHostEntrypoint` 定位产品的代码入口。
 
 共享的应该是 Adapter 接口、加载校验及执行机制，不是每个产品启用的清单。保留一个全局默认全量表，或改成 Host 内部静态注册全部 Adapter，均不能解决这个问题。
 

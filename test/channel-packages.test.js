@@ -17,7 +17,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-extra-channel-wecom";
 import { ImChannelManager as GatewayManager } from "../packages/octo-runtime-extra-channel-gateway/dist/lifecycle/manager.js";
 import { ImChannelManager as WecomManager } from "../packages/octo-runtime-extra-channel-wecom/dist/lifecycle/manager.js";
-import { ExtraPlugins } from "@mininglamp-oss/octo-runtime-daemon";
+import { ExtraPlugins } from "@mininglamp-oss/octo-runtime-host-sdk";
 
 test("hosts resolve credential storage before passing values to channel SDKs", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "octo-host-credentials-"));

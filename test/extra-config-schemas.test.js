@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import test from "node:test";
-import { assertStoredExtra } from "../packages/octo-runtime-daemon/dist/extra-config.js";
+import { assertStoredExtra } from "../packages/octo-runtime-host-sdk/dist/extra-config.js";
 import { validateImConfig as validateGateway } from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
 import { validateImConfig as validateWecom } from "@mininglamp-oss/octo-runtime-extra-channel-wecom";
 

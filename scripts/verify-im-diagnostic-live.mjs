@@ -5,7 +5,7 @@ import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { spawnAdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { spawnWorker } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { canonicalEvents } from "../packages/octo-runtime-protocol/dist/index.js";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
 import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/auth.js";
@@ -62,7 +62,7 @@ const members = Array.isArray(groupMembers) ? groupMembers : groupMembers.member
 for (const account of [receiver, sender]) assert.ok(members.some((m) => m.uid === account.id));
 
 const directory = await mkdtemp(join(tmpdir(), "octo-diagnostic-live-"));
-const hosted = await spawnAdapterHost({
+const hosted = await spawnWorker({
   entrypoint: fileURLToPath(new URL("../test-support/im-diagnostic-host.mjs", import.meta.url))
 });
 const calls = [],

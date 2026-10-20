@@ -4,8 +4,8 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { ExtraPlugins } from "../packages/octo-runtime-daemon/dist/index.js";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "octo-metadata-log-"));
@@ -73,7 +73,7 @@ test("F31 disabled logging creates no files, rejects implicit directories, and n
 test("F31 kernel lifecycle counts only this input/context and keeps execution independent of logging", async (t) => {
   const directory = await fixture(t),
     logging = new RuntimeLogging({ directory });
-  const host = new AdapterHost({ log: logging.kernel });
+  const host = new AgentExecutor({ log: logging.kernel });
   host.register({
     metadata: {
       type: "fixture",
@@ -114,7 +114,7 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   assert.ok(rows.some((row) => row.event === "invoke.rejected"));
   assert.ok(rows.some((row) => row.event === "invoke.started"));
   assert.doesNotMatch(JSON.stringify(rows), /SECRET|payload|instructions/);
-  const failing = new AdapterHost({
+  const failing = new AgentExecutor({
     log: () => {
       throw Error("disk unavailable");
     }

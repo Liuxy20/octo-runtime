@@ -5,19 +5,14 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  AdapterHost,
-  HostRunService,
-  startHostSocketServer
-} from "@mininglamp-oss/octo-runtime-adapter-host";
-import { startDaemonServer } from "@mininglamp-oss/octo-runtime-daemon";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { HostRunService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
   invocationInput,
   isHostTerminal,
   resolveStreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
-import { invokeDaemonRun } from "../packages/octo-runtime-daemon/dist/runtime/run-stream.js";
 import { invokeRequest, waitFor } from "./runtime-fixture.js";
 
 const MIB = 1024 * 1024;
@@ -147,55 +142,6 @@ function input(adapterType, prompt = "policy", protocolMode = "canonical") {
   );
 }
 
-async function fixture(context, kind, configurations) {
-  const home = await mkdtemp(join(tmpdir(), "octo-policy-"));
-  let app;
-  context.after(async () => {
-    try {
-      await app?.close();
-    } finally {
-      await rm(home, { recursive: true, force: true });
-    }
-  });
-  await writeFile(
-    join(home, "adapter.mjs"),
-    `export ${createPolicyAdapter.toString()}\n${largeToolOutput.toString()}\nexport ${createSdkAdapter.toString()}`
-  );
-  const manifestPath = join(home, "adapters.json");
-  await writeFile(
-    manifestPath,
-    JSON.stringify({
-      version: 1,
-      adapters: ["limited", "large", "unconfigured", "codex", "sdk"].map((type) => ({
-        type,
-        module: "./adapter.mjs",
-        export: type === "sdk" ? "createSdkAdapter" : "createPolicyAdapter",
-        factory: true,
-        options: { type }
-      }))
-    })
-  );
-  const options = {
-    homePath: home,
-    socketPath:
-      process.platform === "win32"
-        ? `\\\\.\\pipe\\octo-policy-${randomUUID()}`
-        : join(home, "host.sock"),
-    manifestPath,
-    hostEntrypoint: fileURLToPath(
-      new URL("../packages/octo-runtime-adapter-host/dist/runner.js", import.meta.url)
-    )
-  };
-  app =
-    kind === "daemon"
-      ? await startDaemonServer({
-          ...options,
-          localRuntimes: [{ profile: "default", root: home, adapterConfigurations: configurations }]
-        })
-      : await startHostSocketServer({ ...options, configurations: () => configurations });
-  return { host: app.host, socketPath: options.socketPath, hostProcess: app.hostProcess };
-}
-
 function assertReducedReplay(host, runId) {
   const info = host.get(runId);
   assert.equal(info.terminal.control.state, "completed");
@@ -210,7 +156,7 @@ function assertReducedReplay(host, runId) {
 }
 
 test("HostRunService resolves trusted limits once and freezes before transport starts", async (context) => {
-  const provider = new AdapterHost();
+  const provider = new AgentExecutor();
   provider.register(createPolicyAdapter({ type: "limited" }));
   const overrides = { ...reducedPolicy };
   let resolutions = 0;
@@ -240,147 +186,3 @@ test("HostRunService resolves trusted limits once and freezes before transport s
   assert.deepEqual(transportPolicy, reducedPolicy);
   assertReducedReplay(host, request.runId);
 });
-
-for (const kind of ["daemon", "host socket"]) {
-  test(`${kind} applies trusted replay limits before HostRunService admission`, async (context) => {
-    const { host } = await fixture(context, kind, {
-      limited: { providerOptions: {}, streamLimits: reducedPolicy }
-    });
-    const request = input("limited", "replay");
-    await host.submit(request);
-    await waitFor(() => host.get(request.runId).terminal);
-    assertReducedReplay(host, request.runId);
-  });
-
-  test(`${kind} accepts a legal HostFrame limit above the default throughout execution and replay`, async (context) => {
-    const policy = resolveStreamLimitPolicy({ hostFrameMaxBytes: 24 * MIB });
-    const { host } = await fixture(context, kind, {
-      large: { providerOptions: {}, streamLimits: policy }
-    });
-    const request = input("large", "large");
-    let receivedBytes = 0;
-    for await (const frame of host.invokeFrames(request)) {
-      if (frame.kind === "canonical" && frame.event.type === "message.delta")
-        receivedBytes += Buffer.byteLength(frame.event.payload.text);
-    }
-    assert.equal(receivedBytes, 21 * MIB);
-    const replay = host.read(request.runId, undefined, 0);
-    assert.equal(replay.terminal.control.state, "completed");
-    const retained = replay.events.find(
-      ({ event }) => event.kind === "canonical" && event.event.type === "message.delta"
-    );
-    assert.ok(retained.bytes > DEFAULT_STREAM_LIMIT_POLICY.hostFrameMaxBytes);
-    assert.ok(retained.bytes <= policy.hostFrameMaxBytes);
-    assert.equal(retained.event.event.payload.text.length, receivedBytes);
-  });
-
-  test(`${kind} uses defaults for unknown configurations and absent overrides, ignoring caller policies`, async (context) => {
-    const { host } = await fixture(context, kind, {
-      limited: { providerOptions: {} },
-      codex: { providerOptions: {}, streamLimits: reducedPolicy }
-    });
-    for (const adapterType of ["unconfigured", "limited"]) {
-      const request = input(adapterType);
-      request.contexts.items.push({
-        namespace: "extra.test",
-        name: "stream_limits",
-        payload: { ...reducedPolicy }
-      });
-      request.agentConfig.providerOptions = { stream_limits: reducedPolicy };
-      request.streamLimits = reducedPolicy;
-      const received = [];
-      for await (const frame of host.invokeFrames(request, { streamLimits: reducedPolicy }))
-        received.push(frame);
-      const output = received.find(
-        (frame) => frame.kind === "canonical" && frame.event.type === "message.delta"
-      );
-      assert.deepEqual(JSON.parse(output.event.payload.text), DEFAULT_STREAM_LIMIT_POLICY);
-      assert.equal(received.at(-1).control.state, "completed");
-    }
-    const missing = host.invokeFrames(input("missing"));
-    await assert.rejects(missing.next(), /unknown adapter: missing/);
-  });
-}
-
-for (const protocolMode of ["canonical", "native"]) {
-  test(`daemon SDK traverses the child Host and real socket with intact large ${protocolMode} tool output and no cancellation`, async (context) => {
-    const { host, socketPath, hostProcess } = await fixture(context, "daemon", {});
-    assert.ok(Number.isInteger(hostProcess.child.pid));
-    assert.notEqual(hostProcess.child.pid, process.pid);
-    const cancelRun = context.mock.method(host, "cancelRun");
-    const childCancel = context.mock.method(hostProcess.client, "cancel");
-    const submit = context.mock.method(host, "submit");
-    const request = input("sdk", "sdk-large-tool", protocolMode);
-    const frames = [];
-    for await (const frame of invokeDaemonRun(socketPath, request)) frames.push(frame);
-    const output = largeToolOutput();
-    assert.equal(Buffer.byteLength(output), 1_430_765);
-    assert.equal(submit.mock.callCount(), 1);
-    assert.equal(cancelRun.mock.callCount(), 0);
-    assert.equal(childCancel.mock.callCount(), 0);
-    assert.ok(frames.every((frame) => frame.protocol_mode === protocolMode));
-    assert.deepEqual(
-      frames.map((frame) => frame.seq),
-      frames.map((_, index) => index + 1)
-    );
-    assert.equal(frames.filter(isHostTerminal).length, 1);
-    assert.equal(frames.at(-1).control.state, "completed");
-    assert.equal(
-      frames.some((frame) => frame.kind === "control" && frame.control.type === "error"),
-      false
-    );
-    assert.deepEqual(
-      host.read(request.runId, undefined, 0).events.map(({ event }) => event),
-      frames
-    );
-    if (protocolMode === "canonical") {
-      const updates = frames.filter(
-        (frame) => frame.kind === "canonical" && frame.event.type === "tool_call.update"
-      );
-      assert.equal(updates.length, 1);
-      assert.deepEqual(updates[0].event.payload, {
-        id: "tool-sdk",
-        status: "completed",
-        result: { stdout: output, stderr: "", exitCode: 0 }
-      });
-      assert.equal(
-        frames.filter((frame) => frame.kind === "canonical" && frame.event.type === "run.completed")
-          .length,
-        1
-      );
-      assert.equal(
-        frames.some((frame) => frame.kind === "native"),
-        false
-      );
-    } else {
-      const native = frames.filter((frame) => frame.kind === "native");
-      assert.equal(native.length, 2);
-      assert.ok(native.every((frame) => frame.messageKind === "notification"));
-      assert.deepEqual(native[0].payload, {
-        jsonrpc: "2.0",
-        method: "item/completed",
-        params: {
-          threadId: "thread-sdk",
-          turnId: "turn-sdk",
-          item: {
-            id: "tool-sdk",
-            type: "commandExecution",
-            status: "completed",
-            aggregated_output: output,
-            exit_code: 0
-          }
-        },
-        future: { keep: ["原生字段", 7, true, null] }
-      });
-      assert.deepEqual(native[1].payload, {
-        jsonrpc: "2.0",
-        method: "turn/completed",
-        params: { threadId: "thread-sdk", turn: { id: "turn-sdk", status: "completed" } }
-      });
-      assert.equal(
-        frames.some((frame) => frame.kind === "canonical"),
-        false
-      );
-    }
-  });
-}

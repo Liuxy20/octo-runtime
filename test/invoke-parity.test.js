@@ -1,15 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
-import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer
-} from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { waitFor } from "./runtime-fixture.js";
 
 function fixture(t, invoke) {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "fixture",
@@ -22,8 +19,8 @@ function fixture(t, invoke) {
     output = new PassThrough(),
     wire = [];
   input.on("data", (chunk) => wire.push(JSON.parse(chunk.toString())));
-  new AdapterHostRpcServer({ host, output }).listen(input);
-  const client = new AdapterHostRpcClient({ input: output, output: input });
+  new WorkerRpcServer({ host, output }).listen(input);
+  const client = new WorkerRpcClient({ input: output, output: input });
   t.after(async () => {
     client.close();
     input.destroy();

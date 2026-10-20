@@ -1,9 +1,9 @@
-import { serveAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
 import { fileURLToPath } from "node:url";
 import { testAdapter } from "./test-adapter.js";
 
-serveAdapterHost([
+serveWorker([
   {
     ...testAdapter,
     async *invoke(request) {

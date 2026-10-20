@@ -5,8 +5,11 @@ import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createDaemonRuntime } from "../packages/octo-runtime-daemon/dist/index.js";
-import * as gateway from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
+import {
+  startOwnedKernel,
+  startExtra,
+  componentEndpoint
+} from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/auth.js";
 import {
   fetchBotGroups,
@@ -134,12 +137,27 @@ try {
         .split("\n")
         .filter(Boolean)
         .map((line) => JSON.parse(line));
-    let processHandle, runtime;
+    let processHandle, extra;
+    const endpoint = componentEndpoint(home);
+    const kernel = await startOwnedKernel({ endpoint, workerEntrypoint: entrypoint });
+    const closeExtra = async () => {
+      if (extra) {
+        assert.equal((await extra.stop()).complete, true);
+        extra = undefined;
+      }
+    };
+    const loadExtra = async (config, dependencies) => {
+      extra = await startExtra({
+        endpoint,
+        declaration: { name: "channel-gateway", module: gatewayPath, config },
+        dependencies
+      });
+    };
     let contextLoads = 0;
     const status = async () =>
       mode === "sdk"
-        ? runtime.extraStatus("channel-gateway")
-        : (await localCli(home, ["status"])).extras?.["channel-gateway"]?.status;
+        ? extra.status()
+        : (await localCli(home, ["status"]))["channel-gateway"]?.runtime?.status;
     const ready = async () => {
       const value = await status().catch(() => undefined);
       return value?.bots?.[0]?.state === "online";
@@ -183,28 +201,20 @@ try {
           module: gatewayPath,
           config: { bots: [config] }
         });
-        processHandle = spawn(process.execPath, [runtimeCli, "--home", home, "daemon", "run"], {
-          detached: true,
-          env: {
-            ...process.env,
-            OCTO_RUNTIME_ADAPTER_HOST: entrypoint,
-            OPENCLAW_HOME: join(home, "unused-openclaw")
-          },
-          stdio: "ignore"
-        });
+        processHandle = spawn(
+          process.execPath,
+          [runtimeCli, "--home", home, "channel-gateway", "run"],
+          {
+            detached: true,
+            env: {
+              ...process.env,
+              OPENCLAW_HOME: join(home, "unused-openclaw")
+            },
+            stdio: "ignore"
+          }
+        );
       } else {
-        runtime = createDaemonRuntime({
-          appId: "channel-group-admission-qa",
-          home,
-          distribution: { adapterHostEntrypoint: entrypoint },
-          healthPollIntervalMs: 50
-        });
-        await runtime.startAccount({
-          subject: { type: "user", id: "qa" },
-          tenants: [{ id: "qa" }]
-        });
-        await runtime.loadExtra(
-          gateway,
+        await loadExtra(
           { bots: [config] },
           {
             async loadContexts() {
@@ -236,9 +246,8 @@ try {
           ["empty", { group_ids: [] }],
           ["listed", { group_ids: [group.group_no] }]
         ]) {
-          await runtime.unloadExtra("channel-gateway");
-          await runtime.loadExtra(
-            gateway,
+          await closeExtra();
+          await loadExtra(
             { bots: [{ ...config, ...overrides }] },
             {
               async loadContexts() {
@@ -255,8 +264,8 @@ try {
           { group_ids: ["outside-this-qa-group"] },
           { allowed_sender_ids: [] }
         ]) {
-          await runtime.unloadExtra("channel-gateway");
-          await runtime.loadExtra(gateway, { bots: [{ ...config, ...overrides }] }, {});
+          await closeExtra();
+          await loadExtra({ bots: [{ ...config, ...overrides }] }, {});
           await wait(ready, "sdk restricted Bot online");
           const before = (await calls()).length;
           await send("rejected");
@@ -275,7 +284,8 @@ try {
       report.entries.push(entry);
       console.error(`verified: ${mode} actual group/topic receive, execute and reply`);
     } finally {
-      await runtime?.stop();
+      await closeExtra();
+      assert.equal((await kernel.stop()).complete, true);
       if (processHandle?.pid) {
         const closed = once(processHandle, "close");
         try {

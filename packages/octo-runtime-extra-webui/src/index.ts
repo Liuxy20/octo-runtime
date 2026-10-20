@@ -18,8 +18,8 @@ import type {
   ExtraInitializer,
   ExtraContext,
   JsonObject
-} from "@mininglamp-oss/octo-runtime-daemon";
-import { mergeConfiguredContexts } from "@mininglamp-oss/octo-runtime-daemon";
+} from "@mininglamp-oss/octo-runtime-host-sdk";
+import { mergeConfiguredContexts } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { SessionStore, validMessages, validBinding, type Session } from "./store.js";
 
 export const name = "webui";

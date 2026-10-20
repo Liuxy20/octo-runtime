@@ -5,7 +5,7 @@ import {
   readExtraDirectory,
   type ExtraDescriptor,
   type StoredExtra
-} from "@mininglamp-oss/octo-runtime-daemon";
+} from "@mininglamp-oss/octo-runtime-host-sdk";
 import { withSetupLock, writeJsonAtomic, type RuntimePaths } from "./state.js";
 
 /** Generic full replacement: no platform-specific CLI fields or validation. */

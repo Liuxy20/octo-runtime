@@ -5,6 +5,13 @@ export const testAdapter = {
     agentSources: ["provisioned"]
   },
   async *invoke(request) {
+    if (request.prompt === "wait-for-cancel") {
+      await new Promise((resolve) => {
+        if (request.signal.aborted) resolve();
+        else request.signal.addEventListener("abort", resolve, { once: true });
+      });
+      return;
+    }
     if (request.prompt === "wait-for-host-exit") await new Promise(() => {});
     await Promise.resolve();
     yield {

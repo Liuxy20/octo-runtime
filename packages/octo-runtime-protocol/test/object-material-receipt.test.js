@@ -6,9 +6,7 @@ import { createRequire } from "node:module";
 const schema = JSON.parse(
   readFileSync(new URL("../schema/protocol.schema.json", import.meta.url), "utf8")
 );
-const Ajv = createRequire(new URL("../../octo-runtime-daemon/package.json", import.meta.url))(
-  "ajv"
-).default;
+const Ajv = createRequire(new URL("../../../package.json", import.meta.url))("ajv").default;
 const ajv = new Ajv({ strict: false, logger: false });
 ajv.addSchema(schema);
 const validate = ajv.compile({ $ref: `${schema.$id}#/definitions/PublicObjectMaterial` });

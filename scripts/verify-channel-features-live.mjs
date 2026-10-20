@@ -5,9 +5,8 @@ import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { startDaemonServer } from "../packages/octo-runtime-daemon/dist/server.js";
-import { invokeDaemonRun } from "../packages/octo-runtime-daemon/dist/runtime/run-stream.js";
-import { callDaemon } from "../packages/octo-runtime-daemon/dist/runtime/runtime-contract.js";
+import { startOwnedKernel } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { createExtraPort } from "../packages/octo-runtime-host-sdk/dist/extra-port.js";
 import { canonicalEvents } from "../packages/octo-runtime-protocol/dist/index.js";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -68,29 +67,15 @@ async function cli(account, args, body) {
   }
 }
 const directory = await mkdtemp(join(tmpdir(), "octo-channel-live-"));
-let daemon;
-const socket = join(directory, "daemon.sock");
-const activeRuns = new Map();
+let kernel;
+const socket = join(directory, "kernel.sock");
+const execution = createExtraPort(socket, new AbortController().signal);
 const host = {
-  async *invoke(input, environment) {
-    activeRuns.set(input.invocationId, input.runId);
-    try {
-      yield* canonicalEvents(invokeDaemonRun(socket, input, environment));
-    } finally {
-      activeRuns.delete(input.invocationId);
-    }
-  },
-  cancel: (id) =>
-    callDaemon(socket, {
-      method: "agent_run.cancel",
-      params: { run_id: activeRuns.get(id) ?? id }
-    }),
-  respondInteraction: (id, response) =>
-    callDaemon(socket, {
-      method: "agent_run.respond",
-      params: { run_id: activeRuns.get(id) ?? id, response }
-    }),
-  shutdown: () => daemon?.close()
+  ...execution.port,
+  shutdown: async () => {
+    await execution.close();
+    if (kernel) assert.equal((await kernel.stop()).complete, true);
+  }
 };
 const calls = [],
   diagnostics = [],
@@ -183,15 +168,14 @@ try {
       ]
     })
   );
-  daemon = await startDaemonServer({
-    socketPath: socket,
-    manifestPath: manifest,
-    homePath: directory,
-    hostEntrypoint: fileURLToPath(
-      new URL("../packages/octo-runtime-adapter-host/dist/runner.js", import.meta.url)
+  kernel = await startOwnedKernel({
+    endpoint: socket,
+    manifest,
+    workerEntrypoint: fileURLToPath(
+      new URL("../packages/octo-runtime-executor-kernel/dist/runner.js", import.meta.url)
     )
   });
-  assert.ok(daemon.hostProcess.child.pid && daemon.hostProcess.child.pid !== process.pid);
+  assert.notEqual((await kernel.client.status()).worker.pid, process.pid);
   report.independentHost = true;
   group = await createTestGroup();
   assert.ok(group.group_no);

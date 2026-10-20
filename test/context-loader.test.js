@@ -4,7 +4,7 @@ import {
   createContextLoader,
   mergeConfiguredContexts,
   ExtraPlugins
-} from "../packages/octo-runtime-daemon/dist/index.js";
+} from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { contextControlInstructions } from "../packages/octo-runtime-protocol/dist/index.js";
 
 const signal = () => new AbortController().signal;

@@ -1,7 +1,7 @@
-import { serveAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
-serveAdapterHost([
+serveWorker([
   createAcpAdapter({ type: "broken-acp", provider: "fixture", command: "/octo-missing-R05" }),
   {
     metadata: {

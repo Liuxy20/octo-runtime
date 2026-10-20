@@ -1,14 +1,10 @@
 import { spawn } from "node:child_process";
-import {
-  AdapterHost,
-  AdapterHostRpcServer
-} from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
 
 // 只替换本次验收第一个 Provider 进程的上游，不改用户的 config.toml 或认证文件。
 let first = true;
-const host = new AdapterHost();
-host.register(
+serveWorker([
   createCodexAdapter({
     spawnFn(command, args, options) {
       const overrides = first
@@ -51,19 +47,4 @@ host.register(
       return spawn(command, [...args, ...overrides], spawnOptions);
     }
   })
-);
-new AdapterHostRpcServer({ host, output: process.stdout }).listen(process.stdin);
-let stopping = false;
-const stop = () => {
-  if (stopping) return;
-  stopping = true;
-  void host.shutdown().then(
-    () => process.exit(0),
-    () => process.exit(1)
-  );
-};
-process.once("SIGINT", stop);
-process.once("SIGTERM", stop);
-process.once("SIGHUP", stop);
-process.stdin.once("end", stop);
-process.stdin.once("close", stop);
+]);

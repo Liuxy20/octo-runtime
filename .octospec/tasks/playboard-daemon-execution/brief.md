@@ -27,10 +27,10 @@ CLI playboard
 ```
 
 - [playboard.ts](../../../apps/cli/src/playboard.ts) 直接启动独立 adapter-host，没有启动或复用 daemon。已有 daemon 是否运行不影响这条路径；已有 daemon 运行时仍会另起 adapter-host。
-- [process.ts](../../../packages/octo-runtime-adapter-host/src/process.ts) 启动子进程，使用 `AdapterHostRpcClient` 并通过 `list` 等待 Host 就绪。当前不是在 CLI 进程内直接调用 Host 的模拟执行。
-- [daemon 启动入口](../../../apps/daemon/src/index.ts) 已负责 profile 的 OpenClaw 初始化、连接可用性探测及相应启动装配，再启动 daemon server。
-- [daemon server](../../../packages/octo-runtime-daemon/src/server.ts) 管理共享 adapter-host、按 profile 选择执行配置、执行账本及 Host 故障恢复。playboard 绕过了这些步骤。
-- [OpenClaw 启动配置](../../../apps/daemon/src/openclaw.ts) 解析并保存连接快照；[OpenClaw Adapter](../../../packages/octo-runtime-adapter-openclaw/src/index.ts) 消费连接并访问 Gateway。Octo daemon 和 OpenClaw Gateway 是两个不同的服务；启动前者不表示启动后者。
+- [process.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts) 启动子进程，使用 `AdapterHostRpcClient` 并通过 `list` 等待 Host 就绪。当前不是在 CLI 进程内直接调用 Host 的模拟执行。
+- [daemon 启动入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/daemon/src/index.ts) 已负责 profile 的 OpenClaw 初始化、连接可用性探测及相应启动装配，再启动 daemon server。
+- [daemon server](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts) 管理共享 adapter-host、按 profile 选择执行配置、执行账本及 Host 故障恢复。playboard 绕过了这些步骤。
+- [OpenClaw 启动配置](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/apps/daemon/src/openclaw.ts) 解析并保存连接快照；[OpenClaw Adapter](../../../packages/octo-runtime-adapter-openclaw/src/index.ts) 消费连接并访问 Gateway。Octo daemon 和 OpenClaw Gateway 是两个不同的服务；启动前者不表示启动后者。
 
 # 之前的问题点与改造原因
 
@@ -61,7 +61,7 @@ CLI playboard 读取统一 InvokeInput
 1. playboard 负责 stdin 大小与 JSON 检查、启动本次执行宿主、提交输入、消费输出、信号处理及结束清理。公共输入继续复用既有解析入口；playboard 不自行解释 Provider 连接配置，不保留 `adapterType === "openclaw"` 的装配分支。
 2. CLI 是该场景的 HostApp。CLI 的统一启动编排负责已选 Home/profile 的 Provider 配置解析和必要装配，临时 daemon 与普通 daemon 复用该流程；不能只启动低层 server 后把缺失装配搬回 playboard。
 3. daemon 启动并管理 adapter-host；playboard 不再直接 `spawnAdapterHost`。临时 daemon 的生命周期属于本次 CLI 调用，不复用或停止已运行的常驻 daemon。
-4. 本地 socket 使用现有 daemon 执行协议及其配套客户端，优先复用 [run-stream.ts](../../../packages/octo-runtime-daemon/src/runtime/run-stream.ts) 等现有能力。公共输入到内部请求的转换继续在既有边界完成，不假定当前 socket 已能直接接收原始 stdin JSON。
+4. 本地 socket 使用现有 daemon 执行协议及其配套客户端，优先复用 [run-stream.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/run-stream.ts) 等现有能力。公共输入到内部请求的转换继续在既有边界完成，不假定当前 socket 已能直接接收原始 stdin JSON。
 5. `AdapterHostRpcClient` 继续承担 daemon 到 Host 的 RPC。它目前接收 Readable/Writable，并非专门的 Unix Socket 客户端；本次不要求把 Host stdio 改成 socket，也不把两种服务协议合并。
 6. Adapter 只消费已装配的执行配置。OpenClaw Gateway 的安装、启动和重启由有该权限的宿主操作决定；本次临时 daemon 不隐式安装 Provider，不因 Gateway 不可用而重置连接或身份。
 

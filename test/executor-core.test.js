@@ -6,7 +6,7 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { readFile, readdir } from "node:fs/promises";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { AdapterHost, spawnAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { assertHostFrame, isHostTerminal } from "@mininglamp-oss/octo-runtime-protocol";
 import { createExecutorFixture } from "../test-support/executor-adapter.mjs";
 import { deferred } from "./runtime-fixture.js";
@@ -293,7 +293,10 @@ test("canonical terminal event consumers release capacity and cannot affect reus
 });
 
 test("public Core is the only execution class and has no transport or process setup", async () => {
-  assert.equal(AdapterHost, AgentExecutor);
+  assert.equal(
+    "AdapterHost" in (await import("@mininglamp-oss/octo-runtime-executor-kernel")),
+    false
+  );
   const signals = ["SIGINT", "SIGTERM", "SIGHUP", "uncaughtExceptionMonitor"];
   const before = signals.map((name) => process.listenerCount(name));
   const core = new AgentExecutor();
@@ -476,7 +479,7 @@ test("failed cleanup stays owned and does not skip sibling cleanup or reopen adm
 for (const mode of ["native", "canonical"]) {
   test(`${mode}: direct and isolated worker route original interactions and cancel receipt-only runs`, async (t) => {
     const core = executor(t);
-    const worker = await spawnAdapterHost({
+    const worker = await spawnWorker({
       entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
     });
     t.after(() => worker.close());
@@ -534,7 +537,7 @@ for (const mode of ["native", "canonical"]) {
 
   test(`${mode}: real NDJSON worker uses identical Core and preserves frame identity and input`, async (t) => {
     const core = executor(t);
-    const worker = await spawnAdapterHost({
+    const worker = await spawnWorker({
       entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
     });
     t.after(() => worker.close());
@@ -608,7 +611,7 @@ test("a failed terminal ends cancellation while unresolved cleanup remains owned
 });
 
 test("worker shutdown reports incomplete cleanup with a failing exit status", async (t) => {
-  const worker = await spawnAdapterHost({
+  const worker = await spawnWorker({
     entrypoint: fileURLToPath(new URL("./fixtures/executor-incomplete-worker.mjs", import.meta.url))
   });
   t.after(() => worker.close());
@@ -626,7 +629,7 @@ test("worker shutdown reports incomplete cleanup with a failing exit status", as
 });
 
 test("a shared worker crash fails its active streams without replaying them in the parent", async (t) => {
-  const worker = await spawnAdapterHost({
+  const worker = await spawnWorker({
     entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
   });
   t.after(() => worker.close());

@@ -88,4 +88,4 @@ export const exampleAdapter = createJsonCliAdapter<NativeEvent>({
 
 - 负责：提供适配器共用的进程、流解析和事件辅助工具。
 - 不负责：Daemon 生命周期、IM/Worker 接入。
-- 协作边界：见 [根架构与包边界](../../README.md#模块责任边界)。所有执行来源共用 adapter-host IPC；模块按职责提供协议、执行或宿主能力。
+- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。

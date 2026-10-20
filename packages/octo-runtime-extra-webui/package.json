@@ -26,7 +26,7 @@
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*"
   },
   "devDependencies": {
-    "@mininglamp-oss/octo-runtime-daemon": "workspace:*",
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "lucide-react": "^0.542.0",

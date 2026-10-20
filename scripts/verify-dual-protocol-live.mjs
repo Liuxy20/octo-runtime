@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import {
   createCodexAdapter,
   CodexEventNormalizer
@@ -20,7 +20,7 @@ for (const [type, create, Normalizer] of [
   if (process.argv[2] && process.argv[2] !== type) continue;
   for (const protocolMode of ["native", "canonical"]) {
     if (process.argv[3] && process.argv[3] !== protocolMode) continue;
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     host.register(create());
     const marker = "DUAL_PROTOCOL_" + randomUUID().slice(0, 8);
     const request = {

@@ -15,9 +15,9 @@ export type {
   ExtraStatusHandler,
   JsonObject,
   JsonValue
-} from "@mininglamp-oss/octo-runtime-daemon/extra";
-export { ExtraPlugins } from "@mininglamp-oss/octo-runtime-daemon/extra";
+} from "@mininglamp-oss/octo-runtime-host-sdk/extra";
+export { ExtraPlugins } from "@mininglamp-oss/octo-runtime-host-sdk/extra";
 export type {
   ExtraDescriptor,
   StoredExtra
-} from "@mininglamp-oss/octo-runtime-daemon/extra-config";
+} from "@mininglamp-oss/octo-runtime-host-sdk/extra-config";

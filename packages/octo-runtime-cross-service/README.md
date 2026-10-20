@@ -24,7 +24,7 @@ const spec = {
   // login 从 process.execPath 与当前 npm package 解析这两个绝对路径。
   command: "/opt/homebrew/opt/node@24/bin/node",
   args: [
-    "/opt/homebrew/lib/node_modules/@mininglamp-oss/octo-runtime/apps/daemon/dist/launcher.js",
+    "/opt/homebrew/lib/node_modules/@mininglamp-oss/octo-runtime/apps/cli/dist/index.js",
     "--home",
     "/Users/alice/.octo-runtime"
   ],
@@ -125,4 +125,4 @@ const backend = createServiceBackend({
 
 - 负责：管理 launchd/systemd/Windows 用户服务的生命周期。
 - 不负责：AgentRun 执行、WS 连接、IM 业务。
-- 协作边界：见 [根架构与包边界](../../README.md#模块责任边界)。所有执行来源共用 adapter-host IPC；模块按职责提供协议、执行或宿主能力。
+- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。

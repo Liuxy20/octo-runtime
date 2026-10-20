@@ -4,11 +4,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
-import {
-  AdapterHost,
-  AdapterHostRpcClient,
-  AdapterHostRpcServer
-} from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   createCodexAdapter,
   CodexEventNormalizer
@@ -36,7 +33,7 @@ const collect = async (source) => {
   return values;
 };
 function hostFor(adapter) {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register(adapter);
   return host;
 }
@@ -302,12 +299,12 @@ test("RPC native admission rejects unsupported mode before ACK; genuine native f
   const upstream = new PassThrough(),
     downstream = new PassThrough(),
     trace = [];
-  new AdapterHostRpcServer({
+  new WorkerRpcServer({
     host,
     output: downstream,
     trace: (_direction, frame) => trace.push(frame)
   }).listen(upstream);
-  const client = new AdapterHostRpcClient({ input: downstream, output: upstream });
+  const client = new WorkerRpcClient({ input: downstream, output: upstream });
   try {
     await assert.rejects(
       collect(

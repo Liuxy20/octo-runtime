@@ -2,10 +2,10 @@ import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 
 test("Host scopes anonymous segments to tool boundaries and closes every channel at a step end", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {

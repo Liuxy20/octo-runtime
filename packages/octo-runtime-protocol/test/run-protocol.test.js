@@ -23,9 +23,7 @@ const fixtures = JSON.parse(
 const schema = JSON.parse(
   readFileSync(new URL("../schema/protocol.schema.json", import.meta.url), "utf8")
 );
-const Ajv = createRequire(new URL("../../octo-runtime-daemon/package.json", import.meta.url))(
-  "ajv"
-);
+const Ajv = createRequire(new URL("../../../package.json", import.meta.url))("ajv");
 const ajv = new Ajv({ strict: false, logger: false });
 ajv.addSchema(schema);
 const validators = {

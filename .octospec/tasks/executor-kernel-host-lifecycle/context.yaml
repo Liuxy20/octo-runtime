@@ -1,0 +1,77 @@
+task: executor-kernel-host-lifecycle
+date: 2026-10-20
+status: implementing
+baseline: 6fb8ca5364cd885f5617878e5ea4901f903de3ff
+branch: feat/executor-kernel-host-lifecycle
+issues: [47, 48, 43, 49]
+related_issues: [46, 51, 50, 13, 30, 14]
+architecture_source:
+  url: https://im.deepminer.com.cn/d/d_e34402004b642927092dd649
+  status: awaiting-source-access
+  blocker: octo-cli has no stored profile or environment credential; docs get returned UNAUTHORIZED
+rules_read:
+  - path: .octospec/rules/architecture.md
+    id: runtime-architecture
+  - path: .octospec/rules/runtime-lifecycle.md
+    id: runtime-lifecycle
+  - path: .octospec/rules/extras.md
+    id: runtime-extras
+  - path: .octospec/rules/local-execution.md
+    id: runtime-local-execution
+  - path: .octospec/rules/stateless-execution.md
+    id: runtime-stateless
+  - path: .octospec/rules/engineering.md
+    id: runtime-engineering
+  - path: .octospec/rules/collaboration.md
+    id: commit
+  - path: .octospec/rules/protocol-schema.md
+    id: runtime-protocol-schema
+  - path: .octospec/rules/output-protocol.md
+    id: runtime-output-protocol
+  - path: .octospec/rules/protocol-design.md
+    id: runtime-protocol-design
+  - path: .octospec/rules/invoke-input.md
+    id: runtime-invoke-input
+sources_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/issue-46-executor-core/plan.md
+  - .octospec/tasks/issue-46-executor-core/acceptance.md
+  - .octospec/tasks/issue-46-executor-core/implementation.md
+  - packages/octo-runtime-daemon/src/server.ts
+  - packages/octo-runtime-daemon/src/runtime/daemon-runtime.ts
+  - packages/octo-runtime-daemon/src/runtime/local-extras.ts
+  - packages/octo-runtime-daemon/src/runtime/supervisor.ts
+  - packages/octo-runtime-daemon/src/runtime/run-stream.ts
+  - packages/octo-runtime-adapter-host/src/process.ts
+  - packages/octo-runtime-adapter-host/src/socket-server.ts
+  - apps/cli/src/service-control.ts
+  - apps/cli/src/extras.ts
+  - package.json
+  - packages/octo-runtime-daemon/src/context-loader.ts
+  - packages/octo-runtime-protocol/src/generated/protocol-types.ts
+  - packages/octo-runtime-adapter-host/src/host-run-service.ts
+  - packages/octo-runtime-protocol/src/context.ts
+  - packages/octo-runtime-cross-service/src/types.ts
+  - .github/workflows/ci.yml
+decisions:
+  - 用户已授权commit、push、创建英文PR并合入main；保留配置的Git作者，提交及最终合并消息包含一次Codex协作trailer。
+  - 用户明确1.0.1列为deprecated，不支持从旧daemon升级或迁移；已有安装先停止并移除旧服务，再npm uninstall -g后重新安装新架构版本并重新配置；registry deprecation尚未执行。
+  - 初始先交付规划；用户随后明确直接开始实施，本轮已改运行代码并执行本地验证。
+  - App worktree 工具因聊天根目录不是 Git 仓库失败；在指定 Runtime 仓库使用 git worktree add 创建独立目录。
+  - 从更新后的 main 开分支 feat/executor-kernel-host-lifecycle；不修改原目录工作内容。
+  - 联合规划 47、48，并纳入用户明确要求的 43 Extra 独立运行和 49 CLI 生命周期范围。
+  - Kernel 只监督 worker；HostApp 与 CLI 分别管理 Kernel 和各 Extra，attach 不取得服务所有权。
+  - 46 已合入；51 wire 合同先对齐，Go client 和外部 Loop 业务不作为本任务实现内容。
+  - 保留默认隔离、Core 唯一实现、NDJSON、Run7、Context v3、现有身份和用户数据。
+  - M0至M5已落地本地代码；M6本地自动化通过，跨平台服务、真实IM及部分故障组合验收未完成，见implementation。
+  - 宿主动态函数通过独立依赖代理或明确模块入口；函数不进入 JSON 或 Kernel。
+  - 用户对 OSS 的英文 issue、PR、commit 要求覆盖仓库旧中文提交约定；本轮无提交或远端写入。
+  - 用户要求从90分细化到95分以上；新增design、changes、test-execution与assessment，以同一维度复评96分，功能未实施。
+  - 用户最新决定旧daemon直接改名拆分或删除重写；旧包、bin、API、命令和service代码最终删除，不保留兼容层或服务迁移工具。
+  - 新内部包为executor-kernel与host-sdk；主包新增executor-kernel和host公开子路径，内部包仍private。
+  - 动态Context沿用5秒默认超时、8实际在途、64KiB结果；跨进程队列和跨代次所有权在design固定。
+  - 用户明确CLI主命令为octo-runtime executor-kernel与channel-gateway，各有uninstall/install/start/restart/stop/run六个动作，分别只控制自己的服务。
+  - 两组不追加enable/disable/status/reload动作；自启用install显式选项，全局status分项返回；其他公开CLI命令仍由49另行跟踪。

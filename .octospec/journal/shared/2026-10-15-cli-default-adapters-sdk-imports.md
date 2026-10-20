@@ -12,7 +12,7 @@ timestamp: 2026-10-15T12:50:00Z
 
 依据[装配归属任务](../../tasks/adapter-composition-ownership/brief.md)，CLI 默认清单移到 [apps/cli/src/default_adapters.json](../../../apps/cli/src/default_adapters.json)，构建到 CLI dist，由 CLI daemon 和 Playboard 使用。删除根共享 JSON 及 SDK 复制脚本，使目录归属与产品决策一致。
 
-SDK 的 [独立 Host 入口](../../../packages/octo-runtime-daemon/src/runtime/adapter-host.ts) 直接 import 并注册 Adapter，保留当前 12 项选择。客户维护自己的入口并通过 distribution.adapterHostEntrypoint 传路径，即可只导入所需项；不要求用户准备另一份 JSON。SDK runner 的默认路径不再指向复制清单，显式 manifest 覆盖保留兼容。
+SDK 的 [独立 Host 入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/adapter-host.ts) 直接 import 并注册 Adapter，保留当前 12 项选择。客户维护自己的入口并通过 distribution.adapterHostEntrypoint 传路径，即可只导入所需项；不要求用户准备另一份 JSON。SDK runner 的默认路径不再指向复制清单，显式 manifest 覆盖保留兼容。
 
 CLI JSON loader 与 SDK 代码入口共用 serveAdapterHost 注册、stdio RPC、就绪和退出清理，实例仅存在于 Host 子进程。依赖声明随代码直接导入补齐，未裁剪宿主依赖或扩大自动安装范围。宿主负责依赖、包体和 Provider 安装；加载选择不承诺包体缩小。
 

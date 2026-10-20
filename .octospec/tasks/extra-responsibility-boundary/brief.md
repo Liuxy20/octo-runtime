@@ -51,7 +51,7 @@ CLI 的配置目录读取属于 CLI 宿主装配行为；Work App 可继续使�
 
 # 沿现有实现扩展
 
-当前定义见 [extras.ts](../../../packages/octo-runtime-daemon/src/extras.ts)：插件默认导出加载函数，接收 `ExtraContext` 和配置，通过 `onDispose` 注册清理。无需另建插件类或重复定义 dispose。
+当前定义见 [extras.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/extras.ts)：插件默认导出加载函数，接收 `ExtraContext` 和配置，通过 `onDispose` 注册清理。无需另建插件类或重复定义 dispose。
 
 已在现有 `ExtraContext` 中增加：
 

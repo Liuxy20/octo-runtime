@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { createServer } from "node:net";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
-import { ExtraPlugins, readExtraDirectory } from "../packages/octo-runtime-daemon/dist/index.js";
+import { ExtraPlugins, readExtraDirectory } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import load, { name } from "../packages/octo-runtime-extra-webui/dist/index.js";
 import { SessionStore } from "../packages/octo-runtime-extra-webui/dist/store.js";
 import { runCli } from "../apps/cli/dist/main.js";

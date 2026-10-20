@@ -10,9 +10,9 @@
 
 本地设备独立存在。线上注册是可选能力，具体接入方案待架构确认；远程服务不直接连接执行内核。
 
-同一台电脑上的 `/data/octo-a` 和 `/data/octo-b` 可以承载两个设备实例；`/data/project` 这样的普通工作目录本身不构成设备。设备由 Home 中的身份、配置，以及启动后的 daemon / AdapterHost 共同承载，重启进程不等于换设备。
+同一台电脑上的 `/data/octo-a` 和 `/data/octo-b` 可以承载两个设备实例；`/data/project` 这样的普通工作目录本身不构成设备。Home 承载身份和配置；启动后的 ExecutorKernel 提供本地 IPC 并监督 worker，worker 内的 AgentExecutor 执行请求。重启进程不等于换设备。
 
-本文用于讲解。强制合同统一维护在[基础架构规则](.octospec/rules/architecture.md)；图中「目标」不表示代码已全部实现。
+本文用于讲解。强制合同维护在[基础架构规则](.octospec/rules/architecture.md)。用户指定的线上对齐来源为[架构文档](https://im.deepminer.com.cn/d/d_e34402004b642927092dd649)，当前 octo-cli 缺少登录身份，尚未读取核对，不能宣称与线上版本一致。图中「目标」不表示代码已全部实现；本地实现和待验项见[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 ## 1. 之前：各入口各自执行，没有统一设备寻址
 
@@ -64,7 +64,7 @@ flowchart TB
 
 **有一个叫 Device 的云端记录，不等于有一个可被多业务统一寻址、在本地直接调用的执行实例。**
 
-旧实现依据：[README](../../octo-daemon-old/README.md)、[启动与同步](../../octo-daemon-old/internal/app/start.go)、[Loop 专用协议](../../octo-daemon-old/internal/gateway/client.go)、[历史 Workspace 登记模型](../../octo-daemon-old/docs/trd/01-octo-daemon-overall-design.md)。
+旧调查记录引用 `octo-daemon-old` 中的 README、`internal/app/start.go`、`internal/gateway/client.go` 与 `docs/trd/01-octo-daemon-overall-design.md`。这些外部文件不在本仓，不作为当前实现入口；相关历史决策保存在[设备身份边界任务](.octospec/tasks/device-virtual-runtime-boundary/brief.md)。
 
 ## 2. 目标：一个设备底座，多种业务入口
 
@@ -91,14 +91,16 @@ flowchart TB
                 Gateway["IM Channel / Channel Gateway<br/>接收消息、触发执行与回复"]
                 Presence["设备接入 Extra（待架构确认）<br/>设备登记、在线状态保持<br/>独立设备 Token"]
             end
-            Host["共享 AdapterHost 执行内核"]
+            Host["ExecutorKernel · 本地执行 IPC<br/>只监督 worker，不管理 Extra"]
+            Worker["独立 worker · AgentExecutor<br/>唯一执行实现"]
             subgraph Execution["Provider 执行层"]
                 Providers["Provider Adapter → Codex / Claude Code / OpenClaw 等"]
             end
             IPC -->|"ipc_invoke"| Host
             Gateway -->|"ipc_invoke"| Host
             Presence -.->|"ipc_invoke"| Host
-            Host --> Providers
+            Host -->|"stdio NDJSON"| Worker
+            Worker --> Providers
         end
         Local ==>|"本地直连 IPC · 不经过网络"| IPC
     end
@@ -115,7 +117,7 @@ flowchart TB
 
 本演示暂按 Extra 层的独立设备接入模块表达设备登记与在线状态保持，并以独立设备 Token 示意接入。远程服务连接接入模块，再由本地接入层调用执行内核。
 
-**远端服务不会直接连接 AdapterHost 执行内核。**
+**远端服务不会直接连接 ExecutorKernel 本地执行入口。**
 
 模块划分、Token 合同及远程调用接线均不作为已确定的生产方案。
 
@@ -133,7 +135,7 @@ flowchart TB
 
 ## 3. 执行时：先寻址，本地直连，异地转发
 
-下图演示统一寻址的调用关系。设备线上注册及移动端跨端调用 AgentRun 的流程逻辑仅供参考，具体生产级架构方案待确定。寻址由调用方及业务接入完成，AdapterHost 负责接到请求后的执行。
+下图演示统一寻址的调用关系。设备线上注册及移动端跨端调用 AgentRun 的流程逻辑仅供参考，具体生产级架构方案待确定。寻址由调用方及业务接入完成，Kernel 将请求交给 worker 内的 AgentExecutor 执行。
 
 ```mermaid
 flowchart TB
@@ -154,7 +156,7 @@ flowchart TB
         Cloud --> Remote
     end
     subgraph Kernel["目标设备 · 本地执行底座"]
-        Host["AdapterHost<br/>执行、交互、取消、返回结果"]
+        Host["ExecutorKernel IPC → worker / AgentExecutor<br/>执行、交互、取消、返回结果"]
     end
     Desktop --> Resolve
     Buddy --> Resolve
@@ -180,12 +182,12 @@ flowchart TB
 | 移动端 Buddy · IM 对话 | 经 IM 消息触发，旧执行链与 OpenClaw Channel 耦合 | 移动端继续经 IM 通道对话，Channel 通过 ipc_invoke 复用设备内核及其 Provider |
 | 移动端 Buddy · conversation 跨端对话（可选目标） | 要获得类似桌面本地的对话体验，需额外构建远程接入与设备寻址链路 | 应用在 conversation 中指定设备并发起 AgentRun，经云端和设备接入模块在目标设备执行；具体生产架构待确定 |
 | 本机 App 共用执行能力 | 桌面已有 IPC，但只连自己拉起的 Codex App Server，缺少共用设备发现与寻址 | 发现目标在本地后直接 IPC，同机其他 App 也可使用该设备底座 |
-| 多个场景复用同一底座 | IM 耦合 OpenClaw Channel；复用旧 Loop daemon 又要求将调用转换成 Loop 模型 | IM、Loop、Buddy 各管业务，通过独立 Extra 或本地 IPC 共用 AdapterHost，无需先成为 Loop 调用 |
+| 多个场景复用同一底座 | IM 耦合 OpenClaw Channel；复用旧 Loop daemon 又要求将调用转换成 Loop 模型 | IM、Loop、Buddy 各管业务，通过独立 Extra 或本地 IPC 共用 Kernel 和 AgentExecutor，无需先成为 Loop 调用 |
 | 云端接入失败仍可本地执行 | 旧 Loop daemon 启动依赖云端 Device 凭据 | 注册与可见性由 Extra / 云端管理，失败只影响对应跨端寻址和访问，不影响本地内核 |
 
 **价值落在两件事上：任务能准确找到执行实例；找到本地实例就直接 IPC。业务入口可以增加，执行底座保持统一。**
 
-当前已有本地 Home / 身份、daemon SDK、IPC、共享 AdapterHost 和 Channel Gateway。设备登记与在线状态保持模块、远程接入及云端寻址的具体架构仍待确认，本地/远端自动选择与移动端定向 AgentRun 也未完成验收。见[本地执行现状](.octospec/rules/local-execution.md)和[身份迁移边界](.octospec/tasks/device-virtual-runtime-boundary/brief.md)。
+当前分支已有 Host SDK、ExecutorKernel IPC、独立 worker/AgentExecutor 和独立 Channel Gateway Extra。HostApp/CLI 分别管理 Kernel 与每个 Extra；组件不得暗中安装或维护另一组件。设备登记、在线状态保持、远程接入和云端寻址仍待架构确认，本地/远端自动选择与移动端定向 AgentRun 未完成验收。见[本地执行现状](.octospec/rules/local-execution.md)和[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 现有的 `webui-extra` 插件提供类似 OpenClaw 的 WebUI 能力，**仅用于本地服务调试，不用于实际生产环境。**
 
@@ -195,7 +197,7 @@ flowchart TB
 
 宿主 App 可能将 Agent 提示词和业务 Context 存在内存、SQLite 或远端服务。启动时复制一次会让后续任务继续使用旧数据；每次编辑都重载 Gateway 又会中断连接。我们需要下一轮能读取新数据，同时保持宿主对存储和授权的管理权，以及 Extra 的整体封装。
 
-因此 Extra 使用两阶段入口 `extra(context, jsonConfig)(dependencies)`：第一阶段同步返回初始化函数，SDK 再传入 loadContexts 等宿主函数并等待初始化完成。JSON 配置与不可序列化的函数分开，宿主通过统一接口 `runtime.loadExtra(module, jsonConfig, { loadContexts })` 装配，无需创建插件内部对象或执行桥。Extra 与函数留在宿主 Node 进程，模型执行仍复用原 daemon 和独立 AdapterHost。
+Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `startExtra({ endpoint, declaration, dependencies: { loadContexts } })`，SDK 在独立 Extra 子进程加载插件，业务函数留在宿主并经有界依赖代理调用。也可显式提供在子进程加载的 dependencyModule。JSON 不携带函数，Kernel 不装配业务依赖。Extra 经指定 Kernel endpoint 执行；Kernel 不负责 Extra 的生命周期。
 
 | 时间点 | 执行内容 | 目的 |
 | --- | --- | --- |
@@ -205,11 +207,11 @@ flowchart TB
 
 loadContexts 既能同步返回 `readonly ContextItem[]`，也能返回 Promise。内存或同步 SQLite 可以直接返回数组；异步 SQLite/HTTP 可以使用 async。同步查询不会因为加了 async 就变为非阻塞，取消查询也取决于底层驱动能力。存储、连接及业务授权归宿主；SDK 管装配、取消和清理；Channel 构造本轮 Context，Host/Adapter 按统一合同执行，不读取宿主业务存储或补齐历史 Context。
 
-本地 SDK 接口及生命周期已通过自动化，第三方 App 与真实 IM 接入本轮尚未验收。完整操作见 [SDK 原生接入手册](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#22-加载和重载-extra)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md#7-逐轮加载-agent-系统提示词与业务-context)；强制边界见[架构规则](.octospec/rules/architecture.md#宿主函数注入与逐轮业务数据读取)，证据见[交付记录](.octospec/journal/shared/2026-10-17-sdk-host-extra-contexts.md)。
+当前独立进程 SDK 的本地自动化证据见[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)，第三方 App 与真实 IM 接入待验。完整操作见 [SDK 原生接入手册](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md)。历史同进程 SDK 的结果不能替代本次独立拓扑验收。
 
 ## 6. IM 消息由谁决定是否接纳
 
-Channel Gateway 在调用执行内核前校验消息身份、Space、发送者、群范围与真实 @。CLI 和 SDK 使用同一套准入实现；宿主只通过公开配置表达策略，不接管插件内部判断，AdapterHost 不补做 IM 授权。
+Channel Gateway 在调用执行内核前校验消息身份、Space、发送者、群范围与真实 @。CLI 和 SDK 使用同一套准入实现；宿主只通过公开配置表达策略，不接管插件内部判断，Kernel/AgentExecutor 不补做 IM 授权。
 
 群入口是否启用与允许哪些群是两个问题：groups_enabled 省略或 true 开启群/话题，false 关闭群/话题；group_ids 省略、null 或 [] 不增加群范围限制，非空名单只允许列出的父群及其话题。二者都不限制私聊。关闭群必须明确使用 groups_enabled: false，不用空名单暗示禁用，也不保留旧空名单语义的兼容分支。
 

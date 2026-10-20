@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { spawnAdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 test(
   "Host async spawn error rejects readiness promptly without terminating caller",
@@ -10,10 +10,7 @@ test(
     const started = Date.now();
     try {
       Object.defineProperty(process, "execPath", { ...original, value: "/octo-missing-host-S05" });
-      await assert.rejects(
-        spawnAdapterHost({ entrypoint: "unused", readyTimeoutMs: 10000 }),
-        /ENOENT/
-      );
+      await assert.rejects(spawnWorker({ entrypoint: "unused", readyTimeoutMs: 10000 }), /ENOENT/);
       assert.ok(Date.now() - started < 2000);
     } finally {
       Object.defineProperty(process, "execPath", original);

@@ -3,7 +3,7 @@ import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { InvocationWatchdog } from "../packages/octo-runtime-executor-core/dist/watchdog.js";
-import { AdapterHost } from "@mininglamp-oss/octo-runtime-adapter-host";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { assertRuntimeLimits } from "@mininglamp-oss/octo-runtime-protocol";
 
 function fixture(limits = {}) {
@@ -238,7 +238,7 @@ test(
   "late user cancellation cannot replace a terminal during cleanup",
   { timeout: 2000 },
   async () => {
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     let release, markCleaning;
     const cleaning = new Promise((resolve) => {
       markCleaning = resolve;
@@ -534,7 +534,7 @@ test("host preserves a single pending next during activity and ignores failing d
   let calls = 0;
   let active = 0;
   let peak = 0;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -588,7 +588,7 @@ test("host preserves a single pending next during activity and ignores failing d
 });
 
 test("host uses canonical progress until this invocation actually reports native work", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: { protocol: "fallback.canonical", modes: ["canonical"], nativeMethods: [] },
@@ -619,7 +619,7 @@ test("host uses canonical progress until this invocation actually reports native
 
 test("host hard deadline aborts provider even when its consumer is paused", async () => {
   let signal;
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {
@@ -654,7 +654,7 @@ test("host hard deadline aborts provider even when its consumer is paused", asyn
 });
 
 test("host bounds cleanup after terminal and timeout wins over provider stopped projection", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: {

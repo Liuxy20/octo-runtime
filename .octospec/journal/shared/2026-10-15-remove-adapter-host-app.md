@@ -28,7 +28,7 @@ CLI daemon 的默认 Host 入口改为通过 `import.meta.resolve` 解析 `@mini
 | `git diff --check` | 通过 |
 | 当前执行、测试、发行和指南的旧 app 路径搜索 | 无残留执行依赖；任务和规则中描述删除决定的文字保留 |
 
-[新增入口测试](../../../test/daemon-runtime-options.test.js)验证默认 runner 解析及显式覆盖优先级。现有 CLI、Playboard、Extra、SDK 和跨包回归覆盖执行、Ctrl+C 取消及 Host 崩溃恢复。
+[新增入口测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/daemon-runtime-options.test.js)验证默认 runner 解析及显式覆盖优先级。现有 CLI、Playboard、Extra、SDK 和跨包回归覆盖执行、Ctrl+C 取消及 Host 崩溃恢复。
 
 # 发行物与真实执行
 

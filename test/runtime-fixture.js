@@ -285,7 +285,7 @@ export function deferred() {
 
 export async function waitFor(predicate, timeoutMs = 2_000) {
   const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error("condition timeout");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }

@@ -8,7 +8,7 @@ import {
   InvocationManifest,
   processStartIdentity,
   reapOrphanedInvocationManifest
-} from "../packages/octo-runtime-daemon/dist/invocation-manifest.js";
+} from "../packages/octo-runtime-executor-kernel/dist/invocation-manifest.js";
 
 test("invocation manifest persists only process and invocation metadata", async () => {
   const directory = await mkdtemp(join(tmpdir(), "oh-invocation-manifest-"));
@@ -16,12 +16,12 @@ test("invocation manifest persists only process and invocation metadata", async 
   const { manifest, reap } = await InvocationManifest.open(path);
   try {
     assert.deepEqual(reap, { found: false, reaped: false });
-    await manifest.setAdapterHost(process.pid, "/test/adapter-host.js");
+    await manifest.setWorker(process.pid, "/test/worker.js");
     await manifest.begin({ invocationId: "invoke-1", runId: "run-1", adapterType: "codex" });
     const persisted = JSON.parse(await readFile(path, "utf8"));
     assert.equal(persisted.schemaVersion, 1);
-    assert.equal(persisted.daemonPid, process.pid);
-    assert.equal(persisted.adapterHost.pid, process.pid);
+    assert.equal(persisted.kernelPid, process.pid);
+    assert.equal(persisted.worker.pid, process.pid);
     assert.deepEqual(Object.keys(persisted.invocations[0]).sort(), [
       "adapterType",
       "invocationId",
@@ -53,9 +53,9 @@ test("orphan reaper requires matching process start identity before killing the 
       path,
       JSON.stringify({
         schemaVersion: 1,
-        daemonPid: 2_147_483_646,
+        kernelPid: 2_147_483_646,
         updatedAt: new Date().toISOString(),
-        adapterHost: { pid: child.pid, started, entrypoint: "/test/adapter-host.js" },
+        worker: { pid: child.pid, started, entrypoint: "/test/worker.js" },
         invocations: [
           {
             invocationId: "invoke-orphan",

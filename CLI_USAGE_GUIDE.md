@@ -1,126 +1,105 @@
 # Octo Runtime CLI 使用指南
 
-## 背景与适用场景
+本文描述当前 `feat/executor-kernel-host-lifecycle` 工作区的 CLI 行为。旧 `daemon` 命令组已删除，没有兼容别名；本指南继续作为有效操作文档维护。
 
-CLI 是独立 Runtime 的完整发行物，面向云端设备的定制接入、部署和运维。**默认包含全部 Adapter、Extra，以及系统管理、开启自启等服务能力。** 使用方通过命令启动 daemon 和共享 AdapterHost，配置 Extra 并管理设备上的运行过程。
+Runtime CLI（`octo-runtime`）是 Host SDK 的一个宿主，面向设备部署和运维。CLI 分别管理 Executor Kernel 与 Channel Gateway：Kernel 监督执行 worker，Gateway 在独立进程中处理 Octo IM 连接。两者独立安装、启动、停止和卸载，Gateway 不负责维护或拉起 Kernel。
 
-“默认包含”描述发行范围，不表示安装 CLI 后全部 Extra 自动启用，也不表示系统自启已经注册。Extra 按配置加载；原生服务及自启由下文的 `daemon install` 等命令管理。Adapter 所依赖的 Provider 软件、认证及外部服务仍须按实际使用范围准备，不能把“包含 Adapter”理解为已安装并配置对应 Provider。
+Electron、Tauri 2 及其他业务宿主使用 [SDK 原生接入指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)，不得通过 CLI 或解析终端输出接入。`octo-cli` 是消息、文档等业务操作工具，与本文的 `octo-runtime` 不是同一程序。
 
-**基于 Electron 或 Tauri 2 的桌面程序，严禁通过 CLI 接入 Runtime，必须使用 [SDK 原生接入指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。** 不得把 CLI 可执行程序、命令输出解析或 CLI 原生服务包装成桌面业务接口。SDK 管理的 daemon、Host、Provider 子进程属于 SDK 接入的执行方式。
+## 1. 安装与准备
 
-本指南只描述 CLI 使用；诊断命令和 `playboard` 用于开发验证。需要在客户应用中管理生命周期、持续会话和交互答复时，使用 SDK。
-
-命令依据为 2026-10-16 当前工作区源码，服务地址、Token、ID 和路径均须替换为实际配置。npm 安装以对应版本已发布到可访问的 registry 为前提。身份及生命周期边界见 [Runtime 本地存在与接入边界](.octospec/rules/runtime-lifecycle.md)。
-
-## 1. 安装
-
-环境要求：
-
-- Node.js 24.x。
-- **整仓源码开发必须使用 pnpm 11 或更高版本**，具体版本以根目录 `package.json` 的 `packageManager` 为准。仓库内部依赖使用 `workspace:*`，构建脚本也依赖 pnpm；不支持用 npm 或 Yarn 替代整仓依赖安装和构建。
-- 安装已发布的 Runtime 发行包和工具包可以使用 npm；源码完成 pnpm 安装和构建后，也可以使用 `npm link` 创建全局命令。
-
-安装已发布的工具包（建议安装，优化体验）：
-
-```bash
-npm install -g @mininglamp-oss/octo-cli
-```
-
-安装 Runtime 发行包，提供后续使用的 `octo-runtime` 命令：
+要求 Node.js 24.x。Provider 软件及其认证须提前准备；安装 Runtime 包不会安装 Provider 或完成认证。已发布版本可从 npm 安装，具体版本须包含本文命令：
 
 ```bash
 npm install -g @mininglamp-oss/octo-runtime
+octo-runtime --version
 octo-runtime --help
 ```
 
-从源码运行时，在 `octo-runtime` 根目录先安装依赖并构建，再使用编译后的入口：
+源码开发使用根目录 `package.json` 指定的 pnpm 版本：
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm build
 node apps/cli/dist/index.js --help
-
-# 使用 npm link到全局
-npm link
-octo-runtime --help
-
-# 使用取消全局链接
-npm unlink -g @mininglamp-oss/octo-runtime
-
-
 ```
 
-后续示例统一使用 `octo-runtime`，源码环境可替换为 `node apps/cli/dist/index.js`。
+后续示例使用 Bash/zsh；源码环境可将 `octo-runtime` 替换为 `node apps/cli/dist/index.js`。发行包构建与离线安装验证见 [部署说明](DEPLOYMENTS.md)。
 
-## 2. 可选配置目录：Home 和 profile
+## 2. Home 与 profile
 
-| 参数             | 说明                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------ |
-| `--home PATH`    | 可选，指定 daemon／channel 配置所在的 Home 目录；省略时 macOS/Linux 为 `~/.octo-runtime`，Windows 为 `%LOCALAPPDATA%\OctoRuntime` |
-| `--profile NAME` | Runtime 配置名称，默认为 `default`                                                               |
+| 参数 | 含义 |
+| --- | --- |
+| `--home PATH` | 配置、日志、运行状态与组件端点所属的 Home |
+| `--profile NAME` | Kernel 启动或 playboard 使用的 Provider 配置；省略时读取 Home 的 `default_profile`，未配置则为 `default` |
+| `--manifest PATH` | Kernel 启动或 playboard 使用的 Adapter 清单；省略时使用 CLI 内置清单 |
 
-`--home` 选择 CLI 配置与运行状态目录，不是 Provider 执行工作区，也不是必填参数。一个 Home 运行一个 daemon 和共享 AdapterHost，可以包含多个 profile，每个 profile 有独立 `runtime_id`。Extra 属于 Host；`<home>/extras` 是 CLI 唯一配置目录，`extraset` 和 `extraget` 不接受 `--profile`，不探测其他位置，不合并或回退。daemon 启停作用于整个 Home。SDK 宿主自行提供声明；目录选择原因见 [CLI 决策](.octospec/tasks/device-extra-directory/brief.md)。
+Home 默认采用 `OCTO_RUNTIME_HOME`；未设置时，Windows 使用 `%LOCALAPPDATA%\OctoRuntime`，其他平台使用 `~/.octo-runtime`。Windows 未设置 `LOCALAPPDATA` 时也回退到用户目录下的 `.octo-runtime`。
 
-下文需要显式选择目录或 profile 的 Bash/zsh 示例使用以下变量；使用默认目录时可省略整个 `--home` 参数：
+每个 Home 有一组 Kernel 与 Gateway 服务。profile 选择 Provider 配置，不额外创建一组服务；服务 ID 和端点按 Home 与组件隔离。Home 不是 Provider 的执行工作目录。
+
+`extraset` / `extraget` 只读写 `<home>/extras/<name>/config.json`，不接受 `--profile`。所有安装、启停和查询操作须选择同一个 Home。以下示例均使用默认 Home；自定义时统一添加 `--home /absolute/runtime-home`。
+
+## 3. 两个组件的生命周期
+
+```text
+octo-runtime executor-kernel uninstall|install|start|restart|stop|run
+octo-runtime channel-gateway uninstall|install|start|restart|stop|run
+```
+
+| 动作 | 行为 |
+| --- | --- |
+| `install` | 注册本组件原生用户服务；首次默认关闭自启；重复安装省略选项时保留已有自启设置 |
+| `install --autostart=true` / `false` | 注册或更新本组件服务，并显式设置自启 |
+| `start` / `restart` | 操作已安装的本组件并等待 IPC 就绪；未安装返回 3，不隐式安装或启动另一组件 |
+| `stop` | 停止本组件，保留服务定义和自启设置 |
+| `uninstall` | 停止并移除本组件服务定义，保留 Home、身份、配置和凭据 |
+| `run` | 前台运行本组件；收到 Ctrl+C 或 SIGTERM 后等待清理 |
+
+### 前台运行
+
+先在一个终端启动 Kernel：
 
 ```bash
-HARNESS_HOME="$HOME/.octo-runtime"
-HARNESS_PROFILE="default"
+octo-runtime executor-kernel run
 ```
 
-## 3. 首先启动 daemon 和 Host
-
-按生命周期归属选择启动入口：
-
-| 使用场景 | 启动入口 | 生命周期归属 |
-| --- | --- | --- |
-| CLI 前台运行 | `octo-runtime daemon run` | 当前命令持续运行，Ctrl+C 停止 |
-| CLI 后台原生服务 | `octo-runtime daemon install` 后 `octo-runtime daemon start` | 系统服务管理器负责运行，使用 `daemon stop` 停止 |
-
-当前 CLI 的前台入口是 `daemon run`，没有 `daemon start --foreground` 参数。桌面宿主的启动与回收方式见 [SDK 生命周期管理](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#15-在主进程启动和退出)。
-
-先使用默认配置目录启动前台 daemon，由 daemon 管理共享 Host：
+完成下一节的 Gateway 配置后，在另一个终端启动 Gateway：
 
 ```bash
-octo-runtime daemon run
+octo-runtime channel-gateway run
 ```
 
-需要指定配置目录时使用 `octo-runtime --home "$HARNESS_HOME" daemon run`。Ctrl+C 退出前台进程；`--quiet` 关闭终端状态输出，`--verbose` 输出更详细的运行诊断。
+两个命令均持续运行。退出 Gateway 不会停止 Kernel；退出 Kernel 不会停止 Gateway。Gateway 也可以先启动，此时状态中 `kernel_available=false`，尚不能执行模型任务。不要对同一 Home 的同一组件同时使用前台运行和后台服务启动。
 
-需要原生服务运维时使用以下命令：
+### 后台用户服务
+
+配置好 Gateway 后执行：
 
 ```bash
-# 注册为当前用户的原生服务 用于开机自启，
-# 开机自启由 @cross-service使用, 仅该包的cli使用
-# 宿主APP接入需要基于packages原生接入，daemon的生命周期由 宿主APP来原生接管
-octo-runtime daemon install
-
-# 通过系统服务管理器后台启动本地服务,常驻后台启动
-octo-runtime daemon start
-
-# 查询、重启、停止
-octo-runtime daemon status
-octo-runtime daemon restart
-
-# 通过系统服务管理器后台启动本地服务,停止后台服务
-octo-runtime daemon stop
-
-# 停止并移除原生服务定义，保留 Home 内的数据和凭据
-octo-runtime daemon uninstall
+octo-runtime executor-kernel install --autostart=true
+octo-runtime executor-kernel start
+octo-runtime channel-gateway install --autostart=true
+octo-runtime channel-gateway start
+octo-runtime status
 ```
 
-原生服务对应 macOS LaunchAgent、Linux systemd user service、Windows 当前用户 Task Scheduler。`daemon install` 默认启用登录自启；`daemon start` 要求服务已经安装且启用。
+原生服务后端分别使用 macOS LaunchAgent、Linux systemd user service 和 Windows 当前用户 Task Scheduler。服务启动成功仅表示对应组件就绪，不证明 Provider 已认证或所有 Bot 已在线。
 
-`stop`、`restart` 和 `uninstall` 直接停止本地服务，不等待活动 Run 完成。
+停止或卸载时分别操作，例如：
 
+```bash
+octo-runtime channel-gateway stop
+octo-runtime executor-kernel stop
+octo-runtime channel-gateway uninstall
+octo-runtime executor-kernel uninstall
+```
 
+停止 Gateway 会取消它拥有的执行并清理插件；停止 Kernel 会中断内核中的执行。重启不会恢复或重新提交旧 Run，运维时应选择没有活动任务的时段。
 
+## 4. 配置 Octo IM Gateway
 
-## 4. 接入 Octo IM
-
-### 4.1 Codex / Claude Code（CC）类型
-
-以 Codex 为例，替换 Bot ID、Token、服务地址和工作目录后执行：
+准备 Bot ID、Bot Token、环境 API 地址及已认证的本地 Provider。以下示例的占位值须替换；`workdir` 使用运行机器上的绝对路径：
 
 ```bash
 octo-runtime extraset channel-gateway <<'JSON'
@@ -130,14 +109,12 @@ octo-runtime extraset channel-gateway <<'JSON'
     "bots": [
       {
         "api_url": "https://im-test.deepminer.com.cn/api",
-        "bot_id": "<BOT_ID>",
-        "bot_name": "本地助理",
-        "bf_token": "<BF_TOKEN>",
+        "bot_id": "<OCTO_BOT_ID>",
+        "bot_name": "项目助理",
+        "bf_token": "bf_REPLACE_WITH_REAL_BOT_TOKEN",
         "adapter": {
           "adapter_type": "codex",
-          "workdir": "/srv/octo/workspaces/dev",
-          "model": "gpt-6.1-sol",
-          "effort": "medium"
+          "workdir": "/absolute/workspace"
         },
         "context": {
           "schema": "octo.context-envelope/v3",
@@ -146,11 +123,7 @@ octo-runtime extraset channel-gateway <<'JSON'
               "namespace": "octo.control",
               "name": "instructions",
               "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的OctoClaw助理"
-                  }
-                ]
+                "entries": [{ "text": "我是明略科技的Octo助理" }]
               }
             }
           ]
@@ -162,193 +135,76 @@ octo-runtime extraset channel-gateway <<'JSON'
 JSON
 ```
 
-使用 Claude Code（CC）时，将 `adapter_type` 改为 `claude-code`，省略示例中的 Codex `model` 和 `effort`，使用 Claude Code 默认值。
+`extraset` 保存完整声明，不连接 Bot、不安装插件，也不自动重启组件。每次整体替换，不按 `bot_id` 合并；多个 Bot 须放入同一个 `config.bots` 数组一起保存。POSIX 配置文件权限为 `0600`。
 
-### 4.2 OpenClaw 类型
-
-已有 OpenClaw Agent 时，替换 Bot ID、Token 和服务地址后执行：
+首次保存后使用上一节的 `run` 或 `install` + `start`。后台 Gateway 已运行时，修改配置后只重启 Gateway：
 
 ```bash
-octo-runtime extraset channel-gateway <<'JSON'
-{
-  "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
-  "config": {
-    "bots": [
-      {
-        "api_url": "https://im-test.deepminer.com.cn/api",
-        "bot_id": "<OPENCLAW_BOT_ID>",
-        "bot_name": "OpenClaw 助理",
-        "bf_token": "<OPENCLAW_BOT_BF_TOKEN>",
-        "adapter": {
-          "adapter_type": "openclaw",
-          "provider_agent_id": "main"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的OctoClaw助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
-}
-JSON
-```
-
-### 4.3 启动并查看状态
-
-群/话题中未 @ Bot的讨论不会启动模型任务。再次被 @ 时，Gateway在模型调用前按真实消息位置固定通过现有API层补齐缺口，不依赖模型调用`octo-cli`或判断“总结”等关键词。已知小缺口按跨度、大缺口及未知基线最多最近15条，正文最多1500 Unicode码点；冷启动与缺口共用一次读取，不翻页，10秒超时，失败如实标记但继续当前任务。范围、去重、条数和文本上限由代码执行；同代次重试复用快照。`octo-cli`仍用于模型工具循环中的额外业务操作，与此固定准备流程分离；本地实现与线上验收边界见[Issue #32记录](.octospec/tasks/channel-context-gap/implementation.md)。
-
-配置保存后，前台运行：
-
-```bash
-octo-runtime daemon run
-```
-
-已有前台进程时先 Ctrl+C 停止再启动。使用系统后台服务时，首次安装并启动：
-
-```bash
-octo-runtime daemon install
-octo-runtime daemon start
-```
-
-后台服务已安装并启用时，修改配置后重启，再查看状态：
-
-```bash
-octo-runtime daemon restart
+octo-runtime channel-gateway restart
 octo-runtime status
 ```
 
-### 4.4 配置说明与多个 Bot
+前台 Gateway 则 Ctrl+C 后重新 `run`。无需重启 Kernel；但修改 Kernel 使用的 Provider 连接或 Adapter 清单时，需要单独重启 Kernel。
 
-Bot 内的群配置分别表达入口启停和范围，CLI 与 SDK 完全相同：
+`octo-runtime extraget channel-gateway` 返回完整配置，包含已保存的凭据，配置路径写入 stderr；不要把它的输出放入公开日志。`extraset` 的保存回执不回显凭据，也不代表插件加载或业务连接成功。
 
-| 字段和值 | 群/话题效果 | 私聊效果 |
-| --- | --- | --- |
-| groups_enabled 省略或 true | 开启入口，继续检查范围、授权和真实 @ | 不受此字段影响 |
-| groups_enabled: false | 关闭全部群/话题，即使名单包含该群也拒绝 | 不受此字段影响 |
-| group_ids 省略、null 或 [] | 不增加群范围限制 | 不受此字段影响 |
-| group_ids: ["G1"] | 仅 G1 和其话题可继续检查其他条件 | 不受此字段影响 |
+### Provider 与准入配置
 
-例如 owner 在 G1 中 @Bot：默认配置、group_ids: null 或 [] 均可触发；["G2"] 或 groups_enabled: false 拒绝群消息。话题按父群判断，回复仍发回原话题。groups_enabled 只接受布尔值，null 非法；group_ids 只接受 null 或非空字符串数组。
+- Claude Code：将 `adapter_type` 改为 `claude-code`；`model`、`effort` 可省略，按 Provider 配置执行。
+- OpenClaw：将 adapter 改为 `{ "adapter_type": "openclaw", "provider_agent_id": "main" }`，不填写 `workdir`。CLI 在 Kernel 启动时刷新已保存连接来源；首次发现可指定 `OPENCLAW_HOME`。OpenClaw Gateway 须自行启动，Runtime 不代为启动。连接与工具环境的影响见 [OpenClaw 合同](.octospec/rules/openclaw.md)。
+- 本地 Provider 的 `workdir` 省略时使用并创建 `~/octo-runtime/channels/{bot_id}`，此路径不随 CLI Home 改变。
+- `groups_enabled: false` 关闭群与话题入口；`group_ids` 省略、`null` 或 `[]` 均表示不增加群范围限制。群消息仍须真实 @Bot 并通过发送者权限检查。
+- `allowed_sender_ids` 省略时仅允许认证所得 owner；显式名单替代 owner，`[]` 拒绝所有发送者。
 
-这些字段不放开发送者权限：allowed_sender_ids 省略仅允许服务端认证所得 owner；显式名单替代 owner，[] 拒绝所有发送者，null 非法。群消息仍需真实 @Bot，自身消息及错误 Space 仍拒绝。不保留旧 group_ids: [] 禁用群的语义，需要禁用时明确填写 groups_enabled: false。详见[准入合同与事故修复](.octospec/tasks/channel-group-admission/plan.md)。
+全部字段与多 Bot 配置见 [Gateway 配置说明](packages/octo-runtime-extra-channel-gateway/README.md) 和 [配置 Schema](packages/octo-runtime-extra-channel-gateway/config-schema.json)。动态 `loadContexts` 函数由 SDK 宿主注入，不能写入 CLI JSON，见 [SDK Gateway 指南](SDK_CHANNEL_GATEWAY_GUIDE.md)。
 
-`adapter.workdir` 可省略，默认使用并创建 `~/octo-runtime/channels/{bot_id}`，同一 Agent 后续执行复用此目录；显式填写时必须是绝对路径。该默认路径不随 CLI `--home` 改变。
-
-`model`、`effort` 可省略，使用引擎默认值；`effort` 是思考强度。
-
-`provider_agent_id` 是 OpenClaw 内部的 Agent ID，默认 `main`；不填写 `workdir`。建议显式填写 `bot_name`，使用该 Agent 的 `IDENTITY.md` 中的名称，方便管理员在本地运行状态中识别机器人。此字段不自动读取 `IDENTITY.md`，也不修改远端机器人名称。
-
-OpenClaw 自动发现由 CLI 启动编排负责，默认读取 `~/.openclaw/openclaw.json`，首次可通过 `OPENCLAW_HOME` 指定目录。CLI 保存来源，每次 daemon 启动重新读取 URL/token 并保存连接快照，再认证探测；端口/token 轮换后重启即可。Adapter 的 probe/invoke 只读取快照，不自动发现或写文件。SDK 由宿主显式调用 `configureOpenClawConnection(profileRoot, {url, token})` 初始化连接与设备身份，或通过 `providerOptions` 传入 URL/token 及设备身份；详见 [OpenClaw 合同](.octospec/rules/openclaw.md)。工作区由 OpenClaw Agent 管理。
-
-以上两个示例是同名插件的替代配置，依次执行时后者会覆盖前者。若两个 Bot 要同时启用，将两个 Bot 对象放进同一个 `config.bots` 数组，一次提交完整配置。配置只保存在对应插件的 `extras/<name>/config.json`，不提供渠道专用配置文件。
-
-本节描述 CLI 的文件配置入口；通过 SDK 接入的 App 使用 [SDK 对象配置契约](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#22-加载和重载-extra)，不需要遵循这里的文件保存与加载约定。
-
-使用 `octo-runtime extraset <name>`，从 stdin 提交完整的 `{ module, enabled?, config }` JSON 对象。Octo IM 使用 `channel-gateway` 插件，其配置为 `config.bots` 数组，可包含多个 Bot；插件级和 Bot 级的 `enabled` 均默认 `true`。
-
-三个内置 Extra 均采用两阶段入口，CLI 传空函数依赖。上面的 Octo IM 示例在每个 Bot 的 `context` 中显式配置默认人设“我是明略科技的OctoClaw助理”，使用 `octo.context-envelope/v3` 的 `octo.control/instructions` 和仅含 `text` 的 entries 列表。Gateway/WeCom 的静态 Context 位于 `config.bots[i].context`，WebUI 位于 `config.context`；省略或空列表不自动填充，旧 source 字段不再接受。企业微信和 WebUI 的完整 JSON 分别见[WeCom 配置](packages/octo-runtime-extra-channel-wecom/README.md)与[WebUI 配置](packages/octo-runtime-extra-webui/README.md)。业务动态函数不能通过 CLI JSON 传递；需要逐轮读取宿主数据时，使用 [SDK 的函数装配入口](SDK_CHANNEL_GATEWAY_GUIDE.md#7-逐轮加载-agent-系统提示词与业务-context)。
-
-CLI 将完整对象保存到 `<home>/extras/<name>/config.json`，POSIX 文件权限为 `0600`，不回显配置或凭据。**每次保存整体替换同名插件配置，不按 `bot_id` 合并。** 增删或修改 Bot 时，提交需要保留的完整 `config.bots` 数组。不同名称的 Extra 配置互不覆盖。
-
-单个与多个 Bot 使用相同格式：一个 Bot 为 `config.bots: [botA]`，多个为 `config.bots: [botA, botB]`。若上次保存 `[botA, botB]`，本次提交 `[botB]`，最终配置只保留 botB；提交 `[]` 表示不保留任何 Bot。整个声明中的其他字段也随本次提交覆盖，不从上次配置补齐。
-
-`module` 指向宿主已安装的插件包或绝对入口路径；`extraset` 只保存配置，不安装插件、不建立连接。通用入口校验声明格式，插件在加载时校验自己的 `config`。业务配置错误由插件跳过受影响项并在内部状态中报告，有效项继续初始化；不把某个 Bot 的配置错误扩大为整个 Extra 加载失败。CLI 前台启动和显式加载会输出插件状态，SDK 宿主通过 `extraStatus(name)` 自行展示。
-
-标准 npm CLI 已随包携带 Octo IM 插件，无需单独安装。内部宿主从源码构建并手动拷贝所需插件及其生产依赖，或使用相邻源码仓库的编译入口；需确保插件对 daemon 的模块解析位置可见，也可将 `module` 填为已部署插件的绝对入口路径。内部插件不独立发布到 npm。
-
-名称必须等于插件导出的稳定 `name`，否则加载返回 `EXTRA_NAME_MISMATCH`；第二个 Bot 应放进同一 `bots` 数组，不能改名为 `channel-gateway-2`。保存成功不表示插件加载或连接成功；CLI 通过 `octo-runtime status` 查询状态，前台运行时也会输出插件状态；SDK 的逐插件查询见 [Extra 装配](SDK_CHANNEL_GATEWAY_GUIDE.md#5-保存或重新加载-im-配置)。`loaded` 只表示初始化完成，不证明每个 Bot 已在线。插件加载失败会报告脱敏错误码，本地 Host 可继续使用。不要同时通过对象模块和 Extra 装配同名连接；daemon 会拒绝名称冲突。
-
-修改配置通过 `extraset <name>` 保存完整声明，再执行 `daemon restart` 应用。持久停用保存顶层 `enabled: false` 后重启。CLI 不再提供 extra status/load/unload；SDK 宿主继续管理单插件生命周期。
-
-## 5. 查询状态和执行记录 <测试开发用>
-
-> 可在 `octo-runtime` 后、子命令前添加 `--home PATH` 和 `--profile NAME`，分别隔离配置目录和 Runtime 配置。
+## 5. 状态、诊断与日志
 
 ```bash
-octo-runtime status
+octo-runtime status --json
 octo-runtime doctor
 octo-runtime adapter list
 octo-runtime adapter probe codex
 ```
 
-`doctor` 检查 Node、Home 配置、原生服务程序/管理器/定义和本地 IPC，并提供失败项的修复建议。全部通过退出码为 0，否则为 1。它不验证 Bot 凭据、逐 Bot 连接或云端在线状态；前台运行未安装原生服务时，服务定义检查仍可能失败。
+`status` 分别返回两个组件的原生 `service` 状态与 IPC `runtime` 状态。Kernel 的 `execution_ready` 表示 worker 就绪；Gateway 的初始化、Kernel 可用性及各 Bot 业务连接状态须分别判断。状态查询成功可以返回组件已停止或不可达，不能仅凭退出码 0 判定业务可用。
 
-`agent-run get/cancel` 仅针对当前进程中的在途或有界保留 Run；不提供会话列表、永久历史或跨重启等待。历史记录由消费应用保存。
+`doctor` 返回服务管理器探测、两个服务定义及 IPC 状态，应检查返回字段。`adapter list` / `probe` 查询已运行 Kernel 的 Adapter 元数据，不隐式启动 Kernel，也不执行模型任务；实际执行成功仍须通过真实 Provider 验证。
 
-普通命令的 stdout 为 JSON，可能跨多行；错误输出到 stderr 并返回非零。接入程序应先检查退出码，再解析完整 stdout。`daemon run` 是长期运行进程，不使用一次性 JSON 请求的等待方式。
+普通命令输出 JSON；帮助和版本输出文本。命令失败时也须检查非零退出码及 JSON 错误，不能仅检查 stderr。组件日志目录为 `<home>/logs`。当前命令不提供旧 `--quiet`、`--verbose` 或 `--logs-dir` 参数。
 
-## 6. 本地唤起 Agent：playboard <测试开发用>
+常规命令返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。错误类别以实际返回为准，`run` 意外退出返回失败；不要在清理未确认时直接替换实例。
 
-`playboard` 用于本地开发和调试：从 stdin 读取一个完整 JSON 对象，通过统一启动编排拉起临时 daemon，经本地 socket 执行一轮后退出并回收本次进程和状态。无需登录或预先启动 daemon，Provider 必须预先安装并完成认证。临时执行不加载已配置 Extra，不停止常驻实例，不销毁既有 Home/profile 或身份。
+## 6. 本地临时执行
+
+`playboard` 是开发诊断入口，独立启动临时 Kernel，不要求预先启动后台服务，不加载 Extra，结束时只回收本次组件。真实 Provider 仍须安装并认证。
 
 ```bash
 octo-runtime playboard <<'JSON'
 {
-  "inputs": [{ "type": "text", "text": "回复 OK，不使用工具。" }],
-  "contexts": {
-    "schema": "octo.context-envelope/v3",
-    "items": [
-      {
-        "namespace": "octo.control",
-        "name": "instructions",
-        "payload": { "entries": [{ "text": "我是明略科技的Octo助理" }] }
-      },
-      {
-        "namespace": "octo.execution",
-        "name": "adapter",
-        "payload": { "type": "codex" }
-      }
-    ]
-  },
-  "sessionId": "local-trial",
+  "inputs": [{ "type": "text", "text": "Reply OK" }],
+  "contexts": { "schema": "octo.context-envelope/v3", "items": [] },
   "protocol_mode": "canonical"
 }
 JSON
 ```
 
-| 字段              | 说明                                                 |
-| ----------------- | ---------------------------------------------------- |
-| `inputs`          | 必填，非空的模型输入列表                             |
-| `contexts`        | 必填 Context v3；`items: []` 有效                    |
-| `sessionId`       | 可选业务会话标识；重复此值不会自动恢复 Provider 历史 |
-| `protocol_mode`   | `native` 为默认值；`canonical` 输出标准事件          |
-| `providerSession` | 可选，使用实际返回的 Provider 绑定请求续聊           |
-| `continuityMode`  | 有绑定时默认 `continue`，否则默认 `fresh`            |
+stdout 为 NDJSON，诊断写 stderr；`protocol_mode` 省略时为 `native`，可显式选择 `canonical`。需要审批或问答时，该开发入口以 `PLAYBOARD_INTERACTION_REQUIRED` 失败；持续会话与交互使用 SDK。执行输入与默认值见 [InvokeInput 合同](.octospec/rules/invoke-input.md)。
 
-默认执行配置为 codex、当前工作目录、审批 `ask`、超时 120000 毫秒。可在 `contexts.items` 中增加 workspace：
+## 7. 旧版弃用与重新安装
 
-```json
-{
-  "namespace": "octo.execution",
-  "name": "workspace",
-  "payload": { "mode": "fixed", "path": "/absolute/workspace" }
-}
-```
+`1.0.1` 为旧 daemon 架构的 deprecated 版本，不支持从旧 daemon 升级或迁移到当前架构。已有安装须先卸载 npm 包，再重新安装包含新命令组的版本。
 
-stdout 为 NDJSON，native 模式每行一个 `HostFrame`，canonical 模式每行一个 `CanonicalEvent`。诊断写 stderr。退出码：0 完成，1 校验/启动/Provider/交互失败，130 取消或 Ctrl+C，143 SIGTERM。输入上限为 32 MiB，按包含图片和 Context 的完整 UTF-8 JSON 计算。
-
-出现审批或问答时，playboard 输出交互 frame 后以 `PLAYBOARD_INTERACTION_REQUIRED` 失败，不继续接收答复。独立 App 的持续会话和交互使用 SDK。
-
-OpenClaw 可先配置 profile 的连接，再通过 Context 指定已有 Agent：
+卸载 npm 包前，先用旧版本命令或原生服务管理器停止并移除旧 daemon 服务；`npm uninstall -g` 只卸载包，不会自动停止进程或移除系统服务定义。然后执行：
 
 ```bash
-# daemon 启动前设置 OPENCLAW_HOME，或由 SDK 宿主显式配置连接
-octo-runtime --home "$HARNESS_HOME" --profile "$HARNESS_PROFILE" adapter probe openclaw
+npm uninstall -g @mininglamp-oss/octo-runtime
+npm install -g @mininglamp-oss/octo-runtime@<NEW_VERSION>
+octo-runtime --help
 ```
 
-adapter payload 使用 `{ "type": "openclaw", "provider_agent_id": "main" }`。playboard 支持 `--home` / `--profile` 选择连接来源，由临时 daemon 的统一启动编排装配连接，playboard 不另做 OpenClaw 配置解析。启动 Octo daemon 不表示自动启动 OpenClaw Gateway；Gateway 必须已可访问。
+`<NEW_VERSION>` 须替换为已发布、包含 `executor-kernel` 与 `channel-gateway` 命令组的新架构版本，不能重新安装 `1.0.1`。本分支尚未发布时，使用第 1 节的源码构建入口验证。
 
-完整命令参见 [CLI 使用说明](apps/cli/README.md)。
+重新安装后按本文重新配置并分别安装、启动两个组件。不提供旧状态、配置或服务定义的迁移流程；卸载 npm 包也不等于删除 Home，勿将遗留文件仍在理解为迁移成功。
+
+新架构版本之间的日常更新见 [部署说明](DEPLOYMENTS.md)。完整命令速查见 [CLI README](apps/cli/README.md)，当前平台验证范围见 [实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。

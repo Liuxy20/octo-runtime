@@ -99,7 +99,7 @@ defaults 和请求按 server 名称合并；同名 server 整项替换，不深�
 - `envs` 的值继续保持字面量，不引入 envs 之间的依赖或递归插值。
 - URL 模板在 Context 阶段校验结构，展开后必须为 HTTP(S) URL，且不能包含用户信息、fragment 或控制字符。
 
-常驻 daemon 不会自动获得另一个终端后来执行的 export。模型启动后在 shell 子进程执行 export，也不会修改已启动的 Provider 和 MCP 连接。
+常驻组件不会自动获得另一个终端后来执行的 export。模型启动后在 shell 子进程执行 export，也不会修改已启动的 Provider 和 MCP 连接。
 
 配置属于执行权限输入，只接收调用方提供并通过现有权限边界的执行配置，不从普通材料、工具结果或模型文本提取。业务授权的签发、服务主体和资源范围校验继续独立执行。
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { chmod, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { probeCommand } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 
 test("provider discovery reports real executable path/version, not adapter version", async () => {
@@ -17,7 +17,7 @@ test("provider discovery reports real executable path/version, not adapter versi
     await chmod(command, 0o700);
     const result = await probeCommand(command);
     assert.deepEqual(result, { available: true, command, version: "1.2.3" });
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     host.register({
       metadata: {
         protocolSupport: {
@@ -57,7 +57,7 @@ test("provider discovery reports real executable path/version, not adapter versi
 });
 
 test("missing and failed probes report unavailable without invented provider metadata", async () => {
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   for (const [type, probe] of [
     ["missing", () => ({ available: false, command: "missing", reason: "command_not_found" })],
     [

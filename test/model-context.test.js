@@ -8,7 +8,7 @@ import {
   assertContextEnvelope
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
-import { AdapterHost } from "../packages/octo-runtime-adapter-host/dist/index.js";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { invokeRequest } from "./runtime-fixture.js";
 
 const envelope = (items = []) => ({ schema: "octo.context-envelope/v3", items });
@@ -104,7 +104,7 @@ test("references are displayed without a resolver and controls remain separate",
 
 test("Host renders each run independently without deduplicating resumed context", async () => {
   const received = [];
-  const host = new AdapterHost();
+  const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "fixture",
@@ -148,7 +148,7 @@ test("Host renders each run independently without deduplicating resumed context"
 test("Host freezes contexts and injects once for both modes and image input", async () => {
   for (const mode of ["canonical", "native"]) {
     let received;
-    const host = new AdapterHost();
+    const host = new AgentExecutor();
     host.register({
       metadata: {
         type: "fixture",

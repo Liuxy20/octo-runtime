@@ -4,7 +4,7 @@
  */
 import type { ImBotConfig, ImExecutionPort } from "./contracts.js";
 import type { ImSessionStore } from "./application/session-store.js";
-import type { RuntimeLog, JsonObject } from "@mininglamp-oss/octo-runtime-daemon";
+import type { RuntimeLog, JsonObject } from "@mininglamp-oss/octo-runtime-host-sdk";
 import type { ContextItem } from "@mininglamp-oss/octo-runtime-protocol";
 
 export type ImCredentialSource = (

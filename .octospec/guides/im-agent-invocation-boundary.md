@@ -10,7 +10,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 架构决策
 
-IM 入口管理长期 Agent；`AdapterHost.invoke(input, environment)` 执行调用方已经确定的一次请求。二者使用同一执行链，但承担不同责任。本文中的“IM Agent”指 Channel Gateway 管理的 Bot/Agent 业务，不是新增名为 ImAgent 的通用接口或组件。
+IM 入口管理长期 Agent；`AgentExecutor.invoke(input, environment)` 执行调用方已经确定的一次请求。二者使用同一执行链，但承担不同责任。本文中的“IM Agent”指 Channel Gateway 管理的 Bot/Agent 业务，不是新增名为 ImAgent 的通用接口或组件。
 
 本期 IM Agent 使用固定 workdir，对标当前 OpenClaw 接入保留 Provider Agent 工作区的方向。不同聊天、sessionId 或 reset 不产生新目录。每会话目录不是需求，固定目录也不是待开发功能；它是 IM 业务的架构约束。通用 Host 仍按已有执行合同处理调用方提交的目录配置，不因此被改造成固定 IM Agent 管理器。
 
@@ -20,10 +20,10 @@ IM 入口管理长期 Agent；`AdapterHost.invoke(input, environment)` 执行调
 
 ## 责任归属
 
-| 事项 | IM 业务入口 / Channel Gateway | 通用 AdapterHost 与 Provider Adapter |
+| 事项 | IM 业务入口 / Channel Gateway | 通用 AgentExecutor 与 Provider Adapter |
 | --- | --- | --- |
 | Agent 身份与配置 | 选择本次使用的长期 Agent、Bot 配置及业务默认值 | 根据已提交的执行配置调用 Provider，不维护 IM Agent 注册或业务配置 |
-| adapter 与执行准备 | 读取 adapter 选择用于业务判断，组装公开 InvokeInput | 统一解析执行配置、构造内部请求并调用所选 Adapter；Extra 的重复准备待删除 |
+| adapter 与执行准备 | 读取 adapter 选择用于业务判断，组装公开 InvokeInput | Core 唯一解析执行配置、构造内部请求并调用所选 Adapter；Extra 不重复准备 |
 | 工作目录 | 按 IM 后台 Agent 配置使用固定目录，不接受任务级目录切换；OpenClaw 可由 Provider 管理 | 校验和准备本轮已解析的目录；Provider 原生限制继续执行，不自行决定业务目录生命周期 |
 | 会话关联 | 管理频道到业务 session、generation、Provider binding 的有界映射 | 接收本轮身份与 opaque Provider session，返回真实会话及恢复结果，不自行维护频道映射 |
 | reset | 拦截业务命令、清除 binding 并切换会话代次；不切目录、不删文件、不等同取消 | 不解释 IM 的 /reset 命令，不根据新 sessionId 创建目录或删除旧会话文件 |
@@ -35,14 +35,14 @@ IM 入口管理长期 Agent；`AdapterHost.invoke(input, environment)` 执行调
 
 ## 执行准备与系统指令调用视图
 
-2026-10-16 用户确认以下责任边界。图表示改造目标；当前 Octo / WeCom dispatcher 仍有重复 resolver 和内部请求构造，删除工作见[统一执行计划](../tasks/unify-execution-and-simplify-instructions/brief.md)。
+2026-10-16 用户确认以下责任边界。Octo / WeCom dispatcher 的重复 resolver 和内部请求构造已删除，双渠道直接提交公开 InvokeInput。图表示 Core 内部准备关系，隔离入口在到达 Core 前经过 Kernel IPC 和 worker，显式 direct 模式在宿主内调用同一 Core。
 
 ```mermaid
 flowchart TD
     CONFIG[宿主持有的配置] --> EXTRA[Extra：adapter 业务判断、目录策略、会话与本轮 Context]
     EXTRA --> INPUT[InvokeInput + environment]
     OTHER[其他 SDK / CLI / AgentRun 入口] --> INPUT
-    INPUT --> HOST[AdapterHost 共享准备流程]
+    INPUT --> HOST[AgentExecutor 共享准备流程]
     HOST --> RESOLVE[prepareInvokeInput 内解析执行项]
     HOST --> RENDER[完整 Context：区分普通材料与系统指令]
     RESOLVE --> ADAPTER[Provider Adapter 原生映射]
@@ -55,7 +55,7 @@ Extra 在发起调用时读取当前业务配置并冻结本轮输入，不要�
 
 普通业务 Context 是否逐轮发送由发起方决定，底层不缓存补齐或去重。`octo.control/instructions` 使用独立系统指令通道，续聊不重复初始化；需要更换系统指令时，业务显式新建或 reset Provider 会话。不能以减少重复 system 为由省略普通本轮 Context，也不能把 system 转成每轮用户正文。
 
-协议目标为 entries 只包含 `{ text }` 并以单个换行拼接，删除 source 且不兼容；这是待实施的变更，当前运行时校验仍要求旧字段。故障链、易错做法和调试顺序见[排查经验](../journal/shared/2026-10-16-im-invoke-preparation-lessons.md)。
+当前 instructions 的 entries 只包含 `{ text }` 并以单个换行拼接，source 已删除且不兼容。故障链、易错做法和调试顺序见[排查经验](../journal/shared/2026-10-16-im-invoke-preparation-lessons.md)，实际字段由[协议 Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)校验。
 
 ## 目录能力与产品策略不能互相替代
 

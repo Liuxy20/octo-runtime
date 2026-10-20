@@ -20,14 +20,14 @@ loadContexts 返回 `readonly ContextItem[] | Promise<readonly ContextItem[]>`�
 
 # SDK 内部责任
 
-[本地装配容器](../../../packages/octo-runtime-daemon/src/runtime/local-extras.ts)管理 loader、日志与每实例执行端口。端口按 invocationId 记录真实 runId、账号代次和实例归属，保留 canonical/native 源帧与环境覆盖；取消和交互只作用于所属调用。回执在途取消通过一次身份校验查询取得原回执，不重放 invoke、不把 invocationId 当 runId。daemon 在接纳期间收到客户端断开时向准备操作传递取消。
+[本地装配容器](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/local-extras.ts)管理 loader、日志与每实例执行端口。端口按 invocationId 记录真实 runId、账号代次和实例归属，保留 canonical/native 源帧与环境覆盖；取消和交互只作用于所属调用。回执在途取消通过一次身份校验查询取得原回执，不重放 invoke、不把 invocationId 当 runId。daemon 在接纳期间收到客户端断开时向准备操作传递取消。
 
 SDK 合并两种装配位置的生命周期与自定义状态；名字及最多 64 个声明的容量共享。卸载、退出、切换账号、租户重配及 runner 意外退出都会中止旧本地实例；无须等待另一项阻塞初始化后才通知 abort。函数闭包不随进程恢复自动重放，宿主在新代次重新提交。清理失败如实报告，其他清理与 runner 停止继续尝试，并阻止绕过失败代次装配新实例。
 
 # 验证
 
-- [SDK 自动化](../../../test/sdk-host-extras.test.js)新增 13 项，覆盖函数同引用、同步/异步返回、配置快照、逐轮新值、Host PID 保持独立且不重建、环境覆盖、函数不落入 session JSON、状态合并、JSON/本地同名互斥及恢复、取消/交互归属、native 帧、卸载/退出/账号切换/租户重配、进程崩溃、初始化与清理失败、64 个共享声明边界。
-- [执行流自动化](../../../test/embedded-invoke.test.js)新增 3 项：回执在途取消原身份、不误取消其他身份，以及真实 daemon 接纳期间 socket 断开向 submit 传递 abort。原 canonical/native 恢复测试仍通过。测试使用[独立假 Host](../../../test/fixtures/sdk-extra-host.js)和已有假 Provider，不调用真实模型。
+- [SDK 自动化](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/sdk-host-extras.test.js)新增 13 项，覆盖函数同引用、同步/异步返回、配置快照、逐轮新值、Host PID 保持独立且不重建、环境覆盖、函数不落入 session JSON、状态合并、JSON/本地同名互斥及恢复、取消/交互归属、native 帧、卸载/退出/账号切换/租户重配、进程崩溃、初始化与清理失败、64 个共享声明边界。
+- [执行流自动化](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/embedded-invoke.test.js)新增 3 项：回执在途取消原身份、不误取消其他身份，以及真实 daemon 接纳期间 socket 断开向 submit 传递 abort。原 canonical/native 恢复测试仍通过。测试使用[独立假 Host](../../../test/fixtures/sdk-extra-host.js)和已有假 Provider，不调用真实模型。
 - `pnpm typecheck`、`pnpm lint`、`pnpm test` 通过。Node 共 1078 项，1069 通过、9 项按既有环境条件跳过、0 失败；WebUI Vitest 35 项通过。
 - Octospec 校验与 `git diff --check` 通过；不将此前共享 loader 的 GC 或 im-test 证据算成本轮 SDK 新验收。
 

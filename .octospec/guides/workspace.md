@@ -3,13 +3,13 @@ type: Guide
 title: 工作区与开发组织
 description: pnpm workspace、包依赖、构建和新增项目步骤。
 tags: []
-timestamp: 2026-10-15T00:00:00Z
-implementation_baseline: df63c8f
+timestamp: 2026-10-20T00:00:00Z
+implementation_baseline: feat/executor-kernel-host-lifecycle
 ---
 
 # 工作区与开发组织
 
-当前包边界见 [Runtime 合同](../rules/runtime-lifecycle.md)。embedded 独立包已删除，本地 SDK 合入 daemon；客户不需要 apps/cli 或可选 IM 包。
+当前包边界见 [Runtime 合同](../rules/runtime-lifecycle.md)。Host SDK 独立管理 Kernel 和 Extra；Kernel 只监督 worker，worker 使用唯一 AgentExecutor。SDK 宿主不依赖 apps/cli 或未选用的业务 Extra。
 
 Octo Runtime 使用 pnpm workspace 管理多项目。workspace 边界由根目录 [pnpm-workspace.yaml](../../pnpm-workspace.yaml) 定义：
 
@@ -26,16 +26,15 @@ packages:
 ```text
 apps/
   cli/                  面向用户的 Unix socket CLI
-  daemon/               daemon executable 与装配根
 
 packages/
   octo-runtime-protocol/             canonical protocol
   octo-runtime-executor-core/                 local execution context resolution
-  octo-runtime-daemon/               local SDK, lifecycle, IPC and optional modules
+  octo-runtime-host-sdk/             owned Kernel/Extra、依赖代理、原生组件启动
   octo-runtime-extra-channel-gateway/ optional Octo IM integration
   octo-runtime-extra-channel-wecom/   optional WeCom integration
   octo-runtime-extra-webui/           optional local WebUI with canonical SSE
-  octo-runtime-adapter-host/         adapter lifecycle, RPC and standalone runner
+  octo-runtime-executor-kernel/      Kernel IPC/client、worker 监督、源流窗口
   octo-runtime-adapter-sdk/          adapter authoring helpers
   octo-runtime-acp-client/           reusable ACP client
   octo-runtime-adapter-*/            provider adapter definitions
@@ -46,13 +45,13 @@ packages/
 ```text
 apps -> packages
 octo-runtime-adapter-* -> octo-runtime-adapter-sdk / provider protocol helpers
-octo-runtime-daemon -> local Host / Core / Protocol dependencies
-optional extras -> shared Host and protocol contracts
-HostApp composition -> explicitly selected optional factories
-octo-runtime-adapter-host -> Core / Protocol / Adapter SDK / 内置 Provider Adapter
+octo-runtime-host-sdk -> Kernel / Protocol / Adapter SDK
+optional extras -> Host SDK 的插件类型与 Protocol
+HostApp composition -> 显式选择 Kernel worker 入口及 Extra 声明
+octo-runtime-executor-kernel -> Core / Protocol / Adapter SDK / runner 所需 Provider Adapter
 ```
 
-daemon 的生产依赖不引入业务 Channel；HostApp 额外携带并显式启用所需扩展。标准 CLI 根包携带扩展不代表客户 SDK 必须部署它们。旧 worker-access 和 Context Builder 包已移除。
+Kernel 和 Host SDK 的生产依赖不引入业务 Channel；HostApp 携带并显式启用所需 Extra。标准根发行物携带内置模块，不代表源码 SDK 宿主必须部署全部模块。旧 daemon、adapter-host、worker-access 和 Context Builder 包已移除。
 
 `packages/*` 不应 import `apps/*`。provider 命令构造、native event parser、session codec 和权限适配必须留在 `packages/octo-runtime-adapter-*`；apps 只做配置、进程启动和 I/O 装配。
 
@@ -88,7 +87,8 @@ pnpm build
 pnpm typecheck
 pnpm lint
 pnpm test
-pnpm daemon
+pnpm cli executor-kernel run
+pnpm cli channel-gateway run
 pnpm cli status
 ```
 
@@ -98,7 +98,7 @@ pnpm cli status
 pnpm --recursive list --depth -1
 ```
 
-单独运行 Host runner（通常由 daemon 自动启动）：
+单独运行 worker runner 的 stdio 诊断入口（通常由 Kernel 监督启动）：
 
 ```bash
 pnpm host
@@ -124,11 +124,11 @@ pnpm --filter @mininglamp-oss/octo-runtime-adapter-codex list
 
 外部 SDK 接入统一使用宿主独立的 pnpm workspace：submodule 位于宿主的 `octo-runtime/` 子目录。第一步在宿主 `pnpm-workspace.yaml` 中纳入 `octo-runtime/packages/*`，保留宿主原有配置并合并所需 allowBuilds；第二步在宿主根 `package.json` 中以 `workspace:*` 声明直接依赖。`protocol`、`core`、`adapter-sdk` 等全部纳入 workspace，其传递依赖由 pnpm 自动链接；宿主直接 import 时才另加直接依赖。
 
-集成安装和构建均从宿主根目录执行：`pnpm install` 后，使用 `pnpm --filter <模块包名>... run build` 按依赖顺序构建，无需单独命名一个宿主 Runtime 构建 script。子仓原有 workspace 文件与 lockfile 保留；集成时使用宿主 workspace 配置及 lockfile，宿主 lockfile 与 submodule 指针一起提交，CI 使用宿主 `pnpm install --frozen-lockfile`。SDK 无需纳入子仓根 CLI 包或 apps，正式发行仍携带完整生产依赖。完整步骤见 [SDK 完整原生接入指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#12-配置依赖并构建)与 [Channel Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md#2-添加-dependencies-并构建)。
+集成安装和构建均从宿主根目录执行：`pnpm install` 后，使用 `pnpm --filter <模块包名>... run build` 按依赖顺序构建，无需单独命名一个宿主 Runtime 构建 script。子仓原有 workspace 文件与 lockfile 保留；集成时使用宿主 workspace 配置及 lockfile，宿主 lockfile 与 submodule 指针一起提交，CI 使用宿主 `pnpm install --frozen-lockfile`。SDK 无需纳入子仓根 CLI 包或 apps，正式发行仍携带完整生产依赖。完整步骤见 [SDK 完整原生接入指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)与 [Channel Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md#装配顺序)。
 
 宿主保留预编译方案，将上述过滤构建及独立 Host 入口编译前置到原有 `dev` / `build` 命令，保留原有开发、检查与打包步骤；不要求安装时的 `prepare` 或额外脚本文件。开发启动后仅 App 源码由原服务监听，修改 Runtime 源码需重新编译。普通安装覆盖所有 workspace 项目，构建过滤本身不限制安装范围。
 
-SDK 宿主按实际依赖闭包用 `!octo-runtime/packages/<目录>` 排除无关包。Gateway 示例排除 CLI 专用 `octo-runtime-cross-service`、企业微信 Extra 和 WebUI；基础 SDK 示例还排除 Gateway。启用某项 Extra 时先移除对应排除项，再声明宿主直接依赖并安装、构建。当前 daemon/Host 依赖的其他 Adapter 仍须保留，不能按是否启用判断可否排除。完整排除清单以两篇 SDK 指南的 workspace 示例为准。
+源码 SDK 宿主按实际依赖闭包裁剪模块，不能仅按是否启用判断可否排除。内置 Kernel runner 的 Provider 依赖仍须保留；自定义 worker 入口只注册宿主显式选择的 Adapter。已发布单包通过 /host、/executor-kernel、/executor-core、/extra、/protocol 子路径消费，完整示例见两篇 SDK 指南。
 
 ## 新增 Adapter Package
 
@@ -140,17 +140,17 @@ SDK 宿主按实际依赖闭包用 `!octo-runtime/packages/<目录>` 排除无�
 2. 包名使用 `@mininglamp-oss/octo-runtime-adapter-foo`，依赖 `@mininglamp-oss/octo-runtime-adapter-sdk: workspace:*`。
 3. 实现 metadata、probe、invoke、session 和 canonical event mapping。
 4. CLI 默认项在 [default_adapters.json](../../apps/cli/src/default_adapters.json) 注册 type/module/export；SDK 在各自 Host 入口直接 import 并注册，不复制 CLI 资源。
-5. 在 `packages/octo-runtime-adapter-host/package.json` 增加所需 workspace dependency；标准 CLI 发行时同步根生产依赖，确保 runner 在源码和发行物中都能解析模块。CLI daemon 与 SDK 都独立启动该 package runner。
+5. 使用内置 runner 时，在 `packages/octo-runtime-executor-kernel/package.json` 增加所需 workspace dependency；标准 CLI 发行时同步根生产依赖。自定义 SDK worker 则由宿主管理其依赖和 serveWorker 注册集合。
 6. 若根测试直接 import 该包，在根 `devDependencies` 增加 workspace dependency。
 7. 在 `test/` 添加 native event、success/error/cancel/session resume 契约测试。
 8. README 至少说明包的作用、设计原则、适用场景、明确边界和最小用法，并在 [Packages And Adapter Guide](../../packages/README.md) 与 provider matrix 中建立入口。
 
-Core、daemon 和 CLI 不应增加 `if adapterType === "foo"`。新增 provider 差异必须终止在 adapter contract 边界。
+Core、Kernel 和 CLI 不应增加 `if adapterType === "foo"`。新增 provider 差异必须终止在 adapter contract 边界。
 
 ## 新增 App
 
 1. 创建 `apps/<name>/package.json` 和 `src/index.ts`。
-2. package 标记 `private: true`，命名采用当前 scope `@mininglamp-oss/<name>`；与库包同名时追加 `-app`，例如 `@mininglamp-oss/octo-runtime-daemon-app`。
+2. package 标记 `private: true`，命名采用当前 scope `@mininglamp-oss/<name>`；与库包同名时追加 `-app`。新增 app 不恢复旧 daemon 组合壳。
 3. 使用 `workspace:*` 依赖需要的 runtime packages。
 4. 在 app package 中提供 `start` script；需要统一入口时再加入根 scripts。
 

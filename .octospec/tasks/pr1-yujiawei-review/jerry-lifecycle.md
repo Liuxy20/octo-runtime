@@ -25,7 +25,7 @@ timestamp: 2026-10-17T00:00:00Z
 
 [AcpClient](../../../packages/octo-runtime-acp-client/src/index.ts) 在构造时监听 stderr data、stdout 行和 child exit，却没有处理 child error；spawnAcpClient 也没有补该监听。stdin 写回调虽然拒绝 pending 请求，但不等同于安装流的 error 监听。
 
-spawn 的异步错误通过 EventEmitter 发出，不属于调用该函数时的同步异常。调用方 async generator 的 try/catch 不能捕获无人处理的独立 error 事件。当前 [serveAdapterHost](../../../packages/octo-runtime-adapter-host/src/serve.ts) 只有 uncaughtExceptionMonitor 诊断，不吞掉异常；[Node 24 文档](https://nodejs.org/docs/latest-v24.x/api/process.html#event-uncaughtexceptionmonitor)明确 monitor 不改变进程的默认崩溃行为。
+spawn 的异步错误通过 EventEmitter 发出，不属于调用该函数时的同步异常。调用方 async generator 的 try/catch 不能捕获无人处理的独立 error 事件。当前 [serveAdapterHost](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/serve.ts) 只有 uncaughtExceptionMonitor 诊断，不吞掉异常；[Node 24 文档](https://nodejs.org/docs/latest-v24.x/api/process.html#event-uncaughtexceptionmonitor)明确 monitor 不改变进程的默认崩溃行为。
 
 缺失可执行文件已可触发，无需伪造业务输入。即使 probe 或 workdir 校验曾成功，安装状态和文件系统也可能在实际 spawn 前变化，不能用强制预探测替代传输层错误处理。Host 初始校验能拦下的非法 cwd，与实际 spawn 的失效竞态分别验收。
 
@@ -93,7 +93,7 @@ NDJSON 还在 generator finally 中清掉 escalation timer；ACP close 在父进
 
 边界是本次受管进程组，不等于对任意进程树提供操作系统沙箱。主动 setsid 脱离进程组的工具、其他用户进程和远端服务不由这一补丁保证。Windows 未运行该探针，需按现有平台终止方式单独评估，不能将 POSIX 负 PGID 直接搬过去。
 
-邻近的 [spawnAdapterHost 清理](../../../packages/octo-runtime-adapter-host/src/process.ts)也按 leader 退出判断是否继续升级。后续定向检查已通过 public launcher 独立复现同组工具残留，记为[同类项 S02](assessment.md)；该补充同时记录 Codex stdin 断管导致进程退出的 S01。ZCode 同类清理条件仍仅有源码证据，不能混写为已复现。均不扩张为全局进程管理重构。
+邻近的 [spawnAdapterHost 清理](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts)也按 leader 退出判断是否继续升级。后续定向检查已通过 public launcher 独立复现同组工具残留，记为[同类项 S02](assessment.md)；该补充同时记录 Codex stdin 断管导致进程退出的 S01。ZCode 同类清理条件仍仅有源码证据，不能混写为已复现。均不扩张为全局进程管理重构。
 
 ## 实施顺序与决策
 
