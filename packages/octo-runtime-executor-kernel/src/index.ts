@@ -1,4 +1,4 @@
-// Kernel transport delegates execution to the single Core implementation.
+// Kernel 只提供 IPC、Run 观察与 worker 监督；执行逻辑统一委托给 worker 中的 Core。
 export {
   type HostedAdapter,
   type HostedAdapterMetadata,

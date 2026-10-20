@@ -312,10 +312,15 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
     { kernel: host }
   );
   t.after(async () => {
-    await runtime.close();
-    ws.close();
-    await new Promise((resolve) => server.close(resolve));
-    await rm(dir, { recursive: true, force: true });
+    try {
+      await runtime.close();
+    } finally {
+      for (const socket of ws.clients) socket.terminate();
+      ws.close();
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+      await rm(dir, { recursive: true, force: true });
+    }
   });
   await runtime.start();
   assert.equal(runtime.status.connected, true);

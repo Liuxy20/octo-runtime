@@ -22,7 +22,7 @@ for (const [name, suffix, transportName, platform] of channels) {
     `../packages/octo-runtime-extra-channel-${suffix}/dist/transport/channel.js`
   );
 
-  async function fixture(t, invoke) {
+  async function fixture(t, invoke, cancel = async () => ({ accepted: false })) {
     let receive;
     t.mock.method(Transport.prototype, "start", async function () {
       receive = (message) => this.callbacks.onMessage(message);
@@ -53,7 +53,7 @@ for (const [name, suffix, transportName, platform] of channels) {
               yield { protocolVersion: 2, type: "run.completed", payload: {} };
             }
           },
-          cancelInvocation: async () => ({ accepted: false }),
+          cancelInvocation: cancel,
           respondInteraction: async () => {}
         },
         onDiagnostic: (code) => diagnostics.push(code)
@@ -232,13 +232,28 @@ for (const [name, suffix, transportName, platform] of channels) {
   });
 
   test(`${name} close releases active and queued schedulers`, async (t) => {
-    const f = await fixture(t, async function* (_request, environment) {
-      await new Promise((resolve) => {
-        if (environment.signal.aborted) resolve();
-        else environment.signal.addEventListener("abort", resolve, { once: true });
-      });
-      yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
+    let release, abortedAtTerminal;
+    const cancelled = new Promise((resolve) => {
+      release = resolve;
     });
+    const f = await fixture(
+      t,
+      async function* (_request, environment) {
+        await Promise.race([
+          cancelled,
+          new Promise((resolve) => {
+            if (environment.signal.aborted) resolve();
+            else environment.signal.addEventListener("abort", resolve, { once: true });
+          })
+        ]);
+        abortedAtTerminal = environment.signal.aborted;
+        yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
+      },
+      async () => {
+        release();
+        return { accepted: true };
+      }
+    );
     f.send("active");
     f.send("queued");
     await settle();
@@ -246,5 +261,6 @@ for (const [name, suffix, transportName, platform] of channels) {
     await f.runtime.close();
     assert.equal(f.calls.length, 1, "queued invocation must not start during close");
     assert.equal(f.runtime.status.sessions.length, 0);
+    assert.equal(abortedAtTerminal, suffix !== "gateway");
   });
 }

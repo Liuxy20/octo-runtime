@@ -23,7 +23,10 @@ import {
 } from "./types.js";
 import { InvocationRegistry, type TrackedInvocation } from "./invocation-lifecycle.js";
 
-/** 连接只拥有 IPC 资源；关闭连接或迭代器从不隐式取消已接纳 Run。 */
+/**
+ * 连接本机 socket/Windows Pipe，返回不拥有 Kernel 进程的客户端。
+ * invoke 提供登记、取消和尾流观察；关闭连接或迭代器不会隐式取消已接纳 Run。
+ */
 export function attachKernel(options: { endpoint: string }): KernelClient {
   const sockets = new Set<net.Socket>();
   let closed = false;
@@ -170,6 +173,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       environment.signal?.throwIfAborted();
       const request = identifyInvokeInput(input);
       const record = registry.begin(lookupFor(request));
+      // signal 属于执行控制，不传给 subscribe：取消后仍须读到 Provider 会话更新与真实终态。
       const abort = () => {
         void registry.cancel(record, "caller_aborted").catch(() => undefined);
       };
@@ -183,6 +187,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
           registry.rejected(record, error);
           throw error;
         }
+        // 终态会释放登记，但 yield 后的业务持久化/投递仍由消费者负责，owner 不能据此提前 close。
         let terminal = false;
         for await (const frame of client.subscribe(ref)) {
           terminal = isHostTerminal(frame);
@@ -227,6 +232,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
     get: query,
     submit: (input, environment) => submit(input, environment),
     async *subscribe(ref, afterSeq = 0, signal) {
+      // 断线仅续读同一实例、同一流的连续序号；不能把恢复观察变成再次执行 Provider。
       let after = afterSeq;
       let repair = 0;
       let repairUntil: number | undefined;
@@ -368,6 +374,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
           kernel_instance_id: instance
         },
         30_000,
+        // 请求发出后中断等待会让接纳结果不明；先取得/查询 ACK，再按原身份请求取消。
         undefined,
         () => {
           environment.signal?.throwIfAborted();

@@ -37,7 +37,11 @@ function inputContext(value: unknown): ContextEnvelope {
   return value;
 }
 
-/** One caller-owned snapshot, with no persistent session or daemon state. */
+/**
+ * 将调用方本轮 JSON 快照解析为执行计划与内部请求，不读取持久会话或创建 Provider。
+ * sessionId 只标识业务会话；续接必须显式携带 providerSession，不能由同名会话推断。
+ * 这里只解析执行设置，完整业务 Context 保留给后续共享渲染流程。
+ */
 export function prepareInvokeInput(value: unknown): {
   adapterType: string;
   protocolMode: "native" | "canonical";

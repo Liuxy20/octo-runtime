@@ -119,6 +119,31 @@ test("worker cancellation during onSpawn observes the pending readiness request"
   );
 });
 
+test("startup cancellation is observed when the child callback aborts and throws", async () => {
+  const controller = new AbortController();
+  let child;
+  await assert.rejects(
+    launchNode(
+      resolve("test/fixtures/startup-ack-race.mjs"),
+      {},
+      (value) => {
+        child = value;
+        controller.abort();
+        throw new Error("fixture callback failed");
+      },
+      controller.signal
+    ),
+    (error) => {
+      assert.ok(error instanceof ComponentStartError);
+      assert.match(error.message, /fixture callback failed/);
+      assert.equal(error.cleanup.processExited, true);
+      return true;
+    }
+  );
+  assert.equal(alive(child.pid), false);
+  await assert.rejects(access(child.spawnargs.at(-1)), { code: "ENOENT" });
+});
+
 test("startup rollback ACK remains authoritative when the stop send races IPC close", async () => {
   await assert.rejects(
     launchNode(resolve("test/fixtures/startup-ack-race.mjs"), {}, (child) => {

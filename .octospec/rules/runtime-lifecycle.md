@@ -51,7 +51,9 @@ stop 关闭接纳，取消自己的调用，执行 dispose，回收受管进程�
 
 初始化期间同样观察 owner 断连和停止：先登记取消意图，取消 worker readiness，异步创建返回后检查停止状态并回滚，不得在清理完成后建立迟到端点或报告 ready。spawn 后启动失败以 ComponentStartError 保留 cause 和 cleanup；Extra 初始化失败的 disposer、进程或函数池未完整清理时保留失败名称。Kernel restart 失败后的 stop 必须报告替换实例的清理事实，不得返回旧实例的成功结果。原生 IPC status.pid 必须对应本次新建进程。
 
-Extra runner 为异步初始化和关闭保留 4 秒共享清理预算，另设从 stop 开始计时的 4.5 秒最终退出兜底。owner 断连时兜底必须保持引用，不能因插件子进程 unref 而提前自然退出；POSIX 回收本 runner 的独立进程组。未完成的 dispose 仍是 incomplete，不因强制退出改为成功，端点租约仅在所有清理成功后释放。Kernel 的 manifest 或端点删除失败也保留租约。runner 内部定时器要求事件循环可调度；owner 同时消失且 Extra 同步死循环的回收需要独立 supervisor，当前未实现该保证。
+Extra runner 为异步初始化和关闭保留 4 秒共享清理预算，另设从 stop 开始计时的 4.5 秒最终退出兜底。stop 同步停准入，然后并发取消所属 Run 与 dispose；原调用订阅保持到消费收尾完成或共享截止，再断开执行连接。取消 ACK 不代替终态/消费确认，失败 ref 不无条件删除。私有截止沿 owner signal 及异步关闭作用域传递，不新增 ExtraContext 字段或改变普通调用方 abort 合同。
+
+owner 断连时 runner 兜底必须保持引用，不能因插件子进程 unref 而提前自然退出；POSIX 回收本 runner 的独立进程组。Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervisor，遵守[架构约束](architecture.md#实现语言与原生依赖边界)。owner 已消失、父进程先退或 Extra 同步阻塞时，不承诺退出回调及后代清理必然执行。未完成的 dispose 仍是 incomplete，不因强制退出改为成功，端点租约仅在所有清理成功后释放。Kernel 的 manifest 或端点删除失败也保留租约。
 
 宿主动态函数留在宿主进程，真实 Promise 未结束前仍占容量；超时、取消、账号切换、断线或 scope 更新不能提前释放。宿主同步阻塞函数不能由 IPC 代理隔离。
 

@@ -13,7 +13,8 @@ import type { ChannelDependencies } from "./context-loader.js";
 import { attachKernel, acquireEndpoint } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createDependencyProxy } from "./dependencies.js";
 import { processChannel } from "./process-channel.js";
-import { deadline } from "./launch.js";
+import { performance } from "node:perf_hooks";
+import { abortForShutdown, withShutdownDeadline, withinShutdown } from "./shutdown.js";
 
 interface ExtraConfiguration {
   logging?: RuntimeLoggingOptions;
@@ -89,17 +90,21 @@ const stop = (requestId?: string): Promise<void> =>
       process.exit(process.exitCode ?? 1);
     }, 4500).unref();
     kernel?.invocations.stopAdmission();
-    owner.abort();
-    plugins?.stopAdmission();
+    const shutdownUntil = performance.now() + 4000;
+    withShutdownDeadline(shutdownUntil, () => {
+      abortForShutdown(owner);
+      plugins?.stopAdmission();
+    });
     proxy?.close();
     for (const socket of connections) socket.destroy();
-    const until = Date.now() + 4000;
+    // Kernel drain 使用 epoch 毫秒；私有 dispose 预算使用单调时钟，只换算剩余额度，不重置 4 秒期限。
+    const until = Date.now() + Math.max(0, Math.floor(shutdownUntil - performance.now()));
     const errors: unknown[] = [];
     const attempt = async (operation: () => void | Promise<void>) => {
       try {
-        await deadline(
+        await withinShutdown(
           Promise.resolve().then(operation),
-          Math.max(0, until - Date.now()),
+          shutdownUntil,
           "EXTRA_RUN_CLEANUP_INCOMPLETE"
         );
       } catch (error) {
@@ -108,24 +113,18 @@ const stop = (requestId?: string): Promise<void> =>
     };
     // 初始化仍可能取得资源；必须等它结束后才能确认资源已回收。
     await attempt(() => initialized);
+    // Kernel 确认执行终态与插件持久化/卡片收尾并行；二者都结束或到期后才能关闭尾流连接。
     await Promise.all([
       attempt(async () => {
-        try {
-          if (kernel) {
-            const result = await kernel.invocations.drain({
-              deadline: until,
-              reason: "extra_shutdown"
-            });
-            if (!result.complete) throw new Error("EXTRA_RUN_CLEANUP_INCOMPLETE");
-          }
-        } finally {
-          try {
-            await plugins?.close();
-          } finally {
-            kernel?.close();
-          }
+        if (kernel) {
+          const result = await kernel.invocations.drain({
+            deadline: until,
+            reason: "extra_shutdown"
+          });
+          if (!result.complete) throw new Error("EXTRA_RUN_CLEANUP_INCOMPLETE");
         }
       }),
+      attempt(() => withShutdownDeadline(shutdownUntil, () => plugins?.close())),
       attempt(closeServer)
     ]);
     await attempt(() => kernel?.close());

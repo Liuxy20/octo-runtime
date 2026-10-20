@@ -112,6 +112,8 @@ export class WorkerSupervisor {
     });
   }
   async #recover(worker: WorkerProcess): Promise<void> {
+    // 旧 worker 清理成功才允许替换，避免两个 Provider 实例并行持有同一执行资源。
+    // 只恢复服务可用性，不重放旧 Run；旧流已由 #failed 标为 lost。
     await worker.close();
     await this.recordWorker?.(undefined);
     this.#worker = undefined;

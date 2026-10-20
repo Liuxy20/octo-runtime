@@ -1,5 +1,6 @@
 import type { KernelClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { abortForShutdown, shutdownDeadline, withinShutdown } from "./shutdown.js";
 export type { ChannelDependencies, LoadContexts } from "./context-loader.js";
 export type { RuntimeLog, RuntimeLogLevel } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
@@ -264,7 +265,7 @@ export class ExtraPlugins {
         instance.controller.signal.throwIfAborted();
         this.#statuses.set(name, { phase: "loaded" });
       } catch (error) {
-        instance.controller.abort();
+        abortForShutdown(instance.controller);
         let cleanupFailed = false;
         await withDisposalDeadline(this.#dispose(instance)).catch((cleanupError: unknown) => {
           cleanupFailed = true;
@@ -296,7 +297,8 @@ export class ExtraPlugins {
       return Promise.resolve();
     // 递增代次也能撤销尚未创建 AbortController 的排队 load，防止卸载后又启动旧声明。
     this.#loadEpochs.set(name, (this.#loadEpochs.get(name) ?? 0) + 1);
-    this.#instances.get(name)?.controller.abort();
+    const stopping = this.#instances.get(name);
+    if (stopping) abortForShutdown(stopping.controller);
     const instance = this.#instances.get(name);
     // abort 不能排在初始化 Promise 后面；外部初始化可能正等待这个取消信号才会退出。
     const task = instance ? this.#unload(name) : this.#serial(name, () => this.#unload(name));
@@ -314,15 +316,17 @@ export class ExtraPlugins {
     const instance = this.#instances.get(name);
     if (!instance) return Promise.resolve();
     if (instance.disposing) return instance.disposing;
-    instance.controller.abort();
+    abortForShutdown(instance.controller);
     this.#statuses.set(name, { phase: "disposing" });
     instance.disposing = (async () => {
       try {
-        await withDisposalDeadline(
+        await withinShutdown(
           (async () => {
             await instance.starting.catch(() => undefined);
             await this.#dispose(instance);
-          })()
+          })(),
+          shutdownDeadline(instance.controller.signal),
+          "EXTRA_DISPOSE_FAILED"
         );
         this.#statuses.set(name, { phase: "disposed" });
       } catch (error) {
@@ -339,13 +343,13 @@ export class ExtraPlugins {
 
   stopAdmission(): void {
     this.#closed = true;
-    for (const instance of this.#instances.values()) instance.controller.abort();
+    for (const instance of this.#instances.values()) abortForShutdown(instance.controller);
   }
 
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
     this.#closed = true;
-    for (const instance of this.#instances.values()) instance.controller.abort();
+    for (const instance of this.#instances.values()) abortForShutdown(instance.controller);
     this.#closing = (async () => {
       const results = await Promise.allSettled(
         [...this.#instances.keys()].reverse().map((name) => this.unload(name))
@@ -373,11 +377,11 @@ export class ExtraPlugins {
     instance.cleanup = (async () => {
       const errors: unknown[] = [];
       // 逆序匹配资源的创建依赖；所有 disposer 共用宽限，单项失败仍继续尝试其余清理。
-      const deadline = Date.now() + 5_000;
+      const deadline = shutdownDeadline(instance.controller.signal);
       for (const dispose of instance.disposers.reverse()) {
         try {
           const operation = Promise.resolve().then(dispose);
-          await withDisposalDeadline(operation, Math.max(1, deadline - Date.now()));
+          await withinShutdown(operation, deadline, "EXTRA_DISPOSE_FAILED");
         } catch (error) {
           errors.push(error);
         }

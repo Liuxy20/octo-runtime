@@ -183,12 +183,13 @@ for (const kind of ["gateway", "wecom"]) {
       await runtime.start();
       const first = runtime.close();
       assert.equal(first, runtime.close());
-      assert.equal(signal.aborted, true);
+      assert.equal(signal.aborted, kind !== "gateway");
       let settled = false;
       void first.then(() => {
         settled = true;
       });
       await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(signal.aborted, true, "the connection is revoked after the empty drain");
       assert.equal(settled, false);
       release();
       await first;
@@ -202,7 +203,7 @@ for (const kind of ["gateway", "wecom"]) {
   );
 
   test(
-    `${kind}: unloading aborts an active invocation and waits for its completion`,
+    `${kind}: unloading cancels an active invocation and waits for its completion`,
     { timeout: 3000 },
     async (t) => {
       let callbacks, invocationSignal, finish;
@@ -217,9 +218,11 @@ for (const kind of ["gateway", "wecom"]) {
         async *invoke(_input, options) {
           invocationSignal = options.signal;
           await execution;
+          if (kind === "gateway") yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
         },
         async cancelInvocation(id) {
           cancelled.push(id);
+          return { accepted: true };
         }
       };
       const extras = new ExtraPlugins([entry([bot("active")])], host);
@@ -237,7 +240,7 @@ for (const kind of ["gateway", "wecom"]) {
       const closing = extras.unload(name);
       try {
         await waitFor(() => cancelled.length > 0);
-        assert.equal(invocationSignal.aborted, true);
+        assert.equal(invocationSignal.aborted, kind !== "gateway");
         assert.equal(extras.status[name].phase, "disposing");
       } finally {
         finish();

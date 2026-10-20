@@ -2,7 +2,7 @@ import type { ContextEnvelope, InvokeRequest } from "@mininglamp-oss/octo-runtim
 
 const MODEL_CONTEXT_PATTERNS = [/^extra\.[^/]+\/[^/]+$/, /^octo\.content\/(inline|references)$/];
 
-/** Fixed model text rendering; business capture and execution configuration are separate. */
+/** 仅渲染允许进入模型的业务 Context，执行/安全配置不作为普通提示词；对象键排序使同一快照稳定。 */
 export function renderModelContexts(context: ContextEnvelope): string {
   const items = context.items.filter((item) =>
     MODEL_CONTEXT_PATTERNS.some((pattern) => pattern.test(item.namespace + "/" + item.name))
@@ -35,7 +35,10 @@ function sorted(value: unknown): unknown {
   return value;
 }
 
-/** Called once, after Host freezes the original request and before adapter dispatch. */
+/**
+ * Core 冻结原请求后、派发 Adapter 前调用一次；接入方不应预先渲染而造成 Context 重复。
+ * 正常输入与 fresh fallback 同步添加上下文，保证恢复路径没有额外丢失本轮业务快照。
+ */
 export function withModelContexts(request: InvokeRequest): InvokeRequest {
   const rendered = renderModelContexts(request.context);
   if (!rendered) return request;

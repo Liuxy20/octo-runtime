@@ -31,6 +31,10 @@ export interface OrphanReapResult {
   reason?: "kernel_alive" | "host_missing" | "identity_mismatch" | "unsupported_identity";
 }
 
+/**
+ * 持久化 Kernel/worker 身份与在途执行事实，用于下次启动时识别遗留资源，不保存业务历史。
+ * 写入串行化并通过 rename 替换；只有 owner 确认 worker 回收后才能 close 删除清单。
+ */
 export class InvocationManifest {
   readonly #path: string;
   readonly #invocations = new Map<string, InvocationManifestEntry>();
@@ -104,6 +108,10 @@ export class InvocationManifest {
   }
 }
 
+/**
+ * 仅在原 Kernel 已退出且 worker 的 PID/启动身份仍匹配时尝试回收，防止 PID 复用误杀。
+ * 无法验证身份时保留清单并报告 unsupported_identity；worker 已消失不证明 Windows 后代已清空。
+ */
 export async function reapOrphanedInvocationManifest(path: string): Promise<OrphanReapResult> {
   let parsed: ManifestFile;
   try {

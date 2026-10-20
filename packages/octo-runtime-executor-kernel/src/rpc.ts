@@ -38,7 +38,7 @@ type RpcId = string | number | null;
 export type RpcTraceDirection = "send" | "receive";
 export type RpcTrace = (direction: RpcTraceDirection, frame: string) => void;
 
-/** Stable client contract used by daemon-owned host lifecycle wrappers. */
+/** Kernel 到 worker 的内部执行合同；取消回执 cancelled 由外层 RPC 映射为 accepted，均不表示终态。 */
 export interface WorkerRpc {
   list(configurations?: Record<string, AdapterProbeOptions>): Promise<HostedAdapterMetadata[]>;
   probe(adapterType: string, options?: AdapterProbeOptions): Promise<unknown>;
@@ -167,9 +167,8 @@ function writer(
 }
 
 /**
- * Expose an AdapterHost as a line-delimited JSON-RPC 2.0 service.
- * Ordinary methods use request/response; a long-running invoke uses an ACK plus
- * a notification event stream.
+ * 在 worker 中将唯一 AgentExecutor 暴露为 stdio NDJSON JSON-RPC 服务。
+ * 普通方法是一问一答；invoke 先返回接纳凭据，再发送通知流，不与 Kernel 对外 socket 协议混用。
  */
 export class WorkerRpcServer {
   readonly #log: RuntimeLog;
@@ -463,7 +462,10 @@ export class WorkerRpcServer {
   }
 }
 
-/** The async client for WorkerRpcServer; it also reassembles invoke notifications back into an AsyncGenerator. */
+/**
+ * Kernel 持有的 worker RPC 客户端，将按身份校验的通知还原为有界异步流。
+ * 这里只管理逻辑请求与流；进程存活、心跳和回收由 WorkerSupervisor/WorkerProcess 负责。
+ */
 export class WorkerRpcClient implements WorkerRpc {
   readonly invoke = createInputInvoke((input, environment) =>
     this.invokeFrames(input, environment)
@@ -594,7 +596,7 @@ export class WorkerRpcClient implements WorkerRpc {
     return promise as Promise<T>;
   }
 
-  /** Close the logical connection and end every pending request/invocation with the same error. */
+  /** 用同一故障结束所有逻辑请求/流；不终止进程，owner 仍须调用 WorkerProcess.close。 */
   close(error = new Error("adapter-host client closed")): void {
     if (this.#closedError) return;
     this.#closedError = error;

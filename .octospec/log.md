@@ -2,9 +2,15 @@
 
 ## 2026-10-20
 
+- PR72 按用户要求 rebase 到 main@e82a2f0，沿用 PR73 的实际 KernelClient，迁移 drain/fixture 的取消入口和回执，保留执行排空与业务收尾并行及共享期限。新增[核心代码注释要求](rules/engineering.md#核心代码注释要求)并写入 AGENTS.md，重点补齐 Core/Kernel 与 SDK 接入注释、修正旧 daemon/AdapterHost 描述。本地 UI35、Node1344通过/10跳过、专项62和disposal14通过，真实IM SDK/CLI同卡收尾与重建回复通过；见[本轮记录](journal/shared/2026-10-20-gateway-drain-windows-owner.md#maine82a2f0-rebase-与核心注释)。当前提交的干净包和新CI另行确认。
+
 - 按用户确认补充[两种执行接入的架构选型](../ARCHITECTURE.md#接入选型产品默认推荐-kernelclient)：产品默认推荐 SDK/KernelClient，以独立进程、worker 监督和有界恢复提高宿主运行稳定性；直接 AgentExecutor 保留为显式进程内选项。共用输入输出契约，但取消、观察中断、清理和本地环境选项存在差异；仅更新架构、规则与索引，未改产品代码。
 
 - 实施 [Issue 69 统一 Kernel invoke](tasks/69-kernel-client-invoke/implementation.md)：App、owned.client、Extra 和 Playboard 共享入口，删除 Extra 执行桥，Gateway 继续负责 delivery。原身份 ACK 查询与游标恢复不重发执行，取消未知和 lost 保留真实状态；每个 client 有界登记与 owner 共用绝对期限排空。专项 42/42，全量 Node 1318 通过、10 跳过，UI 35/35，显式 GC 补测 13/13；类型、lint、格式、命名、仓外 tgz、OctoSpec 和 diff 检查通过。Windows/Linux 及真实 Provider/IM 未验，未提交、推送或发布，详见[验证 journal](journal/shared/2026-10-20-kernel-client-invoke.md)。
+
+- 用户明确[公共层原生依赖约束](rules/architecture.md#实现语言与原生依赖边界)：Kernel/Core/SDK/公共框架采用 TS/Node，不引入 Go helper、addon 或随包二进制；业务 Extra 的原生依赖可选隔离。撤除 PR72 的 Windows Job 实现与分发，保留 Node/taskkill 及异常退出限制；旧 95 分评估失效。修复启动取消拒绝与 drain 持久化、审批卡、reasoning 卡终态失败漏报；类型/lint/格式/OKF、UI35和Node1300通过/10平台跳过，真实 SDK/CLI 卡片故障收尾通过，最终 CI 另行记录。
+
+- 从最新 `origin/main@6f5f25f` 新建独立 worktree 和 `plan/gateway-drain-windows-cleanup` 分支，形成[Gateway 收尾与 Windows 后代回收计划](tasks/gateway-drain-windows-cleanup/brief.md)：M0–M5、15 项逐文件安排、24 项验收，以及 95/100 工程自评。先验证 Gateway 尾流与 Windows Job/Node IPC 机制，再实施；公共 SDK 与独立 Kernel/Extra 架构不变。本轮仅规划，未修改产品代码或创建提交，见[记录](journal/shared/2026-10-20-gateway-drain-windows-cleanup-plan.md)。
 
 ## 2026-10-19
 

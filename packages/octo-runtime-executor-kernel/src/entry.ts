@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { startKernelServer, type KernelServerOptions } from "./server.js";
 
+// Host SDK 创建的独立 Kernel 入口；Node IPC 管 owner 生命周期，本地 socket/pipe 服务执行客户端。
+// component.stopped 的 complete 来自服务资源回收结果，与普通客户端断开或某个 Run 终态无关。
 const owner = new AbortController();
 let server: Awaited<ReturnType<typeof startKernelServer>> | undefined;
 let stopping: Promise<void> | undefined;

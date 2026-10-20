@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-// Standalone adapter-host process: load the adapters listed in a JSON manifest,
-// register them into an AdapterHost, then serve invocations over NDJSON JSON-RPC
-// on stdio (the daemon-to-host transport). Kept separate from the daemon so
-// provider processes are isolated behind a process boundary.
+// CLI 使用的独立 worker 入口：只加载显式 manifest 中的 Adapter，注册到唯一 AgentExecutor。
+// 通过 stdio NDJSON 为父 Kernel 提供执行；SDK 可用自有代码入口调用 serveWorker，毋须采用此 manifest。
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveAdapterModuleSpecifier } from "./module-specifier.js";

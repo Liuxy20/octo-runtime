@@ -7,6 +7,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { ComponentStartError, launchNode, type CleanupResult } from "./launch.js";
 
+/** 宿主独占的 Kernel 进程句柄；client 仅是 attached 连接，stop/restart 才管理进程。 */
 export interface OwnedKernel {
   readonly topology: "kernel-ipc";
   readonly ownership: "owned";
@@ -19,6 +20,10 @@ export type OwnedKernelOptions = Omit<KernelServerOptions, "configurations"> & {
   entrypoint?: string;
   signal?: AbortSignal;
 };
+/**
+ * 启动独立 Node Kernel 并返回所有权；worker 入口和 Adapter 集合由宿主显式选择。
+ * 宿主退出前先等待相关 Extra/业务收尾，再 stop 并检查 complete；失败的旧进程不能直接替换。
+ */
 export async function startOwnedKernel(options: OwnedKernelOptions): Promise<OwnedKernel> {
   const entrypoint =
     options.entrypoint ??

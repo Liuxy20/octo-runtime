@@ -26,6 +26,7 @@ import { OctoConnector } from "../packages/octo-runtime-extra-channel-gateway/di
 import { CardSession } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/card-session.js";
 import { parseCardAction } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/card-action.js";
 import { ImDeliveryDispatcher } from "../packages/octo-runtime-extra-channel-gateway/dist/delivery/dispatcher.js";
+import { ImSendError } from "../packages/octo-runtime-extra-channel-gateway/dist/delivery/text-send.js";
 import { ProgressScheduler } from "../packages/octo-runtime-extra-channel-gateway/dist/delivery/scheduler.js";
 import { TypingController } from "../packages/octo-runtime-extra-channel-gateway/dist/presentation/typing.js";
 import { createImInvocation as createChannelInput } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/dispatcher.js";
@@ -702,6 +703,67 @@ test("Cards create/edit one stable message with monotone card_seq and persistent
   assert.equal(edits[1].body.state, "completed");
   assert.ok(stopped > 0);
   assert.equal(f.requests.filter((request) => request.path === "/v1/bot/card/profile").length, 1);
+});
+
+for (const failure of ["receipt", "template"]) {
+  test(`Card finalization retains a terminal ${failure} failure across repeated finish`, async () => {
+    let failing = false;
+    const card = new CardSession(
+      {
+        config: config(),
+        async reasoningTemplate() {
+          if (failing && failure === "template") throw new Error("private template failure");
+          return template;
+        },
+        async card() {
+          if (failing) throw new ImSendError("IM_CARD_REJECTED_TEST", "failed");
+          return "visible-progress-card";
+        }
+      },
+      new ImDeliveryDispatcher(new AbortController().signal),
+      { channelId: "peer", channelType: 1 },
+      "run",
+      () => {},
+      () => {}
+    );
+    const projector = new ImRunProjector("run");
+    card.update(projector.snapshot());
+    await card.finish();
+    assert.equal(card.messageId, "visible-progress-card");
+    failing = true;
+    projector.accept(event("run.cancelled"));
+    card.update(projector.snapshot());
+    await assert.rejects(card.finish(), /IM_CARD_FINALIZATION_FAILED/);
+    await assert.rejects(card.finish(), /IM_CARD_FINALIZATION_FAILED/);
+    assert.equal(card.messageId, "visible-progress-card");
+  });
+}
+
+test("A discarded progress-card failure does not poison successful terminal delivery", async () => {
+  let terminal = false;
+  const card = new CardSession(
+    {
+      config: config(),
+      reasoningTemplate: async () => template,
+      async card() {
+        if (!terminal) throw new ImSendError("IM_CARD_REJECTED_TEST", "failed");
+        return "terminal-card";
+      }
+    },
+    new ImDeliveryDispatcher(new AbortController().signal),
+    { channelId: "peer", channelType: 1 },
+    "run",
+    () => {},
+    () => {}
+  );
+  const projector = new ImRunProjector("run");
+  card.update(projector.snapshot());
+  await card.finish();
+  terminal = true;
+  projector.accept(event("run.cancelled"));
+  card.update(projector.snapshot());
+  await card.finish();
+  assert.equal(card.messageId, "terminal-card");
 });
 
 test("Delivery retries use one effect key and never rerun execution", async () => {

@@ -1,4 +1,5 @@
 import type { JsonObject } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { shutdownDeadline, withinShutdown } from "@mininglamp-oss/octo-runtime-host-sdk/shutdown";
 /**
  * 单 Bot 编排：把授权 IM 消息转换为有界任务，并把公开结果投递回原会话。
  * 管理会话、排队、取消和交互归属；平台协议交给 connector，领域业务交给发起方。
@@ -64,6 +65,9 @@ export class ImRuntime {
   >();
   readonly #responding = new Set<string>();
   #closed = true;
+  #draining = false;
+  #ownerStopped?: () => void;
+  readonly #drainErrors: unknown[] = [];
   #state: ImConnectionState = "stopped";
   #reconnect?: NodeJS.Timeout;
   #connecting?: Promise<void>;
@@ -126,19 +130,15 @@ export class ImRuntime {
     if (this.#connecting) return this.#connecting;
     if (this.#closed) {
       this.#closed = false;
+      this.#draining = false;
+      this.#drainErrors.length = 0;
       this.#closing = undefined;
       this.#abort = new AbortController();
-      this.#signal = AbortSignal.any([
-        this.#abort.signal,
-        ...(this.dependencies.signal ? [this.dependencies.signal] : [])
-      ]);
-      this.#signal.addEventListener(
-        "abort",
-        () => {
-          if (!this.#closed) void this.close().catch(() => this.#diagnostic("IM_DISPOSE_FAILED"));
-        },
-        { once: true }
-      );
+      this.#signal = this.#abort.signal;
+      this.#ownerStopped = () => {
+        if (!this.#closed) void this.close().catch(() => this.#diagnostic("IM_DISPOSE_FAILED"));
+      };
+      this.dependencies.signal?.addEventListener("abort", this.#ownerStopped, { once: true });
       this.#delivery = new ImDeliveryDispatcher(this.#signal);
     }
     this.#everOnline = false;
@@ -153,7 +153,7 @@ export class ImRuntime {
     }
   }
   async #connect(recovering: boolean): Promise<void> {
-    if (this.#closed || this.#signal.aborted) return;
+    if (this.#closed || this.#draining || this.#signal.aborted) return;
     this.#connectionAbort?.abort();
     try {
       await this.#disconnecting;
@@ -164,7 +164,7 @@ export class ImRuntime {
       this.#everOnline = false;
       return;
     }
-    if (this.#closed || this.#signal.aborted) return;
+    if (this.#closed || this.#draining || this.#signal.aborted) return;
     this.#connectionAbort = new AbortController();
     const signal = AbortSignal.any([this.#signal, this.#connectionAbort.signal]);
     let starting = true;
@@ -249,14 +249,21 @@ export class ImRuntime {
     );
   }
   #scheduleReconnect(retryAfterMs = 0): void {
-    if (this.#closed || this.#signal.aborted || this.#state !== "retrying" || this.#reconnect)
+    if (
+      this.#closed ||
+      this.#draining ||
+      this.#signal.aborted ||
+      this.#state !== "retrying" ||
+      this.#reconnect
+    )
       return;
     const delayMs = Math.max(Math.min(30_000, 5_000 * 2 ** this.#retry), retryAfterMs);
     this.#retry = Math.min(3, this.#retry + 1);
     // Node 超过 2^31-1 的 timeout 会变为 1ms；长 Retry-After 分段等待，不能绕过限流。
     const deadline = performance.now() + delayMs;
     const wake = (): void => {
-      if (this.#closed || this.#signal.aborted || this.#state !== "retrying") return;
+      if (this.#closed || this.#draining || this.#signal.aborted || this.#state !== "retrying")
+        return;
       const remaining = deadline - performance.now();
       if (remaining > 0) {
         this.#reconnect = setTimeout(wake, Math.min(remaining, 2_147_483_647));
@@ -292,6 +299,10 @@ export class ImRuntime {
     } catch {
       /* 诊断不改变业务结果。 */
     }
+  }
+  #finalizationFailed(code: string, runId?: string): void {
+    if (this.#draining) this.#drainErrors.push(new Error(code));
+    this.#diagnostic(code, runId);
   }
   #key(message: Pick<ImInboundMessage, "conversationKind" | "conversationId">): string {
     return [
@@ -333,7 +344,7 @@ export class ImRuntime {
         }
       );
     } catch {
-      this.#diagnostic("IM_HISTORY_POSITION_UNAVAILABLE");
+      this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
     }
   }
   #invalidateRules(change: { groupNo: string; shortId?: string }): void {
@@ -351,7 +362,7 @@ export class ImRuntime {
         );
       });
     } catch {
-      this.#diagnostic("IM_RULES_STATE_UNAVAILABLE");
+      this.#finalizationFailed("IM_RULES_STATE_UNAVAILABLE");
     }
   }
   #finishRules(
@@ -361,7 +372,7 @@ export class ImRuntime {
     versions: ImRulesVersions | undefined,
     completed: boolean
   ): void {
-    if (!session.id) return;
+    if (this.#closed || !session.id) return;
     try {
       const provider = this.#sessionStore.read(key)?.providerSession;
       this.#sessionStore.patchRules?.(
@@ -378,12 +389,13 @@ export class ImRuntime {
         }
       );
     } catch {
-      this.#diagnostic("IM_RULES_STATE_UNAVAILABLE");
+      this.#finalizationFailed("IM_RULES_STATE_UNAVAILABLE");
     }
   }
   #receive(message: ImInboundMessage): void {
     if (
       this.#closed ||
+      this.#draining ||
       (this.config.allowed_sender_ids && !this.config.allowed_sender_ids.includes(message.senderId))
     )
       return;
@@ -495,6 +507,7 @@ export class ImRuntime {
         await this.#submitInteraction(key, message.senderId, response);
       },
       cancel: async () =>
+        !this.#draining &&
         this.#tasks.get(key)?.rootInvocationId === invocationId &&
         (await this.#tasks.get(key)!.task.cancel("IM card stop")),
       retry: (senderId: string, id: string): boolean => {
@@ -524,7 +537,7 @@ export class ImRuntime {
     return controls;
   }
   #enqueue(message: ImInboundMessage, key: string, occurrenceId?: string): boolean {
-    if (this.#closed || this.#signal.aborted) return false;
+    if (this.#closed || this.#draining || this.#signal.aborted) return false;
     const id = occurrenceId ?? message.messageId;
     const queuedKey = JSON.stringify([key, id]);
     if (this.#queuedOccurrences.has(queuedKey)) return false;
@@ -645,6 +658,7 @@ export class ImRuntime {
         : message.reply(text, effectKey)
     );
     if (receipt.state !== "delivered") {
+      if (this.#draining) this.#drainErrors.push(new Error(receipt.code ?? "IM_DELIVERY_FAILED"));
       this.#diagnostic(receipt.code ?? "IM_DELIVERY_FAILED");
       if (
         allowUnknownNotice &&
@@ -718,6 +732,7 @@ export class ImRuntime {
     const entry = this.#interactions.get(response.interactionId);
     if (
       this.#closed ||
+      this.#draining ||
       this.#signal.aborted ||
       !entry ||
       entry.key !== key ||
@@ -743,7 +758,7 @@ export class ImRuntime {
     occurrenceId?: string,
     executionSession: ImSession = session
   ): Promise<void> {
-    if (this.#closed || this.#signal.aborted || !this.#delivery) return;
+    if (this.#closed || this.#draining || this.#signal.aborted || !this.#delivery) return;
     const prompt = message.text.trim();
     if (!prompt && !message.buildInputs) return;
     if (prompt === "/session") {
@@ -912,7 +927,7 @@ export class ImRuntime {
     } finally {
       this.#preparing.delete(key);
     }
-    if (this.#closed || this.#signal.aborted) return;
+    if (this.#closed || this.#draining || this.#signal.aborted) return;
     let { request } = prepared;
     const rootRunId = request.runId;
     this.#log("agent_run.requested", {
@@ -953,7 +968,7 @@ export class ImRuntime {
                 )
             );
           } catch {
-            this.#diagnostic("IM_HISTORY_POSITION_UNAVAILABLE");
+            this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
           }
         }
         for (const [id, entry] of this.#interactions)
@@ -1001,7 +1016,7 @@ export class ImRuntime {
                 })
               );
             } catch {
-              this.#diagnostic("IM_HISTORY_POSITION_UNAVAILABLE");
+              this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
             }
           }
         }
@@ -1015,6 +1030,7 @@ export class ImRuntime {
         )
           continue;
         if (event.type === "interaction.requested") {
+          if (this.#draining) continue;
           // Octospec F09: .octospec/tasks/gateway-august-feature-assessment/assessment.md
           // 普通 IM 不提供秘密输入通道，禁止退回聊天命令收集凭据。
           if (
@@ -1089,13 +1105,14 @@ export class ImRuntime {
       if (!projector.snapshot().terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
     } catch {
       if (!projector.snapshot().terminal) {
+        if (this.#draining) this.#drainErrors.push(new Error("IM_EXECUTION_RESULT_UNKNOWN"));
         // 流断开无法证明执行失败；尽力取消并提示核查，不自动重跑潜在的业务副作用。
         await this.dependencies.kernel
           .cancelInvocation(request.invocationId, "IM execution stream failed")
           .catch(() => undefined);
         this.#diagnostic("IM_EXECUTION_RESULT_UNKNOWN", request.runId);
         presentation?.update({ ...snapshot(), resultUnknown: true });
-      }
+      } else if (this.#draining) this.#drainErrors.push(new Error("IM_RUN_FINALIZATION_FAILED"));
     } finally {
       if (rulesEnabled)
         this.#finishRules(
@@ -1105,7 +1122,7 @@ export class ImRuntime {
           rulesVersions,
           projector.snapshot().terminal === "completed"
         );
-      if (handedOff && projector.snapshot().terminal !== "completed") {
+      if (!this.#closed && handedOff && projector.snapshot().terminal !== "completed") {
         try {
           this.#sessionStore.patchGap?.(
             key,
@@ -1120,7 +1137,7 @@ export class ImRuntime {
             }
           );
         } catch {
-          this.#diagnostic("IM_HISTORY_POSITION_UNAVAILABLE");
+          this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
         }
       }
       if (task.stopReason) this.#diagnostic(task.stopReason, rootRunId);
@@ -1134,23 +1151,24 @@ export class ImRuntime {
       try {
         // 长任务结束后重新开始终态去重窗口，保留有界尝试身份，避免立即重复执行。
         const saved = { ...prepared.request };
-        this.#sessionStore.remember(key, occurrenceId ?? message.messageId, {
-          text: message.text,
-          sessionId: request.sessionId,
-          runId: rootRunId,
-          snapshot: saved,
-          attempts: task.attempts.map((attempt) => ({ ...attempt }))
-        });
+        if (!this.#closed)
+          this.#sessionStore.remember(key, occurrenceId ?? message.messageId, {
+            text: message.text,
+            sessionId: request.sessionId,
+            runId: rootRunId,
+            snapshot: saved,
+            attempts: task.attempts.map((attempt) => ({ ...attempt }))
+          });
       } catch {
-        this.#diagnostic("IM_SESSION_STORE_FAILED", rootRunId);
+        this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
       }
       session.activeInvocationId = undefined;
       for (const [id, entry] of this.#interactions)
         if (entry.invocationId === request.invocationId) this.#interactions.delete(id);
       try {
-        await presentation?.finish();
+        if (!this.#closed) await presentation?.finish();
       } catch {
-        this.#diagnostic("IM_PRESENTATION_FAILED", request.runId);
+        this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
       }
     }
     if (this.#closed || this.#signal.aborted) return;
@@ -1166,6 +1184,7 @@ export class ImRuntime {
     );
   }
   #saveBinding(key: string, session: ImSession): void {
+    if (this.#closed) return;
     const binding = this.#sessionStore.read(key);
     this.#sessionStore.save(key, {
       id: session.id,
@@ -1187,43 +1206,55 @@ export class ImRuntime {
         : {})
     });
   }
+  /**
+   * 同步停准入，在共享预算内取消执行并等待会话持久化、卡片和 final，再释放连接。
+   * 源终态或空任务表不代表业务 tail 已结束；失败/超时及重复调用都保留同一关闭结果。
+   */
   close(): Promise<void> {
     if (this.#closing) return this.#closing;
-    this.#closed = true;
+    this.#draining = true;
+    const until = shutdownDeadline(this.dependencies.signal);
+    const drainUntil = Math.min(performance.now() + 3000, until - 1000);
+    const wasOnline = this.#state === "online";
     this.#state = "stopped";
     this.#log("channel.stopped", { state: "stopped" });
     this.#error = undefined;
     this.#everOnline = false;
     this.#retry = 0;
-    this.#abort.abort();
-    this.#connectionAbort?.abort();
+    for (const preparation of this.#preparing.values()) preparation.abort();
+    // 执行终态之后 session.tail 仍可能在结束卡片或发送 final，连接在 drain 后统一撤销。
+    if (!wasOnline) this.#connectionAbort?.abort();
     if (this.#reconnect) {
       clearTimeout(this.#reconnect);
       this.#reconnect = undefined;
     }
     this.#closing = Promise.resolve().then(async () => {
       const errors: unknown[] = [];
-      const attempt = async (operation: () => unknown): Promise<void> => {
+      const attempt = async (operation: () => unknown, deadline = until): Promise<void> => {
         try {
-          await operation();
+          await withinShutdown(Promise.resolve().then(operation), deadline, "IM_DRAIN_INCOMPLETE");
         } catch (error) {
           errors.push(error);
         }
       };
-      await attempt(() => this.#connector?.close());
-      await Promise.all(
-        [...this.#sessions.values()]
-          .filter((session) => session.activeInvocationId)
-          .map((session) =>
-            attempt(() =>
-              this.dependencies.kernel.cancelInvocation(session.activeInvocationId!, "IM shutdown")
-            )
-          )
-      );
-      await attempt(() => this.#connecting);
-      await Promise.all([...this.#sessions.values()].map((session) => attempt(() => session.tail)));
-      await Promise.all(this.#busyNotifications.values());
+      await Promise.all([
+        ...[...this.#tasks.values()].map(({ task }) => attempt(() => task.drain(), drainUntil)),
+        ...[...this.#sessions.values()].map((session) => attempt(() => session.tail, drainUntil))
+      ]);
+      // 截止后撤销订阅与投递权限，迟到事件不能继续保存或向已释放连接投递。
+      this.#closed = true;
+      this.#abort.abort();
+      this.#connectionAbort?.abort();
+      if (this.#ownerStopped)
+        this.dependencies.signal?.removeEventListener("abort", this.#ownerStopped);
+      await Promise.all([
+        attempt(() => this.#connector?.close()),
+        attempt(() => this.#connecting),
+        attempt(() => this.#disconnecting),
+        ...[...this.#busyNotifications.values()].map((notification) => attempt(() => notification))
+      ]);
       if (!this.dependencies.sessions) await attempt(() => this.#sessionStore.close?.());
+      errors.push(...this.#drainErrors);
       if (errors.length) throw new AggregateError(errors, "IM_DISPOSE_FAILED");
       this.#sessions.clear();
       this.#seen.clear();

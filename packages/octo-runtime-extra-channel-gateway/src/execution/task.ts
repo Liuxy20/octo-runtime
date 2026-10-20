@@ -4,6 +4,7 @@ import type { ImInvocationInput } from "./dispatcher.js";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
+import { KernelError } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { type CanonicalEvent, type InvokeEnvironment } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig, ImTaskAttempt } from "../contracts.js";
 
@@ -42,7 +43,7 @@ export class ImTask {
   readonly #abort = new AbortController();
   readonly #retryStop = new AbortController();
   readonly #signal: AbortSignal;
-  #active?: string;
+  #active?: { invocationId: string; finished: Promise<boolean> };
   #cancelPending?: Promise<{ accepted: boolean }>;
   #total = 0;
   #consecutive = 0;
@@ -50,6 +51,7 @@ export class ImTask {
   #recoveryTimer?: () => void;
   #replaySafe = true;
   #started = false;
+  #draining = false;
   stopReason?: string;
   constructor(
     readonly kernel: ImModuleDependencies["kernel"],
@@ -70,10 +72,29 @@ export class ImTask {
   stopRetries(): void {
     this.#retryStop.abort();
   }
+  /** owner stop 只取消执行和后续尝试；当前订阅须继续消费真实终态。 */
+  async drain(reason = "IM shutdown"): Promise<void> {
+    this.#draining = true;
+    this.stopRetries();
+    const active = this.#active;
+    if (!active) return;
+    try {
+      this.#cancelPending ??= this.kernel.cancelInvocation(active.invocationId, reason);
+      await this.#cancelPending;
+    } catch (error) {
+      // Kernel 可在订阅 ACK 时先确认终态并释放登记，业务迭代器此时仍可能等待交互展示。
+      // 登记缺失本身不是完成证据；只接受同次原流正常耗尽且包含真实终态，仍受 owner 共享期限约束。
+      if (
+        !(error instanceof KernelError && error.code === "INVOCATION_NOT_TRACKED") ||
+        !(await active.finished)
+      )
+        throw error;
+    }
+  }
   async cancel(reason = "IM user stop"): Promise<boolean> {
     this.#abort.abort(reason);
     if (!this.#active) return true; // 退避阶段也属于可停止的业务任务。
-    this.#cancelPending ??= this.kernel.cancelInvocation(this.#active, reason);
+    this.#cancelPending ??= this.kernel.cancelInvocation(this.#active.invocationId, reason);
     return (await this.#cancelPending).accepted;
   }
   #stop(reason: string): void {
@@ -169,7 +190,7 @@ export class ImTask {
     );
     let request = this.request;
     try {
-      while (!this.#signal.aborted) {
+      while (!this.#signal.aborted && !this.#draining) {
         const remaining = Math.ceil(deadline - this.time.now());
         if (remaining < 100) {
           this.#stop("IM_TASK_DEADLINE");
@@ -181,7 +202,13 @@ export class ImTask {
           if (item.namespace === "octo.execution" && item.name === "limits")
             item.payload.run_timeout_ms = remaining;
         this.onAttempt(request);
-        this.#active = request.invocationId;
+        let finish!: (confirmed: boolean) => void;
+        this.#active = {
+          invocationId: request.invocationId,
+          finished: new Promise<boolean>((resolve) => {
+            finish = resolve;
+          })
+        };
         this.#cancelPending = undefined;
         const attempt: ImTask["attempts"][number] = {
           runId: request.runId,
@@ -190,6 +217,7 @@ export class ImTask {
         };
         this.attempts.push(attempt);
         let terminal: CanonicalEvent | undefined;
+        let confirmed = false;
         try {
           for await (const event of this.kernel.invoke(request, {
             ...this.environment,
@@ -206,6 +234,8 @@ export class ImTask {
               terminal = event;
             else yield event;
           }
+          // 看到终态后仍须正常耗尽：终态后的传输/控制错误不能被 drain 当成成功。
+          confirmed = terminal !== undefined;
         } catch (error) {
           attempt.outcome = "unknown";
           throw error;
@@ -213,6 +243,8 @@ export class ImTask {
           // 必须等待消费结束及取消回执；未知结果不会进入下一次 invoke。
           await this.#settleCancellation();
           this.#active = undefined;
+          // #cancelPending 只保存原始取消回执，不能反过来等待 finished，否则这里会循环等待。
+          finish(confirmed);
         }
         if (!terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
         attempt.outcome = terminal.type;

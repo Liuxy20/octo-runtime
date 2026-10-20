@@ -50,6 +50,17 @@ Executor Kernel 提供本地 IPC、源窗口和 worker 监督；Host SDK 独立�
 旧 daemon app、包、bin、CLI 命令和 API 已删除，不保留兼容包装。LoopDaemon 是另一项目的
 Go 二进制，不在本仓实现；平台和真实业务验收按各自实际证据报告。
 
+## 实现语言与原生依赖边界
+
+2026-10-20 用户明确：**Octo Runtime 的 Kernel 和公共层采用 TypeScript / Node.js；业务 Extra 的原生依赖是独立边界。** 本约束适用于 Executor Core、Executor Kernel、Host/Adapter SDK、公共协议、传输和进程管理等框架代码。
+
+- **公共层不引入原生实现。** 不为框架能力新增 Go、Rust、C/C++ 辅助程序、Node 原生扩展，或随包分发、安装时下载的分架构 `.exe`、动态库等运行时二进制。不得为了 Windows 进程清理引入原生 Job Object broker，也不得把编译工具链、二进制构建、摘要校验和分发变成公共 Runtime 的依赖。
+- **平台差异留在 Node.js 合同内。** 使用 Node.js API 和操作系统已有命令实现常规生命周期管理，明确实际保证及限制。Windows 的 `taskkill /PID … /T /F` 依赖仍可识别的进程树；父进程先退出、Runtime 被强杀或事件循环无法运行时，不承诺后代必然清空。现有 Windows 清理在 leader 已退出时可能返回成功；`cleanup.complete` 仅反映既有观测范围，不能证明此时全部后代已清空。已观察到的清理失败须如实报告，不得把不可观测场景写成已解决的强保证。
+- **业务 Extra 可以拥有原生依赖。** 原生实现、构建、打包、安装和清理由对应 Extra 自身负责，保持可选且隔离，不成为 Kernel 或公共 SDK 的启动、构建或发布前提。不得把公共进程管理搬入一个 Extra，以绕过本约束。
+- **调用外部程序不等于内置原生实现。** Adapter 调用宿主选择的 Provider CLI、业务 Extra 使用 octo-cli，以及 SDK 启动调用方显式提供的外部组件，仍按各自已有合同执行；不因此授权 Runtime 自带通用原生辅助程序。用于验证这些外部组件合同的测试 fixture 也不构成产品运行时依赖。
+
+本次 Windows 清理方案不属于原生例外，必须撤除已有 Go broker、专属构建及二进制分发接线。未来若确有公共层原生实现的必要性，应先明确需求、替代方案、维护成本和例外边界，并取得用户明确授权；实现方不能自行以必要性为由突破本约束。
+
 ## CLI 使用与 SDK 原生接入
 
 **SDK 是 Octo Runtime 的主要接入方式。** 不同团队维护各自的 HostApp，经 SDK 装配并使用统一执行能力。用户明确 Buddy 就是由其他团队维护的宿主产品；其产品策略、认证、配置、凭据保护和应用生命周期由该团队负责，Runtime 团队维护通用 SDK、执行合同及其实现。

@@ -105,6 +105,10 @@ function validateParams(method: string, params: Record<string, unknown>): void {
     throw new KernelError("INVALID_PARAMS");
 }
 
+/**
+ * 创建独立 Kernel 的本地 RPC 端点，独占端点租约、Run 事件源与 worker 监督器。
+ * 启动失败也执行回收；close 失败会保留所有权证据，客户端断开不等同于 owner 关闭。
+ */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
   const instance = randomUUID();
   let manifest: InvocationManifest | undefined;
@@ -387,6 +391,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     };
     if (listening)
       await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    // 先终止 worker 才能让失联的源流结束，再清空 Run 缓存；每个资源仍独立尝试回收并汇总失败。
     const workerStopped = await attempt(() => worker.close());
     await attempt(() => runs.close());
     // 进程未确认回收时保留身份清单和端点租约，禁止新实例覆盖所有权。

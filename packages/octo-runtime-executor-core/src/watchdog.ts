@@ -49,7 +49,10 @@ const clock: WatchdogClock = {
   }
 };
 
-/** One autonomous timer per invocation. Neither consumer pulls nor logging drive deadlines. */
+/**
+ * 每次执行独立的单调时钟看门狗；期限由定时器推进，不依赖消费者拉流速度或日志输出。
+ * Provider 进度与传输响应分开记录，避免心跳/RPC 响应掩盖模型停滞；超时通过 controller 请求取消。
+ */
 export class InvocationWatchdog {
   readonly limits: EffectiveLimits;
   readonly #startedAt: number;

@@ -38,6 +38,10 @@ export function assertLocalContext(context: unknown): asserts context is Context
   }
 }
 
+/**
+ * 合并执行默认值与本轮提交，校验后生成 Provider 无关的执行计划；不扫描宿主文件或准备目录。
+ * defaults 仅允许执行/安全配置，业务历史由调用方单独传入，不能变为所有调用的隐式默认。
+ */
 export function resolveLocalContext(
   defaults: ContextEnvelope,
   submitted: ContextEnvelope,
@@ -99,6 +103,7 @@ export function resolveLocalContext(
   return { effectiveContext, resolvedExecutionPlan: plan };
 }
 
+/** 将 Context 的 wire 字段映射为 Core 限制；未知键拒绝，避免配置看似生效却被静默忽略。 */
 export function localRuntimeLimits(plan: ResolvedExecutionPlan): RuntimeLimits | undefined {
   if (!plan.runtime_limits) return undefined;
   const limits: Record<string, unknown> = {};

@@ -14,6 +14,8 @@
 
 本文用于讲解。强制合同维护在[基础架构规则](.octospec/rules/architecture.md)。用户指定的线上对齐来源为[架构文档](https://im.deepminer.com.cn/d/d_e34402004b642927092dd649)，当前 octo-cli 缺少登录身份，尚未读取核对，不能宣称与线上版本一致。图中「目标」不表示代码已全部实现；本地实现和待验项见[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
+**实现约束：Kernel 和公共层采用 TypeScript / Node.js，不引入 Go 等原生辅助程序、Node 原生扩展或随包二进制。业务 Extra 可以拥有隔离的原生依赖，不能成为公共 Runtime 的前置条件。** 使用宿主选择的 Provider CLI 或业务工具不改变此边界；Windows 异常退出的进程回收限制必须如实说明。具体例外和责任见[实现语言与原生依赖边界](.octospec/rules/architecture.md#实现语言与原生依赖边界)。
+
 ## 1. 之前：各入口各自执行，没有统一设备寻址
 
 旧架构有三套独立执行链路：IM 内连 OpenClaw Channel，桌面 OctoBuddy 本地启动 Codex App Server 并直接 IPC，Loop 使用带应用业务逻辑的专用 daemon 轮询执行。移动端除 IM 入口外，conversation 跨端对话还需额外实现一套接入链路：

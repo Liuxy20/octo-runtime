@@ -6,6 +6,7 @@ import { validateImConfig } from "../packages/octo-runtime-extra-channel-gateway
 import { assertInvokeInput, failurePayload } from "@mininglamp-oss/octo-runtime-protocol";
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvocationWatchdog } from "../packages/octo-runtime-executor-core/dist/watchdog.js";
+import { KernelError } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 const config = {
   bot_id: "retry-fixture",
@@ -86,6 +87,7 @@ function fixture(invoke, options = {}) {
     },
     async cancelInvocation(id) {
       cancellations.push(id);
+      if (options.cancel) return options.cancel(id);
       return { accepted: true };
     }
   };
@@ -314,6 +316,79 @@ test("unknown stream result never causes another invocation", async () => {
   assert.equal(f.calls.length, 1);
   assert.equal(f.timers.size, 0);
 });
+
+for (const outcome of [
+  "completed",
+  "failed",
+  "cancelled",
+  "missing",
+  "lost",
+  "after-terminal",
+  "abandoned",
+  "cancel-unknown",
+  "untyped-error"
+]) {
+  test(`IM drain reconciles missing registration only with a fully consumed terminal: ${outcome}`, async () => {
+    const cancellation =
+      outcome === "untyped-error"
+        ? new Error("INVOCATION_NOT_TRACKED")
+        : new KernelError(
+            outcome === "cancel-unknown" ? "OPERATION_OUTCOME_UNKNOWN" : "INVOCATION_NOT_TRACKED"
+          );
+    const f = fixture(
+      async function* () {
+        yield progress();
+        if (outcome === "lost") throw new KernelError("RUN_OUTCOME_UNKNOWN");
+        if (outcome === "missing") return;
+        yield event(`run.${["failed", "cancelled"].includes(outcome) ? outcome : "completed"}`);
+        if (outcome === "after-terminal") throw new KernelError("STREAM_GAP");
+      },
+      {
+        cancel: async () => {
+          throw cancellation;
+        }
+      }
+    );
+    const iterator = f.task.events();
+    await iterator.next();
+    let settled = false;
+    const draining = f.task.drain().finally(() => {
+      settled = true;
+    });
+    const result = Promise.allSettled([draining]);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(settled, ["cancel-unknown", "untyped-error"].includes(outcome));
+    if (outcome === "abandoned") await iterator.return();
+    else if (["missing", "lost", "after-terminal"].includes(outcome)) {
+      await assert.rejects(
+        iterator.next(),
+        new RegExp(
+          {
+            missing: "IM_RUN_WITHOUT_TERMINAL",
+            lost: "RUN_OUTCOME_UNKNOWN",
+            "after-terminal": "STREAM_GAP"
+          }[outcome]
+        )
+      );
+    } else {
+      assert.equal(
+        (await iterator.next()).value.type,
+        `run.${["failed", "cancelled"].includes(outcome) ? outcome : "completed"}`
+      );
+      assert.equal((await iterator.next()).done, true);
+    }
+    const [actual] = await result;
+    if (["completed", "failed", "cancelled"].includes(outcome))
+      assert.equal(actual.status, "fulfilled");
+    else {
+      assert.equal(actual.status, "rejected");
+      assert.equal(actual.reason, cancellation);
+    }
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.cancellations.length, 1);
+    assert.equal(f.timers.size, 0);
+  });
+}
 
 test("retry-after exceeding recovery or total budget is not shortened", async () => {
   const f = fixture(

@@ -60,6 +60,8 @@ ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteractio
 
 每个独立 Extra 获得自己的 client，最多 128 个高层 invoke 登记（含在途/未知），只保留元数据。runner 停止时先关闭接纳，显式 drain 请求取消并核对原终态，在现有 4 秒共享期限内等待业务 onDispose 后才关闭 client。已关闭或暂停的 iterator 通过 get 核对，不额外创建订阅。单纯 client.close/iterator.return 不取消；SDK owner stop 是显式策略。未知/lost/未确认返回 incomplete，不清空登记冒充成功。执行终态不代表 delivery 或业务资源已完成，业务清理失败同样阻止替换。
 
+框架 owner 停止是停准入与启动清理的信号，业务插件可在共享截止内保留已接纳调用的消费和投递资源。Gateway 最多 3 秒完成 drain，资源清理共用 4 秒预算；runner 并发执行取消与 dispose。未知执行结果、绑定/规则保存失败、最终展示或投递失败均保留失败事实，重复关闭不能变成成功；此行为不自动扩展为 WeCom 的回复策略。
+
 初始化、Kernel 不可达、业务连接失败、dispose 失败和进程退出分别报告；日志不携带凭据或私有错误正文。可选 logging.directory 使用统一元数据白名单。登录、云端登记和 IM 建联不是本地 Kernel 或其他 Extra 的前提。
 
 三个内置插件为 channel-gateway、channel-wecom 和 webui，都复用函数式入口。公开配置 Schema 从主包 /extras/<name>/config-schema.json 获取。没有 Extra 也可执行本地请求。

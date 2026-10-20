@@ -39,7 +39,10 @@ interface Run {
 }
 const TTL = 120_000;
 
-/** One process-local event authority around the existing adapter-host IPC client. */
+/**
+ * Kernel 内唯一的 Run 事件源：从 worker 消费一次，按原 stream/seq 有界缓存供多个订阅观察。
+ * 接纳、执行与观察分离；订阅退出不取消源执行，缓存过期只报告缺口，不重跑 Provider。
+ */
 export class HostRunService implements WorkerRpc {
   readonly invoke = createInputInvoke((input, environment) =>
     this.invokeFrames(input, environment)
@@ -196,6 +199,7 @@ export class HostRunService implements WorkerRpc {
       }
     }
   }
+  /** 返回接纳凭据后仍在后台驱动源流；调用方无需保持原请求连接才能让执行继续。 */
   async submit(input: InvokeInput, environment: InvokeEnvironment = {}): Promise<HostRunReceipt> {
     const run = await this.#begin(identifyInvokeInput(input), environment);
     const task = (async (): Promise<void> => {
@@ -278,6 +282,7 @@ export class HostRunService implements WorkerRpc {
       ...(run.terminal ? { terminal: structuredClone(run.terminal) } : {})
     };
   }
+  /** 读取同一流的游标后事件；缺失历史必须报 STREAM_GAP，禁止拼接成看似完整的新流。 */
   read(
     runId: string,
     streamId: string | undefined,
@@ -332,6 +337,7 @@ export class HostRunService implements WorkerRpc {
   beginDrain(): void {
     this.#draining = true;
   }
+  /** 仅停止接纳并等待在途流结束，不主动取消；超时抛错，由 owner 决定后续强制回收。 */
   async drain(timeoutMs: number): Promise<{ drained: boolean }> {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000)
       throw new Error("DRAIN_TIMEOUT_INVALID");

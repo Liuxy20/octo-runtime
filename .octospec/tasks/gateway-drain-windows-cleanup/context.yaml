@@ -1,0 +1,80 @@
+task: gateway-drain-windows-cleanup
+date: 2026-10-20
+status: in_progress
+initial_baseline: 6f5f25f97ec4b2ca879ac78ca2990ee2019f9eeb
+baseline: e82a2f0ce339c94497fc90ccf82d8db0aa28361c
+branch: feat/gateway-drain-windows-cleanup
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-gateway-drain-windows-cleanup
+related_issues: [30, 14, 47, 48, 50, 57, 65, 66]
+rules_read:
+  - {path: .octospec/rules/architecture.md, id: runtime-architecture}
+  - {path: .octospec/rules/protocol-design.md, id: runtime-protocol-design}
+  - {path: .octospec/rules/extras.md, id: runtime-extras}
+  - {path: .octospec/rules/runtime-lifecycle.md, id: runtime-lifecycle}
+  - {path: .octospec/rules/local-execution.md, id: runtime-local-execution}
+  - {path: .octospec/rules/output-protocol.md, id: runtime-output-protocol}
+  - {path: .octospec/rules/channel-integration.md, id: runtime-channel}
+  - {path: .octospec/rules/session-reset.md, id: runtime-session-reset}
+  - {path: .octospec/rules/engineering.md, id: runtime-engineering}
+  - {path: .octospec/rules/collaboration.md, id: commit}
+sources_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/executor-kernel-host-lifecycle/design.md
+  - .octospec/tasks/executor-kernel-host-lifecycle/implementation.md
+  - .octospec/tasks/executor-kernel-host-lifecycle/assessment.md
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/task.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-host-sdk/src/extra-entry.ts
+  - packages/octo-runtime-host-sdk/src/extras.ts
+  - packages/octo-runtime-host-sdk/src/launch.ts
+  - packages/octo-runtime-adapter-sdk/src/process-cleanup.ts
+external_sources:
+  - https://learn.microsoft.com/en-us/windows/win32/procthread/job-objects
+  - https://learn.microsoft.com/en-us/windows/win32/procthread/nested-jobs
+  - https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags
+  - https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessw
+  - https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-jobobject_basic_accounting_information
+  - https://github.com/nodejs/node/blob/v24.19.0/deps/uv/src/win/process.c
+  - https://github.com/nodejs/node/blob/v24.19.0/deps/uv/src/win/process-stdio.c
+decisions:
+  - PR72 head816ad54 后续 P2：以每次 attempt 的原流耗尽/终态确认协调 drain 的 INVOCATION_NOT_TRACKED；只消除已结束执行的误报，不改 Kernel 公共合同，不恢复旧桥或增加观察订阅。
+  - 本轮按用户要求 rebase main@e82a2f0（PR73）；保留统一 KernelClient 入口与旧 extra-port 删除，drain 使用新 cancelInvocation/accepted，并保留业务收尾与执行排空的并行共享期限。
+  - 用户追加要求在 AGENTS.md 约束核心实现和接入使用注释，重点补齐 Kernel/Executor；以 engineering 规则为正文，更新公开入口、状态/身份、取消/尾流、资源归属及 Windows 能力边界的中文注释。
+  - 最初用户授权新worktree与Octospec开发计划，随后授权英文提交、推送、创建PR和合并；其后明确要求直接实施原计划。
+  - 用户已澄清与55无关；PR关联30/14，未完成的修复与更广的平台验收不能记为已交付。
+  - 最新origin/main已fetch并固定；原main工作区不修改。
+  - App创建worktree工具因聊天根目录不是Git仓库失败；改用git worktree add。App attachment不接受非managed checkout，Git worktree已实际建立且可用。
+  - 使用technical-writing-zh技能整理中文合同；OSS远端issue/PR/commit仍遵循用户英文约定。
+  - Gateway采用内部有界drain，保持ctx.signal和普通caller取消合同，不修改通用createInputInvoke以绕过finally。
+  - 旧Windows Go/Job原型已由用户于2026-10-20撤回；公共Kernel/Core/SDK/进程管理采用TS/Node，不引入原生helper/addon/随包二进制。业务Extra的原生依赖必须隔离，不能成为公共层前提。
+  - 旧评分95随原生方案撤回而失效；当前不宣称Windows父先退/强杀后代回收完成，不关闭更广issue。
+  - 会话存储工厂、公共Extra API重构、Go执行IPC client与Loop均不纳入；接触文件与65/66显式协调。
+  - 提交PR前按用户要求rebase最新main@fae6333；保留上游GROUP.md任务索引，重读Channel/session规则并将rulesContext代次保护纳入G03。
+  - 用户随后关闭规划PR68、要求分支使用feat，并明确授权按计划直接实施；当前已完成产品接线与本地/真实IM检查，不重新创建规划PR。
+  - Gateway真实联验使用用户指定im-test环境和本机octo-im-account.md；凭据只在测试进程读取，不进入知识文件或日志。
+validation:
+  terminal_reconciliation: macOS arm64 Node24.19.0；真实 Kernel/IPC 的终态先于订阅与延迟交互展示先 RED 后 GREEN；专项71通过；UI35及Node1355通过/10平台跳过，0失败或取消；typecheck/lint/names/format通过；本轮未重跑真实IM、发行包或其他平台
+  rebase_main: main@e82a2f0 (PR73); macOS arm64 Node24.19.0, typecheck/lint/names/format/OKF passed; UI35 and Node1344 passed with 10 platform skips, focused62 and disposal14 passed
+  rebase_live_cards: SDK390ms/CLI280ms; original-card terminal edit ACK, unique final at stop, sibling and Kernel isolation, restart reply passed; no rendered-terminal readback or fault injection claimed this round
+  current_node_only: macOS arm64 Node24.19.0; typecheck/lint/names/format/OKF passed; UI35 and Node1300 passed, 10 platform skips; two-axis re-review no new P1/P2
+  current_live_cards: SDK281ms/CLI294ms; same-card terminal edit acknowledged, unique final at stop, sibling and Kernel isolation, restart reply passed; client-rendered terminal not independently read back
+  current_live_card_fault: SDK665ms/CLI500ms; terminal-card rejection yields stable incomplete, one attempt and final text still delivered
+  baseline_okf: 246 units, 20 rules, 1548 local links; passed using uv with pyyaml
+  initial_plan_okf: 252 units, 20 rules, 1573 local links; passed using uv with pyyaml
+  final_okf: 255 units, 20 rules, 1595 local links; passed after rebase using uv with pyyaml
+  diff_check: passed
+  plan_matrix: verified 6 stages, 15 file mappings, 24 acceptance cases; self-assessment 95 of 100
+  product_tests: 1d6104f code, macOS arm64 Node24.19.0, typecheck/lint/names/format, UI35 and Node1291 passed with 18 platform skips; CI39434536989 Linux/macOS/Windows and Gate passed
+  release_package: clean 1d6104f, offline install and public TS/owned Kernel/independent Extra/CLI/uninstall checks passed locally and in three-platform CI
+  live_im: SDK and CLI with real Codex0.154.0 passed stop/restart/sibling isolation; injected WebSocket send failure preserved incomplete
+  native_windows_historical_only: withdrawn prototype at 1d6104f; old CI does not establish Node-only Windows guarantees
+  linux_regression: terminal-to-finalization connection race reproduced in Node24.19.0 Linux container; corrected, container11 and local12 focused tests passed
+  remaining: verify current Node-only build, Gateway failure regressions and live IM; Windows leader-first/hard-kill cleanup guarantee is not implemented

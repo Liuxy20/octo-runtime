@@ -9,7 +9,7 @@ export interface SpawnWorkerOptions {
   /** CLI JSON 来源；SDK 的直接 import 入口不需要此参数。 */
   manifest?: string;
   env?: NodeJS.ProcessEnv;
-  /** Cancels readiness and terminates the complete child process group. */
+  /** 取消就绪等待并请求回收子进程；POSIX 使用进程组，Windows taskkill 不保证父先退后的后代回收。 */
   signal?: AbortSignal;
   /** Maximum time allowed for the initial RPC readiness handshake. */
   readyTimeoutMs?: number;
@@ -27,11 +27,9 @@ export interface WorkerProcess {
 }
 
 /**
- * Spawn the adapter-host as a child process and return a ready-to-use RPC
- * client. It waits for the first `list` to succeed as a readiness handshake, so
- * a failed spawn (bad manifest, missing binary) surfaces here with the child's
- * captured stderr rather than at first invoke. The child inherits the debug
- * environment and writes its own Host log.
+ * 启动 Node worker，以首次 list RPC 成功作为就绪确认，再返回客户端与进程所有权。
+ * 入口/manifest/环境错误在启动阶段携带有界 stderr 抛出；失败路径仍须回收已创建的进程。
+ * owner 必须等待 close；清理失败不能当作可安全启动替代 worker 的普通启动错误。
  */
 export async function spawnWorker({
   entrypoint,
@@ -94,8 +92,8 @@ export async function spawnWorker({
     client,
     child,
     adapters,
-    // S02：关闭 RPC 后等待本次进程组，不以 leader exit 结束回收。
-    // .octospec/tasks/pr1-yujiawei-review/assessment.md
+    // 先断开 RPC，再等待平台清理；POSIX 不以 leader exit 结束进程组回收。
+    // Windows 仅有 Node/taskkill 的常规树清理能力，不能承诺父进程提前退出后的后代已清空。
     close(): Promise<void> {
       client.close();
       return cleanup();

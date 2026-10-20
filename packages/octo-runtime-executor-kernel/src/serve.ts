@@ -6,9 +6,9 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 /**
- * 在当前独立 Host 子进程中提供执行服务。调用方已经决定加载集合：
+ * 在当前独立 worker 子进程中提供 Core 执行服务。调用方已经决定加载集合：
  * CLI 可从自己的 JSON 动态加载，SDK 可直接 import；这里不扫描或补齐任何 Adapter。
- * 该函数必须放在 Host 入口调用，不应在宿主 main 或 daemon 控制进程中调用。
+ * 该函数只在 worker 入口调用；宿主 App 和 Kernel 监督进程通过客户端接入，不直接调用。
  */
 export function serveWorker(
   adapters: readonly HostedAdapter[],
@@ -30,7 +30,7 @@ export function serveWorker(
     logging.kernel("info", "adapter.registered", { adapter_type: adapter.metadata.type });
   }
 
-  // 仅服务已注册集合；daemon 仍通过首次 list 握手确认就绪。
+  // 仅服务已注册集合；Kernel 监督器通过首次 list 握手确认 worker 就绪。
   // 注册不代表 Provider 已安装或认证，实际可用性由 probe 和调用结果说明。
   new WorkerRpcServer({
     host,
@@ -39,7 +39,7 @@ export function serveWorker(
   }).listen(process.stdin);
   logging.kernel("info", "host.ready");
 
-  // 父进程断开或停止时等待 Host 取消和清理；重启由 daemon 重新启动同一个入口。
+  // 父 Kernel 断开或停止时等待 Core 取消和清理；需要替换时由 Kernel 监督器重启相同入口。
   let stopping = false;
   const stop = (): void => {
     if (stopping) return;

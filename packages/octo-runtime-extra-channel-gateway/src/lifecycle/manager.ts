@@ -2,6 +2,13 @@ import type { ImBotConfig } from "../contracts.js";
 import type { ImModuleDependencies } from "../ports.js";
 import { ImRuntime } from "../application/im-channel.js";
 import {
+  abortForShutdown,
+  shutdownDeadline,
+  shutdownSignal,
+  withShutdownDeadline,
+  withinShutdown
+} from "@mininglamp-oss/octo-runtime-host-sdk/shutdown";
+import {
   imBotIdentity,
   validateImConfig,
   IM_MAX_BOTS,
@@ -41,7 +48,7 @@ export class ImChannelManager {
       if (this.#closed) throw new Error("IM_MANAGER_CLOSED");
       const runtime = new ImRuntime(snapshot, {
         ...this.dependencies,
-        signal: AbortSignal.any([
+        signal: shutdownSignal([
           this.#abort.signal,
           ...(this.dependencies.signal ? [this.dependencies.signal] : [])
         ])
@@ -80,14 +87,15 @@ export class ImChannelManager {
     if (this.#closing) return this.#closing;
     this.#closed = true;
     // Cancel initialization before waiting for the queue it is blocking.
-    this.#abort.abort();
+    const until = shutdownDeadline(this.dependencies.signal);
+    withShutdownDeadline(until, () => abortForShutdown(this.#abort));
     this.#closing = (async () => {
-      await this.#queue;
-      const results = await Promise.allSettled(
-        [...this.#endpoints.values()].map((runtime) =>
-          Promise.resolve().then(() => runtime.close())
+      const results = await Promise.allSettled([
+        withinShutdown(this.#queue, until, "IM_DISPOSE_FAILED"),
+        ...[...this.#endpoints.values()].map((runtime) =>
+          withShutdownDeadline(until, () => Promise.resolve().then(() => runtime.close()))
         )
-      );
+      ]);
       const errors = results
         .filter((result) => result.status === "rejected")
         .map((result): unknown => result.reason);

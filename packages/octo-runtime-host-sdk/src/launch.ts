@@ -50,6 +50,7 @@ export async function launchNode(
   try {
     await chmod(directory, 0o700);
     await writeFile(file, JSON.stringify(config), { mode: 0o600 });
+    signal?.throwIfAborted();
   } catch (error) {
     await rm(directory, { recursive: true, force: true });
     throw error;
@@ -162,6 +163,7 @@ export async function launchNode(
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted) onAbort();
   });
+  void aborted.catch(() => undefined);
   try {
     onChild?.(child);
     await deadline(Promise.race([ready, aborted]), 30_000, "COMPONENT_START_TIMEOUT");

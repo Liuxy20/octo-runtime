@@ -26,7 +26,10 @@ export interface TrackedInvocation {
   admissionError?: Error;
 }
 
-/** Only identity/control metadata lives here; execution and recovery remain in client.ts. */
+/**
+ * 每个 client 独立保存 invoke 的身份、取消和观察状态；执行与断线恢复由 client.ts 负责。
+ * 最多登记 128 项，不缓存正文；未知结果继续占用额度，不能通过删除记录伪造排空成功。
+ */
 export class InvocationRegistry implements KernelInvocationLifecycle {
   readonly #records = new Map<string, TrackedInvocation>();
   #stopped = false;
@@ -119,6 +122,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
       error instanceof KernelError &&
       error.data !== undefined &&
       !["KERNEL_INSTANCE_CHANGED", "RUN_IDENTITY_MISMATCH"].includes(error.code);
+    // 仅未发送或明确拒绝可安全移除；已发送但 ACK 未知时保留身份，后续 drain 只能查询确认。
     if (!record.submitted || rejectedByServer) this.#records.delete(record.key.invocation_id);
   }
 
@@ -168,6 +172,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
       return Promise.reject(new KernelError("RUN_OUTCOME_UNKNOWN"));
     record.reason ??= reason;
     if (record.cancellation === "none") record.cancellation = "requested";
+    // 取消可能早于接纳 ACK：记住首次原因，等同一执行获得 RunRef 后发出一次控制请求。
     if (!record.ref)
       return record.admitted.then(() => {
         if (!record.ref) throw record.admissionError ?? new KernelError("ACCEPTANCE_UNKNOWN");
@@ -247,6 +252,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
   drain(options: { deadline: number; reason: string }): Promise<KernelInvocationDrainResult> {
     if (!Number.isSafeInteger(options.deadline) || options.deadline - Date.now() > 2_147_483_647)
       throw new KernelError("INVOCATION_DEADLINE_INVALID");
+    // 首次关闭锁定绝对期限；重复调用不能延长预算，也不能启动第二轮取消副作用。
     if (this.#draining) return this.#draining;
     this.stopAdmission();
     this.#drainDeadline = options.deadline;
@@ -271,7 +277,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
     try {
       while (this.#records.size && !controller.signal.aborted && Date.now() < deadline) {
         const records = [...this.#records.values()];
-        // Four workers bound both control and lookup IO; never add replay subscriptions.
+        // 最多四路查询/控制 IO；只查终态元数据，不新增正文订阅，避免与业务消费者争夺尾流。
         let index = 0;
         await Promise.all(
           Array.from({ length: Math.min(4, records.length) }, async () => {
@@ -290,7 +296,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
                 if (!record.ref) this.accepted(record, info.ref);
                 if (info.terminal) this.observe(info.ref, info.terminal);
                 if (!this.#records.has(record.key.invocation_id)) continue;
-                // Lost is an unknown execution outcome, not a reason to retry a side effect.
+                // lost 表示执行结果未知，必须留在 unresolved，不能据此重放可能已有副作用的执行。
                 if (record.observationError !== "RUN_OUTCOME_UNKNOWN")
                   await this.cancel(record, reason);
               } catch (error) {

@@ -21,6 +21,7 @@ import { startOwnedKernel, componentEndpoint } from "@mininglamp-oss/octo-runtim
 import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
 
 const endpoint = componentEndpoint(absoluteHome);
+// owner 拥有独立进程；client 只拥有连接，不能用 client.close 代替 owner.stop。
 const owner = await startOwnedKernel({
   endpoint,
   workerEntrypoint: absoluteWorkerJs,
@@ -29,6 +30,7 @@ const owner = await startOwnedKernel({
 const client = owner.client;
 const status = await client.status();
 for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) consume(event);
+// 示例执行已耗尽；实际应用须先等待 Extra/业务持久化和投递，再停止 owned Kernel。
 const stopped = await owner.stop();
 if (!stopped.complete) reportCleanupFailure(stopped);
 ```
@@ -44,6 +46,7 @@ const client = attachKernel({ endpoint });
 try {
   for await (const frame of client.invoke(input)) consume(frame); // 默认 native / HostFrame
 } finally {
+  // 这里只关闭观察连接；若要取消本 client 在途调用，先 stopAdmission/drain 并等待业务收尾。
   client.close();
 }
 ```

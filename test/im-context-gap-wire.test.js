@@ -12,6 +12,8 @@ import { WukongConnection } from "../packages/octo-runtime-extra-channel-gateway
 import { setImmediate as settle } from "node:timers/promises";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
 import { CardSession } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/card-session.js";
+import { OctoConnector } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/connector.js";
+import { imCardProfile } from "./fixtures/im-card-profile.js";
 
 const hash = (value) => createHash("md5").update(value).digest("hex");
 function integer(value, bytes = 4) {
@@ -187,6 +189,224 @@ test("gateway observation keeps scope gates, separates execution admission and b
   wire.onPosition({ ...position, fromUid: "bot", messageId: "known-card", messageSeq: 103 });
   assert.deepEqual(observed.at(-1).turn, original);
 });
+
+test("interaction finalization retains failed resolutions and attempts every remaining card", async (context) => {
+  let wire,
+    incoming,
+    reasoningFinished = 0;
+  const edits = [];
+  let created = 0;
+  context.mock.method(globalThis, "fetch", async (url, options) => {
+    if (url.endsWith("/auth/verify-bot"))
+      return Response.json({ bot_uid: "bot", space_id: "space" });
+    if (url.endsWith("/bot/register"))
+      return Response.json({
+        robot_id: "bot",
+        owner_uid: "owner",
+        owner_channel_id: "owner",
+        ws_url: "wss://im-test.deepminer.com.cn/ws",
+        im_token: "fixture"
+      });
+    if (url.endsWith("/bot/events"))
+      return new Promise((resolve) => {
+        const done = () => resolve(Response.json({ results: [] }));
+        if (options.signal.aborted) done();
+        else options.signal.addEventListener("abort", done, { once: true });
+      });
+    throw Error("unexpected fixture request");
+  });
+  context.mock.method(WukongConnection.prototype, "connect", async function () {
+    wire = this;
+  });
+  context.mock.method(WukongConnection.prototype, "close", async () => {});
+  context.mock.getter(WukongConnection.prototype, "connected", () => true);
+  context.mock.method(CardSession.prototype, "finish", async () => {
+    reasoningFinished++;
+  });
+  context.mock.method(
+    OctoConnector.prototype,
+    "interactionCard",
+    async (_address, _document, effect, messageId) => {
+      if (!messageId) return ++created === 1 ? "first-card" : "second-card";
+      edits.push(messageId);
+      if (messageId.includes("first")) throw Error("fixture card edit failed");
+      return messageId;
+    }
+  );
+  const transport = new GatewayTransport(
+    {
+      bot_id: "bot",
+      api_url: "https://im-test.deepminer.com.cn/api",
+      typing: false,
+      adapter: { adapter_type: "codex" }
+    },
+    async () => "bf_fixture",
+    {
+      onMessage: (message) => {
+        incoming = message;
+      },
+      onDisconnect() {}
+    }
+  );
+  context.after(() => transport.close());
+  await transport.start(new AbortController().signal);
+  wire.onMessage({
+    channelId: "owner",
+    channelType: 1,
+    fromUid: "owner",
+    messageId: "request",
+    payload: { type: 1, content: "run", space_id: "space" }
+  });
+  assert.ok(incoming);
+  const presentation = incoming.beginPresentation("run", () => {}, {
+    cancel: async () => false,
+    retry: () => false
+  });
+  for (const id of ["first", "second"])
+    assert.equal(
+      await presentation.interaction({
+        interactionId: id,
+        kind: "approval",
+        request: { operation: { summary: "fixture" } }
+      }),
+      true
+    );
+  await assert.rejects(
+    presentation.resolveInteraction("first", "accepted"),
+    /fixture card edit failed/
+  );
+  await assert.rejects(presentation.finish(), /IM_PRESENTATION_FAILED/);
+  assert.equal(
+    edits.filter((id) => id.includes("first")).length,
+    2,
+    "failed resolution must remain for terminal invalidation"
+  );
+  assert.equal(
+    edits.filter((id) => id.includes("second")).length,
+    1,
+    "one failure must not skip other cards"
+  );
+  assert.equal(reasoningFinished, 1);
+  await assert.rejects(presentation.finish(), /IM_PRESENTATION_FAILED/);
+});
+
+for (const mode of ["disabled", "404", "healthy"]) {
+  for (const action of ["resolve", "finish"]) {
+    test(`interaction ${action} requires a confirmed terminal edit with a ${mode} profile`, async (context) => {
+      let wire,
+        incoming,
+        changed = false,
+        created = 0,
+        profileReads = 0,
+        reasoningFinished = 0;
+      const edits = [],
+        diagnostics = [];
+      context.mock.method(globalThis, "fetch", async (url, options) => {
+        if (url.endsWith("/auth/verify-bot"))
+          return Response.json({ bot_uid: "bot", space_id: "space" });
+        if (url.endsWith("/bot/register"))
+          return Response.json({
+            robot_id: "bot",
+            owner_uid: "owner",
+            owner_channel_id: "owner",
+            ws_url: "wss://fixture.invalid/ws",
+            im_token: "fixture"
+          });
+        if (url.endsWith("/bot/card/profile")) {
+          profileReads++;
+          if (changed && mode === "404") return Response.json({}, { status: 404 });
+          const profile = imCardProfile();
+          if (changed && mode === "disabled") profile.enabled = false;
+          return Response.json(profile);
+        }
+        if (url.endsWith("/bot/sendMessage"))
+          return Response.json({ message_id: `approval-${++created}` });
+        if (url.endsWith("/bot/message/edit")) {
+          edits.push(JSON.parse(options.body).message_id);
+          return Response.json({});
+        }
+        if (url.endsWith("/bot/events"))
+          return new Promise((resolve) => {
+            const done = () => resolve(Response.json({ results: [] }));
+            if (options.signal.aborted) done();
+            else options.signal.addEventListener("abort", done, { once: true });
+          });
+        throw Error("unexpected fixture request");
+      });
+      context.mock.method(WukongConnection.prototype, "connect", async function () {
+        wire = this;
+      });
+      context.mock.method(WukongConnection.prototype, "close", async () => {});
+      context.mock.getter(WukongConnection.prototype, "connected", () => true);
+      context.mock.method(CardSession.prototype, "finish", async () => {
+        reasoningFinished++;
+      });
+      const transport = new GatewayTransport(
+        {
+          bot_id: "bot",
+          api_url: "https://fixture.invalid/api",
+          typing: false,
+          adapter: { adapter_type: "codex" }
+        },
+        async () => "bf_fixture",
+        {
+          onMessage: (message) => {
+            incoming = message;
+          },
+          onDisconnect() {}
+        }
+      );
+      context.after(() => transport.close());
+      await transport.start(new AbortController().signal);
+      wire.onMessage({
+        channelId: "owner",
+        channelType: 1,
+        fromUid: "owner",
+        messageId: "request",
+        payload: { type: 1, content: "run", space_id: "space" }
+      });
+      const presentation = incoming.beginPresentation("run", (code) => diagnostics.push(code), {
+        cancel: async () => false,
+        retry: () => false
+      });
+      for (const id of ["first", "second"])
+        assert.equal(
+          await presentation.interaction({
+            interactionId: id,
+            kind: "approval",
+            request: { operation: { summary: "fixture" } }
+          }),
+          true
+        );
+      changed = true;
+      if (action === "resolve") {
+        const resolution = presentation.resolveInteraction("first", "accepted");
+        if (mode === "healthy") await resolution;
+        else await assert.rejects(resolution, /IM_INTERACTION_CARD_FINALIZATION_UNCONFIRMED/);
+      }
+      if (mode !== "healthy") {
+        const beforeFinish = profileReads;
+        await assert.rejects(presentation.finish(), /IM_PRESENTATION_FAILED/);
+        assert.equal(profileReads - beforeFinish, 2, "all pending cards must be attempted");
+        assert.equal(reasoningFinished, 1, "reasoning finalization must still run");
+        assert.equal(diagnostics.filter((code) => code === "IM_INTERACTION_CARD_FAILED").length, 2);
+        assert.deepEqual(edits, [], "unavailable profiles must not send edits");
+        await assert.rejects(presentation.finish(), /IM_PRESENTATION_FAILED/);
+        changed = false;
+      }
+      await presentation.finish();
+      assert.deepEqual(
+        edits,
+        ["approval-1", "approval-2"],
+        "pending evidence must survive until the original cards are finalized"
+      );
+      assert.equal(created, 2, "finalization must not create replacement cards");
+      const settledReads = profileReads;
+      await presentation.finish();
+      assert.equal(profileReads, settledReads, "confirmed cards must be removed from pending work");
+    });
+  }
+}
 
 test("wire positions distinguish SENDACK client/message sequences, observe own RECV without executing it, and ignore failed ACKs", async (context) => {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });

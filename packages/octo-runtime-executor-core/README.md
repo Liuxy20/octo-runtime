@@ -8,10 +8,9 @@ internal workspace package is private. Consumers of the distribution import
 
 ## Integration Priority
 
-Prioritize stability: the recommended integration is SDK access over IPC to an
-independent Executor Kernel, especially for Electron and other long-running
-hosts. The new Kernel's IPC and supervision implementation belongs to issue #47.
-The existing isolated worker and stdio NDJSON path remain available meanwhile.
+生产接入默认推荐经 SDK/IPC 使用独立 Executor Kernel，尤其是 Electron 等长期运行宿主。
+Kernel 已提供本地 IPC、源窗口及 worker 监督；worker 通过 stdio NDJSON 调用同一个 Core，
+不再使用旧 adapter-host 包或 daemon 架构。
 
 Direct Core embedding is an explicitly selected, simpler SDK integration option.
 It shares the host process failure domain and requires the host to manage its
@@ -24,6 +23,7 @@ The following example demonstrates the optional in-process integration:
 import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime/executor-core";
 
 export async function execute(adapter: HostedAdapter) {
+  // 显式进程内接入：与宿主共享事件循环和故障域，Adapter 的选择/配置归宿主。
   const executor = new AgentExecutor();
   executor.register(adapter);
   try {
@@ -44,6 +44,7 @@ export async function execute(adapter: HostedAdapter) {
       console.log(frame);
     }
   } finally {
+    // 提前结束 Core 迭代会请求取消；仍需检查清理结果，closed/终态不代表资源已回收。
     const result = await executor.shutdown();
     if (result.cleanup === "incomplete") throw new Error("Executor cleanup remains incomplete");
   }
@@ -120,13 +121,10 @@ uses a monotonic clock. Catch/finally and resumed consumers use the remaining
 budget; they do not grant another grace period. The explicit `shutdown` timeout
 only bounds that caller's wait for owned cleanup, without resetting this deadline.
 
-Direct calls share the host's process and event loop. Exceptions can fail an
-invocation, but `process.exit`, OOM and synchronous blocking cannot be contained
-by this Core. The default production worker and stdio NDJSON path remain in the
-transitional adapter-host transport package. That worker instantiates this same
-class; it does not retain a second executor. Kernel IPC, replay and supervision
-belong to issue #47. Worker restart restores availability for subsequent work;
-it never automatically replays interrupted Runs.
+直接调用与宿主共享进程及事件循环，Core 不能隔离 `process.exit`、OOM 或同步阻塞。
+默认隔离链路由 Executor Kernel 持有独立 worker，并通过 stdio NDJSON 调用同一个
+AgentExecutor。Kernel 的 IPC 观察、有限源窗口与 worker 监督不改变 Core 的唯一执行职责；
+worker 替换只恢复后续服务能力，不自动重放中断的 Run。
 
 Invocation identity metadata is bounded to 1024 entries with lazy 120-second
 eviction of inactive records. Active, paused or incompletely cleaned calls are

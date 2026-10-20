@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./shutdown": "./dist/shutdown.js",
     "./extra": {
       "types": "./dist/extras.d.ts",
       "import": "./dist/extras.js"

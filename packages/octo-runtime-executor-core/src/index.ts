@@ -99,6 +99,7 @@ interface MessageState {
   provenance?: MessageProvenance;
 }
 
+/** closed 表示不再接纳；只有 cleanup=complete 才确认当前登记的 Adapter 清理均已完成。 */
 export interface ExecutorShutdownResult {
   state: "closed";
   cleanup: "complete" | "incomplete";
@@ -116,9 +117,9 @@ interface InvocationOwner {
 }
 
 /**
- * The in-process registry and lifecycle gatekeeper for adapters.
- * It validates plugin input/output, fills in the message lifecycle, guarantees
- * a single terminal, and turns cancellation into an AbortSignal.
+ * 唯一的进程内执行实现：校验输入/Adapter 输出、补齐消息生命周期、约束单个终态并传递取消。
+ * Kernel worker 和显式进程内接入共用本类；它不拥有独立 Kernel、业务会话或 IM 投递。
+ * 接入方须消费流并在退出时检查 shutdown 的 cleanup 结果；终态不能替代资源回收确认。
  */
 export class AgentExecutor {
   // F31：.octospec/tasks/gateway-august-feature-assessment/assessment.md
@@ -133,12 +134,17 @@ export class AgentExecutor {
       }
     };
   }
+  /**
+   * 常规接入入口：默认返回 native HostFrame，显式 canonical 返回 CanonicalEvent。
+   * 与 Kernel 的观察 iterator 不同，本地 Core 提前结束迭代会请求取消并进入 Adapter 清理。
+   */
   readonly invoke = createInputInvoke((input, environment) =>
     this.invokeFrames(input, environment)
   );
   readonly #adapters = new Map<string, HostedAdapter>();
   readonly #active = new Map<string, AbortController>();
   readonly #activeAdapters = new Map<string, HostedAdapter>();
+  // 资源所有权独立于活动执行/终态：清理未确认的 owner 必须留存，供 shutdown 返回真实遗留项。
   readonly #owners = new Map<string, InvocationOwner>();
   #state: "open" | "closing" | "closed" = "open";
   #shutdownAttempt: Promise<ExecutorShutdownResult> | undefined;
@@ -270,7 +276,10 @@ export class AgentExecutor {
     return { ...receipt };
   }
 
-  /** Public invocations default to native; canonical consumers explicitly select their view. */
+  /**
+   * 同步校验并冻结单次输入，开始迭代时接纳执行；native 为默认，canonical 须显式选择。
+   * signal、执行环境和容量限制来自本次 environment，不从业务会话或其他 Run 继承。
+   */
   invokeFrames(input: InvokeInput, environment: InvokeEnvironment = {}): AsyncGenerator<HostFrame> {
     const received = Date.now();
     try {
@@ -317,6 +326,7 @@ export class AgentExecutor {
     streamLimits: Readonly<StreamLimitPolicy>,
     received: number
   ): AsyncGenerator<HostFrame> {
+    // 延迟到消费时再次检查关闭/取消，防止创建生成器后、开始迭代前 shutdown 的竞态。
     this.#assertOpen();
     request.signal?.throwIfAborted();
     const receipt = this.#prepare(adapterType, request, { protocolMode });
@@ -357,7 +367,7 @@ export class AgentExecutor {
   }
 
   #cleanupOwner(id: string, owner: InvocationOwner): Promise<unknown> {
-    // A failed generator finalizer cannot be retried by calling return() again.
+    // 生成器 finally 失败后再次 return() 无法重跑清理；缓存首次结果并保留失败 owner 供 shutdown 报告。
     if (owner.cleanupAttempt) return owner.cleanupAttempt;
     owner.cleanupState = "pending";
     owner.cleanupAttempt = Promise.resolve()
@@ -1024,7 +1034,7 @@ export class AgentExecutor {
     return adapter.probe(options);
   }
 
-  /** Abort an active invocation; returns false when that invocation no longer exists or has already ended. */
+  /** 请求取消活动执行；true 仅表示已触发 abort，仍须消费终态并等待 Adapter 清理。 */
   cancel(invocationId: string, reason = "cancelled"): boolean {
     const controller = this.#active.get(invocationId);
     if (!controller || controller.signal.aborted || this.#acceptedTerminals.has(invocationId))
@@ -1060,8 +1070,10 @@ export class AgentExecutor {
     await adapter.respondNative(invocationId, response);
   }
 
-  /** Abort every invocation and wait briefly for adapter cleanup to reap its
-   * provider processes. Used when the RPC parent disappears or shuts down. */
+  /**
+   * 停止接纳并取消未终结执行，在 timeoutMs 内等待 Adapter 清理；不负责业务投递收尾。
+   * 并发调用共用当前尝试；超时或清理失败返回 incomplete 和遗留身份，不冒充资源已回收。
+   */
   shutdown(reason = "executor shutdown", timeoutMs = 2_500): Promise<ExecutorShutdownResult> {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0)
       throw new Error("shutdown timeoutMs must be a positive safe integer");

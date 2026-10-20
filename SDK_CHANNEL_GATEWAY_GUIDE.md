@@ -18,6 +18,14 @@ dependencies.loadContexts(botConfig,{signal}) 返回当前 ContextItem 数组或
 
 不要把函数、源码或模块实例放进 config。替换函数引用按整体停止/加载处理。调用方处理 signal 的正常取消，dispose 的真实失败仍须报告。
 
+## 执行中停止
+
+调用 extra.stop() 后，Gateway 立即停止准入、排队任务、准备和重试；已接纳调用请求取消，但原事件订阅与投递连接保持到收尾结束。Gateway 在最多 3 秒内消费终态、保存当前代次的绑定并尝试唯一最终回复，再释放连接；插件与 runner 共用最多 4 秒的清理预算，不逐层重新计时。
+
+取消 ACK、Provider 终态、IM 投递成功和进程退出是不同事实。结果未知、投递失败或截止未完成时，stop() 返回 complete=false，重复停止保留同一失败结果；宿主不得据此创建同名替代实例。停止 Gateway 不停止共享 Kernel，也不取消其他 Extra 或 attached 客户端的 Run。
+
+可复现的真实 IM 检查见 [验收脚本](scripts/verify-gateway-drain-live.mjs)：通过环境变量 OCTO_CHANNEL_QA_ACCOUNTS 指定受保护账号文件；默认验证 SDK，--cli 验证 CLI，--fail-delivery 在实际 WebSocket 文本发送边界注入失败。脚本仅使用 im-test 及指定账号共同加入的 Channel_QA_ 测试群，报告不含凭据。
+
 ## 配置和业务责任
 
 完整字段见 [Gateway JSON Schema](packages/octo-runtime-extra-channel-gateway/config-schema.json)，业务行为见 [Gateway README](packages/octo-runtime-extra-channel-gateway/README.md)。宿主负责令牌取得、存储、更新与授权流程；Extra 消费实际配置值，不扫描 CLI Home 或其他凭据文件。Electron/Tauri 使用 SDK，不调用 Runtime CLI。
