@@ -21,24 +21,36 @@ export interface ImSessionBinding {
   gap?: ImGapMetadata;
   rulesContext?: ImRulesContext;
 }
+/**
+ * Gateway 的会话状态合同，与数据库无关；常规方法必须同步完成并返回独立快照。
+ * key 是不透明聊天身份，宿主另按可信 Bot/账号 scope 分区，不从消息正文选择租户。
+ */
 export interface ImSessionStore {
+  /** 未命中返回 undefined；返回值的后续修改不能直接改变已保存状态。 */
   read(key: string): ImSessionBinding | undefined;
+  /** 保存完整 binding；宿主负责提交及容量策略，Gateway 保持既有代次检查。 */
   save(key: string, binding: ImSessionBinding): void;
+  /** 原子记录控制 ID 并递增 generation；重复控制不得再次重置当前 binding。 */
   reset(key: string, controlId: string): ImSessionBinding;
+  /** 消息处理及重试快照；未命中返回 undefined，宿主自行设置保留期限。 */
   occurrence(key: string, id: string): ImSessionOccurrence | undefined;
   remember(key: string, id: string, value: ImSessionOccurrence): void;
+  /** 仅在当前 sessionId/generation 匹配时原子合并；未命中或拒绝更新返回 false。 */
   patchGap?(
     key: string,
     identity: Pick<ImGapTurnToken, "sessionId" | "generation">,
     update: (current: ImGapMetadata | undefined) => ImGapMetadata
   ): boolean;
+  /** 只使匹配的现有规则游标失效，不创建 binding 或改变聊天代次。 */
   invalidateRules?(matches: (key: string) => boolean): void;
+  /** 与 patchGap 相同的身份校验；update 返回 undefined 时不写入。 */
   patchRules?(
     key: string,
     identity: { sessionId: string; generation: number },
     update: (current: ImRulesContext | undefined) => ImRulesContext | undefined
   ): boolean;
-  close?(): void;
+  /** 工厂句柄由 Gateway 调用一次；只释放该句柄，不能关闭宿主共享数据库。 */
+  close?(): void | Promise<void>;
 }
 
 /** Bounded process-local mappings; eviction never restores an older session. */

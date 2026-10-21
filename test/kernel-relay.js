@@ -65,6 +65,7 @@ export async function kernelRelay(t, fixture, hooks = {}) {
     await new Promise((resolve) => server.close(resolve));
   });
   return {
+    endpoint,
     client,
     requests,
     count: (method) => requests.filter((r) => r.method === method).length

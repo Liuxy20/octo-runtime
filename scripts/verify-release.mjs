@@ -127,7 +127,15 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
-    for (const name of ["plugin", "executor", "worker", "host", "kernel-invoke", "builtin-extras"])
+    for (const name of [
+      "plugin",
+      "executor",
+      "worker",
+      "host",
+      "kernel-invoke",
+      "builtin-extras",
+      "gateway-store"
+    ])
       await cp(join(root, `test-support/public-extra/${name}.mts`), join(consumer, `${name}.mts`));
     await execute(
       process.execPath,
@@ -139,6 +147,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "host.mts",
         "kernel-invoke.mts",
         "builtin-extras.mts",
+        "gateway-store.mts",
         "--module",
         "NodeNext",
         "--target",
@@ -222,6 +231,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         webuiAssets: true,
         nativeKernel: true,
         independentExtra: true,
+        gatewayHostStore: true,
         cliKernel: true,
         uninstallPreservedHome: true,
         version: metadata.version

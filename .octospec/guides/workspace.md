@@ -122,7 +122,7 @@ pnpm --filter @mininglamp-oss/octo-runtime-adapter-codex list
 
 这样 pnpm 安装时只会链接当前 workspace package，不会意外从 registry 拉取同名旧版本。
 
-外部 SDK 接入统一使用宿主独立的 pnpm workspace：submodule 位于宿主的 `octo-runtime/` 子目录。第一步在宿主 `pnpm-workspace.yaml` 中纳入 `octo-runtime/packages/*`，保留宿主原有配置并合并所需 allowBuilds；第二步在宿主根 `package.json` 中以 `workspace:*` 声明直接依赖。`protocol`、`core`、`adapter-sdk` 等全部纳入 workspace，其传递依赖由 pnpm 自动链接；宿主直接 import 时才另加直接依赖。
+外部 SDK 接入统一使用宿主独立的 pnpm workspace：submodule 位于宿主的 `octo-runtime/` 子目录，必须跟踪远端 `main`，首次接入与主动升级均对齐当时最新的 main，不依赖功能分支或未合并 PR。具体 Git 命令与宿主记录 commit 的方式见 [源码接入步骤](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#0-源码接入使用最新-main)。第一步在宿主 `pnpm-workspace.yaml` 中纳入 `octo-runtime/packages/*`，保留宿主原有配置并合并所需 allowBuilds；第二步在宿主根 `package.json` 中以 `workspace:*` 声明直接依赖。`protocol`、`core`、`adapter-sdk` 等全部纳入 workspace，其传递依赖由 pnpm 自动链接；宿主直接 import 时才另加直接依赖。
 
 集成安装和构建均从宿主根目录执行：`pnpm install` 后，使用 `pnpm --filter <模块包名>... run build` 按依赖顺序构建，无需单独命名一个宿主 Runtime 构建 script。子仓原有 workspace 文件与 lockfile 保留；集成时使用宿主 workspace 配置及 lockfile，宿主 lockfile 与 submodule 指针一起提交，CI 使用宿主 `pnpm install --frozen-lockfile`。SDK 无需纳入子仓根 CLI 包或 apps，正式发行仍携带完整生产依赖。完整步骤见 [SDK 完整原生接入指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)与 [Channel Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md#装配顺序)。
 

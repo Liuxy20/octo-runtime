@@ -50,6 +50,8 @@
 
 ## 当前任务
 
+- [Gateway 宿主会话存储与 Extra 公共合同（#57/#66）](tasks/channel-host-session-store/brief.md)：基于 `main@0c1d1c9`、分支 `feat/channel-host-session-store` 实施。逐 Bot 工厂/句柄、共享关闭期限、业务入口与包外样例已接通；见[实施结果](tasks/channel-host-session-store/implementation.md)、[24 项验收](tasks/channel-host-session-store/acceptance.md)、[文档独立验收](tasks/channel-host-session-store/documentation.md)和[验证记录](journal/shared/2026-10-21-channel-host-session-store-implementation.md)。Node 1401 通过/10 跳过、UI 35 通过。整个 Runtime 不依赖 SQLite；用户授权合入 main 后自行执行真实宿主/Provider 测试。
+
 - [Issue 69：Kernel client 统一 invoke](tasks/69-kernel-client-invoke/brief.md)：基于 `main@fae6333`，分支 `feat/69-kernel-client-invoke`，用户确认破坏性更新后已实施。App、owned.client、Extra 和 Playboard 共用 KernelClient.invoke，删除旧执行端口；Gateway 消费结果做 delivery。见[接口设计](tasks/69-kernel-client-invoke/design.md)、[32 项验收证据](tasks/69-kernel-client-invoke/implementation.md)和[验证记录](journal/shared/2026-10-20-kernel-client-invoke.md)。本地 Node 1318 通过、10 跳过，UI 35 通过，仓外 tgz 验证通过；Windows/Linux 与真实 Provider/IM 未验，尚未提交。规划[96 分](tasks/69-kernel-client-invoke/assessment.md)仅表示当时可执行性。
 - [Issue 71：统一原生 SDK 服务](tasks/unified-native-sdk-services/brief.md)：已 rebase 到 `main@70f0247`，分支 `refactor/71-unified-sdk-services`；旧改动仅作参考，main 的 invoke/调用登记/渠道排空与失败语义作为基准保留。业务使用 KernelClient RPC，原生服务托管由装配入口负责，严禁外部 Node/CLI 代启。SQLite 完全由宿主管理。[设计](tasks/unified-native-sdk-services/design.md)、[迁移](tasks/unified-native-sdk-services/migration.md)、[验收](tasks/unified-native-sdk-services/acceptance.md)及[实施记录](tasks/unified-native-sdk-services/implementation.md)同步维护。三个评审项已整改并通过库内验证，尚未提交；外部 Electron 集成不作为本次前置条件。
 

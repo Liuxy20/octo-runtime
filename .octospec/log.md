@@ -1,5 +1,17 @@
 # 工程知识变更记录
 
+## 2026-10-21
+
+- 实施 Gateway 宿主会话存储：业务入口公开工厂及完整类型，逐 Bot 句柄先登记、尾写后撤权与一次释放，失败保留所有权；不新增 SQLite 依赖或适配。SDK 两篇、README、规则及无数据库包外样例同步。Node 1401 通过/10 跳过、UI 35 通过，类型/lint/格式/命名及离线 tgz 验证通过。用户授权合入 main 后执行真实 Electron/Buddy/SQLite/Provider 测试，见[实施验收](tasks/channel-host-session-store/implementation.md)与[记录](journal/shared/2026-10-21-channel-host-session-store-implementation.md)。
+
+- 完成宿主存储计划的[逐项可执行性评估](tasks/channel-host-session-store/executability.md)，为 A01–A24 明确测试入口和宿主前提；文档拆为 [D01–D10 独立交付](tasks/channel-host-session-store/documentation.md)。按用户明确约束，整个 octo-runtime 不依赖 SQLite、不提供 SQLite 适配；新增库内测试/样例使用无 SQLite 依赖的宿主替身，真实数据库重开在宿主工程验收。修正超时回收、drain 故障场景及 Buddy 必须跟随 main 的条件。仅修订计划和文档。
+
+- 刷新根目录两篇 SDK 指南，补自定义 ImSessionStore 的目标装配代码及 `/extras/channel-gateway` 业务依赖边界；按用户要求 submodule 首次接入和主动升级均跟踪最新远端 main，不依赖特定功能分支，CI 使用宿主记录的验收指针。工厂能力继续明确为待实现，停止示例改为原生 close。
+
+- 按用户补充要求新增 [ImSessionStore 用途与 Electron SQLite 接入说明](tasks/channel-host-session-store/session-store-explained.md)：说明保存的数据、dependencies 与 config 的区别、CLI 默认内存、宿主自有数据库实现、重启恢复的收益和限制；明确消息快照的落盘及保留责任，仍为规划说明。
+
+- 从最新 `main@0c1d1c9` 创建 `feat/channel-host-session-store` worktree，启动 [#57/#66 的 Octospec 规划](tasks/channel-host-session-store/brief.md)。固定未合并 #65 的源码证据，按当前 createExtraService/KernelClient 重新安排 M0-M4，明确宿主数据库、逐 Bot 句柄、共享 4 秒截止及规则游标透传，形成 24 项验收。仅规划，未改产品代码或提交，见[记录](journal/shared/2026-10-21-channel-host-session-store-plan.md)。
+
 ## 2026-10-20
 
 - PR72 按用户要求 rebase 到 main@e82a2f0，沿用 PR73 的实际 KernelClient，迁移 drain/fixture 的取消入口和回执，保留执行排空与业务收尾并行及共享期限。新增[核心代码注释要求](rules/engineering.md#核心代码注释要求)并写入 AGENTS.md，重点补齐 Core/Kernel 与 SDK 接入注释、修正旧 daemon/AdapterHost 描述。本地 UI35、Node1344通过/10跳过、专项62和disposal14通过，真实IM SDK/CLI同卡收尾与重建回复通过；见[本轮记录](journal/shared/2026-10-20-gateway-drain-windows-owner.md#maine82a2f0-rebase-与核心注释)。当前提交的干净包和新CI另行确认。

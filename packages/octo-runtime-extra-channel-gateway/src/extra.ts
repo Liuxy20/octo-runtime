@@ -1,10 +1,10 @@
 import {
   createContextLoader,
-  type ChannelDependencies,
   type ExtraInitializer,
   type ExtraContext,
   type JsonObject
 } from "@mininglamp-oss/octo-runtime-host-sdk";
+import type { GatewayDependencies } from "./ports.js";
 import { ImChannelManager } from "./lifecycle/manager.js";
 import {
   validateImBots,
@@ -17,14 +17,14 @@ export const name = "channel-gateway";
 export default function load(
   context: ExtraContext,
   config: JsonObject
-): ExtraInitializer<ChannelDependencies> {
+): ExtraInitializer<GatewayDependencies> {
   // JSON 连接配置与宿主函数分别装配；插件保留 manager，不向宿主开放逐 Bot 控制。
   return (dependencies) => initialize(context, config, dependencies);
 }
 async function initialize(
   context: ExtraContext,
   config: JsonObject,
-  dependencies: Readonly<ChannelDependencies>
+  dependencies: Readonly<GatewayDependencies>
 ): Promise<void> {
   // 回调池归整个 Extra 所有，所有 Bot 共用额度；逆序清理时先停 manager，再等待业务 IO 退出。
   const contexts = createContextLoader(
@@ -61,6 +61,7 @@ async function initialize(
     kernel: context.kernel,
     signal: context.signal,
     log: context.log,
+    createSessionStore: dependencies.createSessionStore,
     // 只保存调用入口，不预取提示词；宿主更新业务存储后，下一个接纳的逻辑轮重新读取。
     prepareContexts: (bot, signal) => contexts.load(bot, signal),
     credentials: (bot) => Promise.resolve(configuredCredential(bot)),

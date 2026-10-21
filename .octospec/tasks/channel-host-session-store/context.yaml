@@ -1,0 +1,121 @@
+status: library-verified-awaiting-main-merge
+recorded_on: 2026-10-21
+baseline: 0c1d1c99c90a85c715212de6e55858a41924f058
+branch: feat/channel-host-session-store
+issues:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/57
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/66
+reference_pr:
+  url: https://github.com/Mininglamp-OSS/octo-runtime/pull/65
+  head: 0c50ea96e4b162a89277a02f7bf182cd75bd5f10
+  state: OPEN
+  applied: false
+rules:
+  - runtime-architecture
+  - runtime-extras
+  - runtime-local-execution
+  - runtime-channel
+  - runtime-session-reset
+  - runtime-stateless
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - public/extra.ts
+  - public/channel-gateway.ts
+  - package.json
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - packages/octo-runtime-host-sdk/src/extra-dependencies.ts
+  - packages/octo-runtime-host-sdk/src/context-loader.ts
+  - packages/octo-runtime-host-sdk/src/shutdown.ts
+  - packages/octo-runtime-extra-channel-gateway/src/extra.ts
+  - packages/octo-runtime-extra-channel-gateway/src/ports.ts
+  - packages/octo-runtime-extra-channel-gateway/src/index.ts
+  - packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts
+  - packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts
+source_excerpts:
+  - apps/cli/src/main.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - test/gateway-shutdown-drain.test.js
+  - test/gateway-runner-drain.test.js
+  - test/extra-service-shutdown.test.js
+  - test/extra-dependency-container.test.js
+  - test/kernel-invoke.test.js
+  - test/kernel-invoke-lifecycle.test.js
+  - test/kernel-invoke-consumers.test.js
+  - SDK_CHANNEL_GATEWAY_GUIDE.md
+  - SDK_NATIVE_INTEGRATION_FULL_GUIDE.md
+  - .octospec/guides/extra-configuration.md
+external_evidence:
+  npm_registry: https://registry.npmjs.org
+  latest: 1.0.1
+  github_v1_0_2: draft
+  release_source_inspected: v1.0.1:public/extra.ts
+  all_historical_archives_audited: false
+decisions:
+  entry: createExtraService
+  generic_gateway_fields: false
+  factory: synchronous-per-enabled-bot
+  handle_close: void-or-promise
+  database_owner: host
+  factory_handle_owner: gateway
+  direct_sessions: borrowed
+  cleanup_budget: inherit-existing-4-second-monotonic-deadline
+  gateway_drain_budget: at-most-3-seconds-within-shared-deadline
+  invocation: existing-KernelClient.invoke
+  restore_legacy_daemon_or_local_extras: false
+  protocol_change: false
+  sqlite_implementation: host-owned-ImSessionStore-adapter
+  runtime_sqlite_dependency: forbidden
+  runtime_sqlite_adapter: out-of-scope-host-only
+  new_library_store_tests: sqlite-free-host-store-double
+  sqlite_persistence_verification: consumer-host-repository
+  documentation_acceptance: independent-D01-D10
+  executability_review: mapped-A01-A24-with-host-prerequisites
+  cli_default: MemoryImSessionStore
+  recovery_benefit: reload-persisted-logical-and-provider-session-binding
+  full_occurrence_may_persist_text_and_input_snapshot: true
+  canonical_gateway_entry: /extras/channel-gateway
+  gateway_types_in_generic_extra_entry: false
+  sdk_submodule_branch: main
+  sdk_submodule_initialization_and_upgrade: latest-origin-main
+  host_ci: recorded-validated-submodule-commit
+documentation_skills:
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+verification:
+  baseline_okf: passed-273-units-20-rules-1726-links
+  plan_okf: passed-281-units-20-rules-1766-links
+  implementation_okf: passed-283-units-20-rules-1797-links
+  acceptance_mapping: A01-A24-and-D01-D10-complete
+  sqlite_dependency_audit: no-sqlite-package-in-root-apps-packages-manifests
+  new_plan_files_whitespace: passed
+  sdk_guides: implemented-contract-method-table-and-sqlite-free-runnable-fixture
+  gateway_store_example_compile: passed-in-offline-tgz-consumer
+  diff_whitespace: passed
+  product_tests: passed-node-1401-skipped-10-ui-35
+  targeted_host_store: passed-35-strict-unhandled-rejections
+  offline_tgz: passed-with-gateway-host-store-and-default-memory
+  clean_commit_tgz: pending-after-commit
+  hosted_ci: pending-after-pr
+  live_im_provider: not-performed
+  buddy_integration: not-performed
+authorization:
+  plan_and_worktree: true
+  sdk_documentation_updates: true
+  commit_push_pr_merge: authorized-by-user
+  npm_publish: not-requested
+  real_host_testing: user-after-main-merge

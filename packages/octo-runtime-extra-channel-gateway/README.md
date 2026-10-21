@@ -20,6 +20,14 @@
 
 插件级 JSON 配置 `context_loading` 支持 `timeout_ms`（默认 5000，1..30000）和 `max_in_flight`（默认 8，1..32）。超时、异常或容量已满时本轮不调用模型；未结束的 IO 继续占名额，没有等待回调的队列或历史结果缓存。业务函数必须响应 signal；`/stop` 及卸载会取消加载。任意外部同步代码和自行建立的缓存不受框架内存预算约束。完整合同见[配置指南](../../.octospec/guides/extra-configuration.md)。
 
+## 宿主会话存储
+
+`ImSessionStore` 保存聊天到逻辑/Provider session 的绑定、reset 代次与控制去重、历史/规则准备游标和消息处理快照。occurrence 可能包含文本及请求快照，不是只存 ID；该接口不保存完整 Provider 历史，也不能恢复未结束 Run。默认使用有界 `MemoryImSessionStore`，CLI 不自动建库。
+
+需要跨重启保存绑定时，宿主在 `GatewayDependencies` 中提供可选同步 `createSessionStore(botConfig)`。每个有效且启用的 Bot 获得独立配置快照和句柄，宿主按可信 scope 选择存储；工厂失败不降级 Memory。Gateway 负责尾写结束后撤权并调用句柄 close 一次，数据库的创建、迁移、事务及关闭均归宿主。整个 octo-runtime 不依赖 SQLite、不提供数据库适配实现；其他满足同步接口的宿主存储同样可用。
+
+类型从主包 `/extras/channel-gateway` 导入，不放进通用 `/extra`；store 通过 dependencies 注入 Gateway，无需另行注册 Extra，也不进入 config/Kernel/worker。完整方法语义、scope/reset/patch 原子性、初始化错误、关闭次序及可执行样例见 [SDK 存储接入](../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)。停止超时或保存/释放失败返回 incomplete，不能直接替换同名实例或关闭仍被其他业务使用的数据库。
+
 ## 群和话题规则
 
 GROUP.md/话题规则更新通知只标记规则需要刷新，不触发模型、排队、执行卡或回复。下一条满足准入条件的请求仍读取规则 API；首次会话、`/reset`/`/new` 后或版本变化时携带规则，同一可续接 Provider 会话成功执行过相同版本后省略自动规则正文。规则失效与已提供版本存于现有 binding 的 `rulesContext` 字段；每轮 API 核验覆盖漏通知，失败后下次重带。同轮 Provider 恢复使用冻结的完整规则及原输入。详见[Channel 合同](../../.octospec/rules/channel-integration.md)。

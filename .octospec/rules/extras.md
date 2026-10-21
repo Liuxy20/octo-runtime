@@ -57,6 +57,14 @@ loadContexts: (jsonConfig,{signal}) => readonly ContextItem[] | Promise<readonly
 
 函数和模块的安装及可信度归宿主；JS 同进程调用不提供线程或沙箱隔离。
 
+## Gateway 专属存储依赖
+
+GatewayDependencies 由 `/extras/channel-gateway` 定义，扩展既有 loadContexts 并提供可选同步 createSessionStore(botConfig)。通用 `/extra`、ExtraContext 和服务加载器不新增 Gateway store 或数据库字段；其他 Extra 定义自己的依赖类型，仍通过同一泛型服务加载。
+
+每个有效且启用的 Bot 获得一个工厂句柄；工厂输入是已校验、保留未知宿主 scope 字段的独立深拷贝。工厂和普通 store 方法同步，close 可异步；工厂抛错、无效对象及误返 Promise 不回退 Memory。工厂句柄由 Gateway 在 Runtime 尾写后撤权并释放一次，宿主共享数据库始终归宿主；内部直接注入 sessions 仍是借用，不能与工厂同时配置。原始宿主方法的 this 与可选方法缺失语义必须保留。
+
+句柄与 Runtime/Manager 共用最早关闭截止，取消通知不立即撤销必要尾写；实际保存或 close 失败、到期仍未释放均使清理 incomplete，保留旧所有权并阻止替换。错误 async 工厂的迟到资源仍须回收，迟到完成不能覆盖已返回失败。整个 Runtime 不依赖 SQLite、不提供 SQLite 适配实现。方法语义、包外样例及宿主职责见 [SDK 存储接入](../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)，回归见 [宿主工厂测试](../../test/gateway-host-session-store.test.js)。
+
 ## 执行、错误和状态
 
 ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list 与普通 App 使用同一合同；身份关联和恢复在 Kernel 包维护。旧 ctx.adapterHost、ExtraAdapterHost 和 extra-port 已删除，不保留兼容接口。

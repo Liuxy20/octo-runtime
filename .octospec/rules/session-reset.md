@@ -48,7 +48,7 @@ Octo 与 WeCom 的 `ImRuntime.#sessions` 只登记有排队或在途执行的调
 
 单设备每天一万个 Session 表示累计接待量，不等于一万个并发模型执行。已有每 Bot 64 条待处理消息限制继续约束在途消息，不随历史会话数量消耗；默认 store 的容量和期限仍是下述独立业务合同。此修复不代表 Kernel 的历史源窗口已经移除，也不承诺默认内存 store 保存一天内全部一万个 binding。
 
-当前 [Octo 接入模块](../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 使用 [MemoryImSessionStore](../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)，不创建 `im-sessions.db`，不承诺跨进程恢复。WeCom 包使用自己的同类内存实现。
+当前 [Octo 接入模块](../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 默认使用 [MemoryImSessionStore](../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)，不创建 `im-sessions.db`，默认内存不承诺跨进程恢复。宿主可显式提供同步 createSessionStore，按可信 Bot/账号/组织/助理等 scope 保存同一 ImSessionStore 合同的数据；真实持久性及 reset/patch 原子性由宿主保证。整个 Runtime 不依赖 SQLite、不提供数据库适配；WeCom 的默认实现不变。接线与所有权见 [Extra 规则](extras.md#gateway-专属存储依赖)。
 
 | 数据 | 数量上限 | 序列化大小上限 | 保留时间 |
 | --- | --- | --- | --- |
@@ -56,13 +56,14 @@ Octo 与 WeCom 的 `ImRuntime.#sessions` 只登记有排队或在途执行的调
 | 消息 occurrence | 4096 | 16 MiB | 120 秒 |
 | reset 去重 | 4096 | 1 MiB | 120 秒 |
 
-访问时检查过期，另有 10 秒清理定时器；超限淘汰最早项。模块关闭时清理映射。重启、过期或淘汰后创建新 session，不声称恢复旧 Provider 会话。去重只在当前窗口内有效，不是持久投递保证。
+上述表格适用于默认 Memory：访问时检查过期，另有 10 秒清理定时器；超限淘汰最早项。模块关闭时清理其自有内存映射。重启、过期或淘汰后创建新 session，不声称恢复旧 Provider 会话。去重只在当前窗口内有效，不是持久投递保证。宿主 store 的保留、容量、数据保护和数据库生命周期由宿主制定；已保存的 binding 只提供下次续接身份，不恢复未完成 Run，也不保证 Provider 原生会话可恢复。
 
 Work App 的业务会话和完整事件保存在它自己的存储中，不属于 Runtime SQLite；宿主负责自己的 reset 持久化和历史展示。
 
 ## 验证入口
 
 - [im-session-store.test.js](../../test/im-session-store.test.js)：映射、reset、容量、过期与关闭。
+- [gateway-host-session-store.test.js](../../test/gateway-host-session-store.test.js)：宿主工厂消费、重载读取、scope/reset、尾写和句柄所有权；真实数据库和 Electron 另由宿主验收。
 - [im-session-scheduling.test.js](../../test/im-session-scheduling.test.js)：两种渠道分别接待一万个不同会话、闲置回收、续聊、卡片重试、失败、排队、reset 与关闭；使用 `--expose-gc` 时额外断言预热后堆内存增长。
 - [im-runtime.test.js](../../test/im-runtime.test.js)、[im-wecom.test.js](../../test/im-wecom.test.js)：入口控制命令与执行行为。
 - [stateless-executor.test.js](../../test/stateless-executor.test.js)：执行内核不创建业务数据库、重启不恢复旧 Run。

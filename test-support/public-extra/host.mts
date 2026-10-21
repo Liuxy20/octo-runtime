@@ -13,6 +13,7 @@ import { type InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 import type { JsonObject, ExtraPluginModule } from "@mininglamp-oss/octo-runtime/extra";
 import { verifyBuiltinExtras } from "./builtin-extras.mjs";
 import { verifyKernelInvoke } from "./kernel-invoke.mjs";
+import { verifyGatewayStore } from "./gateway-store.mjs";
 
 const endpoint = componentEndpoint(resolve("h"));
 const owner = createKernelService({
@@ -122,6 +123,7 @@ try {
         assert.equal((await business.close()).complete, true);
         assert.equal(database.prepare("SELECT text FROM business").get()?.text, "kept");
         await verifyBuiltinExtras(endpoint);
+        await verifyGatewayStore(endpoint);
       } finally {
         database.close();
       }

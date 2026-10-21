@@ -2,6 +2,29 @@
 
 业务通过 KernelClient 调用 Kernel 的 RPC 能力。一次 invoke 提交输入并返回事件流，不要求业务模块构造服务、管理执行 worker 或操作调用登记表。服务由 CLI 或 App 的装配入口托管；这与普通业务调用是两项职责。
 
+## 0. 源码接入使用最新 main
+
+通过 Git submodule 接入时，必须跟踪 `Mininglamp-OSS/octo-runtime` 的 `main`，并在首次接入或主动升级时更新到当时最新的远端 `main`。不使用特定功能分支、未合并 PR 分支或私有补丁作为 SDK 接入依赖。
+
+首次在宿主仓库根目录添加：
+
+```bash
+git submodule add --branch main git@github.com:Mininglamp-OSS/octo-runtime.git octo-runtime
+```
+
+已有 submodule 时，先确认子仓没有未提交修改，再从宿主仓库根目录执行：
+
+```bash
+git submodule update --init -- octo-runtime
+git submodule set-branch --branch main -- octo-runtime
+git submodule update --remote --checkout -- octo-runtime
+git -C octo-runtime log -1 --oneline
+```
+
+`--remote` 获取所配置 `main` 的最新提交；`--checkout` 按该提交检出，处于 detached HEAD 是 submodule 的正常状态。命令遇到本地修改冲突时先处理修改，不使用强制覆盖。跟踪分支写入 `.gitmodules`，宿主仓库仍记录具体 submodule commit；升级验收后将 `.gitmodules`、submodule 指针及宿主 lockfile 一起纳入宿主变更。CI 检出已记录指针以复现验收结果，不在每次构建或应用启动时自动升级依赖。
+
+源码 workspace 的依赖与构建方式见 [工作区指南](.octospec/guides/workspace.md#安装与常用命令)。本页主包 `/host`、`/extra`、`/extras/<name>` 等导入示例用于主发行包消费；只纳入子仓 `packages/*` 的源码宿主使用对应 workspace 包：`/host` 对应 `@mininglamp-oss/octo-runtime-host-sdk`，`/extra` 共享插件类型对应其 `/extra` 入口，Gateway 模块及业务依赖对应 `@mininglamp-oss/octo-runtime-extra-channel-gateway`。两种消费方式遵守同一类型与资源所有权边界。
+
 ## 1. 调用 Kernel RPC
 
 ```ts
@@ -72,18 +95,21 @@ stateDirectory 保存进程清理事实，不保存业务历史。SDK 不要求�
 ```ts
 import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
 import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 
+// 依赖类型由 Gateway 定义；其他 Extra 可以声明自己的依赖类型。
+const dependencies: GatewayDependencies = {
+  loadContexts: async (config, { signal }) => {
+    signal.throwIfAborted();
+    return businessContextStore.readCurrent(config, signal);
+  }
+};
 const extra = createExtraService({
   endpoint,
   module: gateway,
   config: { bots: preparedBots },
   logging: { directory: absoluteLogDirectory },
-  dependencies: {
-    loadContexts: async (config, { signal }) => {
-      signal.throwIfAborted();
-      return businessContextStore.readCurrent(config, signal);
-    }
-  }
+  dependencies
 });
 await extra.initialize();
 const snapshot = await extra.status();
@@ -92,7 +118,26 @@ const cleanup = await extra.close();
 if (!cleanup.complete) reportCleanupFailure(cleanup);
 ```
 
-模块实例、JSON 配置和泛型业务依赖分别传入。业务函数直接在宿主进程执行，不序列化、不经依赖 IPC、不进入 Kernel。插件保持 extra(ctx, jsonConfig)(dependencies)，ctx.kernel 是实际 KernelClient，与 main 的普通 App 合同相同。ctx.onStatus 提供同步 JSON，ctx.onDispose 清理插件自己拥有的资源。SQLite 完全由宿主负责创建、连接、迁移和关闭；SDK/Extra 只调用宿主业务依赖，不接管数据库。
+模块实例、JSON 配置和泛型业务依赖分别传入。业务函数直接在宿主进程执行，不序列化、不经依赖 IPC、不进入 Kernel。插件保持 extra(ctx, jsonConfig)(dependencies)，ctx.kernel 是实际 KernelClient，与 main 的普通 App 合同相同。ctx.onStatus 提供同步 JSON，ctx.onDispose 清理插件自己拥有的资源。整个 octo-runtime 不依赖 SQLite，也不提供 SQLite 适配实现。SQLite 完全由宿主负责选型、创建、连接、迁移、测试和关闭；SDK/Extra 只调用宿主业务依赖，不接管数据库。
+
+### 共享入口与业务依赖
+
+| 入口 | 合同归属 |
+| --- | --- |
+| `@mininglamp-oss/octo-runtime/host` | 通用服务构造和生命周期，例如 createExtraService |
+| `@mininglamp-oss/octo-runtime/extra` | 通用插件 authoring/loading 类型，例如 ExtraContext、ExtraPlugin、ExtraInitializer、JsonObject |
+| `@mininglamp-oss/octo-runtime/extras/channel-gateway` | Gateway 模块、GatewayDependencies、ImSessionStore 及实现接口所需的业务类型 |
+| 其他 `/extras/<name>` 或独立 Extra 包 | 各自的模块和业务依赖类型 |
+
+业务模块通过 `ExtraPlugin<D>` / `ExtraInitializer<D>` 的泛型声明专属 dependencies，通用服务根据 module 和 dependencies 装配。新增 Gateway 存储依赖时，不向 `ExtraContext` 添加数据库/会话字段，不增加 Gateway 专用 loader overload，也不把 Gateway 类型重新导出到 `/extra`。现有业务 subpath 为复数 `/extras/channel-gateway`，不另设 `/extra/channel-gateway` 别名。
+
+### 自定义 Gateway 会话存储
+
+`ImSessionStore` 保存 Gateway 的逻辑/Provider 会话绑定、历史和规则准备状态、消息处理及 reset 去重记录。默认 Memory 在重启后丢失绑定；Electron 宿主可以提供自己的 SQLite 实现，保存绑定以便下次重新读取。occurrence 还可能包含文本和请求快照，宿主负责保留及访问保护策略。
+
+`GatewayDependencies.createSessionStore(botConfig)` 同步返回逐 Bot 的独立句柄，支持宿主类实例方法；句柄 close 可异步。完整主进程装配、插件加载链、方法合同和错误/关闭顺序见 [Gateway 自定义会话存储](SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)，可运行代码见[无数据库样例](test-support/public-extra/gateway-store.mts)。源码接入按第 0 节更新到包含此能力的最新 main，不切换到 #65 或功能分支。`loadContexts` 与工厂彼此可选；不提供工厂时继续默认 Memory。
+
+### 共享生命周期与执行
 
 dependencies 可为普通对象或类实例；继承方法、非枚举和 Symbol 成员均保留，方法 this 绑定宿主原对象，可读取私有状态。注入视图是只读浅快照，函数引用及值/访问器结果在装配时固定，宿主原对象不被冻结；动态数据通过这些方法读取，嵌套对象不递归代理。原生服务照常执行依赖关闭权限和实际异步在途限制。
 
