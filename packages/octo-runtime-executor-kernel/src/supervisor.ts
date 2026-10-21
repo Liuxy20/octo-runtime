@@ -1,4 +1,9 @@
-import { spawnWorker, type SpawnWorkerOptions, type WorkerProcess } from "./process.js";
+import {
+  closeWorker,
+  spawnWorker,
+  type SpawnWorkerOptions,
+  type WorkerProcess
+} from "./process.js";
 import type { KernelStatus } from "./types.js";
 import { KernelError } from "./types.js";
 
@@ -17,6 +22,7 @@ export class WorkerSupervisor {
   #attempts: number[] = [];
   #abort = new AbortController();
   #cleanupFailure?: AggregateError;
+  #closeUntil?: number;
   constructor(
     private readonly options: SpawnWorkerOptions,
     private readonly recordWorker?: (pid: number | undefined) => Promise<void>
@@ -59,7 +65,7 @@ export class WorkerSupervisor {
       throw error;
     }
     if (this.#closing) {
-      await worker.close();
+      await closeWorker(worker, this.#closeUntil ?? Date.now() + 5000, true);
       return;
     }
     this.#worker = worker;
@@ -114,7 +120,10 @@ export class WorkerSupervisor {
   async #recover(worker: WorkerProcess): Promise<void> {
     // 旧 worker 清理成功才允许替换，避免两个 Provider 实例并行持有同一执行资源。
     // 只恢复服务可用性，不重放旧 Run；旧流已由 #failed 标为 lost。
-    await worker.close();
+    // Preserve baseline recovery for leaders that exited before close began. On Windows this
+    // path cannot verify detached descendants; EOF-close checks require a live leader at entry.
+    if (worker.child.exitCode !== null || worker.child.signalCode !== null) await worker.close();
+    else await closeWorker(worker, Date.now() + 4800, true);
     await this.recordWorker?.(undefined);
     this.#worker = undefined;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -144,12 +153,13 @@ export class WorkerSupervisor {
     }
     this.#state = "exhausted";
   }
-  async close(): Promise<void> {
+  async close(until = Date.now() + 5000): Promise<void> {
     this.#closing = true;
+    this.#closeUntil ??= until;
     this.#abort.abort();
     clearInterval(this.#timer);
     await this.#recovery;
-    await this.#worker?.close();
+    if (this.#worker) await closeWorker(this.#worker, this.#closeUntil);
     if (this.#cleanupFailure) throw this.#cleanupFailure;
     await this.recordWorker?.(undefined);
     this.#state = "stopped";

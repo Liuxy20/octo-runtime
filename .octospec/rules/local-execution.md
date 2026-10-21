@@ -72,6 +72,8 @@ Windows 使用 Node.js 创建进程，并通过系统已有的 `taskkill /PID �
 
 ## 临时执行与证据
 
+Windows worker 正常 close 在 launcher 内部先结束 stdin，复用既有 shutdown/logging.close；监听先于 EOF，等待期间继续消费输出，整个关闭过程共用一个 Promise。排空与树回收必须共用调用方剩余预算，为回收预留时间；未响应 EOF 时提前进入回收，已确认开始关闭的 worker 可使用较长的有界排空机会。故障恢复不等待正常排空宽限。worker 通过现有私有 IPC 通知排空结果并保留 leader，随后 launcher 使用 taskkill 清理仍可识别的进程树。本次 EOF 关闭开始后、树回收确认前发生的提前退出、taskkill 失败或已报告的排空 incomplete 不能报成功；cleanup 后仍释放本层管道并保留错误。关闭开始前已经退出的 worker 沿用前述基线限制。启动失败直接回滚；宿主不传平台选项或调用新 flush API。Host SDK→Kernel→worker 慢关闭和延迟回收的组合须实际验证，不能仅比较超时常量。证据见 [#38 验证记录](../journal/shared/2026-10-20-windows-host-log-close.md)。
+
 CLI playboard 通过同一原生工厂在本进程创建临时 Kernel 服务，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。退出只回收本次资源，保留 Home/profile，不复用常驻服务。#71 已删除旧 owned launcher 路径。
 
 实现：[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Core](../../packages/octo-runtime-executor-core/README.md)。测试：[clients](../../test/kernel-clients.test.js)、[worker](../../test/kernel-worker-supervision.test.js)、[所有权](../../test/host-sdk-lifecycle.test.js)。实际平台与线上证据见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。

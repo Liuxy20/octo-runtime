@@ -69,6 +69,8 @@
 
 ## 历史与取舍
 
+- [Windows Host 正常关闭与日志排空（Issue #38）](tasks/windows-host-log-close/brief.md)：内部 EOF 与有界关闭已实现，原 F31、新增 Windows 关闭回归和 SDK 慢关闭通过；公共接口不变，详见[验证记录](journal/shared/2026-10-20-windows-host-log-close.md)。
+
 - [Windows manifest 模块路径修复（Issue #37）](journal/shared/2026-10-19-windows-manifest-module-paths.md)：专门回归 14 通过；Windows 全仓剩余失败及新暴露的关闭问题单独记录，跨平台验证按 PR 检查结果更新。
 - [历史 Gitleaks 告警处置（Issue #22）](tasks/gitleaks-history-triage/brief.md)：45 条误报已核验并添加精确历史例外，19 条新增 canary 被拦截；完整历史与 PR 模式验证通过，见[验证记录](journal/shared/2026-10-19-gitleaks-history-triage.md)。
 

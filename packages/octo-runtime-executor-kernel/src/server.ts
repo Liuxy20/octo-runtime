@@ -376,7 +376,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       }
     });
   });
-  const teardown = async (): Promise<void> => {
+  const teardown = async (until = Date.now() + 5000): Promise<void> => {
     runs.beginDrain();
     for (const socket of sockets) socket.destroy();
     const errors: unknown[] = [];
@@ -392,9 +392,10 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     if (listening)
       await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())));
     // 先终止 worker 才能让失联的源流结束，再清空 Run 缓存；每个资源仍独立尝试回收并汇总失败。
-    const workerStopped = await attempt(() => worker.close());
+    // 内部沿用服务截止时间，为清单和端点收尾预留时间；不重启一份独立关闭预算。
+    const workerStopped = await attempt(() => worker.close(until - 200));
     await attempt(() => runs.close());
-    // 进程未确认回收时保留身份清单和端点租约，禁止新实例覆盖所有权。
+    // An incomplete worker close retains ownership, including an observed executor cleanup failure.
     if (workerStopped) {
       await attempt(() => manifest?.close() ?? Promise.resolve());
       if (listening && process.platform !== "win32")
@@ -441,8 +442,8 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   }
   return {
     status,
-    close(): Promise<void> {
-      return (closing ??= teardown());
+    close(until?: number): Promise<void> {
+      return (closing ??= teardown(until));
     }
   };
 }

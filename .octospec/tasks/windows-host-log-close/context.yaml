@@ -1,0 +1,33 @@
+brief: .octospec/tasks/windows-host-log-close/brief.md
+phase: finish
+injected:
+  - { id: runtime-architecture, source: repo, reason: "保持公共 SDK 与宿主职责" }
+  - { id: runtime-protocol-design, source: repo, reason: "复用 EOF 和私有 IPC；不新增公开协议" }
+  - { id: runtime-local-execution, source: repo, reason: "所属进程回收、关闭预算、启动回滚及错误保真" }
+  - { id: runtime-lifecycle, source: repo, reason: "服务 5 秒关闭和显式重新构造" }
+  - { id: runtime-output-protocol, source: repo, reason: "保留取消与唯一执行终态" }
+  - { id: runtime-stateless, source: repo, reason: "保持日志有界队列、隐私及可丢弃语义" }
+  - { id: runtime-engineering, source: repo, reason: "Windows 原生验证与故障注入分别记录，核心中文注释" }
+  - { id: commit, source: repo, reason: "英文 commit/PR，当前范围和实际证据" }
+files_expected:
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/serve.ts
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/supervisor.ts
+  - test/host-process-close.test.js
+  - test/executor-core.test.js
+  - test-support/fake-host-close.mjs
+  - .github/workflows/ci.yml
+files_review_only:
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/runtime-log.ts
+  - packages/octo-runtime-adapter-sdk/src/runtime-log-worker.ts
+  - packages/octo-runtime-adapter-sdk/src/process-cleanup.ts
+base: d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e
+previous_head: 6cd9fd836d9c050e8c78ae538a2c458cc76dca9e
+scope: "仅 #38 的正常日志关闭、预算兼容、故障恢复和 EOF 退出窗口；公共 SDK 接口及共享 Adapter 清理接口不变"
+verification_status: "22 项 Windows 关闭回归通过；专项 48 pass/10 skip，Core 38 pass，F31 3 pass，生命周期 11 pass/1 skip；类型、lint、命名、格式、OKF 和公共 API 对照均通过"
+evidence: .octospec/journal/shared/2026-10-20-windows-host-log-close.md
+updated_at: 2026-10-21T06:37:00Z
