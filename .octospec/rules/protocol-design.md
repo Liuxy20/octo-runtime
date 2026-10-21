@@ -18,13 +18,13 @@ supersedes: []
 
 # Runtime 调用关系与协议
 
-当前执行链为 HostApp/独立 Extra → Kernel IPC → worker → 唯一 AgentExecutor → Provider Adapter。宿主通过 Host SDK 分别管理 Kernel 和 Extra，Kernel 不加载业务插件。
+执行链为 HostApp/Extra → Kernel IPC → 内部 worker → 唯一 AgentExecutor → Provider Adapter。服务构造按[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)：CLI 服务进程与 Electron 主进程直接创建同一服务，不能以外部 Node 代启。公共 API 为 createKernelService/createExtraService，见[合同](../tasks/unified-native-sdk-services/design.md)。Kernel 不加载业务插件。
 
 ## 合同与版本
 
 - 主输入是 InvokeInput；Core 唯一解析执行配置、准备输入并映射到 Provider。
 - Run schema_version=7；Context 为 octo.context-envelope/v3；Kernel IPC 为 ipc_version=1，分别版本化。
-- /executor-core 是显式进程内方案；/executor-kernel 是 attached 客户端和 worker 装配入口；/host 提供 owned 组件。
+- /executor-core 是显式进程内方案；/executor-kernel 统一原生 Kernel 服务、客户端和 worker authoring；/host 提供原生 Extra 服务与宿主辅助。这是 #71 目标，基线 /host 的 owned launch 导出须删除。
 - 源帧和 canonical 事件保持原协议，native/canonical 模式在接纳时冻结，续流不得切换。
 - 业务 Context、Agent 定义、会话绑定、历史和可靠投递由业务方拥有；内核不补齐、摘要或重放业务请求。
 
@@ -55,4 +55,4 @@ Core shutdown 的完整/未确认清理语义保持 [Core 合同](../../packages
 
 ## 核对位置
 
-[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[worker RPC](../../packages/octo-runtime-executor-kernel/src/rpc.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[调用登记](../../packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。
+[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[worker RPC](../../packages/octo-runtime-executor-kernel/src/rpc.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[调用登记](../../packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts)、[原生 Extra 服务](../../packages/octo-runtime-host-sdk/src/extra-service.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。

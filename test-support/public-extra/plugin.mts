@@ -8,7 +8,6 @@ import {
   type ExtraDescriptor,
   type ExtraPluginModule,
   ExtraPlugins,
-  type ChannelDependencies,
   type JsonObject,
   type CanonicalEvent,
   type HostFrame,
@@ -24,6 +23,7 @@ import {
 } from "@mininglamp-oss/octo-runtime/extra";
 import type { KernelClient } from "@mininglamp-oss/octo-runtime/executor-kernel";
 import { assertCanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
+import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 
 export const name = "public-extra";
 
@@ -63,7 +63,7 @@ export interface BusinessState {
 
 export function checkAssembly(
   loader: ExtraPlugins,
-  module: ExtraPluginModule<ChannelDependencies>,
+  module: ExtraPluginModule<GatewayDependencies>,
   config: JsonObject
 ) {
   void loader.load(module, config, {

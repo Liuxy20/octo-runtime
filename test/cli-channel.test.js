@@ -43,8 +43,8 @@ test("generic extra configuration stays independent; CLI OpenClaw tool preparati
     false
   );
   const cli = await readFile(new URL("../apps/cli/src/main.ts", import.meta.url), "utf8");
-  assert.match(cli, /startExtra/);
-  assert.match(cli, /startOwnedKernel/);
+  assert.match(cli, /createExtraService/);
+  assert.match(cli, /createKernelService/);
   let help = "";
   await runCli(["help"], {
     output: (line) => {

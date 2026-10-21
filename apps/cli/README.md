@@ -47,7 +47,7 @@ gateway.json 是完整声明 `{ "module": "@mininglamp-oss/octo-runtime-extra-ch
 
 ## 临时执行
 
-playboard 启动独立临时 Kernel，读取选定 profile 的 Provider 配置。结束时只回收本次组件，不停止常驻服务，不加载 Extra。
+playboard 在当前进程构造临时 Kernel，读取选定 profile 的 Provider 配置。结束时只回收本次组件，不停止常驻服务，不加载 Extra。
 
 ```bash
 octo-runtime playboard <<'JSON'

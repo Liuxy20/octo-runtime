@@ -38,7 +38,7 @@ Channel Gateway 是长期 IM Agent 的业务入口，管理固定 Agent workdir�
 
 具体改造见 [IM 长任务与 Codex 重试方案](../tasks/im-long-running-retry/brief.md)。已实现工具或交互出现前、明确 Codex 暂态失败的有界重试；原生提示仍不触发第二次 invoke，但纳入 Extra 恢复预算。工具执行后的安全恢复与 Host 断流续流仍待实施，结果未知不盲目重跑。源码默认值不能作为已部署或真实持续一天运行的证据；验证范围见任务记录。
 
-Octo 与 WeCom 使用各自的可选 Extra 包，在独立子进程通过指定 Kernel endpoint 执行。仅保留默认函数式 Extra 入口；旧对象式 daemon module 工厂已删除。宿主通过 startExtra 显式携带和启用插件，不要求云端注册。
+Octo 与 WeCom 使用各自的可选 Extra 包，在宿主进程原生装配，通过指定 Kernel endpoint 执行。仅保留默认函数式 Extra 入口；旧对象式 daemon module 工厂已删除。宿主通过 createExtraService 显式携带模块、配置和依赖并 initialize，不要求云端注册。CLI 各组件的独立进程属于部署，SDK 不另起顶层服务。
 
 ChannelGateway 与 WeCom 各自以整个 Extra 为加载、卸载和配置重载单位。宿主可编辑公开 Bot 配置，但不调用插件内部 manager、逐 Bot 运行控制或 WS 管理方法；逐 Bot 编辑界面转换为完整配置及对应 Extra 重载。主要单机单 Bot 场景不存在其他 Bot 的连带断线，不为少数多 Bot 在配置更新时短暂重连新增局部热更合同。原因与约束见 [Extra 整体生命周期规则](extras.md#配置和重载)。
 

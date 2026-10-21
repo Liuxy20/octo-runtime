@@ -177,7 +177,7 @@ octo-runtime adapter probe codex
 
 ## 6. 本地临时执行
 
-`playboard` 是开发诊断入口，独立启动临时 Kernel，不要求预先启动后台服务，不加载 Extra，结束时只回收本次组件。真实 Provider 仍须安装并认证。
+`playboard` 是开发诊断入口，在当前进程原生构造临时 Kernel，不要求预先启动后台服务，不加载 Extra，结束时只回收本次组件。真实 Provider 仍须安装并认证。
 
 ```bash
 octo-runtime playboard <<'JSON'

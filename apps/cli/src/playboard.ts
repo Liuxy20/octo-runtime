@@ -5,10 +5,14 @@ import {
   type ProfileConfiguration
 } from "./state.js";
 import { initializeCliOpenClaw } from "./openclaw.js";
-import { readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import {
+  readAdapterConfigurations,
+  createKernelService,
+  type KernelService
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { startOwnedKernel, componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -85,13 +89,13 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   if (!options.output) process.stdout.on("error", onOutputError);
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
-  let kernel: Awaited<ReturnType<typeof startOwnedKernel>> | undefined;
+  let kernel: KernelService | undefined;
   const temporary = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   try {
     const paths = runtimePaths(home, profile);
     await initializeCliOpenClaw(paths.profileRoot, options.env ?? process.env);
     const configuration = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
-    kernel = await startOwnedKernel({
+    kernel = createKernelService({
       endpoint:
         process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
       workerEntrypoint: fileURLToPath(
@@ -103,9 +107,9 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
       env: options.env ?? process.env,
       adapterConfigurations: readAdapterConfigurations(paths.profileRoot, configuration?.adapters)
     });
-    const invoke = kernel.client.invoke;
+    await kernel.initialize({ signal: controller.signal });
     let exitCode = 1;
-    for await (const frame of invoke(input, { signal: controller.signal })) {
+    for await (const frame of kernel.client.invoke(input, { signal: controller.signal })) {
       await output(JSON.stringify(frame));
       if (
         ("kind" in frame &&
@@ -151,9 +155,7 @@ function writeLine(line: string): Promise<void> {
     process.stdout.write(`${line}\n`, (error) => (error ? reject(error) : resolve()));
   });
 }
-async function closeKernel(
-  kernel: Awaited<ReturnType<typeof startOwnedKernel>> | undefined
-): Promise<void> {
-  const result = await kernel?.stop();
+async function closeKernel(kernel: KernelService | undefined): Promise<void> {
+  const result = await kernel?.close();
   if (result && !result.complete) throw new Error("COMPONENT_CLEANUP_INCOMPLETE");
 }

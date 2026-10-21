@@ -10,7 +10,7 @@
 
 入口采用 `extra(context, jsonConfig)(dependencies)` 两阶段合同：外层同步返回函数，内层异步启动。CLI 传入空依赖，使用各 Bot 的显式 context；下面的示例带固定人设“我是明略科技的Octo助理”，省略 context 不会自动补齐。instructions.entries 只保留 text，不再接受 source。
 
-同进程宿主可通过公开 `ExtraPlugins.load(module, jsonConfig, { loadContexts })` 注入业务函数。`loadContexts(botConfig, { signal })` 可以同步返回 ContextItem 数组或返回 Promise；每轮准入后、调用模型前执行一次，同 namespace/name 动态整项覆盖静态配置，保持原位置，新增项顺序追加。函数和配置分开传递，不暴露内部连接或 manager。Host SDK 的 startExtra({declaration, endpoint, dependencies}) 在独立进程加载插件，宿主函数经有界 IPC 代理逐轮调用。
+宿主通过 `createExtraService({module, config, endpoint, dependencies: {loadContexts}})` 后 initialize，在当前进程注入业务函数。`loadContexts(botConfig, {signal})` 可以同步返回 ContextItem 数组或 Promise；每轮准入后、调用模型前执行一次，同 namespace/name 动态整项覆盖静态配置，保持位置，新增项顺序追加。函数和配置分开传递，不暴露内部连接或 manager。
 
 插件级 `context_loading.timeout_ms` 默认 5000，范围 1..30000；`max_in_flight` 默认 8，范围 1..32。超时未结束仍计入在途，满额直接拒绝本轮，不建立回调等待队列或保留历史结果。错误、超时和取消均不调用 Provider；业务 IO 必须响应 signal。`/stop` 和卸载触发取消。任意外部同步代码或业务自有缓存不受这些预算约束。完整合同见[配置指南](../../.octospec/guides/extra-configuration.md)。
 
@@ -172,11 +172,11 @@ JSON
 
 ## SDK 装配
 
-默认导出为 Extra 加载函数，稳定名称为 `channel-wecom`。宿主调用 `startExtra({ endpoint, declaration: { name: "channel-wecom", module, config: { bots } } })` 启动独立进程。`module` 使用已安装插件的绝对入口；SDK 不读写 CLI 配置文件。当前 CLI 六动作只管理 channel-gateway，WeCom 由 SDK 宿主管理。
+从 `@mininglamp-oss/octo-runtime/extras/channel-wecom` 导入模块，默认导出为 Extra 加载函数，稳定名称为 `channel-wecom`。宿主调用 `createExtraService({endpoint, module, config: {bots}, dependencies})` 并 initialize，在当前进程构造服务。SDK 不读写 CLI 配置文件。当前 CLI 六动作只管理 channel-gateway，WeCom 由 SDK 宿主管理。
 
-宿主 await owned handle 的 `stop()`，确认 complete 后保存完整配置并重新 `startExtra`，插件内连接整体重建。此操作不停止 Kernel 或其他 Extra。
+宿主 await 服务的 `close()`，确认 complete 后保存完整配置并重新构造、initialize，插件内连接整体重建。此操作不停止 Kernel 或其他 Extra。
 
-owned handle 的 `status()` 中 plugin 字段 返回本插件自己的 `{ "bots": [...], "errors": [...] }`；CLI 使用 `octo-runtime status`。有效项包含 `connection_key`、`type: "wecom"`、`enabled`、`connected`、`state`、脱敏 `error`、`deliveries`、`sessions`，可包含已解析的 `botId`。停用项仍可见，`enabled: false`、`state: "stopped"`、`connected: false`。错误配置跳过连接，状态项返回从零开始的 `config_index`、`state: "config_error"` 和脱敏错误码，`errors` 同时记录位置及错误码；有效 Bot 继续初始化。列表或授权配置错误记录在 `errors`，不建立连接。状态同步读取内存，由宿主解释，不依赖 Octo 状态模型。owned handle 的 `status()` 查询生命周期。完整示例见 [SDK 对接指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-独立-extra)。
+服务对象 `status()` 的 plugin 字段返回本插件自己的 `{ "bots": [...], "errors": [...] }`。有效项包含 `connection_key`、`type: "wecom"`、`enabled`、`connected`、`state`、脱敏 `error`、`deliveries`、`sessions`，可包含已解析的 `botId`。停用项仍可见，`enabled: false`、`state: "stopped"`、`connected: false`。错误配置跳过连接，状态项返回从零开始的 `config_index`、`state: "config_error"` 和脱敏错误码，`errors` 同时记录位置及错误码；有效 Bot 继续初始化。列表或授权配置错误记录在 `errors`，不建立连接。状态同步读取内存，由宿主解释，不依赖 Octo 状态模型。完整示例见 [SDK 对接指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-独立-extra)。
 
 本包作为 Event 发起方提交本轮 Context，空输入与显式重复有效；不会按会话补齐上下文。执行配置独立校验，不进入模型文本。Run=7、Context=v3。会话与回执使用有界内存，不承诺跨重启恢复；真实企业微信客户端显示效果需平台验收。
 

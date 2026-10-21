@@ -21,6 +21,18 @@
       "types": "./dist/public/executor-core.d.ts",
       "import": "./dist/public/executor-core.js"
     },
+    "./extras/channel-gateway": {
+      "types": "./dist/public/channel-gateway.d.ts",
+      "import": "./dist/public/channel-gateway.js"
+    },
+    "./extras/channel-wecom": {
+      "types": "./dist/public/channel-wecom.d.ts",
+      "import": "./dist/public/channel-wecom.js"
+    },
+    "./extras/webui": {
+      "types": "./dist/public/webui.d.ts",
+      "import": "./dist/public/webui.js"
+    },
     "./extras/channel-gateway/config-schema.json": "./packages/octo-runtime-extra-channel-gateway/config-schema.json",
     "./extras/channel-wecom/config-schema.json": "./packages/octo-runtime-extra-channel-wecom/config-schema.json",
     "./extras/webui/config-schema.json": "./packages/octo-runtime-extra-webui/config-schema.json",

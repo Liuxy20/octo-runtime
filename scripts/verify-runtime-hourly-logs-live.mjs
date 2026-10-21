@@ -3,10 +3,11 @@ import { mkdtemp, readFile, readdir, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
-  startOwnedKernel,
-  startExtra,
+  createExtraService,
+  extraRegistration,
   componentEndpoint
 } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { createKernelService } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 
 assert.ok(process.env.OCTO_CHANNEL_QA_ACCOUNTS, "Set protected QA account file path");
 const blocks = (await readFile(process.env.OCTO_CHANNEL_QA_ACCOUNTS, "utf8"))
@@ -20,24 +21,29 @@ const home = await mkdtemp(join(tmpdir(), "oh-log-"));
 const previous = process.env.OCTO_RUNTIME_DEBUG;
 process.env.OCTO_RUNTIME_DEBUG = "1";
 const endpoint = componentEndpoint(home);
-const kernel = await startOwnedKernel({
+const kernel = createKernelService({
   endpoint,
   workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
   manifest: resolve("apps/cli/dist/default_adapters.json"),
   env: { ...process.env, OCTO_RUNTIME_HOME: home }
 });
+await kernel.initialize();
 let extras = [];
 const stopExtras = async () => {
   const closing = extras;
   extras = [];
-  for (const extra of closing) assert.equal((await extra.stop()).complete, true);
+  for (const extra of closing) assert.equal((await extra.close()).complete, true);
 };
 const loadExtra = async (declaration) => {
-  const extra = await startExtra({
+  const registration = extraRegistration(declaration);
+  const extra = createExtraService({
     endpoint,
-    declaration,
+    module: await registration.load(),
+    config: registration.config,
+    dependencies: {},
     logging: { directory: join(home, "logs") }
   });
+  await extra.initialize();
   extras.push(extra);
   return extra;
 };
@@ -66,7 +72,7 @@ try {
         ]
       }
     });
-    const status = await extras.find((extra) => extra.name === "channel-gateway").status();
+    const status = (await extras.at(-1).status()).plugin;
     assert.equal(status.bots[0].state, "online");
     await stopExtras();
     const logs = join(home, "logs", "extras");
@@ -93,7 +99,7 @@ try {
   );
 } finally {
   await stopExtras();
-  assert.equal((await kernel.stop()).complete, true);
+  assert.equal((await kernel.close()).complete, true);
   if (previous === undefined) delete process.env.OCTO_RUNTIME_DEBUG;
   else process.env.OCTO_RUNTIME_DEBUG = previous;
   await rm(home, { recursive: true, force: true });

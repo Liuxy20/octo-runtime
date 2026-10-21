@@ -18,19 +18,19 @@ supersedes: []
 
 # 本地执行与传输
 
-推荐宿主通过 SDK 经 IPC 调用独立 Executor Kernel。直接 /executor-core AgentExecutor 仍是显式可选模式，实例所有者管理 shutdown，共享宿主故障域，不具备进程隔离或源重放。
+服务构造强制遵循[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)：CLI 服务进程与 Electron 主进程直接构造服务、持有 socket，不得由外部 Node 代启。下述 worker/IPC 是现有执行隔离合同，不授权 SDK 再启动顶层 Kernel。公共 API 见[服务设计](../tasks/unified-native-sdk-services/design.md)。直接 /executor-core AgentExecutor 仍是显式可选模式，实例所有者管理 shutdown，共享宿主故障域，不具备进程隔离或源重放。
 
 ```mermaid
 flowchart LR
-  App[HostApp] -->|owned / attached SDK| K[Executor Kernel]
-  Extra[独立 Extra] -->|ctx.kernel.invoke / IPC| K
+  App[HostApp] -->|原生构造服务 / attach 客户端| K[Executor Kernel]
+  Extra[原生 Extra 服务] -->|共同 KernelClient / IPC| K
   K -->|stdio NDJSON| W[worker / 唯一 AgentExecutor]
   W --> A[Provider Adapter]
 ```
 
 业务输入为 InvokeInput，环境 signal 不序列化，executionEnvOverrides 独立传递。唯一 Core 负责执行配置解析和输入准备；Extra 不提前解析内部计划，不补模型历史。
 
-App 的 attached/owned.client 和 Extra 的 ctx.kernel 都直接使用 KernelClient.invoke(input, environment?)，普通消费者不组合 submit/subscribe。首次 next 才登记和提交；native/default 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合。没有 Extra 加载要求，也没有第二个 Extra invoke。高级调用方保留原语并自行管理其所有权。
+App 的 attached client、原生服务的 client 和 Extra 的 ctx.kernel 都直接使用 KernelClient.invoke(input, environment?)，普通消费者不组合 submit/subscribe。业务仅调用 RPC 能力，不负责服务托管、调用登记或手动 drain。首次 next 才自动登记和提交；native/default 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合。没有 Extra 加载要求，也没有第二个 Extra invoke。高级调用方保留原语并自行管理其所有权。
 
 caller signal 在写出前取消时不发 invoke；写出后按原身份恢复接纳并发一次 cancel，原观察保留尾事件。正常耗尽后抛实际 signal.reason，具体传输/控制错误优先保留。iterator.return/client.close/订阅 signal 只关闭观察。native lost 先保留源帧再报 RUN_OUTCOME_UNKNOWN；canonical 在错误处查询确认 lost 后报同码，不造 Provider 事件。若确认查询失败，保留原控制错误。
 
@@ -45,7 +45,7 @@ environment.streamLimits 在现有 Kernel wire 不支持，显式传入拒绝 KE
 - submit 返回完整 RunRef：kernel_instance_id 加原 receipt 的所有身份。
 - get 使用 run/invocation/session/generation/mode 五元组，允许指定预期 Kernel instance。
 - 订阅和控制校验完整 ref。游标是最后连续收到的 seq。
-- invoke 与 subscribe 分离；接纳后 Kernel 独立消费源，不由请求 socket 拥有 generator。
+- wire invoke 与 subscribe 分离；普通业务 API 使用 main 已实现的同一个 KernelClient.invoke。接纳后 Kernel 独立消费源，不由请求 socket 拥有 generator。
 - ACK 丢失仅查询原身份，最多 3 次、总修复预算 10 秒；不能重新 invoke。
 - 断流沿原 ref/cursor 有界修复，实例变化、身份不符、窗口缺口和过期明确失败。
 - cancel/respond 的 ACK 仅表示操作被接纳；执行结果以真实终态为准。
@@ -72,6 +72,6 @@ Windows 使用 Node.js 创建进程，并通过系统已有的 `taskkill /PID �
 
 ## 临时执行与证据
 
-CLI playboard 创建临时 owned Kernel，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。退出只回收本次资源，保留 Home/profile，不复用常驻服务。
+CLI playboard 通过同一原生工厂在本进程创建临时 Kernel 服务，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。退出只回收本次资源，保留 Home/profile，不复用常驻服务。#71 已删除旧 owned launcher 路径。
 
 实现：[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Core](../../packages/octo-runtime-executor-core/README.md)。测试：[clients](../../test/kernel-clients.test.js)、[worker](../../test/kernel-worker-supervision.test.js)、[所有权](../../test/host-sdk-lifecycle.test.js)。实际平台与线上证据见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。

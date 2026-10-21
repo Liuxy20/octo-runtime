@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { createHash, randomUUID } from "node:crypto";
 import {
-  startOwnedKernel,
-  startExtra,
+  createExtraService,
   componentEndpoint
 } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { createKernelService } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
 import { kernelInput } from "../test/kernel-fixture.js";
 import { selectReasoningTemplate } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/cards.js";
@@ -180,16 +180,16 @@ try {
       { mode: 0o600 }
     );
     const endpoint = componentEndpoint(directory);
-    kernel = await startOwnedKernel({
+    kernel = createKernelService({
       endpoint,
       manifest,
       workerEntrypoint: absolute("../packages/octo-runtime-executor-kernel/dist/runner.js")
     });
+    await kernel.initialize();
     const sibling = await kernel.client.submit(kernelInput("wait-for-host-exit"));
     const attemptsFile = join(directory, "send-attempts.ndjson");
     const cardAcks = join(directory, "card-acks.ndjson");
     const preload = join(directory, "delivery-observer.mjs");
-    const extraEntrypoint = join(directory, "extra-entry.mjs");
     if (instrumented) {
       const source = [
         `import { appendFile } from 'node:fs/promises';
@@ -216,17 +216,12 @@ OctoConnector.prototype.card = async function (...args) {
   return messageId;
 };\n`);
       await writeFile(preload, source.join("\n"), { mode: 0o600 });
-      await writeFile(
-        extraEntrypoint,
-        `await import(${JSON.stringify(pathToFileURL(preload).href)});
-await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/extra-entry.js", import.meta.url).href)});\n`
-      );
+      if (!cliMode) await import(pathToFileURL(preload).href);
     }
     let contexts = 0;
     const open = async () => {
       const options = {
         endpoint,
-        ...(instrumented ? { entrypoint: extraEntrypoint } : {}),
         declaration: {
           name: "channel-gateway",
           module: absolute("../packages/octo-runtime-extra-channel-gateway/dist/index.js"),
@@ -262,7 +257,20 @@ await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/ex
           }
         }
       };
-      if (!cliMode) return startExtra(options);
+      if (!cliMode) {
+        // SDK 模式直接在验证进程构造服务；故障注入也在同一进程加载。
+        const service = createExtraService({
+          endpoint,
+          module: await import(pathToFileURL(options.declaration.module).href),
+          config: options.declaration.config,
+          dependencies: options.dependencies
+        });
+        await service.initialize();
+        return {
+          close: () => service.close(),
+          status: async () => (await service.status()).plugin
+        };
+      }
       ensure(
         (await runCli(["--home", directory, "extraset", "channel-gateway"], {
           input: Readable.from([
@@ -341,7 +349,7 @@ await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/ex
           );
           return JSON.parse(stdout)["channel-gateway"].runtime.status;
         },
-        stop
+        close: stop
       };
     };
     stage = "gateway";
@@ -406,13 +414,13 @@ await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/ex
       : undefined;
     stage = "stop";
     const started = performance.now();
-    const stopped = await gateway.stop();
+    const stopped = await gateway.close();
     report.stopMs = Math.round(performance.now() - started);
     ensure(
       stopped.complete === !(failDelivery || failCard),
       failDelivery || failCard ? "QA_SEND_FAILURE_HIDDEN" : "QA_STOP_INCOMPLETE"
     );
-    ensure((await gateway.stop()).complete === stopped.complete, "QA_REPEATED_STOP_CHANGED");
+    ensure((await gateway.close()).complete === stopped.complete, "QA_REPEATED_STOP_CHANGED");
     gateway = undefined;
     await observing;
     ensure((await kernel.client.get(ref)).terminal, "QA_TERMINAL_MISSING");
@@ -503,7 +511,7 @@ await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/ex
         async () => (await gateway.status()).bots?.[0]?.workingTasks === 0,
         "QA_RESTART_TURN_ACTIVE"
       );
-      ensure((await gateway.stop()).complete, "QA_RESTART_STOP_INCOMPLETE");
+      ensure((await gateway.close()).complete, "QA_RESTART_STOP_INCOMPLETE");
       gateway = undefined;
       result.restartedAndReplied = true;
     }
@@ -516,7 +524,7 @@ await import(${JSON.stringify(new URL("../packages/octo-runtime-host-sdk/dist/ex
   console.error(JSON.stringify({ stage, error: code }));
   process.exitCode = 1;
 } finally {
-  if (gateway) await gateway.stop().catch(() => undefined);
-  if (kernel) await kernel.stop().catch(() => undefined);
+  if (gateway) await gateway.close().catch(() => undefined);
+  if (kernel) await kernel.close().catch(() => undefined);
   await rm(directory, { recursive: true, force: true });
 }

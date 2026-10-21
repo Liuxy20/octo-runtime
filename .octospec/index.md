@@ -51,6 +51,9 @@
 ## 当前任务
 
 - [Issue 69：Kernel client 统一 invoke](tasks/69-kernel-client-invoke/brief.md)：基于 `main@fae6333`，分支 `feat/69-kernel-client-invoke`，用户确认破坏性更新后已实施。App、owned.client、Extra 和 Playboard 共用 KernelClient.invoke，删除旧执行端口；Gateway 消费结果做 delivery。见[接口设计](tasks/69-kernel-client-invoke/design.md)、[32 项验收证据](tasks/69-kernel-client-invoke/implementation.md)和[验证记录](journal/shared/2026-10-20-kernel-client-invoke.md)。本地 Node 1318 通过、10 跳过，UI 35 通过，仓外 tgz 验证通过；Windows/Linux 与真实 Provider/IM 未验，尚未提交。规划[96 分](tasks/69-kernel-client-invoke/assessment.md)仅表示当时可执行性。
+- [Issue 71：统一原生 SDK 服务](tasks/unified-native-sdk-services/brief.md)：已 rebase 到 `main@70f0247`，分支 `refactor/71-unified-sdk-services`；旧改动仅作参考，main 的 invoke/调用登记/渠道排空与失败语义作为基准保留。业务使用 KernelClient RPC，原生服务托管由装配入口负责，严禁外部 Node/CLI 代启。SQLite 完全由宿主管理。[设计](tasks/unified-native-sdk-services/design.md)、[迁移](tasks/unified-native-sdk-services/migration.md)、[验收](tasks/unified-native-sdk-services/acceptance.md)及[实施记录](tasks/unified-native-sdk-services/implementation.md)同步维护。三个评审项已整改并通过库内验证，尚未提交；外部 Electron 集成不作为本次前置条件。
+
+- [Issue 71 评审整改](tasks/unified-native-sdk-services/remediation.md)：以 main@70f0247 为基线，已实施依赖有界收尾、WebUI/WeCom 公开模块和规则统一；C01-C12 验证通过。实际主包 tgz 严格编译并运行三个内置 Extra，WebUI 首页及 JS/CSS 可读、关闭成功；[本轮记录](journal/shared/2026-10-21-native-service-remediation.md)保存架构结论与证据，尚未提交。
 
 - [Gateway关闭收尾与Windows后代回收](tasks/gateway-drain-windows-cleanup/brief.md)：分支`feat/gateway-drain-windows-cleanup`、PR72。Gateway drain 与失败收尾已实施；按用户[公共层原生依赖约束](rules/architecture.md#实现语言与原生依赖边界)撤回 Go/Job 方案及旧95分自评，Windows异常退出强回收仍有限制。现行状态见[实施记录](tasks/gateway-drain-windows-cleanup/implementation.md)，[原计划记录](journal/shared/2026-10-20-gateway-drain-windows-cleanup-plan.md)仅保留历史。
 

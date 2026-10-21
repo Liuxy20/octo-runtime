@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { startExtra } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { createExtraService } from "@mininglamp-oss/octo-runtime-host-sdk";
+import * as drainGateway from "./fixtures/drain-gateway-extra.mjs";
 import { kernelFixture, kernelInput, frames } from "./kernel-fixture.js";
 import { waitFor } from "./runtime-fixture.js";
 import { kernelRelay } from "./kernel-relay.js";
@@ -106,7 +107,7 @@ for (const finishFails of [false, true])
   );
 
 test(
-  "independent Gateway drains its accepted Kernel run before stop ACK and preserves a sibling",
+  "native Gateway drains its accepted Kernel run before close completes and preserves a sibling",
   { timeout: 10000 },
   async (t) => {
     const { client, endpoint, directory } = await kernelFixture(t, {
@@ -116,15 +117,14 @@ test(
     const sibling = await client.submit(kernelInput("sibling"));
     const trace = join(directory, "drain.ndjson");
     const records = async () => (await readFile(trace, "utf8")).trim().split("\n").map(JSON.parse);
-    const extra = await startExtra({
+    const extra = createExtraService({
       endpoint,
-      declaration: {
-        name: "drain-gateway",
-        module: resolve("test/fixtures/drain-gateway-extra.mjs"),
-        config: { trace }
-      }
+      module: drainGateway,
+      config: { trace },
+      dependencies: {}
     });
-    t.after(() => extra.stop());
+    t.after(() => extra.close());
+    await extra.initialize();
     await waitFor(async () =>
       (await records()).some((item) => item.type === "accepted.tail")
     ).catch(async (error) => {
@@ -132,7 +132,7 @@ test(
         cause: error
       });
     });
-    const result = await extra.stop();
+    const result = await extra.close();
     assert.equal(result.complete, true, JSON.stringify({ result, records: await records() }));
     const events = await records();
     const stop = events.findIndex((item) => item.type === "cancel.ack");

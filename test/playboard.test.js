@@ -477,7 +477,7 @@ test("OpenClaw uses daemon startup configuration, refreshes its source and retai
   assert.equal(await readFile(deviceFile, "utf8"), device);
 });
 
-test("daemon startup failure removes temporary process state and keeps stdout empty", async (t) => {
+test("native service startup failure removes temporary state and keeps stdout empty", async (t) => {
   const settings = await fixture(t);
   const isolated = await mkdtemp(
     join(process.platform === "darwin" ? "/tmp" : tmpdir(), "op-state-")
@@ -492,6 +492,6 @@ test("daemon startup failure removes temporary process state and keeps stdout em
   );
   assert.equal(result.code, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /KERNEL_START_FAILED/);
+  assert.match(result.stderr, /SERVICE_INITIALIZATION_FAILED/);
   assert.deepEqual(await readdir(isolated), []);
 });

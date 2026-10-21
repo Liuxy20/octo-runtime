@@ -5,8 +5,6 @@ export type {
   RuntimeLogLevel,
   ExtraDisposer,
   ExtraInitializer,
-  ChannelDependencies,
-  LoadContexts,
   ExtraPlugin,
   ExtraPluginModule,
   ExtraRegistration,

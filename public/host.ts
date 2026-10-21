@@ -1,6 +1,5 @@
 export {
-  startOwnedKernel,
-  startExtra,
+  createExtraService,
   ComponentStartError,
   componentEndpoint,
   componentServiceId,
@@ -8,11 +7,19 @@ export {
   normalizedHome
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 export type {
-  OwnedKernel,
-  OwnedKernelOptions,
-  OwnedExtra,
-  ExtraLaunchOptions,
+  ExtraService,
+  ExtraServiceOptions,
+  ExtraServiceStatus,
   CleanupResult
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 export { startNativeComponent } from "@mininglamp-oss/octo-runtime-host-sdk";
 export type { NativeComponentOptions } from "@mininglamp-oss/octo-runtime-host-sdk";
+export { createKernelService, ServiceInitializationError } from "./executor-kernel.js";
+export type {
+  KernelService,
+  KernelServiceOptions,
+  KernelServiceStatus,
+  ServiceCleanupResult,
+  ServiceLifecycle,
+  ServicePhase
+} from "./executor-kernel.js";

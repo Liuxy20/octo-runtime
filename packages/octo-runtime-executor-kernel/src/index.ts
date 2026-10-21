@@ -8,7 +8,13 @@ export {
   type WorkspaceAssignments
 } from "@mininglamp-oss/octo-runtime-executor-core";
 export { HostRunService } from "./host-run-service.js";
-export { startKernelServer, type KernelServerOptions } from "./server.js";
+export {
+  createKernelService,
+  type KernelService,
+  type KernelServiceOptions,
+  type KernelServiceStatus
+} from "./service.js";
+export * from "./lifecycle.js";
 export { attachKernel } from "./client.js";
 export * from "./types.js";
 export {

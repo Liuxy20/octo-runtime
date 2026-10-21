@@ -1,0 +1,154 @@
+status: locally-validated
+recorded_on: 2026-10-21
+baseline: 70f0247ac7dc00cc9729b366eba64ea8288b5b78
+original_planning_baseline: fae6333632010602506774b0648b639b70d25e22
+baseline_source: git-fetch-origin-main
+branch: refactor/71-unified-sdk-services
+issues:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/71
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/69
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/66
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/73
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/72
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-local-execution
+  - runtime-extras
+  - runtime-lifecycle
+  - runtime-invoke-input
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/.claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/executor-kernel-host-lifecycle/design.md
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - packages/octo-runtime-host-sdk/src/extra-dependencies.ts
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/lifecycle.ts
+  - packages/octo-runtime-host-sdk/src/extras.ts
+  - packages/octo-runtime-host-sdk/src/shutdown.ts
+  - packages/octo-runtime-host-sdk/src/context-loader.ts
+  - packages/octo-runtime-host-sdk/src/native.ts
+  - packages/octo-runtime-host-sdk/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/supervisor.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/index.ts
+  - test/cli-foreground.test.js
+  - public/host.ts
+  - public/executor-kernel.ts
+  - public/extra.ts
+  - test-support/public-extra/host.mts
+  - scripts/verify-release.mjs
+  - scripts/verify-gateway-drain-live.mjs
+  - test/gateway-runner-drain.test.js
+  - test/gateway-shutdown-drain.test.js
+  - package.json
+  - scripts/pack-release.mjs
+  - public/channel-gateway.ts
+  - public/tsconfig.json
+  - packages/octo-runtime-extra-webui/src/index.ts
+  - packages/octo-runtime-extra-channel-wecom/src/index.ts
+  - public/channel-wecom.ts
+  - public/webui.ts
+  - test/extra-service-shutdown.test.js
+  - test/extra-dependency-container.test.js
+  - test/extra-startup.test.js
+  - test/service-bind-startup.test.js
+  - test/host-sdk-lifecycle.test.js
+  - test/component-startup.test.js
+  - test-support/public-extra/builtin-extras.mts
+remediation:
+  plan: remediation.md
+  status: locally-validated
+  acceptance: C01-C12-passed
+  pr_review_round_2:
+    reviewed_head: 134b98bf897f5e312e1f198a638b3931cadd1bb2
+    status: locally-validated
+    R04: fixed-rollback-starts-cached-invocation-drain-before-disposal
+    R05: fixed-cli-executable-owns-bounded-final-exit
+    R06: fixed-late-extra-bind-cleanup-retains-incomplete-ownership
+    R07: kernel-finding-not-reproduced-existing-serial-rollback-regression-passed
+    reviewers: [Jerry-Xin, yujiawei]
+  pr_review_round_3:
+    reviewed_head: afeea70a6e4f701ca437fb97316a4d761f6a6a3d
+    review: https://github.com/Mininglamp-OSS/octo-runtime/pull/74#pullrequestreview-5588971464
+    status: locally-validated
+    R08: fixed-forced-exit-scoped-to-parsed-foreground-component-run
+    slow_reader: complete-700049-byte-json-after-800ms-pause-exit-0
+    incomplete_cleanup: bounded-cli-exit-5-preserved
+  pr_review_round_4:
+    reviewed_head: 843083693d060b21045df9af42fb3016f7fa93ae
+    review: https://github.com/Mininglamp-OSS/octo-runtime/pull/74#pullrequestreview-5593228740
+    status: locally-validated
+    R09: fixed-class-dependencies-preserve-prototype-symbol-nonenumerable-and-original-receiver
+    R10: extra-rejection-finding-not-reproduced-strict-late-failure-regression-passed
+    R11: kernel-race-observes-losing-branch-strict-late-failure-regression-passed
+    R12: kernel-bind-finding-not-reproduced-serial-rollback-and-expired-cleanup-regression-passed
+external_sources:
+  - https://www.electronjs.org/docs/latest/api/environment-variables
+  - https://www.electronjs.org/docs/latest/tutorial/fuses
+decisions:
+  service_location: calling-cli-service-process-or-electron-main-process
+  socket_owner: calling-process
+  cli_components: separately-managed-service-processes
+  sdk_external_node_service_launcher: forbidden
+  runtime_cli_as_native_sdk_backend: forbidden
+  renamed_or_compatibility_owned_launcher: forbidden
+  gateway_owns_kernel: false
+  executor_implementation: AgentExecutor-only
+  worker_purpose: internal-execution-isolation-only
+  internal_worker: reuse-existing-library-isolation
+  primary_validation: cli-directly-loads-public-sdk-and-package-external-sdk-fixture
+  external_electron_integration: outside-current-library-scope
+  shared_invoke: preserve-main-pr-73-implementation
+  shared_drain: preserve-main-pr-72-implementation-and-monotonic-deadline
+  business_access: kernel-client-rpc-capability
+  manual_invocation_lifecycle_required_for_business: false
+  extra_scope_cleanup: coordinate-issue-66
+  reset_existing_state: forbidden
+  sqlite_owner: host-app-only
+assessment:
+  feasibility_score: 92
+  maximum_score: 100
+  meaning: implementation-readiness-judgment-not-completion-or-probability
+  planned_library_work: implemented-review-findings-remediated
+verification:
+  source_inspection: completed
+  architecture_review: prior-one-p1-two-p2-remediated-implementer-self-checked
+  runtime_implementation: implemented
+  public_type_fixture: passed-actual-tgz-after-remediation-three-builtin-extras
+  real_process_topology: cli-and-package-external-sdk-passed-on-main-70f0247-worktree
+  native_os_service_registration: not-run
+  real_electron: not-run
+  live_provider_and_im: not-run
+  documentation_checks: passed
+  documentation_check_command: uv run --with pyyaml python .octospec/scripts/lint.py
+  okf_units: 273
+  indexed_rules: 20
+  diff_whitespace_check: passed
+  typecheck: passed
+  lint: passed
+  lint_names: passed
+  format_check: passed
+  node_tests: { total: 1376, passed: 1366, skipped: 10, failed: 0 }
+  focused_tests: { passed: 52, unhandled_rejections: strict }
+  ui_tests: { passed: 35 }
+  offline_release: passed-after-remediation-including-webui-assets

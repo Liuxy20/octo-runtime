@@ -26,7 +26,7 @@
 | [octo-runtime-adapter-zcode-gui](octo-runtime-adapter-zcode-gui/README.md)     | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
 | [octo-runtime-executor-core](octo-runtime-executor-core/README.md) | AgentExecutor：唯一执行实现、输入准备、取消、交互及清理；不含 IPC、回放或业务历史 |
 | [octo-runtime-cross-service](octo-runtime-cross-service/README.md)             | 管理 launchd/systemd/Windows 用户服务的生命周期                                                                                                                      |
-| [octo-runtime-host-sdk](octo-runtime-host-sdk/README.md) | Node/Electron owned 组件与依赖代理；独立管理 Kernel 和 Extra，不依赖业务 Channel。 |
+| [octo-runtime-host-sdk](octo-runtime-host-sdk/README.md) | 调用进程原生 Extra 装配与依赖生命周期；独立管理服务对象，不依赖业务 Channel。 |
 | [octo-runtime-extra-channel-gateway](octo-runtime-extra-channel-gateway/README.md)                   | 读取本地 bf_token、连接 IM 专用 WS、管理私聊会话与 /reset，经共享 Kernel IPC 执行后回发最终文本。                                                                |
 | [octo-runtime-protocol](octo-runtime-protocol/README.md)                       | 定义和校验统一执行、事件与 Context 合同                                                                                                                              |
 | [octo-runtime-extra-channel-wecom](octo-runtime-extra-channel-wecom/README.md) | 企业微信专用 WebSocket、原生 stream 回复与独立生命周期；不依赖 gateway。 |

@@ -1,6 +1,6 @@
 # octo-runtime-extra-webui
 
-本地浏览器工作台，Extra 名称 `webui`，默认地址 `http://127.0.0.1:13888/`。复用宿主的 AdapterHost，不启动另一套执行内核。界面与事件投影从 `octo-work-app` 移植，来源和适配边界见 [porting-map.md](porting-map.md)。旧 SSE demo 已移除。
+本地浏览器工作台，Extra 名称 `webui`，默认地址 `http://127.0.0.1:13888/`。通过 KernelClient 调用指定 Kernel，不启动另一套执行内核。界面与事件投影从 `octo-work-app` 移植，来源和适配边界见 [porting-map.md](porting-map.md)。旧 SSE demo 已移除。
 
 ## CLI
 
@@ -45,12 +45,10 @@ octo-runtime channel-gateway run
 SDK 不依赖 React。HostApp 安装并选择此包，显式加载时才导入服务端模块；React、Markdown、图标和样式在构建时打包为 `dist/web` 静态资源，浏览器打开页面后才加载。
 
 ```ts
-import { fileURLToPath } from 'node:url';
-import { startExtra } from '@mininglamp-oss/octo-runtime/host';
+import { createExtraService } from '@mininglamp-oss/octo-runtime/host';
+import * as webui from '@mininglamp-oss/octo-runtime/extras/webui';
 
-const extra = await startExtra({ endpoint, declaration: {
-  name: 'webui',
-  module: fileURLToPath(import.meta.resolve('@mininglamp-oss/octo-runtime-extra-webui')),
+const extra = createExtraService({ endpoint, module: webui, dependencies: {},
   config: {
     port: 13888,
     sessionStorePath: '/absolute/host-owned-home/extras/webui/sessions.json',
@@ -60,12 +58,13 @@ const extra = await startExtra({ endpoint, declaration: {
         payload: { entries: [{ text: '我是明略科技的Octo助理' }] } }]
     }
   }
-} });
+});
+await extra.initialize();
 await extra.status();
-await extra.stop();
+await extra.close();
 ```
 
-endpoint 指向已有 Kernel。Host SDK 在独立进程中加载 WebUI 并注入实际 ctx.kernel；list/invoke/cancelInvocation/respondInteraction 直接使用统一 KernelClient。停止 WebUI 不停止 Kernel，不安装 Provider。SSE 展示与会话存储属于 WebUI。
+endpoint 指向已有 Kernel。Host SDK 在调用进程原生构造 WebUI 并注入实际 ctx.kernel；list/invoke/cancelInvocation/respondInteraction 直接使用统一 KernelClient。停止 WebUI 不停止 Kernel，不安装 Provider。SSE 展示与会话存储属于 WebUI。
 
 ## 数据与接口
 

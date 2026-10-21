@@ -63,6 +63,23 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     }
     const source = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
     assert.deepEqual(metadata.exports, source.exports);
+    for (const file of ["host", "executor-kernel", "extra"]) {
+      const declaration = await readFile(join(installed, `dist/public/${file}.d.ts`), "utf8");
+      assert.doesNotMatch(
+        declaration,
+        /startOwnedKernel|OwnedKernel|startExtra|OwnedExtra|ExtraAdapterHost/
+      );
+    }
+    for (const [name, file] of [
+      ["host-sdk", "kernel.js"],
+      ["host-sdk", "extra-entry.js"],
+      ["host-sdk", "extra-port.js"],
+      ["executor-kernel", "entry.js"]
+    ])
+      await assert.rejects(
+        access(join(installed, `node_modules/@mininglamp-oss/octo-runtime-${name}/dist/${file}`)),
+        { code: "ENOENT" }
+      );
     for (const target of Object.values(metadata.exports))
       if (typeof target === "string") await access(join(installed, target));
     const build = JSON.parse(
@@ -110,7 +127,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
-    for (const name of ["plugin", "executor", "worker", "host", "kernel-invoke"])
+    for (const name of ["plugin", "executor", "worker", "host", "kernel-invoke", "builtin-extras"])
       await cp(join(root, `test-support/public-extra/${name}.mts`), join(consumer, `${name}.mts`));
     await execute(
       process.execPath,
@@ -121,6 +138,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "worker.mts",
         "host.mts",
         "kernel-invoke.mts",
+        "builtin-extras.mts",
         "--module",
         "NodeNext",
         "--target",
@@ -171,6 +189,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       }
       const status = JSON.parse((await run(["status"])).stdout);
       assert.equal(status["executor-kernel"].runtime.execution_ready, true);
+      assert.equal(status["executor-kernel"].runtime.pid, child.pid);
       assert.equal(status["channel-gateway"].runtime.available, false);
       child.kill("SIGTERM");
       await Promise.race([
@@ -199,7 +218,9 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       JSON.stringify({
         offlineInstall: true,
         publicTypes: true,
-        ownedKernel: true,
+        builtinExtras: true,
+        webuiAssets: true,
+        nativeKernel: true,
         independentExtra: true,
         cliKernel: true,
         uninstallPreservedHome: true,

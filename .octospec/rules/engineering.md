@@ -25,6 +25,8 @@ supersedes: []
 
 本要求是架构与评审约束，不宣称自动化检查能够识别全部职责越界。发现越界应修改方案和责任归属，而非仅添加风险说明或测试后保留越界行为。
 
+服务装配或进程生命周期需求还必须执行[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)的拓扑、所有权和公共 API 检查。功能通过不能替代架构通过；CLI 服务进程和 Electron 主进程必须直接构造对应服务，严禁外部 Node 代启。库内以 CLI 直接加载共同 SDK、实际 PID/socket 和包外 SDK 类型及行为为主要证据；外部 Electron 集成独立跟踪，不作为库内改造前置条件，不以增加测试数量豁免架构问题。
+
 ## 工程与验证要求
 
 - 使用严格 TypeScript ES modules，不显式使用 `any`；类型引用使用 type-only import，错误必须显式处理。
@@ -32,7 +34,7 @@ supersedes: []
 - `pnpm build` 将源码 Git commit 与 dirty 状态写入 CLI 的 `dist/build-info.json`；版本命令及根帮助展示构建时的 `commit:<12 位短 SHA>`，未提交修改标记 `(dirty)`。发行物保留此元数据，运行时不查询用户当前目录的 Git；缺少 Git 来源时显示 `commit:unknown`，不得伪造为干净提交。
 - 同一文件的 `buildTime` 为构建流程捕获的 UTC ISO 8601 时间，帮助和版本显示 `build:`；旧或无效元数据显示 `build:unknown`，不得用运行、安装或 commit 时间代替。发行矩阵共用一次构建会话时间；同版本恢复必须校验并复用原发行物时间，仍以完整 archive integrity 阻止不可变版本内容漂移。
 - 协议 wire types 从 JSON Schema 生成。修改协议时同步 schema、生成类型、样例、调用端及测试，不手工只改生成文件。
-- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 的生命周期、状态和依赖代理使用 owner 控制通道。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
+- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
 - 自动化测试使用 fake Provider，不调用真实模型。真实接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录自动化检查与实际联调结果，不把 mock 结果当作线上证据。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。
 - 修改 Run / Context 协议后，同步构建 Worker、Runtime 和桌面应用，重启受影响的本地进程，验证内置运行时注册及执行。仅完成全局链接不算重启验证。

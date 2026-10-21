@@ -1,20 +1,20 @@
 # SDK Channel Gateway 接入
 
-宿主使用 /host 的 startExtra 独立管理 Channel Gateway，执行通过指定的 Kernel endpoint。完整可编译调用方式及 loadContexts 注入见 [原生 SDK 指南第 3 节](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-独立-extra)。
+宿主使用 /host 的 createExtraService 在当前进程管理 Channel Gateway，执行通过指定的 Kernel endpoint。模块从 /extras/channel-gateway 导入。完整调用方式及 loadContexts 注入见 [原生 SDK 指南第 3 节](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-原生-extra)。
 
 Gateway 直接调用注入的 ctx.kernel.invoke，消费返回结果完成 delivery 数据处理。提交、身份关联、ACK 查询和订阅修复由同一个 KernelClient 负责。App 内部模块也可直接 attach 后 invoke，无需加载 Gateway 或任何 Extra；Gateway 的展示、存储和业务重试策略不进入 Kernel。
 
 ## 装配顺序
 
-1. 宿主准备 Node、Provider 和自己的 worker 入口，调用 startOwnedKernel，或附加到已有 Kernel。
-2. 从自己的受保护配置源取得 Bot 值，构造 {name: "channel-gateway", module, config: {bots}}。
-3. startExtra({endpoint, declaration, dependencies}) 创建独立 Gateway。
-4. extra.status() 读取插件 JSON；业务 Bot online 与 kernel_available 分别判断。
-5. 配置变更先等待 extra.stop() 且 complete=true，再保存并创建新实例；Kernel 保持运行。
+1. 宿主准备 Provider 和自己的 worker 入口，createKernelService 后 initialize，或 attachKernel 连接已有服务。
+2. 从受保护配置源取得 Bot 值，并导入 Gateway 模块。
+3. createExtraService({endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
+4. extra.status() 的 plugin 为插件 JSON；Bot online 与 kernel_available 分别判断。
+5. 配置变更先等待 extra.close() 且 complete=true，再保存并创建新实例；Kernel 保持运行。
 
 ## 逐轮 Context
 
-dependencies.loadContexts(botConfig,{signal}) 返回当前 ContextItem 数组或 Promise。函数留在宿主，由有界 IPC 代理逐轮调用；函数读取的数据变化无需重载连接。超时或取消后真实 Promise 未结束仍占额度；返回值最多 32 项 / 64 KiB。静态 context 与动态项的合并、业务指引和准入规则继续按 [Gateway 合同](packages/octo-runtime-extra-channel-gateway/README.md)。
+dependencies.loadContexts(botConfig,{signal}) 返回当前 ContextItem 数组或 Promise。函数在宿主同进程直接调用，读取的数据变化无需重载连接。超时或取消后真实 Promise 未结束仍占额度；返回值最多 32 项 / 64 KiB。静态 context 与动态项的合并、业务指引和准入规则继续按 [Gateway 合同](packages/octo-runtime-extra-channel-gateway/README.md)。
 
 不要把函数、源码或模块实例放进 config。替换函数引用按整体停止/加载处理。调用方处理 signal 的正常取消，dispose 的真实失败仍须报告。
 

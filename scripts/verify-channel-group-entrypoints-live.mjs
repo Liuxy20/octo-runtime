@@ -6,10 +6,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  startOwnedKernel,
-  startExtra,
+  createExtraService,
   componentEndpoint
 } from "../packages/octo-runtime-host-sdk/dist/index.js";
+import { createKernelService } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/auth.js";
 import {
   fetchBotGroups,
@@ -139,24 +139,27 @@ try {
         .map((line) => JSON.parse(line));
     let processHandle, extra;
     const endpoint = componentEndpoint(home);
-    const kernel = await startOwnedKernel({ endpoint, workerEntrypoint: entrypoint });
+    const kernel = createKernelService({ endpoint, workerEntrypoint: entrypoint });
+    await kernel.initialize();
     const closeExtra = async () => {
       if (extra) {
-        assert.equal((await extra.stop()).complete, true);
+        assert.equal((await extra.close()).complete, true);
         extra = undefined;
       }
     };
     const loadExtra = async (config, dependencies) => {
-      extra = await startExtra({
+      extra = createExtraService({
         endpoint,
-        declaration: { name: "channel-gateway", module: gatewayPath, config },
-        dependencies
+        module: await import(gatewayPath),
+        config,
+        dependencies: dependencies ?? {}
       });
+      await extra.initialize();
     };
     let contextLoads = 0;
     const status = async () =>
       mode === "sdk"
-        ? extra.status()
+        ? extra.status().then((value) => value.plugin)
         : (await localCli(home, ["status"]))["channel-gateway"]?.runtime?.status;
     const ready = async () => {
       const value = await status().catch(() => undefined);
@@ -285,7 +288,7 @@ try {
       console.error(`verified: ${mode} actual group/topic receive, execute and reply`);
     } finally {
       await closeExtra();
-      assert.equal((await kernel.stop()).complete, true);
+      assert.equal((await kernel.close()).complete, true);
       if (processHandle?.pid) {
         const closed = once(processHandle, "close");
         try {

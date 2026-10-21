@@ -4,7 +4,7 @@ Kernel 提供本地 JSON-RPC、独立 worker 监督以及有界 Run 源窗口。
 
 ## 公开入口
 
-消费者从主发行包 /executor-kernel 导入 attachKernel、KernelError、serveWorker 及相关类型；本 workspace 仅为内部实现。
+消费者从主发行包 /executor-kernel 导入 createKernelService、attachKernel、KernelError、serveWorker 及相关类型；本 workspace 仅为内部实现。CLI 和 App 使用同一 createKernelService 在调用进程原生构造服务，initialize 后通过 service.client 执行，close 返回真实清理结果。attachKernel 只连接已有服务。
 
 ```ts
 import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
@@ -17,7 +17,7 @@ try {
 }
 ```
 
-普通 App、owned.client 和 Extra 的 ctx.kernel 使用同一个 invoke(input, environment?)，无需安装或加载 Extra。输入仍是 InvokeInput 的 inputs/contexts；首次 next 才提交。省略模式或 native 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合类型。完整示例见 [SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
+普通 App、kernelService.client 和 Extra 的 ctx.kernel 使用同一个 invoke(input, environment?)，无需安装或加载 Extra。输入仍是 InvokeInput 的 inputs/contexts；首次 next 才提交。省略模式或 native 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合类型。完整示例见 [SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
 
 高级调用方可明确使用 submit 返回完整 RunRef，再 get/subscribe；cancel(ref)、respond(ref)、respondNative(ref) 校验 Kernel instance 和完整执行身份。这些低层调用的所有权由调用方自行管理，不进入 invoke 登记。命令被接纳不等于执行完成，完成以源终态为准。
 
@@ -26,7 +26,7 @@ try {
 - caller signal 在写请求前取消时不提交；写出后仍按原身份取得回执，然后请求一次取消。原订阅继续接收尾事件，正常耗尽后抛出实际 signal.reason。传输、控制 ACK 未知等具体错误优先保留。
 - cancelInvocation(invocationId, reason?)、respondInteraction 和 respondNativeInteraction 只控制本 client 登记的 invoke；未登记或其他 client 的身份拒绝。取消返回 accepted，不能解读成 Provider 已 cancelled。
 - iterator.return、退出迭代、subscription signal 和 client.close 只停止本地观察，不隐式 cancel。已接纳 Run 可由其他 client 按原 ref 继续观察。
-- owner 显式调用 invocations.stopAdmission()，再 invocations.drain({deadline: Date.now()+4000, reason}) 请求取消并核对原终态；返回 complete/unresolved。deadline 是与业务 dispose 共用的绝对时间，重复 drain 共享首次操作。
+- 标准服务接入只需调用服务 close；Extra 服务在内部自动停止接纳并排空所属 invoke，普通 App/Extra 无需手动操作 invocations。底层接口 invocations.stopAdmission()/drain({deadline, reason}) 留给自行 attach 并明确实现调用所有权策略的高级调用方，返回 complete/unresolved。deadline 是与业务 dispose 共用的绝对时间，重复 drain 共享首次操作。
 - snapshot 只复制身份、阶段、取消状态、游标和错误码，不保存输入/输出正文；在途与未知记录均计入 128 个额度。确认 completed/failed/cancelled 才释放，lost 返回 RUN_OUTCOME_UNKNOWN，清理保持 incomplete。
 - 排空查询和取消并发各不超过 4，不创建逐 Run 重放订阅。执行终态不代表 delivery 或存储完成，owner 继续等待业务 onDispose 后才释放资源。
 

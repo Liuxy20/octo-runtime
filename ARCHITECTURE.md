@@ -119,7 +119,7 @@ flowchart TB
 
 ### 接入选型：产品默认推荐 KernelClient
 
-**产品级接入默认推荐通过 Host SDK 使用 KernelClient，尤其是 Electron 等桌面应用和长期运行的宿主。** SDK 启动 Kernel 后使用 owned.client，连接已有 Kernel 时使用 attached client。独立 Kernel/worker 将执行与宿主进程分开，提供 worker 监督和有界断线恢复，有助于提高宿主的运行稳定性。AgentExecutor 是显式可选的进程内简化接入，适合宿主能够接受并管理同进程执行风险的场景。
+**业务接入默认使用 KernelClient 提供的 RPC 调用能力，尤其是 Electron 等桌面应用和长期运行的宿主。** 业务像使用普通工具一样调用 invoke、消费结果并按需发送控制，不要求构造服务、手动登记或排空。负责托管服务的 CLI/App 装配入口使用原生 SDK 工厂，或连接已有 endpoint，并将同一个 KernelClient 提供给业务。Kernel 服务在调用进程，执行隔离由内部 worker 承担；worker 监督和有界恢复保持原合同。AgentExecutor 是显式可选的进程内接入，适合宿主能够接受并管理同进程执行风险的场景。
 
 **两种方式使用相同的 invoke(input, environment?) 调用契约，但执行和生命周期不同。** 两者共用 InputInvoke 类型：InvokeInput 携带 inputs、contexts 和调用身份；省略 protocol_mode 或指定 native 返回 HostFrame，指定 canonical 返回 CanonicalEvent，均通过异步迭代消费。同一份业务输入可用于两种入口，实际可用能力仍取决于所注册的 Adapter、配置和运行环境。
 
@@ -224,7 +224,7 @@ flowchart TB
 
 宿主 App 可能将 Agent 提示词和业务 Context 存在内存、SQLite 或远端服务。启动时复制一次会让后续任务继续使用旧数据；每次编辑都重载 Gateway 又会中断连接。我们需要下一轮能读取新数据，同时保持宿主对存储和授权的管理权，以及 Extra 的整体封装。
 
-Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `startExtra({ endpoint, declaration, dependencies: { loadContexts } })`，SDK 在独立 Extra 子进程加载插件，业务函数留在宿主并经有界依赖代理调用。也可显式提供在子进程加载的 dependencyModule。JSON 不携带函数，Kernel 不装配业务依赖。Extra 经指定 Kernel endpoint 执行；Kernel 不负责 Extra 的生命周期。
+Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `createExtraService({ endpoint, module, config, dependencies: { loadContexts } })` 后 initialize，在调用进程直接装配业务函数。CLI 的组件 run 与原生应用主进程使用同一服务实现，不经外部 Node 或 Runtime CLI 代替构造。JSON 不携带函数，Kernel 不装配业务依赖。Extra 使用共享 KernelClient.invoke；关闭只清理自己的调用和资源，不停止指定 Kernel。
 
 | 时间点 | 执行内容 | 目的 |
 | --- | --- | --- |
@@ -234,7 +234,7 @@ Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。�
 
 loadContexts 既能同步返回 `readonly ContextItem[]`，也能返回 Promise。内存或同步 SQLite 可以直接返回数组；异步 SQLite/HTTP 可以使用 async。同步查询不会因为加了 async 就变为非阻塞，取消查询也取决于底层驱动能力。存储、连接及业务授权归宿主；SDK 管装配、取消和清理；Channel 构造本轮 Context，Host/Adapter 按统一合同执行，不读取宿主业务存储或补齐历史 Context。
 
-当前独立进程 SDK 的本地自动化证据见[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)，第三方 App 与真实 IM 接入待验。完整操作见 [SDK 原生接入手册](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md)。历史同进程 SDK 的结果不能替代本次独立拓扑验收。
+本次统一原生 SDK 的证据见[实施记录](.octospec/tasks/unified-native-sdk-services/implementation.md)。完整操作见 [SDK 原生接入手册](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md)。外部应用和真实 IM 的验证分别记录。
 
 ## 6. IM 消息由谁决定是否接纳
 

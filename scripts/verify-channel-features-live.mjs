@@ -5,8 +5,10 @@ import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
-import { startOwnedKernel } from "../packages/octo-runtime-host-sdk/dist/index.js";
-import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import {
+  createKernelService,
+  attachKernel
+} from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { canonicalEvents } from "../packages/octo-runtime-protocol/dist/index.js";
 import { fileURLToPath } from "node:url";
 import { randomBytes } from "node:crypto";
@@ -69,16 +71,17 @@ async function cli(account, args, body) {
 const directory = await mkdtemp(join(tmpdir(), "octo-channel-live-"));
 let kernel;
 const socket = join(directory, "kernel.sock");
-const execution = attachKernel({ endpoint: socket });
+const client = attachKernel({ endpoint: socket });
 const host = {
-  ...execution,
+  ...client,
   shutdown: async () => {
-    await execution.invocations.drain({
-      deadline: Date.now() + 4000,
+    const cleanup = await client.invocations.drain({
+      deadline: Date.now() + 5000,
       reason: "verification_shutdown"
     });
-    execution.close();
-    if (kernel) assert.equal((await kernel.stop()).complete, true);
+    assert.equal(cleanup.complete, true);
+    client.close();
+    if (kernel) assert.equal((await kernel.close()).complete, true);
   }
 };
 const calls = [],
@@ -172,13 +175,14 @@ try {
       ]
     })
   );
-  kernel = await startOwnedKernel({
+  kernel = createKernelService({
     endpoint: socket,
     manifest,
     workerEntrypoint: fileURLToPath(
       new URL("../packages/octo-runtime-executor-kernel/dist/runner.js", import.meta.url)
     )
   });
+  await kernel.initialize();
   assert.notEqual((await kernel.client.status()).worker.pid, process.pid);
   report.independentHost = true;
   group = await createTestGroup();

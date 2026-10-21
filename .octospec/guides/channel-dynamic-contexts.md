@@ -14,7 +14,7 @@ HostApp 中的 Agent 提示词、项目说明或业务规则可能随时变化�
 
 采用 `extra(context, jsonConfig)(dependencies)`：宿主在初始化时注入一个 `loadContexts` 函数，Channel 在每个已接纳的普通任务真正开始准备时调用它。**函数只装配一次，业务数据每轮读取。** 宿主更新该函数读取的数据后，无需重启 Channel Gateway、Kernel 或 worker，也无需调用内部 Bot 更新接口。
 
-Gateway/WeCom 继续使用两阶段函数入口和逐轮覆盖。HostApp 通过 `startExtra({ endpoint, declaration, dependencies })` 启动独立 Extra 进程，函数留在宿主，通过有界依赖代理调用；也可指定子进程内的 dependencyModule。CLI 的 channel-gateway 使用 JSON 静态配置。具体初始化见 [SDK 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。真实 IM 验收单列记录。
+Gateway/WeCom 使用两阶段函数入口和逐轮覆盖。HostApp 通过 `createExtraService({endpoint, module, config, dependencies})` 后 initialize，在当前进程直接注入函数；不经依赖代理或 dependencyModule。CLI 的 channel-gateway 使用 JSON 静态配置。具体初始化见 [SDK 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。真实 IM 验收单列记录。
 
 ## 2. 所有权与封装
 
@@ -28,7 +28,7 @@ flowchart LR
   Kernel --> Provider[Provider Adapter]
 ```
 
-图表示逻辑调用关系。Extra 在独立子进程中执行，通过 IPC 调用宿主依赖并取得 JSON 结果；执行请求经过 Kernel 进入 worker 内的 AgentExecutor，不传输函数源码或对象。
+图表示逻辑调用关系。Extra 与函数在调用进程直接装配，执行请求经 Kernel 进入内部 worker 的 AgentExecutor，不传输业务函数源码或对象。
 
 | 责任方 | 负责什么 | 不取得的控制权 |
 | --- | --- | --- |
@@ -52,7 +52,7 @@ interface ChannelDependencies {
 }
 ```
 
-`config` 始终为普通 JSON 对象。函数通过 initializer 的独立参数注入，不写入配置文件、SDK descriptor 或 Context；不保存 lambda 源码，不做 eval。跨进程代理只传 instance、epoch、call ID、受限 JSON 和取消状态。类型见 [context-loader.ts](../../packages/octo-runtime-host-sdk/src/context-loader.ts)。
+`config` 始终为普通 JSON 对象。函数通过 initializer 的独立参数注入，不写入配置文件、SDK descriptor 或 Context；不保存 lambda 源码，不做 eval，不经过跨进程代理。类型见 [context-loader.ts](../../packages/octo-runtime-host-sdk/src/context-loader.ts)。
 
 第一参数是当前 Bot 的独立完整配置快照，不是整个 `bots` 数组，也不含本轮消息、session 或 manager。宿主可按 `bot_id` 及自身已授权映射查 Agent；多环境、多租户不能只凭裸 Bot ID 决定授权。Bot 配置可能含凭据，不记录整个入参。需要更多数据的业务必须在宿主函数内部按其已有业务作用域读取，当前接口不承诺按发送者或消息内容选择材料。
 
@@ -143,4 +143,4 @@ interface ChannelDependencies {
 
 核心位置为 [共享加载与合并](../../packages/octo-runtime-host-sdk/src/context-loader.ts)、[Gateway 装配](../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[Gateway 每轮准备](../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[WeCom 每轮准备](../../packages/octo-runtime-extra-channel-wecom/src/application/im-channel.ts)。对应核心注释说明函数/数据边界、覆盖和资源所有权。
 
-旧 loader、同进程 SDK、GC 和 im-test 证据保存在[此前交付记录](../journal/shared/2026-10-17-extra-initializer-delivery.md)与[旧 SDK 记录](../journal/shared/2026-10-17-sdk-host-extra-contexts.md)，仅说明当时拓扑。当前独立 Extra/宿主函数代理的测试与待验项见[实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)，旧账号切换结果不能代替新拓扑验收。
+历史 loader、SDK、GC 和 im-test 证据保存在[此前交付记录](../journal/shared/2026-10-17-extra-initializer-delivery.md)与[旧 SDK 记录](../journal/shared/2026-10-17-sdk-host-extra-contexts.md)，仅说明当时拓扑。当前统一原生服务的测试与待验项见[实施记录](../tasks/unified-native-sdk-services/implementation.md)，旧结果不能代替本次验收。

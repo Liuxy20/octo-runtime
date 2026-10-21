@@ -14,7 +14,7 @@
 
 入口为 `extra(context, jsonConfig)(dependencies)`：外层同步返回函数，内层异步启动。CLI 以 `{}` 初始化，使用各 Bot 显式配置的 context；下面的新配置示例均包含“我是明略科技的Octo助理”。省略 context 不会自动填充。instructions.entries 只接受 `{ text }`，旧 source 字段会被拒绝。
 
-同进程宿主可经公开 `ExtraPlugins.load(module, jsonConfig, { loadContexts })` 注入业务函数：`loadContexts(botConfig, { signal })` 返回 ContextItem 数组或 Promise。每个已接纳轮次调用一次，同 namespace/name 动态整项替换静态项并保留位置，新项按动态顺序追加；重试复用本轮快照。函数不进入 JSON，插件内部 manager 不向宿主暴露。Host SDK 的 startExtra({declaration, endpoint, dependencies}) 在独立进程加载插件，宿主函数经有界 IPC 代理逐轮调用。
+宿主通过 `createExtraService({module, config, endpoint, dependencies: {loadContexts}})` 后 initialize，在当前进程注入业务函数。`loadContexts(botConfig, {signal})` 返回 ContextItem 数组或 Promise，每个接纳轮次调用一次；同 namespace/name 动态整项覆盖并保留位置，新项按顺序追加，重试复用本轮快照。函数不进入 JSON，插件内部 manager 不向宿主暴露。
 
 典型场景是宿主编辑 Agent 提示词后，后续 IM 任务重新读取新值，而无需重载 Gateway 或重建连接。初始化固定的是函数引用，不是以后读取的数据。静态 `config.bots[i].context` 每轮作为基线；动态同 key 整项替换，instructions.entries 也不拼接，需保留的固定人设由宿主显式带上。动态空数组保留静态项，不沿用上一轮动态值。完整场景和覆盖例子见[Octospec 专题](../../.octospec/guides/channel-dynamic-contexts.md)，宿主函数、装配及 SDK 后续初始化见[SDK 指南第 7 节](../../SDK_CHANNEL_GATEWAY_GUIDE.md#逐轮-context)。逐轮取得新系统指令与 Provider 已有会话应用不同，不自动 reset，详见该节的会话边界。
 
@@ -215,7 +215,7 @@ Extra 只对 Codex 结构化暂态限流或不可用失败（`OH-PRV-4005/4006` 
 
 ## SDK 装配
 
-默认导出为 Extra 加载函数，稳定名称为 `channel-gateway`。宿主调用 `startExtra({ endpoint, declaration: { name: "channel-gateway", module, config: { bots } } })` 启动独立进程。`module` 使用已安装插件的绝对入口；SDK 不读写 CLI 配置文件。
+默认导出为 Extra 加载函数，稳定名称为 `channel-gateway`。从主包 `/extras/channel-gateway` 导入模块，调用 `createExtraService({endpoint, module, config: {bots}, dependencies})` 后 initialize。服务直接属于调用进程；SDK 不读写 CLI 配置文件，关闭使用 close 并检查 complete。
 
 更新由宿主卸载本插件、保存完整配置、重新加载；插件内所有连接重新建立。CLI 使用 `extraset channel-gateway` 保存完整声明，再用 `channel-gateway restart` 读取最新文件；前台未安装服务时停止并重新运行 `channel-gateway run`。单插件装卸通过宿主接口完成。
 

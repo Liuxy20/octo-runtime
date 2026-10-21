@@ -1,6 +1,7 @@
 import type { KernelClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { abortForShutdown, shutdownDeadline, withinShutdown } from "./shutdown.js";
+import { snapshotExtraDependencies } from "./extra-dependencies.js";
 export type { ChannelDependencies, LoadContexts } from "./context-loader.js";
 export type { RuntimeLog, RuntimeLogLevel } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
@@ -155,7 +156,10 @@ export class ExtraPlugins {
   ): Promise<void> {
     if (typeof target !== "string") {
       // 仅在同一 Node 进程闭包捕获函数；复用下方生命周期，不把函数写入声明或传过 IPC。
-      const functions = Object.freeze({ ...dependencies }) as Readonly<D>;
+      const functions =
+        dependencies === undefined
+          ? (Object.freeze({}) as Readonly<D>)
+          : snapshotExtraDependencies(dependencies);
       const registration: ExtraRegistration = {
         name: target.name,
         config: configOrRegistration as JsonObject,

@@ -13,19 +13,16 @@ fs.rm = async (file, ...args) => {
   return remove(file, ...args);
 };
 syncBuiltinESMExports();
-const { startKernelServer } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
-const server = await startKernelServer({
+const { createKernelService } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
+const server = createKernelService({
   endpoint,
   stateDirectory: home,
   workerEntrypoint: resolve("test/fixtures/direct-adapter-host.js")
 });
+await server.initialize();
 const { worker } = JSON.parse(await fs.readFile(manifest, "utf8"));
 closing = true;
-let code;
-try {
-  await server.close();
-} catch (error) {
-  code = error.message;
-}
+const cleanup = await server.close();
+const code = cleanup.complete ? undefined : cleanup.errors[0].code;
 process.on("message", () => process.disconnect());
 process.send?.({ code, worker: worker.pid });
