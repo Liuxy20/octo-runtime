@@ -233,6 +233,8 @@ for (const cleanupIncomplete of [false, true]) {
       const f = await fixture(t, {
         shutdownDelayMs: 2490,
         logWriteDelayMs: 950,
+        // 仅偏移 trace 时间戳，确保顺序断言不依赖父子进程时钟一致。
+        traceClockOffsetMs: 60_000,
         cleanupIncomplete
       });
       const stateDirectory = join(f.home, "run");
@@ -255,6 +257,10 @@ for (const cleanupIncomplete of [false, true]) {
       childProcess.execFile = (...args) => {
         if (args[0] !== "taskkill" || args[1]?.[1] !== String(pid)) return execFile(...args);
         cleanupStarted = Date.now();
+        appendFileSync(
+          f.trace,
+          `${JSON.stringify({ event: "tree.cleanup.started", pid, time: cleanupStarted })}\n`
+        );
         process.kill(pid, "SIGKILL");
         args.at(-1)(null);
       };
@@ -272,8 +278,13 @@ for (const cleanupIncomplete of [false, true]) {
       assert.equal(stopped(pid), true);
       assert.equal(existsSync(join(stateDirectory, "kernel-invocations.json")), cleanupIncomplete);
       assert.ok(elapsed >= 3400 && elapsed < 5000, `elapsed=${elapsed}`);
+      // 子进程先同步记录完成，再发 IPC；父进程同步记录 taskkill，文件顺序直接证明因果顺序。
+      const events = trace.map((row) => row.event);
+      assert.ok(events.includes("logging.close.finished"), JSON.stringify(trace));
+      assert.ok(events.includes("tree.cleanup.started"), JSON.stringify(trace));
       assert.ok(
-        trace.some((row) => row.event === "logging.close.finished" && row.time <= cleanupStarted)
+        events.indexOf("logging.close.finished") < events.indexOf("tree.cleanup.started"),
+        JSON.stringify(trace)
       );
     }
   );

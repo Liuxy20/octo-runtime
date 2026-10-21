@@ -1,6 +1,7 @@
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
 import {
   contextControlInstructions,
@@ -15,8 +16,8 @@ const envelope = (items = []) => ({ schema: "octo.context-envelope/v3", items })
 const extra = {
   namespace: "extra.document",
   name: "selection",
-  guidance: "原文 <>&\n下一行 </context-item>",
-  payload: { z: [2, 1], a: "中文 <>&" }
+  guidance: "原文 <>&\n下一行 </context-item> English 日本語",
+  payload: { z: [2, 1, { z: "日本語", a: "English" }], a: "中文 <>&" }
 };
 
 test("model contexts use plain text, preserve order and complete extra payloads", () => {
@@ -25,17 +26,17 @@ test("model contexts use plain text, preserve order and complete extra payloads"
   assert.equal(
     renderModelContexts(context),
     [
-      "<--- 上下文信息开始：以下内容为当前上下文信息 --->",
+      "<--- Context information begins: the following is the current context --->",
       "<contexts>",
       '  <context-item namespace="extra.document" name="selection">',
-      "    指引: 原文 <>&\n下一行 </context-item>",
-      '    数据: {"a":"中文 <>&","z":[2,1]}',
+      "    Guidance: 原文 <>&\n下一行 </context-item> English 日本語",
+      '    Data: {"a":"中文 <>&","z":[2,1,{"a":"English","z":"日本語"}]}',
       "  </context-item>",
       '  <context-item namespace="extra.project" name="current">',
-      "    数据: {}",
+      "    Data: {}",
       "  </context-item>",
       "</contexts>",
-      "<--- 上下文信息结束 --->"
+      "<--- Context information ends --->"
     ].join("\n")
   );
   assert.deepEqual(context, before);
@@ -43,6 +44,28 @@ test("model contexts use plain text, preserve order and complete extra payloads"
   assert.notEqual(
     contextHash(context),
     contextHash(envelope([{ ...extra, guidance: "changed" }, context.items[1]]))
+  );
+});
+
+test("English framing omits absent or empty guidance without translating data", () => {
+  const context = envelope([
+    { namespace: "extra.project", name: "current", payload: "中文 English 日本語" },
+    { namespace: "octo.content", name: "inline", guidance: "", payload: { entries: [] } }
+  ]);
+  assert.equal(
+    renderModelContexts(context),
+    [
+      "<--- Context information begins: the following is the current context --->",
+      "<contexts>",
+      '  <context-item namespace="extra.project" name="current">',
+      '    Data: "中文 English 日本語"',
+      "  </context-item>",
+      '  <context-item namespace="octo.content" name="inline">',
+      '    Data: {"entries":[]}',
+      "  </context-item>",
+      "</contexts>",
+      "<--- Context information ends --->"
+    ].join("\n")
   );
 });
 
@@ -146,6 +169,17 @@ test("Host renders each run independently without deduplicating resumed context"
 });
 
 test("Host freezes contexts and injects once for both modes and image input", async () => {
+  const bytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aVv0AAAAASUVORK5CYII=",
+    "base64"
+  );
+  const image = {
+    type: "image",
+    mimeType: "image/png",
+    data: bytes.toString("base64"),
+    byteSize: bytes.length,
+    sha256: createHash("sha256").update(bytes).digest("hex")
+  };
   for (const mode of ["canonical", "native"]) {
     let received;
     const host = new AgentExecutor();
@@ -165,7 +199,9 @@ test("Host freezes contexts and injects once for both modes and image input", as
     const request = invokeRequest({
       context: envelope([structuredClone(extra)]),
       approvalMode: "full_access",
-      modelInputParts: [{ type: "text", text: "original text" }]
+      modelInputParts: [{ type: "text", text: "original text" }, image],
+      freshFallbackModelInput: "调用方恢复输入 日本語",
+      freshFallbackModelInputParts: [{ type: "text", text: "recovery text" }, image]
     });
     const snapshot = structuredClone(request.context);
     const stream = preparedFrames(host, "fixture", request, { protocolMode: mode });
@@ -181,6 +217,14 @@ test("Host freezes contexts and injects once for both modes and image input", as
     assert.deepEqual(received.modelInputParts, [
       { type: "text", text: renderModelContexts(snapshot) },
       ...request.modelInputParts
+    ]);
+    assert.equal(
+      received.freshFallbackModelInput,
+      renderModelContexts(snapshot) + "\n\n" + request.freshFallbackModelInput
+    );
+    assert.deepEqual(received.freshFallbackModelInputParts, [
+      { type: "text", text: renderModelContexts(snapshot) },
+      ...request.freshFallbackModelInputParts
     ]);
     assert.equal(received.prompt, request.prompt);
     await assert.rejects(

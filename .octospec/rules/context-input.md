@@ -3,7 +3,7 @@ type: Rule
 title: 本轮模型输入与工作目录
 description: Context v3 的业务归属、固定 renderer、控制通道和工作目录边界。
 tags: ["context","model-input","workspace"]
-timestamp: 2026-10-19T00:00:00Z
+timestamp: 2026-10-21T00:00:00Z
 implementation_baseline: df63c8f
 id: runtime-context-input
 tier: repo
@@ -37,7 +37,22 @@ supersedes: []
 | `extra.<domain>/<name>`         | 是         | contexts 块完整输出 guidance 与 payload，无逐业务注册或字段投影               |
 | 其他未知可选类型                | 否         | 保存并转发，忽略消费；需要注入的扩展使用 extra 命名空间                       |
 
-item 内部仅输出换行纯文本 `指引: ...`、`数据: ...`。不添加 guidance/payload 子标签，不执行 XML 实体转义，不要求严格 XML。空列表或只有非注入类型时，renderer 返回空字符串。
+框架生成的固定边界和标签统一使用英文。item 内部仅输出换行纯文本 `Guidance: ...`、`Data: ...`；guidance 缺省或空字符串时省略该行。业务 guidance 与 payload 的多语言值保留原文，不翻译、不要求模型使用英文回答。不添加 guidance/payload 子标签，不执行 XML 实体转义，不要求严格 XML。空列表或只有非注入类型时，renderer 返回空字符串。
+
+完整格式示例（namespace/name 来自调用方；payload 递归排序对象键，数组保序）：
+
+```text
+<--- Context information begins: the following is the current context --->
+<contexts>
+  <context-item namespace="extra.project" name="reference">
+    Guidance: Use this reference when answering the request. 保留原文。
+    Data: {"key":"value","text":"中文 日本語"}
+  </context-item>
+</contexts>
+<--- Context information ends --->
+```
+
+2026-10-21 / Issue #87：以上英文边界及 `Guidance:` / `Data:` 替代原中文固定格式。这是模型可见文本变更；匹配旧边界或标签的集成须同步更新断言、解析器和提示词快照，不再输出旧格式。Context v3 外壳、Run 7、内容、顺序、过滤及独立控制通道不变。
 
 renderer 只匹配 namespace/name 的白名单 pattern，保序输出全部数据。renderer 不调用信封校验器，不做业务字段、场景、材料可用性、处理器注册、预算估算或编译应用检查。协议接纳与执行配置校验属于各自边界，不能成为追加或改写模型上下文的理由。旧 Compiler/Pipeline、预取、摘要和投影配置已删除。
 

@@ -2,25 +2,25 @@ import type { ContextEnvelope, InvokeRequest } from "@mininglamp-oss/octo-runtim
 
 const MODEL_CONTEXT_PATTERNS = [/^extra\.[^/]+\/[^/]+$/, /^octo\.content\/(inline|references)$/];
 
-/** 仅渲染允许进入模型的业务 Context，执行/安全配置不作为普通提示词；对象键排序使同一快照稳定。 */
+/** 仅渲染允许进入模型的业务 Context；固定格式使用英文，业务内容保留原文，对象键排序使同一快照稳定。 */
 export function renderModelContexts(context: ContextEnvelope): string {
   const items = context.items.filter((item) =>
     MODEL_CONTEXT_PATTERNS.some((pattern) => pattern.test(item.namespace + "/" + item.name))
   );
   if (!items.length) return "";
   return [
-    "<--- 上下文信息开始：以下内容为当前上下文信息 --->",
+    "<--- Context information begins: the following is the current context --->",
     "<contexts>",
     ...items.map((item) =>
       [
         `  <context-item namespace="${item.namespace}" name="${item.name}">`,
-        ...(item.guidance ? [`    指引: ${item.guidance}`] : []),
-        `    数据: ${JSON.stringify(sorted(item.payload))}`,
+        ...(item.guidance ? [`    Guidance: ${item.guidance}`] : []),
+        `    Data: ${JSON.stringify(sorted(item.payload))}`,
         "  </context-item>"
       ].join("\n")
     ),
     "</contexts>",
-    "<--- 上下文信息结束 --->"
+    "<--- Context information ends --->"
   ].join("\n");
 }
 

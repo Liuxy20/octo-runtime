@@ -30,7 +30,7 @@ export async function serveCloseFixture(options = {}) {
     if (options.trace)
       appendFileSync(
         options.trace,
-        `${JSON.stringify({ event, pid: process.pid, time: Date.now(), ...data })}\n`
+        `${JSON.stringify({ event, pid: process.pid, time: Date.now() + (options.traceClockOffsetMs ?? 0), ...data })}\n`
       );
   };
   process.on("exit", (code) => mark("host.exit", { code }));

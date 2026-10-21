@@ -2,6 +2,10 @@
 
 ## 2026-10-21
 
+- 处理 PR #90 同步 #53 后的 Windows CI 顺序断言失败：用共享 trace 的同步事件顺序替换跨进程时间戳大小比较，增加一分钟 trace 时钟偏移以验证断言独立于时钟一致性。生产关闭行为与门禁保持。构建及本地相关测试 14 通过/22 Windows skip，远端原生结果单列，见[记录](journal/shared/2026-10-21-87-english-context-framing.md#pr-90-windows-ci-顺序断言修复)。
+
+- 完成 [Issue 87 Context 英文固定格式](tasks/87-english-context-framing/brief.md)：先规划并评估可执行性 98/100，再统一共享 renderer 的固定边界及 Guidance/Data 标签，保留多语言数据与原有注入语义；合同、README 及示例同步迁移说明。Node 1439 通过/10 跳过、UI 35 通过，类型/lint/格式/命名/文档通过。OKF 唯一错误为 main 已有 docs 目录禁用规则冲突，见[验证记录](journal/shared/2026-10-21-87-english-context-framing.md)。
+
 - 实施 Gateway 宿主会话存储：业务入口公开工厂及完整类型，逐 Bot 句柄先登记、尾写后撤权与一次释放，失败保留所有权；不新增 SQLite 依赖或适配。SDK 两篇、README、规则及无数据库包外样例同步。Node 1401 通过/10 跳过、UI 35 通过，类型/lint/格式/命名及离线 tgz 验证通过。用户授权合入 main 后执行真实 Electron/Buddy/SQLite/Provider 测试，见[实施验收](tasks/channel-host-session-store/implementation.md)与[记录](journal/shared/2026-10-21-channel-host-session-store-implementation.md)。
 
 - 完成宿主存储计划的[逐项可执行性评估](tasks/channel-host-session-store/executability.md)，为 A01–A24 明确测试入口和宿主前提；文档拆为 [D01–D10 独立交付](tasks/channel-host-session-store/documentation.md)。按用户明确约束，整个 octo-runtime 不依赖 SQLite、不提供 SQLite 适配；新增库内测试/样例使用无 SQLite 依赖的宿主替身，真实数据库重开在宿主工程验收。修正超时回收、drain 故障场景及 Buddy 必须跟随 main 的条件。仅修订计划和文档。

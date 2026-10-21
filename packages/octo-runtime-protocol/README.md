@@ -92,7 +92,20 @@ pnpm build                            # 3. 构建
 
 ## Context 统一处理合同
 
-内置 Context 各类型是否进入 LLM 提示词及目标通道，必须遵循 [Context v3 的 LLM 注入约束](../../.octospec/rules/context-input.md)。执行参数不进入提示词；inline、references 和 extra 进入普通上下文块；已授权 control instructions 使用独立控制通道。固定格式内部使用 `指引: ...`、`数据: ...` 换行纯文本，不要求 XML。
+内置 Context 各类型是否进入 LLM 提示词及目标通道，必须遵循 [Context v3 的 LLM 注入约束](../../.octospec/rules/context-input.md)。执行参数不进入提示词；inline、references 和 extra 进入普通上下文块；已授权 control instructions 使用独立控制通道。框架固定边界和标签统一使用英文，内部使用 `Guidance: ...`、`Data: ...` 换行纯文本，不要求 XML；可选 guidance 为空时省略，业务多语言内容保留原值。
+
+```text
+<--- Context information begins: the following is the current context --->
+<contexts>
+  <context-item namespace="extra.project" name="reference">
+    Guidance: Use this reference when answering the request. 保留原文。
+    Data: {"key":"value","text":"中文 日本語"}
+  </context-item>
+</contexts>
+<--- Context information ends --->
+```
+
+Migration note (#87): English boundary markers and the `Guidance:` / `Data:` labels replace the previous Chinese framing. Integrations matching those strings must update their parsers, assertions and prompt snapshots. Caller-supplied content remains in its original language; this does not require English model responses. The Context v3 schema, item order, filtering, serialization and separate control-instruction channel are unchanged.
 
 运行合同固定采用 schema 7，选路快照为 `octo.runtime-selection/v2`，Context 信封固定为 `octo.context-envelope/v3`。Compiler/Catalog 版本与编译应用协议已删除。新增可选场景元数据不升级 Run/Context 版本；通过 candidates 或 explicit 声明设备意图，授权候选由 Worker 固定。
 

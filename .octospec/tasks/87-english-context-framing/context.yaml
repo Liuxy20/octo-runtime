@@ -1,0 +1,33 @@
+baseline: d064cfe
+issue: 87
+ci_remediation_baseline: 2cdf0ae
+ci_failure_run: 39591260941
+ci_remediation_scope: test_trace_ordering_only
+branch: feat/87-english-context-framing
+workflow: .claude/skills/octospec-workflow/SKILL.md
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/stateless-execution.md
+authorization:
+  worktree: true
+  implementation_after_feasibility_95: true
+  commit: true
+  push: true
+  pull_request_target: main
+  public_commit_and_pr_language: English
+user_instruction_override:
+  - OSS commit messages and GitHub issue/PR text use English.

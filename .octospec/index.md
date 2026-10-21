@@ -51,6 +51,8 @@
 
 ## 当前任务
 
+- [Issue 87：Context 固定英文格式](tasks/87-english-context-framing/brief.md)：基于最新 `main@d064cfe` 独立 worktree，规划可执行性 [98 分](tasks/87-english-context-framing/assessment.md) 后实施。共享边界及标签英文，业务多语言内容和执行语义保持；Node 1439 通过/10 跳过、UI 35 通过，检查与基线 OKF 目录冲突见[交付记录](journal/shared/2026-10-21-87-english-context-framing.md)。
+
 - [Gateway 宿主会话存储与 Extra 公共合同（#57/#66）](tasks/channel-host-session-store/brief.md)：基于 `main@0c1d1c9`、分支 `feat/channel-host-session-store` 实施。逐 Bot 工厂/句柄、共享关闭期限、业务入口与包外样例已接通；见[实施结果](tasks/channel-host-session-store/implementation.md)、[24 项验收](tasks/channel-host-session-store/acceptance.md)、[文档独立验收](tasks/channel-host-session-store/documentation.md)和[验证记录](journal/shared/2026-10-21-channel-host-session-store-implementation.md)。Node 1401 通过/10 跳过、UI 35 通过。整个 Runtime 不依赖 SQLite；用户授权合入 main 后自行执行真实宿主/Provider 测试。
 - [Issue 75：CLI 独立服务与启动诊断](tasks/75-cli-lifecycle/brief.md)：分支 fix/75-cli-lifecycle，PR #80 已 rebase 到 main@43cdee7。start 自动安装、默认自启、独立 Extra、易读 status、用途帮助及英文 README/IPC 图已实施；投递状态仅展示回执数量。评审整改覆盖组件修改锁、前台终态诊断、旧退出码误判及 systemd/Windows 停止/删除确认。最终 Node 1438 通过、10 跳过，UI 35 通过；隔离 macOS 真机 118 条命令通过，见[本轮记录](journal/shared/2026-10-21-cli-lifecycle.md)。Windows/Linux 原生与实际重登待验；全局已 unlink，提交 PR 与合并已授权。
 
