@@ -1,0 +1,87 @@
+# InvokeInput
+
+[简体中文](../../zh-CN/reference/invoke-input.md) | [Documentation](../README.md)
+
+`InvokeInput` contains the parameters for one invocation. Import the type from `@mininglamp-oss/octo-runtime/protocol` and create a plain object; no `new` is needed.
+
+A normal invocation needs at least `inputs` and `contexts`. Explicitly setting `protocol_mode: "canonical"` is recommended. See [Inputs and Contexts](../concepts/inputs-and-contexts.md) for a complete example; use this page to look up fields.
+
+`InvokeInput.check(value)` validates JSON structure and returns the original value on success. Before execution, Runtime also checks configuration consistency, session continuation, and Provider feature support.
+
+## Basic Fields
+
+| Field           | Required / default | Purpose                                                                                                  |
+| --------------- | ------------------ | -------------------------------------------------------------------------------------------------------- |
+| `inputs`        | Required           | 1–128 ordered text or image objects, containing at least nonblank text or an image.                      |
+| `contexts`      | Required           | Context object with `schema` and `items`; `items` may be empty.                                          |
+| `protocol_mode` | `native`           | `native` returns HostFrame; `canonical` returns CanonicalEvent. Unsupported modes fail before execution. |
+
+The default Adapter is `codex`. To choose another registered Adapter, supply `octo.execution/adapter` in Context.
+
+## Invocation and Session Identifiers
+
+| Field               | When omitted                                 | Purpose                                                                                                                       |
+| ------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `sessionId`         | Generated                                    | Application conversation ID; cannot resume a Provider conversation on its own.                                                |
+| `invocationId`      | Generated                                    | Correlates this invocation with cancellation requests and interaction replies.                                                |
+| `runId`             | Generated                                    | Application ID for an execution, independent of session and invocation IDs.                                                   |
+| `sessionGeneration` | Receipt returns the value used for execution | Nonnegative safe integer. Applications can distinguish session generations to prevent old requests from overwriting new data. |
+| `providerEpoch`     | Application version is not inferred          | Nonnegative safe integer that applications can use to version a Provider session binding.                                     |
+| `runMetadata`       | Absent                                       | JSON business or diagnostic information for record correlation, not model input or authorization.                             |
+
+## Execution Settings
+
+Usually select execution settings through Context. These fields support integrations that need to supply settings directly. If both a field and its Context selection are supplied, they must agree.
+
+| Field                 | Default source                                  | Purpose                                                                                      |
+| --------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `agentSource`         | OpenClaw: `preset`; others: `provisioned`       | Use an existing Provider Agent, or prepare execution settings for this invocation.           |
+| `prompt`              | Text description derived from inputs            | For display; does not replace original image data.                                           |
+| `modelInput`          | Text derived from inputs                        | Override input text when needed; images still come from inputs.                              |
+| `workdir`             | Context workspace or local current directory    | Provider working directory; must match a fixed workspace in Context.                         |
+| `controlInstructions` | Context session instructions                    | Instructions passed separately to the Provider; the application must authorize their source. |
+| `approvalMode`        | Context approval policy, otherwise `ask`        | Tool approval mode; must agree with Context.                                                 |
+| `agentConfig`         | Resolved execution settings                     | Full Provider configuration; model and effort must agree with Context.                       |
+| `runtimeLimits`       | Execution defaults; whole invocation 120,000 ms | Complete timeout settings, using different field names from Context limits; see below.       |
+
+`agentConfig` includes `workdir`, `model`, `effort`, `sandbox`, `providerAgentId`, `timeoutSeconds` (seconds), `openclawConfigPath`, `openclawStateDir`, and JSON object `providerOptions`. Runtime preserves Provider extension fields while validating defined fields and rejecting removed ones.
+
+`runtimeLimits` uses camelCase field names: `firstFrameTimeoutMs`, `modelIdleTimeoutMs`, `modelIdleWarningMs`, `modelIdlePolicy`, `toolTimeoutMs`, `toolWallTimeoutMs`, `runTimeoutMs`, `cancelGraceMs`, and `enforcement`. Numeric values are milliseconds; policies are `observe | enforce`. See [Context timeout fields](contexts.md) for ranges. Use public `assertRuntimeLimits` to validate a complete object. To adjust individual settings, prefer Context `octo.execution/limits`.
+
+## Session Continuation and Recovery Input
+
+| Field                            | Default / requirement                              | Purpose                                                                                                          |
+| -------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `providerSession`                | Optional                                           | The complete session object returned by the Provider, including extension fields, for continuing a conversation. |
+| `continuityMode`                 | `continue` with providerSession, otherwise `fresh` | `fresh` forbids providerSession; `continue` requires it.                                                         |
+| `freshFallbackModelInput`        | Optional                                           | Application-supplied history text for a new session if resuming fails.                                           |
+| `freshFallbackModelInputParts`   | Optional                                           | The same recovery input, with text and images.                                                                   |
+| `freshFallbackImagesUnavailable` | Optional                                           | Fail recovery into a new session when required historical images cannot be supplied.                             |
+
+`providerSession` requires a nonempty `sessionId`. It may include `resumable`, `resumeOutcome` (`new | resumed | fresh_fallback | compacted`), `resumeFallback`, and `contextInputVariant` (`primary | recovery`). These fields describe the Provider's resume result; save them along with extension fields. See [Context and Sessions](../guides/context-and-sessions.md) for continuation steps.
+
+## The Second Argument to invoke
+
+The `environment` argument to `invoke(input, environment?)` accepts these settings outside `input`:
+
+- `signal`: a local `AbortSignal` for requesting cancellation; it is not serialized.
+- `executionEnvOverrides`: overrides this invocation's environment variables. KernelClient sends it in a separate IPC field.
+- `streamLimits`: supported only by direct AgentExecutor use. KernelClient rejects it with `KERNEL_STREAM_LIMITS_UNSUPPORTED`.
+
+`executionEnvOverrides` uses `{env_variables: [{key, value}]}`, limited to 128 entries and 65,536 bytes. Environment values merge in this order, with later values overriding earlier ones: inherited process environment, Context envs, `executionEnvOverrides`, and Adapter fixed settings. The result is used only for this invocation without modifying global `process.env`. The application must still check whether callers may set these variables.
+
+## Multipart Input and Capacity
+
+A text object in `inputs` is `{type: "text", text: "..."}`; an image object is `{type: "image", mimeType, data, byteSize, sha256}`. Optional `id` values must be unique within an array.
+
+Image `data` uses canonical base64. `byteSize` must match the decoded byte count, and `sha256` must be the matching lowercase hexadecimal SHA-256. Supported MIME types are `image/png`, `image/jpeg`, and `image/webp`. Use [image.mts](../../examples/image.mts) to generate these fields.
+
+Each input array allows up to 4 images, 2 MiB each, and 8 MiB total decoded image bytes. The entire invocation has a 32 MiB UTF-8 JSON transport limit, including Context, base64 images, recovery input, environment overrides, and protocol wrapping.
+
+Exactly the limit is allowed. Larger requests fail with `INVOKE_REQUEST_TOO_LARGE` before Provider startup, without truncation. When both primary and recovery arrays are submitted, both count toward the limit even if their images are identical.
+
+## Common Format Errors
+
+A Context without `schema`, mismatched image hashes, empty `inputs`, or `signal` inside JSON fails validation. Old fields or wrappers `protocolMode`, `adapterType`, `request`, and `options` are no longer used. Use `protocol_mode` and select the Adapter through Context.
+
+Sources: [InvokeInput](../../../packages/octo-runtime-protocol/src/invoke-input.ts), [preparation](../../../packages/octo-runtime-executor-core/src/invoke-input.ts), [multimodal validation](../../../packages/octo-runtime-protocol/src/multimodal.ts), [schema](../../../packages/octo-runtime-protocol/schema/protocol.schema.json).

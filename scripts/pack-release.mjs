@@ -121,7 +121,7 @@ try {
       if (file === "LICENSE" || error.code !== "ENOENT") throw error;
     });
   }
-  await cp(join(root, "release/README.md"), join(temporary, "README.md"));
+  await cp(join(root, "README.md"), join(temporary, "README.md"));
   const dependencies = Object.fromEntries(
     [...packages].map(([name, { source }]) => [
       name,

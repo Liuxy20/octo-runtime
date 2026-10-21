@@ -1,5 +1,7 @@
 # KernelClient 调用与原生服务托管
 
+通用开发者合同和可验证示例见 [English](docs/en/README.md) / [简体中文](docs/zh-CN/README.md)。本篇保留源码/submodule、宿主装配和完整原生集成步骤。
+
 业务通过 KernelClient 调用 Kernel 的 RPC 能力。一次 invoke 提交输入并返回事件流，不要求业务模块构造服务、管理执行 worker 或操作调用登记表。服务由 CLI 或 App 的装配入口托管；这与普通业务调用是两项职责。
 
 ## 0. 源码接入使用最新 main

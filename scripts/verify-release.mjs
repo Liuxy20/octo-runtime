@@ -42,6 +42,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const consumer = process.platform === "win32" ? directory : join(directory, "lib");
     const installed = join(consumer, "node_modules/@mininglamp-oss/octo-runtime");
     const metadata = JSON.parse(await readFile(join(installed, "package.json"), "utf8"));
+    assert.equal(
+      await readFile(join(installed, "README.md"), "utf8"),
+      await readFile(join(root, "README.md"), "utf8"),
+      "The package must reuse the root README"
+    );
     assert.equal(metadata.license, "Apache-2.0");
     assert.equal(
       await readFile(join(installed, "LICENSE"), "utf8"),
@@ -127,6 +132,49 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
+    await cp(join(root, "docs/examples"), join(consumer, "docs-examples"), { recursive: true });
+    await execute(
+      process.execPath,
+      [
+        join(root, "node_modules/typescript/bin/tsc"),
+        "-p",
+        "docs-examples/tsconfig.json",
+        "--typeRoots",
+        join(root, "node_modules/@types")
+      ],
+      { cwd: consumer, timeout: 30_000 }
+    );
+    await cp(join(root, "test/fixtures/invoke-adapter.js"), join(consumer, "docs-adapter.mjs"));
+    await writeFile(
+      join(consumer, "docs-worker.mjs"),
+      'import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";\n' +
+        'import { testAdapter } from "./docs-adapter.mjs";\nserveWorker([testAdapter]);\n'
+    );
+    await execute(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `
+      import assert from "node:assert/strict";
+      import { resolve } from "node:path";
+      import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+      import { runOwnedInvocation } from "./docs-examples/service.mts";
+      let completed = false;
+      await runOwnedInvocation({
+        endpoint: componentEndpoint(resolve("docs-home")),
+        workerEntrypoint: resolve("docs-worker.mjs")
+      }, {
+        inputs: [{type: "text", text: "documentation package example"}],
+        contexts: {schema: "octo.context-envelope/v3", items: [
+          {namespace: "octo.execution", name: "adapter", payload: {type: "test"}}
+        ]}
+      }, event => { if (event.type === "run.completed") completed = true; });
+      assert.equal(completed, true);
+    `
+      ],
+      { cwd: consumer, timeout: 30_000 }
+    );
     for (const name of [
       "plugin",
       "executor",

@@ -1,5 +1,7 @@
 # SDK Channel Gateway 接入
 
+通用 Extra 架构和生命周期见开发者文档：[English](docs/en/guides/extras.md) / [简体中文](docs/zh-CN/guides/extras.md)。本篇保留 IM 配置、会话存储和业务接入细节。
+
 宿主使用 /host 的 createExtraService 在当前进程管理 Channel Gateway，执行通过指定的 Kernel endpoint。模块从 /extras/channel-gateway 导入。完整调用方式及 loadContexts 注入见 [原生 SDK 指南第 3 节](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-原生-extra)。
 
 Gateway 直接调用注入的 ctx.kernel.invoke，消费返回结果完成 delivery 数据处理。提交、身份关联、ACK 查询和订阅修复由同一个 KernelClient 负责。App 内部模块也可直接 attach 后 invoke，无需加载 Gateway 或任何 Extra；Gateway 的展示、存储和业务重试策略不进入 Kernel。

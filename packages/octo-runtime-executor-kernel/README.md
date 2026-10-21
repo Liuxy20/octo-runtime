@@ -1,5 +1,7 @@
 # Executor Kernel
 
+公开开发者参考：[English](../../docs/en/reference/kernel-ipc.md) / [简体中文](../../docs/zh-CN/reference/kernel-ipc.md)。本页保留包内监督和实现说明。
+
 Kernel 提供本地 JSON-RPC、独立 worker 监督以及有界 Run 源窗口。它只维护 worker 的进程生命周期，不加载 Extra、读取业务存储或调度 Loop 业务。
 
 ## 公开入口

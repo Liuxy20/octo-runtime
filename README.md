@@ -2,6 +2,10 @@
 
 Octo Runtime 是 Provider-neutral 的本地 Agent 执行基础设施。宿主决定业务输入、配置来源和依赖安装；Runtime 校验执行合同并调用 Provider，不保存业务 Run、Agent 或聊天历史。
 
+## Developer Documentation / 开发者文档
+
+[English](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/en/README.md) · [简体中文](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/zh-CN/README.md)：架构、首次 SDK 调用、Kernel IPC、inputs、Context 类型、MCP、交互与故障排查。核心模块配有 Mermaid 图，两种语言共用可运行示例。
+
 ## 执行结构
 
 ```mermaid
@@ -19,7 +23,7 @@ Kernel 监督自己的 worker，保存有界源窗口并提供执行、订阅和
 
 旧 daemon app、workspace 包、CLI 命令组、bin 和 AdapterHost 过渡别名已删除。执行实现只有 `AgentExecutor`。Run 7、Context v3 和既有身份文件格式不变。
 
-旧 daemon 架构的 `1.0.1` 版本已列为 deprecated，不支持升级或迁移。已有安装须先停止并移除旧服务，执行 `npm uninstall -g @mininglamp-oss/octo-runtime`，再安装新架构版本并重新配置，详见 [重新安装步骤](DEPLOYMENTS.md#旧版弃用与重新安装)。
+旧 daemon 架构的 `1.0.1` 版本已列为 deprecated，不支持升级或迁移。已有安装须先停止并移除旧服务，执行 `npm uninstall -g @mininglamp-oss/octo-runtime`，再安装新架构版本并重新配置，详见 [重新安装步骤](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/DEPLOYMENTS.md#旧版弃用与重新安装)。
 
 ## CLI
 
@@ -57,7 +61,7 @@ CLI 服务进程和原生应用主进程通过相同工厂直接构造服务，s
 
 业务只需将 KernelClient 作为普通 RPC 工具使用：invoke 输入并消费结果，按需取消或响应交互。服务托管不属于每次调用的接入步骤，普通业务不手动操作调用登记或 drain。
 
-完整接入示例见 [SDK 指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)，命令见 [CLI](apps/cli/README.md)，发行验证见 [部署说明](DEPLOYMENTS.md)。
+完整接入示例见 [SDK 指南](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)，命令见 [CLI](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/apps/cli/README.md)，发行验证见 [部署说明](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/DEPLOYMENTS.md)。
 
 ## 输入和业务边界
 
@@ -79,7 +83,7 @@ node scripts/pack-release.mjs
 node scripts/verify-release.mjs dist/release/mininglamp-oss-octo-runtime-0.0.0.tgz
 ```
 
-自动测试使用 fixture Provider；不能代替实际 Provider、真实 IM 或各平台原生服务验收。当前实施证据和待验收项见 [实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
+自动测试使用 fixture Provider；不能代替实际 Provider、真实 IM 或各平台原生服务验收。当前实施证据和待验收项见 [实施记录](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 ## 结构
 
@@ -91,7 +95,7 @@ node scripts/verify-release.mjs dist/release/mininglamp-oss-octo-runtime-0.0.0.t
 - `packages/octo-runtime-adapter-*`：Provider 协议适配。
 - `.octospec/rules`：当前架构与工程合同。
 
-架构入口见 [基础规则](.octospec/rules/architecture.md)。所有内部 workspace 包仍 private，只发布一个 npm 包。
+架构入口见 [开发者架构说明](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/zh-CN/concepts/architecture.md)。所有内部 workspace 包仍 private，只发布一个 npm 包。
 
 ## 许可证
 

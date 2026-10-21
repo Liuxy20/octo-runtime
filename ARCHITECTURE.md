@@ -1,5 +1,7 @@
 # Octo Runtime：为什么统一「设备」
 
+当前实现的双语模块说明和 Mermaid 图见开发者文档：[English](docs/en/concepts/architecture.md) / [简体中文](docs/zh-CN/concepts/architecture.md)。本文保留设备动机、新旧比较及明确标注的未来目标。
+
 **设备是某台机器上，由一个特定 Home 目录承载的本地执行实例。统一设备，就是让业务先确定「在哪个实例执行」，再决定「怎么连过去」：本地直接 IPC，异地经云端下发。**
 
 **三个核心目标，共用同一个设备执行内核：**

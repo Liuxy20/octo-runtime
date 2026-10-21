@@ -1,5 +1,7 @@
 # Octo Runtime 使用与接入入口
 
+公开开发者文档：[English](docs/en/README.md) / [简体中文](docs/zh-CN/README.md)。首次调用、Kernel IPC、inputs/contexts、MCP 与交互合同优先查阅本库；下列指南保留宿主、CLI 和 IM 业务装配细节。
+
 按使用场景选择指南，具体操作和示例只在对应指南维护。
 
 | 场景 | 文档 | 责任 |

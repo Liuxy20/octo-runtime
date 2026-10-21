@@ -1,0 +1,65 @@
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
+    {
+      "namespace": "octo.execution",
+      "name": "model",
+      "payload": {
+        "selection": { "use_provider_default": true },
+        "reasoning": { "effort": "medium" }
+      }
+    },
+    { "namespace": "octo.execution", "name": "actmode", "payload": { "mode": "default" } },
+    {
+      "namespace": "octo.execution",
+      "name": "workspace",
+      "payload": { "mode": "fixed", "path": "/example/project" }
+    },
+    {
+      "namespace": "octo.execution",
+      "name": "envs",
+      "payload": { "env_variables": [{ "key": "PROJECT_ID", "value": "example-project" }] }
+    },
+    {
+      "namespace": "octo.execution",
+      "name": "mcp",
+      "payload": {
+        "mcpServers": {
+          "project-docs": { "type": "streamable_http", "url": "https://example.com/mcp" }
+        }
+      }
+    },
+    { "namespace": "octo.execution", "name": "limits", "payload": { "run_timeout_ms": 120000 } },
+    {
+      "namespace": "octo.runtime",
+      "name": "selection",
+      "payload": { "mode": "explicit", "runtime_id": "example-runtime" }
+    },
+    { "namespace": "octo.security", "name": "approval_policy", "payload": { "mode": "ask" } },
+    {
+      "namespace": "octo.content",
+      "name": "inline",
+      "payload": { "entries": [{ "text": "Selected source text", "resource_ref": "doc:example" }] }
+    },
+    {
+      "namespace": "octo.content",
+      "name": "references",
+      "payload": {
+        "entries": [
+          {
+            "resource_ref": "doc:example",
+            "resolver": "mcp",
+            "locator": { "server_ref": "project-docs", "tool": "read_document" },
+            "params": { "id": "example" }
+          }
+        ]
+      }
+    },
+    {
+      "namespace": "octo.control",
+      "name": "instructions",
+      "payload": { "entries": [{ "text": "Answer concisely." }] }
+    }
+  ]
+}

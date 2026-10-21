@@ -77,6 +77,8 @@ jobs:
         run: pnpm format:check
       - name: Typecheck and build
         run: pnpm typecheck
+      - name: Check bilingual developer documentation and examples
+        run: pnpm docs:check
       - name: Check generated protocol and lockfile drift
         run: git diff --exit-code -- pnpm-lock.yaml packages/octo-runtime-protocol/src/generated/protocol-types.ts
       - name: Test
@@ -135,6 +137,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build release package
         run: pnpm build
+      - name: Check bilingual developer documentation and examples on Windows
+        run: pnpm docs:check
       - name: Verify Core, Kernel and independent Extra lifecycle on Windows
         run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/zcode-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/kernel-worker-supervision.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/component-startup.test.js test/extra-startup.test.js test/native-startup.test.js test/service-bind-startup.test.js
       - name: Verify Gateway drain and finalization on Windows
