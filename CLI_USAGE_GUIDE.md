@@ -36,25 +36,29 @@ node apps/cli/dist/index.js --help
 
 Home 默认采用 `OCTO_RUNTIME_HOME`；未设置时，Windows 使用 `%LOCALAPPDATA%\OctoRuntime`，其他平台使用 `~/.octo-runtime`。Windows 未设置 `LOCALAPPDATA` 时也回退到用户目录下的 `.octo-runtime`。
 
-每个 Home 有一组 Kernel 与 Gateway 服务。profile 选择 Provider 配置，不额外创建一组服务；服务 ID 和端点按 Home 与组件隔离。Home 不是 Provider 的执行工作目录。
+每个 Home 有一个 Kernel 服务和各自独立的 Extra 服务。profile 选择 Provider 配置，不额外创建一组服务；服务 ID 和端点按 Home 与组件隔离。Home 不是 Provider 的执行工作目录。
 
 `extraset` / `extraget` 只读写 `<home>/extras/<name>/config.json`，不接受 `--profile`。所有安装、启停和查询操作须选择同一个 Home。以下示例均使用默认 Home；自定义时统一添加 `--home /absolute/runtime-home`。
 
-## 3. 两个组件的生命周期
+## 3. 独立组件的生命周期
 
 ```text
-octo-runtime executor-kernel uninstall|install|start|restart|stop|run
-octo-runtime channel-gateway uninstall|install|start|restart|stop|run
+octo-runtime executor-kernel uninstall|install|start|restart|stop|status|run
+octo-runtime <extra-name> uninstall|install|start|restart|stop|status|run
 ```
 
 | 动作 | 行为 |
 | --- | --- |
-| `install` | 注册本组件原生用户服务；首次默认关闭自启；重复安装省略选项时保留已有自启设置 |
+| `install` | 注册并启用本组件自启服务；首次和重复安装都默认开启自启 |
 | `install --autostart=true` / `false` | 注册或更新本组件服务，并显式设置自启 |
-| `start` / `restart` | 操作已安装的本组件并等待 IPC 就绪；未安装返回 3，不隐式安装或启动另一组件 |
+| `start` | 未安装时自动安装本组件并开启自启，随后启动并等待 IPC 就绪；已安装时保留服务设置，不启动其他组件 |
+| `restart` | 重启已安装并启用的本组件并等待 IPC 就绪；未安装返回 3，显式禁用时提示 install --autostart=true |
+| `status` | 查看本组件原生服务、IPC 与业务状态 |
 | `stop` | 停止本组件，保留服务定义和自启设置 |
 | `uninstall` | 停止并移除本组件服务定义，保留 Home、身份、配置和凭据 |
 | `run` | 前台运行本组件；收到 Ctrl+C 或 SIGTERM 后等待清理 |
+
+`<extra-name>` 可为 channel-gateway、channel-wecom、webui 或通过 extraset 保存的名称。直接运行 `octo-runtime executor-kernel` 会显示组件帮助；`--help` 也可查看。各组件分别执行 install，默认开启自启；只有显式 --autostart=false 才关闭，再次普通 install 会恢复自启。服务在用户登录/用户 manager 激活时自动启动，不保证未登录时运行。自启或手动启动不要求前后顺序；Extra 先启动时报告 Kernel 不可用，Kernel 后续上线后恢复可用状态，不需要重新启动 Extra。
 
 ### 前台运行
 
@@ -77,14 +81,16 @@ octo-runtime channel-gateway run
 配置好 Gateway 后执行：
 
 ```bash
-octo-runtime executor-kernel install --autostart=true
 octo-runtime executor-kernel start
-octo-runtime channel-gateway install --autostart=true
 octo-runtime channel-gateway start
 octo-runtime status
 ```
 
 原生服务后端分别使用 macOS LaunchAgent、Linux systemd user service 和 Windows 当前用户 Task Scheduler。服务启动成功仅表示对应组件就绪，不证明 Provider 已认证或所有 Bot 已在线。
+
+start 检测到未安装时会自动安装当前组件并开启自启，在 stderr 打印安装与启动进度，安装失败不会继续启动。--json 的 stdout 保留最终格式化 JSON；进度不会混入 JSON。已安装服务的配置不重写；显式禁用时用 install --autostart=true 恢复后再启动。
+
+start/restart 成功结果包含本组件 status 的完整展示：服务、自启、IPC、Manager、PID、Worker 或 Extra 业务状态和服务定义路径。--json 保留 component/action，并提供与 status 相同的 service/runtime 数据，无需再执行一次 status 才能查看运行结果。
 
 停止或卸载时分别操作，例如：
 
@@ -137,7 +143,7 @@ JSON
 
 `extraset` 保存完整声明，不连接 Bot、不安装插件，也不自动重启组件。每次整体替换，不按 `bot_id` 合并；多个 Bot 须放入同一个 `config.bots` 数组一起保存。POSIX 配置文件权限为 `0600`。
 
-首次保存后使用上一节的 `run` 或 `install` + `start`。后台 Gateway 已运行时，修改配置后只重启 Gateway：
+首次保存后使用上一节的 `run` 或 `start`。后台 Gateway 已运行时，修改配置后只重启 Gateway：
 
 ```bash
 octo-runtime channel-gateway restart
@@ -161,17 +167,20 @@ octo-runtime status
 ## 5. 状态、诊断与日志
 
 ```bash
+octo-runtime status
 octo-runtime status --json
+octo-runtime executor-kernel status
+octo-runtime channel-gateway status --json
 octo-runtime doctor
 octo-runtime adapter list
 octo-runtime adapter probe codex
 ```
 
-`status` 分别返回两个组件的原生 `service` 状态与 IPC `runtime` 状态。Kernel 的 `execution_ready` 表示 worker 就绪；Gateway 的初始化、Kernel 可用性及各 Bot 业务连接状态须分别判断。状态查询成功可以返回组件已停止或不可达，不能仅凭退出码 0 判定业务可用。
+`status` 查询 Kernel、Gateway 和其他已配置 Extra，分别返回原生 `service` 状态与 IPC `runtime` 状态，仍调用每个 Extra 自身的 status。单组件 status 只查询所选组件。Kernel 的 `execution_ready` 表示 worker 就绪；Gateway 的初始化、Kernel 可用性及各 Bot 业务连接状态须分别判断。状态查询成功可以返回组件已停止或不可达，不能仅凭退出码 0 判定业务可用。
 
-`doctor` 返回服务管理器探测、两个服务定义及 IPC 状态，应检查返回字段。`adapter list` / `probe` 查询已运行 Kernel 的 Adapter 元数据，不隐式启动 Kernel，也不执行模型任务；实际执行成功仍须通过真实 Provider 验证。
+`doctor` 返回服务管理器探测、各组件服务定义及 IPC 状态，应检查返回字段。`adapter list` / `probe` 查询已运行 Kernel 的 Adapter 元数据，不隐式启动 Kernel，也不执行模型任务；实际执行成功仍须通过真实 Provider 验证。
 
-普通命令输出 JSON；帮助和版本输出文本。命令失败时也须检查非零退出码及 JSON 错误，不能仅检查 stderr。组件日志目录为 `<home>/logs`。当前命令不提供旧 `--quiet`、`--verbose` 或 `--logs-dir` 参数。
+服务操作、status 和 doctor 默认输出紧凑文本；status 展示业务健康、Bot 状态与任务/队列/保留集合计数，不逐项列出会话或投递 ID。`--json` 输出缩进 JSON 并保留完整公开状态，原先解析默认 JSON 的脚本须显式添加此参数。extraget 保留完整紧凑 JSON，adapter 数据查询仍为 JSON，playboard 为 NDJSON。文本错误写 stderr，JSON 错误写 stdout；命令失败时检查非零退出码及稳定错误码、cause_code 和排障提示。组件日志目录为 `<home>/logs`；CLI 启动失败的稳定错误码与 cause 沿统一结构化日志写入 `kernel-<UTC小时>.log` 或 `extras/<组件>-<UTC小时>.log`，事件名为 `cli.initialization_failed` / `cli.initialization_cause`，不捕获任意 stdout/stderr。当前命令不提供旧 `--quiet`、`--verbose` 或 `--logs-dir` 参数。
 
 常规命令返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。错误类别以实际返回为准，`run` 意外退出返回失败；不要在清理未确认时直接替换实例。
 

@@ -105,14 +105,17 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       assert.match((await run(args)).stdout, /executor-kernel|channel-gateway/);
     await assert.rejects(
       run(["daemon"]),
-      (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stdout)
+      (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stderr)
     );
-    for (const component of ["executor-kernel", "channel-gateway"])
-      for (const action of ["start", "restart"])
-        await assert.rejects(
-          run([component, action]),
-          (error) => error.code === 3 && /SERVICE_NOT_INSTALLED/.test(error.stdout)
-        );
+    for (const component of ["executor-kernel", "channel-gateway"]) {
+      assert.match((await run([component])).stdout, /Usage:.*<command>/);
+      await assert.rejects(
+        run([component, "restart", "--json"]),
+        (error) =>
+          error.code === 3 && JSON.parse(error.stdout).error.code === "SERVICE_NOT_INSTALLED"
+      );
+    }
+    assert.match((await run(["status"])).stdout, /executor-kernel\s+service:/);
     const command = join(
       directory,
       process.platform === "win32" ? "octo-runtime.cmd" : "bin/octo-runtime"
@@ -221,10 +224,14 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       ],
       { cwd: consumer, timeout: 30_000 }
     );
-    const child = spawn(process.execPath, [cli, "executor-kernel", "run", "--home", home], {
-      cwd: consumer,
-      stdio: ["ignore", "pipe", "pipe"]
-    });
+    const child = spawn(
+      process.execPath,
+      [cli, "executor-kernel", "run", "--json", "--home", home],
+      {
+        cwd: consumer,
+        stdio: ["ignore", "pipe", "pipe"]
+      }
+    );
     let stdout = "",
       stderr = "";
     child.stdout.on("data", (chunk) => {
@@ -239,12 +246,12 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     });
     try {
       const end = Date.now() + 30_000;
-      while (!stdout.includes('"state":"ready"')) {
+      while (!/"state"\s*:\s*"ready"/.test(stdout)) {
         if (child.exitCode !== null || child.signalCode !== null || Date.now() >= end)
           throw new Error(`Kernel CLI failed: ${stdout} ${stderr}`);
         await new Promise((resolveWait) => setTimeout(resolveWait, 50));
       }
-      const status = JSON.parse((await run(["status"])).stdout);
+      const status = JSON.parse((await run(["status", "--json"])).stdout);
       assert.equal(status["executor-kernel"].runtime.execution_ready, true);
       assert.equal(status["executor-kernel"].runtime.pid, child.pid);
       assert.equal(status["channel-gateway"].runtime.available, false);

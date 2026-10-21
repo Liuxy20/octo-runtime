@@ -1,0 +1,45 @@
+baseline: 0c1d1c99c90a85c715212de6e55858a41924f058
+integration_baseline: 43cdee721857495138bb48539b2c42dfa5d8ca8b
+review_remediation:
+  pull_request: 80
+  component_mutations_locked: true
+  foreground_terminal_diagnostics: true
+  native_stop_delete_confirmation: true
+  historical_exit_status_not_current_failure: true
+issue: 75
+product_policy:
+  audience: ordinary_users
+  component_install_autostart_default: true
+  repeat_install_without_flag_enables_autostart: true
+  independent_component_autostart: true
+  start_installs_missing_component: true
+  automatic_install_progress: stderr
+  component_help_includes_purpose: true
+  start_restart_include_component_status: true
+  delivery_status: retained_receipt_count_only
+  default_output: human_readable
+  cross_service_enable_disable_contract: unchanged
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/channel-integration.md
+authorization:
+  worktree: true
+  implementation: true
+  isolated_native_testing: true
+  commit: true
+  push: true
+  pull_request: true
+  merge_main: true
+  global_unlink: true
+  publish: false

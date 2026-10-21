@@ -23,7 +23,9 @@ octo-runtime --home /absolute/runtime/state adapter list
 octo-runtime --home /absolute/runtime/state adapter probe codex
 ```
 
-SDK 查看 KernelClient.status 的 execution_ready、worker 状态及 ExtraService.status 的 plugin/kernel_available。socket 文件、历史 connected 值或 Extra 初始化成功均不能替代实际就绪／连接证据。全局 status 分别返回两个组件的 service/runtime 状态。
+SDK 查看 KernelClient.status 的 execution_ready、worker 状态及 ExtraService.status 的 plugin/kernel_available。socket 文件、历史 connected 值或 Extra 初始化成功均不能替代实际就绪／连接证据。全局 status 查询 Kernel 与各已配置 Extra 自身 status；`executor-kernel status` 或 `<extra-name> status` 单独查询对应组件。默认紧凑文本展示业务健康和计数，`--json` 输出缩进 JSON 完整状态。
+
+Kernel 与每个 Extra 分别执行 start，未安装时自动注册本组件并开启登录/manager 激活自启，向 stderr 打印安装及启动进度；--json 的 stdout 只保留最终结果。显式 install 首次和重复安装同样默认自启，只有 --autostart=false 才关闭。禁用后，start/restart 提示用 install --autostart=true 恢复，普通 install 同样恢复自启。Extra 先启动允许 Kernel 暂时不可用，后续 Kernel 上线无须重新启动 Extra，不存在必须 Kernel 先启动的依赖。裸组件命令显示用途及配置/启动帮助。修改配置后只重启对应服务，不改变其他组件。
 
 ## 排障
 
@@ -42,6 +44,8 @@ SDK 查看 KernelClient.status 的 execution_ready、worker 状态及 ExtraServi
 ## 日志与验收
 
 SDK Extra 的 logging 默认关闭，宿主可向 createExtraService 显式传 `logging: { directory: "/absolute/logs" }`；Kernel 通过 worker 的 OCTO_RUNTIME_LOGS_DIRECTORY 环境指定目录。当前 CLI 为 Kernel worker 和 Gateway 配置 `<home>/logs`，不支持 --logs-dir/--verbose/--force。start 不改已安装的服务定义。旧 OCTO_RUNTIME_DEBUG 不创建独立 Host debug 文件。
+
+CLI 初始化失败也使用下面的统一结构化日志：`cli.initialization_failed` 保存稳定错误码，`cli.initialization_cause` 保存受控原因码；日志关闭沿有界刷新，不额外捕获原始 stdout/stderr。检查管理器退出码、IPC 超时与提前退出，不能仅靠 COMMAND_FAILED 猜测。文本错误写 stderr；--json 错误写 stdout，均须检查退出码。JSON 接口不输出任意异常正文或原生 stderr，以免泄露凭据。
 
 文件按 UTC 小时命名：内核 `<directory>/kernel-YYYYMMDDTHH.log`，Extra `<directory>/extras/<extra_type>-YYYYMMDDTHH.log`。每个序列保留最近 3 个实际日志文件，包含当前文件，单文件最多 100 MiB；没有新日志的小时不创建空文件。停机或空闲跨天不按时间年龄删除这 3 个文件，产生第四个文件后淘汰最旧归档。启动、首条小时写入及每 60 秒执行本序列清理，停止后不清理；其他类别、用户文件和旧固定文件不受影响。时钟回拨时保留当前活动文件，再按文件名时间保留两个最新归档。见[逐项实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。
 

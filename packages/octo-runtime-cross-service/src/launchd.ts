@@ -1,6 +1,7 @@
 /** macOS current-user service backend implemented with a LaunchAgent. */
 import { mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
   definitionDrift,
   escapeXml,
@@ -139,7 +140,7 @@ export class LaunchdUserBackend implements ServiceBackend {
     if (changed && wasLoaded) {
       // launchd does not reload changed plist bytes in place. Replace a loaded
       // job, but keep it unloaded when the desired definition is disabled.
-      await this.#bootout(label);
+      await this.#bootout(label, normalized.timeoutStopSeconds);
       if (normalized.enabled) await this.#bootstrap(definitionPath);
     }
   }
@@ -148,7 +149,7 @@ export class LaunchdUserBackend implements ServiceBackend {
   async uninstall(spec: ServiceSpec): Promise<void> {
     const normalized = this.#normalize(spec);
     const label = launchdLabel(normalized);
-    await this.#bootout(label);
+    await this.#bootout(label, normalized.timeoutStopSeconds);
     await removeDefinition(this.#definitionPath(label));
   }
 
@@ -194,7 +195,7 @@ export class LaunchdUserBackend implements ServiceBackend {
   /** Finish with the job absent from the user's launchd domain; the plist remains installed. */
   async stop(spec: ServiceSpec): Promise<void> {
     const normalized = await this.#installed(spec);
-    await this.#bootout(launchdLabel(normalized));
+    await this.#bootout(launchdLabel(normalized), normalized.timeoutStopSeconds);
   }
 
   /** Finish with a newly kicked/bootstrapped process, while leaving identity and data files unchanged. */
@@ -270,9 +271,9 @@ export class LaunchdUserBackend implements ServiceBackend {
     );
     if (result.exitCode !== 0) return false;
     const match = result.stdout.match(
-      new RegExp(`["']?${escapeRegExp(label)}["']?\\s*=>\\s*(true|false)`)
+      new RegExp(`["']?${escapeRegExp(label)}["']?\\s*=>\\s*(true|false|enabled|disabled)`)
     );
-    return match?.[1] === "true";
+    return match?.[1] === "true" || match?.[1] === "disabled";
   }
 
   #setEnabled(label: string, enabled: boolean): Promise<unknown> {
@@ -299,11 +300,23 @@ export class LaunchdUserBackend implements ServiceBackend {
     );
   }
 
-  async #bootout(label: string): Promise<void> {
+  async #bootout(label: string, timeoutSeconds: number): Promise<void> {
     if ((await this.#print(label)).exitCode !== 0) return;
     await runCommand(this.#runner, this.kind, this.#launchctl, ["bootout", this.#target(label)], {
       env: this.#environment
     });
+    // bootout 默认异步返回；确认旧 job 消失后才能 stop 完成或 bootstrap。
+    // 有界轮询避免 --wait 无界阻塞及旧版 launchctl 的兼容问题。
+    const until = Date.now() + (timeoutSeconds + 5) * 1000;
+    while ((await this.#print(label)).exitCode === 0) {
+      if (Date.now() >= until)
+        throw new ServiceError("COMMAND_FAILED", "launchd service did not finish unloading", {
+          backend: this.kind,
+          command: this.#launchctl,
+          exitCode: 124
+        });
+      await sleep(50);
+    }
   }
 }
 

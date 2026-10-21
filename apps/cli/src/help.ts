@@ -26,14 +26,61 @@ const validBuildTime =
 const cliBuildInfo = `build:${validBuildTime ? buildTime : "unknown"}`;
 export const cliVersionInfo = `${cliVersion}\n${cliCommitInfo}\n${cliBuildInfo}`;
 
-export function helpText(): string {
+const componentDescriptions: Record<string, string> = {
+  "executor-kernel": `Local Agent execution service. Runs requests through Provider adapters and
+supervises the execution worker used by Gateway, WeCom, WebUI and SDK clients.
+Install and authenticate your chosen Provider before running Agent tasks.
+
+Get started: octo-runtime executor-kernel start
+Check readiness: octo-runtime executor-kernel status`,
+  "channel-gateway": `Connects Octo IM Bots to local Agent execution. Receives messages, invokes
+the Executor Kernel and sends Agent replies back to Octo IM.
+
+Configure Bots: octo-runtime extraset channel-gateway < gateway.json
+Start: octo-runtime channel-gateway start
+Agent tasks also need: octo-runtime executor-kernel start`,
+  "channel-wecom": `Connects WeCom Bots to local Agent execution. Receives WeCom messages,
+invokes the Executor Kernel and sends Agent replies back to WeCom.
+
+Configure Bots: octo-runtime extraset channel-wecom < wecom.json
+Start: octo-runtime channel-wecom start
+Agent tasks also need: octo-runtime executor-kernel start`,
+  webui: `Local browser workspace for Agent conversations and projects.
+Uses the Executor Kernel for Agent execution; default URL: http://127.0.0.1:13888/.
+
+Configure port and sessionStorePath: octo-runtime extraset webui < webui.json
+Start: octo-runtime webui start
+Agent tasks also need: octo-runtime executor-kernel start`
+};
+
+export function helpText(component?: string): string {
+  if (component)
+    return `Octo Runtime: ${component}
+
+${componentDescriptions[component] ?? `Configured Extra service "${component}". Runs its registered module independently.\nConfiguration: octo-runtime extraget ${component}`}
+
+Usage: octo-runtime ${component} <command> [flags]
+
+Commands:
+  install       Register and enable this service (autostart on by default)
+  uninstall     Remove this service, preserving configuration and data
+  start         Install if needed, then start this service and wait for readiness
+  restart       Restart this service and wait for local readiness
+  stop          Stop this service, preserving its autostart setting
+  status        Show native service, IPC and component status
+  run           Run this component in the foreground
+
+Flags: --home <path> --profile <name> --manifest <path> --json --help
+Install: --autostart=true|false
+Kernel and Extras have independent services and autostart settings.
+An Extra may start before Kernel and connect when Kernel becomes available.`;
   return `Octo Runtime CLI (${cliVersion})
 ${cliVersionInfo.split("\n").slice(1).join("\n")}
 Manage the local Agent runtime and independent services.
 
 Usage:
-octo-runtime executor-kernel uninstall|install|start|restart|stop|run
-octo-runtime channel-gateway uninstall|install|start|restart|stop|run
+octo-runtime executor-kernel uninstall|install|start|restart|stop|status|run
+octo-runtime <extra-name> uninstall|install|start|restart|stop|status|run
 octo-runtime status [--json]
 octo-runtime adapter list
 octo-runtime adapter probe <type>
@@ -43,5 +90,12 @@ octo-runtime extraget <name>
 octo-runtime playboard < request.json
 
 Flags: --home <path> --profile <name> --manifest <path> --json
-Install: --autostart=true|false (first install defaults to false)`;
+Install: --autostart=true|false (defaults to true)
+Extras: channel-gateway, channel-wecom, webui, or a name saved by extraset.
+Components:
+  executor-kernel  Local Agent execution and worker supervision
+  channel-gateway Octo IM Bot messaging and Agent replies
+  channel-wecom   WeCom Bot messaging and Agent replies
+  webui           Local browser workspace for Agent conversations
+Use octo-runtime <component> --help for component commands.`;
 }

@@ -51,6 +51,8 @@ ACP 的每个 session 更新队列、ZCode 的每次客户端事件队列复用 
 
 ## 插件状态
 
+Gateway 的 cardDeliveries、Gateway/WeCom 的 deliveries 仅输出当前保留回执的总数，直接读取 Map.size，不复制或公开 effectKey/messageId 明细；不是累计发送量。原有投递重试与每个投递器最多 512 条的防重回执缓存保持不变。512 是当前容量选择而非协议常量；此上限不等同于整个进程 RSS 上限或重启后恰好一次投递。用户于 2026-10-21 明确本项只调整状态展示，不借此改造投递机制。
+
 Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 reset 见 [会话合同](session-reset.md)。Octo Gateway 可显式消费宿主 createSessionStore 返回的句柄，数据仍属于宿主；整个 Runtime 不依赖 SQLite、不提供适配、表结构或迁移。这些业务映射不属于通用 Host 的持久历史。默认映射失效后创建新会话；宿主持久 binding 也不等于 Provider 会话必定恢复或旧 Run 可继续执行。
 
 2026-10-15 用户对 Channel Gateway 再次确认：不新增 Context、聊天正文、输入图片、业务 Provider binding 或投递账本的本地持久化，不在 Adapter 建业务状态库；在途与连接状态保持有界内存。需要新会话背景时由 Channel 调用 API 获取当前频道此前 15 条并显式提交 extra Context；此策略于 2026-10-16 实施，一次资格保存在现有有界 binding 中。Provider 原生存储、现有身份和配置不因本决策删除或重置。依据、代价与验收见[不持久化决策](../tasks/channel-no-context-persistence/brief.md)及[历史 Context 专项](../tasks/channel-new-session-history/brief.md)。

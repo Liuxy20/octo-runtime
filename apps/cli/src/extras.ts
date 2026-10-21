@@ -46,7 +46,12 @@ export async function readExtra(paths: RuntimePaths, name: string): Promise<Extr
   if (!entry) throw new Error("EXTRA_NOT_REGISTERED");
   // Invalid stored declarations carry a controlled read error through their loader.
   if (!entry.module) await entry.load();
-  return { name, module: entry.module!, config: entry.config };
+  return {
+    name,
+    module: entry.module!,
+    config: entry.config,
+    ...(entry.enabled === undefined ? {} : { enabled: entry.enabled })
+  };
 }
 
 export async function getExtra(paths: RuntimePaths, name: string): Promise<StoredExtra> {

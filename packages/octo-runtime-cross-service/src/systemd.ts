@@ -1,7 +1,9 @@
 /** Linux current-user service backend implemented with `systemctl --user`. */
 import { mkdir } from "node:fs/promises";
 import { dirname, join, posix } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
+  assertCommandSucceeded,
   definitionDrift,
   normalizeServiceSpec,
   parseProperties,
@@ -148,15 +150,16 @@ export class SystemdUserBackend implements ServiceBackend {
       await this.#command(["restart", unit]);
   }
 
-  /** Finish with the unit stopped, disabled, removed, and forgotten by the user manager. */
+  /** 确认用户 unit 已停止再禁用、移除定义；真实管理器失败传播给调用方，保留未删定义。 */
   async uninstall(spec: ServiceSpec): Promise<void> {
     const normalized = this.#normalize(spec);
     const unit = systemdUnit(normalized);
-    await this.#command(["stop", unit], false);
-    await this.#command(["disable", unit], false);
+    await this.#commandOrMissing(["stop", unit], unit);
+    await this.#waitInactive(unit, normalized.timeoutStopSeconds);
+    await this.#commandOrMissing(["disable", unit], unit);
     await removeDefinition(this.#definitionPath(unit));
     await this.#command(["daemon-reload"]);
-    await this.#command(["reset-failed", unit], false);
+    await this.#commandOrMissing(["reset-failed", unit], unit);
   }
 
   /** Add the default-target link for future user-manager activation; do not start now. */
@@ -185,10 +188,12 @@ export class SystemdUserBackend implements ServiceBackend {
     if (status.state !== "running") await this.#command(["start", systemdUnit(normalized)]);
   }
 
-  /** Finish with no active process for the installed unit; keep the unit file and enablement. */
+  /** 请求停止并有界确认 inactive/failed 且无主进程，保留定义与自启设置。 */
   async stop(spec: ServiceSpec): Promise<void> {
-    const unit = systemdUnit(await this.#installed(spec));
-    await this.#command(["stop", unit]);
+    const normalized = await this.#installed(spec);
+    const unit = systemdUnit(normalized);
+    await this.#commandOrMissing(["stop", unit], unit);
+    await this.#waitInactive(unit, normalized.timeoutStopSeconds);
   }
 
   /** Finish with systemd having launched a replacement process; persistent Runtime data is unchanged. */
@@ -251,6 +256,45 @@ export class SystemdUserBackend implements ServiceBackend {
       checked,
       env: this.#environment
     });
+  }
+
+  /** not-found 不等同于 inactive；删除定义前必须同时确认进程已停止。 */
+  async #commandOrMissing(args: readonly string[], unit: string): Promise<void> {
+    const result = await this.#command(args, false);
+    if (result.exitCode === 0) return;
+    const shown = await this.#show(unit);
+    const properties = parseProperties(shown.stdout);
+    if (
+      properties.LoadState === "not-found" &&
+      properties.ActiveState === "inactive" &&
+      properties.MainPID === "0"
+    )
+      return;
+    assertCommandSucceeded(result, this.kind);
+  }
+
+  async #waitInactive(unit: string, seconds: number): Promise<void> {
+    const end = Date.now() + seconds * 1000;
+    while (true) {
+      const shown = await this.#show(unit);
+      const properties = parseProperties(shown.stdout);
+      if (properties.LoadState !== "not-found") assertCommandSucceeded(shown, this.kind);
+      if (
+        ["inactive", "failed"].includes(properties.ActiveState ?? "") &&
+        properties.MainPID === "0"
+      )
+        return;
+      assertCommandSucceeded(shown, this.kind);
+      if (!properties.ActiveState || properties.MainPID === undefined)
+        throw new ServiceError("MANAGER_UNAVAILABLE", "systemd did not report process state", {
+          backend: this.kind
+        });
+      if (Date.now() >= end)
+        throw new ServiceError("COMMAND_FAILED", "systemd stop did not complete", {
+          backend: this.kind
+        });
+      await sleep(100);
+    }
   }
 }
 

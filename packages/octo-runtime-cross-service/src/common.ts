@@ -122,15 +122,20 @@ export async function runCommand(
       detail: cause instanceof Error ? cause.message : String(cause)
     });
   }
-  if ((options.checked ?? true) && result.exitCode !== 0) {
+  if (options.checked ?? true) assertCommandSucceeded(result, backend);
+  return result;
+}
+
+/** 平台仅在确认原生 not-found 后忽略失败，其他结果沿同一受控错误合同传播。 */
+export function assertCommandSucceeded(result: CommandResult, backend: ServiceBackendKind): void {
+  if (result.exitCode !== 0) {
     throw new ServiceError("COMMAND_FAILED", `${backend} command failed`, {
       backend,
-      command,
+      command: result.command,
       exitCode: result.exitCode,
       detail: boundedDetail(result.stderr || result.stdout)
     });
   }
-  return result;
 }
 
 /** Read a UTF-8 service definition; absence is represented as `undefined`. */

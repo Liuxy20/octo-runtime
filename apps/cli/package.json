@@ -12,6 +12,7 @@
   },
   "types": "./dist/index.d.ts",
   "dependencies": {
+    "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
     "json5": "^2.2.3",
     "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*",
     "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",

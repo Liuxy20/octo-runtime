@@ -102,7 +102,7 @@ export class ImRuntime {
       connected: this.#state === "online",
       state: this.#state,
       error: this.#error ?? null,
-      deliveries: this.#delivery?.receipts ?? [],
+      deliveries: this.#delivery?.receiptCount ?? 0,
       workingTasks: this.#working,
       queuedTasks: [...this.#sessions.values()].reduce(
         (sum, session) => sum + Math.max(0, session.pending - 1),

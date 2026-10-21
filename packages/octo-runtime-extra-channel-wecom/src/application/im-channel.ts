@@ -67,7 +67,7 @@ export class ImRuntime {
       connected: this.#state === "online",
       state: this.#state,
       error: this.#error ?? null,
-      deliveries: this.#delivery?.receipts ?? [],
+      deliveries: this.#delivery?.receiptCount ?? 0,
       sessions: [...this.#sessions.values()].map((session) => ({
         sessionId: session.id,
         generation: session.generation,

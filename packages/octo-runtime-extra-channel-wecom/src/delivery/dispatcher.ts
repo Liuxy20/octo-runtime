@@ -7,8 +7,9 @@ import type { ImDeliveryReceipt } from "../contracts.js";
 export class ImDeliveryDispatcher {
   readonly #receipts = new Map<string, ImDeliveryReceipt>();
   constructor(readonly signal: AbortSignal) {}
-  get receipts(): ImDeliveryReceipt[] {
-    return [...this.#receipts.values()].map((r) => ({ ...r }));
+  /** 状态仅读取数量，避免复制和输出用于防重的内部回执。 */
+  get receiptCount(): number {
+    return this.#receipts.size;
   }
 
   async deliver(

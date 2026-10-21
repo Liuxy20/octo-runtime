@@ -22,7 +22,7 @@ test("Extra configuration belongs to Home even when the default profile changes"
     await runCli(["--home", home, "extraget", "example"], { output() {}, errorOutput }),
     1
   );
-  assert.deepEqual(warnings, []);
+  assert.match(warnings[0], /EXTRA_NOT_REGISTERED/);
   const stored = { module: "device-extra", config: { shared: true } };
   await runCli(["--home", home, "extraset", "example"], {
     input: Readable.from([JSON.stringify(stored)]),

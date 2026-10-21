@@ -56,11 +56,11 @@ Replace `codex` with the Adapter type you plan to use. A successful probe checks
 For a service managed by the operating system, stop the foreground process first, then register and start the service:
 
 ```sh
-octo-runtime executor-kernel install --autostart=true
+octo-runtime executor-kernel install
 octo-runtime executor-kernel start
 ```
 
-`install` registers the service without starting it. First installation defaults to autostart disabled unless explicitly enabled. Service management uses launchd on macOS, systemd user services on Linux, and Task Scheduler on Windows.
+`install` registers the selected service and enables autostart by default on first and repeated installs. Use `--autostart=false` to disable it explicitly. `start` automatically installs a missing component with progress on stderr; existing services keep their settings. Successful `start` and `restart` include component status. Status is readable text by default; use `--json` for formatted machine output. Service management uses launchd on macOS, systemd user services on Linux, and Task Scheduler on Windows. Kernel and Extras have independent autostart and can start in either order.
 
 Manage the registered service with:
 

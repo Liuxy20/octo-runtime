@@ -198,6 +198,8 @@ test("Windows install registers structured XML and inspect detects no drift", as
       return registered ? result() : result(1, "", "task not found");
     }
     if (command.endsWith("powershell.exe")) {
+      if (args.at(-1).includes("Schedule.Service"))
+        return result(0, JSON.stringify({ exists: registered }));
       if (!registered) return result(1, "", "task not found");
       return result(
         0,
@@ -273,6 +275,83 @@ test("backend factory selects the native user manager and rejects unsupported pl
     (error) => error instanceof ServiceError && error.code === "UNSUPPORTED_PLATFORM"
   );
 });
+
+test("launchd stop waits for asynchronous bootout before a subsequent start", async (t) => {
+  const home = await mkdtemp(join(tmpdir(), "oc75-launchd-stop-"));
+  t.after(() => rm(home, { recursive: true, force: true }));
+  let state = "absent";
+  let pendingPrints = 0;
+  const runner = new FakeRunner((_command, args) => {
+    if (args[0] === "print") {
+      if (state === "unloading" && pendingPrints-- <= 0) state = "absent";
+      return state === "absent"
+        ? result(113)
+        : result(0, `state = ${state === "unloading" ? "not running" : "running"}\n`);
+    }
+    if (args[0] === "bootout") {
+      state = "unloading";
+      pendingPrints = 2;
+    }
+    if (args[0] === "bootstrap") {
+      assert.equal(state, "absent");
+      state = "running";
+    }
+    assert.notEqual(args[0], "kickstart", "must not kickstart the exiting job");
+    return result();
+  });
+  const backend = new LaunchdUserBackend({
+    platform: "darwin",
+    runner,
+    homeDirectory: home,
+    uid: 501
+  });
+  const spec = {
+    ...unixSpec,
+    workingDirectory: home,
+    stdoutPath: undefined,
+    stderrPath: undefined
+  };
+  await backend.install(spec);
+  await backend.start(spec);
+  await backend.stop(spec);
+  assert.equal((await backend.inspect(spec)).state, "stopped");
+  await backend.start(spec);
+  assert.equal((await backend.inspect(spec)).state, "running");
+});
+
+for (const value of ["true", "disabled", "false", "enabled"]) {
+  test(`launchd recognizes the ${value} override format`, async (t) => {
+    const home = await mkdtemp(join(tmpdir(), "oc75-launchd-format-"));
+    t.after(() => rm(home, { recursive: true, force: true }));
+    const runner = new FakeRunner((_command, args) => {
+      if (args[0] === "print-disabled") return result(0, `"${unixSpec.id}" => ${value}`);
+      if (args[0] === "print") return result(113);
+      return result();
+    });
+    const backend = new LaunchdUserBackend({
+      platform: "darwin",
+      runner,
+      homeDirectory: home,
+      uid: 501
+    });
+    const spec = {
+      ...unixSpec,
+      workingDirectory: home,
+      stdoutPath: undefined,
+      stderrPath: undefined
+    };
+    await backend.install(spec);
+    const disabled = value === "true" || value === "disabled";
+    assert.equal((await backend.inspect(spec)).enabled, !disabled);
+    if (disabled)
+      await assert.rejects(backend.start(spec), (error) => error.code === "SERVICE_DISABLED");
+    else await backend.start(spec);
+    assert.equal(
+      runner.calls.some((call) => call.args[0] === "bootstrap"),
+      !disabled
+    );
+  });
+}
 
 class FakeRunner {
   calls = [];

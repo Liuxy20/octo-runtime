@@ -102,6 +102,9 @@ importers:
 
   apps/cli:
     dependencies:
+      '@mininglamp-oss/octo-runtime-adapter-sdk':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-sdk
       '@mininglamp-oss/octo-runtime-adapter-openclaw':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-adapter-openclaw

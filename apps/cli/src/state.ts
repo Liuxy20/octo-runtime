@@ -347,7 +347,7 @@ async function acquireProcessLock(path: string): Promise<() => Promise<void>> {
       if (!isNodeError(error, "EEXIST")) throw error;
       const owner = await readLockOwner(path);
       if (owner !== undefined && processAlive(owner)) {
-        throw new Error(`another setup process is active (pid ${owner})`, { cause: error });
+        throw new Error("SETUP_IN_PROGRESS", { cause: error });
       }
       await rm(path, { force: true });
     }

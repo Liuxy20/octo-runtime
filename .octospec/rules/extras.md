@@ -3,8 +3,8 @@ type: Rule
 title: Extra 加载与业务边界
 description: 插件归属、统一 KernelClient、停止清理与显式装配。
 tags: ["extra","lifecycle","installation"]
-timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/69-kernel-client-invoke
+timestamp: 2026-10-21T00:00:00Z
+implementation_baseline: fix/75-cli-lifecycle
 id: runtime-extras
 tier: repo
 priority: 90
@@ -43,7 +43,7 @@ export default function extra(ctx: ExtraContext, config: JsonObject) {
 
 宿主选择配置来源、持久化和凭据保护，SDK 只消费已解析的 JSON 值。JSON 不允许函数、循环引用、非 JSON 值。SDK 不读取宿主数据库或云端配置中心。配置、模块或函数引用变化时按“停止旧 Extra并确认完整 → 保存完整配置 → 创建新 Extra”处理，不恢复 onConfigure、局部 reconcile 或业务对象控制。
 
-CLI extraset 整份替换 <home>/extras/<name>/config.json，POSIX 0600；extraget 显式返回完整配置。配置属于 Home，不能以 profile 分区。应用使用 SDK 时无需这个文件。CLI 仅重启 channel-gateway 自己的服务，Kernel 和其他 Extra 不变。
+CLI extraset 整份替换 <home>/extras/<name>/config.json，POSIX 0600；extraget 显式返回完整配置。配置属于 Home，不能以 profile 分区。应用使用 SDK 时无需这个文件。CLI 以注册名称独立管理各 Extra 服务；例如 channel-gateway/channel-wecom/webui，各自 install/start/restart/stop/status/run，自启也按组件设置。重启只影响对应 Extra，Kernel 和其他 Extra 不变。全局 status 逐个查询已配置 Extra 自身公开状态，不只查询进程或 Kernel。
 
 ## 动态函数与实际在途
 

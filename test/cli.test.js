@@ -13,6 +13,9 @@ test("CLI help and version are local and removed daemon commands cannot create a
     ["--help"],
     ["executor-kernel", "--help"],
     ["channel-gateway", "--help"],
+    ["executor-kernel"],
+    ["channel-gateway"],
+    ["webui"],
     ["--version"]
   ]) {
     let text = "";

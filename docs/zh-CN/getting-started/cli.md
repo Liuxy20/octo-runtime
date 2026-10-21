@@ -56,11 +56,11 @@ octo-runtime doctor
 需要由操作系统管理后台服务时，先停止前台进程，再注册并启动服务：
 
 ```sh
-octo-runtime executor-kernel install --autostart=true
+octo-runtime executor-kernel install
 octo-runtime executor-kernel start
 ```
 
-`install` 只注册服务，不会启动服务。首次安装未指定自启动参数时，默认关闭自启动。macOS 使用 launchd，Linux 使用 systemd 用户服务，Windows 使用任务计划程序。
+`install` 注册所选服务，首次和重复安装均默认开启自启，只有显式 `--autostart=false` 才禁用。`start` 在未安装时自动安装本组件并向 stderr 输出进度；已安装时保留设置。`start` 和 `restart` 成功后包含组件状态。状态默认易读文本，`--json` 输出格式化机器数据。macOS 使用 launchd，Linux 使用 systemd 用户服务，Windows 使用任务计划程序。Kernel 与各 Extra 独立自启，不要求启动顺序。
 
 使用以下命令管理已注册的服务：
 

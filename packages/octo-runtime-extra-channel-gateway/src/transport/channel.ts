@@ -73,7 +73,10 @@ export class GatewayTransport {
     this.botId = config.bot_id;
   }
   get status() {
-    return { connected: this.#connected, cardDeliveries: this.#delivery?.receipts ?? [] };
+    return {
+      connected: this.#connected,
+      cardDeliveries: this.#delivery?.receiptCount ?? 0
+    };
   }
   async start(signal: AbortSignal): Promise<void> {
     this.#closed = false;

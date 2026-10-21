@@ -3,8 +3,8 @@ type: Rule
 title: 本地身份、生命周期与就绪事实
 description: Home、账号与租户 profile 的身份隔离及本地 SDK 生命周期。
 tags: ["runtime","identity","lifecycle"]
-timestamp: 2026-10-20T00:00:00Z
-implementation_baseline: feat/69-kernel-client-invoke
+timestamp: 2026-10-21T00:00:00Z
+implementation_baseline: fix/75-cli-lifecycle
 id: runtime-lifecycle
 tier: repo
 priority: 90
@@ -65,9 +65,21 @@ Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervis
 
 ## CLI
 
-两组固定命令为 executor-kernel 和 channel-gateway，分别提供 uninstall/install/start/restart/stop/run。首次 install 默认不自启，重复安装省略选项保留原值；--autostart=true/false 显式修改。start/restart 要求已安装，不隐式安装、启用或控制另一组件。stop 不修改自启；uninstall 保留 Home 和用户数据。
+start/restart 成功结果复用本组件 status 的查询与格式化：展示服务、自启、IPC、Manager、PID、Worker/Extra 业务状态和服务定义路径；JSON 保留 component/action 并提供同一 service/runtime 数据。启动成功不等同于 Bot 已连通，业务状态沿 Extra 自身接口反馈。
 
-status 汇总原生服务状态、Kernel 可用性和 Extra 状态。run 前台组件意外退出时 CLI 返回失败；SIGINT/SIGTERM 时等待清理，未完整清理返回 5。服务 ID 和端点按规范化 Home 与组件派生。
+CLI 遵循[面向普通用户的产品默认值](architecture.md#cli-面向普通用户的产品默认值)，为 executor-kernel 与每个已配置 Extra 提供 uninstall/install/start/restart/stop/status/run；内置 Extra 名为 channel-gateway、channel-wecom、webui。裸组件显示用途、配置/启动入口和命令帮助。install 默认注册并开启本组件自启，首次和重复安装相同；只有显式 --autostart=false 才禁用，再次普通 install 恢复开启。start 在组件锁内检查安装状态，未安装时自动注册本组件并开启自启，向 stderr 打印安装及启动阶段进度，随后启动并等待 IPC 就绪；安装失败不继续启动，--json 的 stdout 只保留最终结果。已安装时保留服务定义及自启设置；restart 未安装返回 3。显式禁用时 start/restart 保留 cross-service 的 SERVICE_DISABLED 并提示 install --autostart=true，不安装或控制另一组件。stop 不修改自启；uninstall 保留 Home 和用户数据。两个自启服务或多个 Extra 不依赖启动顺序；Extra 先启动可报告 Kernel 不可用，Kernel 后续上线时沿现有 client 恢复可用状态，不创建替代 Kernel。
+
+cross-service 沿用既有各平台启用/禁用实现：macOS 的 LaunchAgents 和 disabled override、Linux 的 user unit 与 target enable 链接、Windows 整个用户任务的 Enabled 设置。本轮不迁移 plist 目录或改造 Windows 触发器。均为用户服务，自动激活时机是用户登录/manager 激活，不承诺未登录时运行。
+
+macOS stop/uninstall 及定义替换不能把 bootout 请求已受理视为卸载完成；有界确认旧 job 从原生 manager 消失后才允许返回或 bootstrap。print-disabled 的 true/false 和 enabled/disabled 两种输出均须正确解析。
+
+组件 install/start/restart/stop/uninstall 共用按 Home/组件派生的 setup lock，原生修改、就绪等待及最终状态确认均在锁内；同组件并发修改返回 SETUP_IN_PROGRESS，不调用管理器；不同组件不共用锁。start/restart 不把管理器保留的 LastTaskResult/ExecMainStatus 当作本次失败，缺少当前失败证据时保留就绪预算。
+
+systemd/Windows 的停止或删除失败不得静默视为成功；只有原生明确 not-found 可忽略，管理器不可用和权限失败须传播。systemd 删除 unit 前确认 inactive/failed 且 MainPID=0；Windows /End 后有界确认任务不再 running/queued，再删除或 /Run 替换，未确认前保留定义。Windows 非零 /Query 不能直接推定不存在，通过 Task Scheduler 原生 HRESULT 确认，不能依赖本地化错误文字。
+
+前台 run 的初始化失败、意外关闭和 closed 拒绝共用幂等终态处理：先解除 signal 监听并取消初始化，再确认清理、记录受控诊断及输出一次失败。意外关闭即使发生在 ready 后也不能只返回退出码；清理异常不吞掉原始初始化失败。正常 signal 停止仍等待清理并保留 incomplete 退出码。
+
+status 汇总原生服务状态、Kernel 可用性和每个已配置 Extra 自身 status；单组件 status 只查询该组件。服务状态失败独立呈现，不阻止其他组件查询。默认输出紧凑文本，业务状态、Bot 健康和任务/队列/会话等计数继续展示；--json 使用缩进 JSON 保留完整公开状态，需脚本读取的旧 status 调用显式添加 --json。extraget 保留紧凑完整 JSON，playboard 保留 NDJSON。文本错误写 stderr，JSON 错误写 stdout，并返回非零码；异常正文可能含凭据，只输出稳定错误码、受控 cause_code、原生管理器命令名及退出码、排障提示和日志目录。run 前台组件意外退出时 CLI 返回失败；SIGINT/SIGTERM 时等待清理，未完整清理返回 5。服务 ID 和端点按规范化 Home 与组件派生。
 
 CLI 可执行入口仅为参数解析及校验确认的前台组件 run 选择有界最终退出：命令返回后设置原退出码，250ms 后若仍因残留句柄存活则显式退出。该定时器 unref，正常资源回收后无需额外等待。extraget 等数据命令、帮助、状态和部署命令必须自然等待 stdout/stderr 刷新，不能以固定 timer 截断慢管道并返回成功。命令类型由既有解析结果通知可执行入口，不能重复猜测参数。最终退出不改变 incomplete 事实；进程退出只属于可执行入口，不进入 SDK 或可导入的 runCli，也不作为同进程同步死循环的强停保证。
 

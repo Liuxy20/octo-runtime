@@ -701,6 +701,7 @@ test("Cards create/edit one stable message with monotone card_seq and persistent
   assert.equal(edits[1].body.transient, undefined);
   assert.equal(edits[1].body.message_id, "9223372036854775801");
   assert.equal(edits[1].body.state, "completed");
+  assert.equal(delivery.receiptCount, 3);
   assert.ok(stopped > 0);
   assert.equal(f.requests.filter((request) => request.path === "/v1/bot/card/profile").length, 1);
 });

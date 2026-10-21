@@ -1,6 +1,8 @@
 /** Windows current-user service backend implemented with Task Scheduler. */
 import { join, win32 } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import {
+  assertCommandSucceeded,
   definitionDrift,
   escapeXml,
   normalizeServiceSpec,
@@ -193,13 +195,11 @@ export class WindowsUserTaskBackend implements ServiceBackend {
     // Re-registration replaces Task Scheduler's definition. Capture running
     // state first so install can restore it without becoming an implicit start.
     const previous = await this.inspect(spec);
+    if (previous.state === "running" || previous.state === "starting") await this.stop(spec);
     await writeDefinition(
       definitionPath,
       renderWindowsTaskXmlNormalized(normalized, taskName, this.#windowsUserId)
     );
-    if (previous.state === "running") {
-      await this.#schtasksCommand(["/End", "/TN", taskName], false);
-    }
     await this.#schtasksCommand(["/Create", "/TN", taskName, "/XML", definitionPath, "/F"]);
     // Restore only a previously running enabled task. A stopped task remains
     // stopped, so setup controls the explicit first start and readiness wait.
@@ -208,12 +208,20 @@ export class WindowsUserTaskBackend implements ServiceBackend {
     }
   }
 
-  /** Finish with no scheduled task or XML sidecar; Runtime credentials and data remain. */
+  /** 确认任务停止并删除后才移除 XML；权限/管理器故障不作为不存在，用户数据保留。 */
   async uninstall(spec: ServiceSpec): Promise<void> {
     const normalized = this.#normalize(spec);
     const taskName = windowsTaskName(normalized);
-    await this.#schtasksCommand(["/End", "/TN", taskName], false);
-    await this.#schtasksCommand(["/Delete", "/TN", taskName, "/F"], false);
+    if (await this.#exists(taskName)) {
+      await this.stop(spec);
+      const result = await this.#schtasksCommand(["/Delete", "/TN", taskName, "/F"], false);
+      if (await this.#exists(taskName)) {
+        assertCommandSucceeded(result, this.kind);
+        throw new ServiceError("COMMAND_FAILED", "Windows task deletion did not complete", {
+          backend: this.kind
+        });
+      }
+    }
     await removeDefinition(this.#definitionPath(normalized));
   }
 
@@ -248,13 +256,37 @@ export class WindowsUserTaskBackend implements ServiceBackend {
     }
   }
 
-  /** Finish with no running task instance; keep the registered task and its logon trigger. */
+  /** 有界确认旧任务不再运行，保留注册和登录触发器；/End 请求受理不代表停止完成。 */
   async stop(spec: ServiceSpec): Promise<void> {
     const normalized = await this.#installed(spec);
-    await this.#schtasksCommand(["/End", "/TN", windowsTaskName(normalized)], false);
+    const taskName = windowsTaskName(normalized);
+    const status = await this.inspect(spec);
+    if (status.state === "stopped" || status.state === "not_installed") return;
+    if (status.state === "unknown")
+      throw new ServiceError("MANAGER_UNAVAILABLE", "Windows task state is unavailable", {
+        backend: this.kind
+      });
+    const result = await this.#schtasksCommand(["/End", "/TN", taskName], false);
+    if (result.exitCode !== 0 && (await this.#exists(taskName)))
+      assertCommandSucceeded(result, this.kind);
+    // /End 仅表示请求受理；旧实例仍运行时不能 /Run（IgnoreNew 会吞掉重启）。
+    const end = Date.now() + normalized.timeoutStopSeconds * 1000;
+    while (true) {
+      const current = await this.inspect(spec);
+      if (current.state === "stopped" || current.state === "not_installed") return;
+      if (current.state === "unknown")
+        throw new ServiceError("MANAGER_UNAVAILABLE", "Windows task state is unavailable", {
+          backend: this.kind
+        });
+      if (Date.now() >= end)
+        throw new ServiceError("COMMAND_FAILED", "Windows task stop did not complete", {
+          backend: this.kind
+        });
+      await sleep(100);
+    }
   }
 
-  /** Finish with a replacement task process; it continues through screen lock but not user sign-out. */
+  /** 确认旧实例停止后再启动替换实例；IPC 就绪仍由宿主查询，注销后不承诺继续运行。 */
   async restart(spec: ServiceSpec): Promise<void> {
     const normalized = await this.#installed(spec);
     const status = await this.inspect(spec);
@@ -268,7 +300,7 @@ export class WindowsUserTaskBackend implements ServiceBackend {
         { backend: this.kind }
       );
     }
-    await this.#schtasksCommand(["/End", "/TN", windowsTaskName(normalized)], false);
+    await this.stop(spec);
     await this.#schtasksCommand(["/Run", "/TN", windowsTaskName(normalized)]);
   }
 
@@ -314,7 +346,29 @@ export class WindowsUserTaskBackend implements ServiceBackend {
 
   async #exists(taskName: string): Promise<boolean> {
     const result = await this.#schtasksCommand(["/Query", "/TN", taskName], false);
-    return result.exitCode === 0;
+    if (result.exitCode === 0) return true;
+    // schtasks 非零也可能是权限/manager 故障；只按原生 ERROR_FILE_NOT_FOUND (0x80070002) 确认缺失。
+    const confirmed = await runCommand(
+      this.#runner,
+      this.kind,
+      this.#powershell,
+      powershellArguments(
+        `$ErrorActionPreference='Stop';$scheduler=New-Object -ComObject Schedule.Service;$scheduler.Connect();$folder=$scheduler.GetFolder('\\');try{$null=$folder.GetTask('${powershellSingleQuote(taskName.slice(1))}');'{"exists":true}'}catch{$errorObject=$_.Exception;while($errorObject.InnerException){$errorObject=$errorObject.InnerException};if($errorObject.HResult -eq -2147024894){'{"exists":false}'}else{throw}}`
+      ),
+      { env: this.#environment }
+    );
+    let exists: unknown;
+    try {
+      const value: unknown = JSON.parse(confirmed.stdout);
+      if (value !== null && typeof value === "object" && "exists" in value) exists = value.exists;
+    } catch {
+      /* 下方统一拒绝不完整结果。 */
+    }
+    if (typeof exists !== "boolean")
+      throw new ServiceError("MANAGER_UNAVAILABLE", "Windows task existence query was invalid", {
+        backend: this.kind
+      });
+    return exists;
   }
 
   #schtasksCommand(args: readonly string[], checked = true): Promise<CommandResult> {

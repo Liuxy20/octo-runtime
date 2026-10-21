@@ -81,7 +81,7 @@ for (const mode of ["hang", "reject", "startup-failure"]) {
       );
       const child = spawn(
         process.execPath,
-        [resolve("apps/cli/dist/index.js"), "--home", home, "channel-gateway", "run"],
+        [resolve("apps/cli/dist/index.js"), "--json", "--home", home, "channel-gateway", "run"],
         { stdio: ["ignore", "pipe", "pipe"] }
       );
       let output = "";
@@ -103,7 +103,7 @@ for (const mode of ["hang", "reject", "startup-failure"]) {
       await waitFor(() => {
         if (child.exitCode !== null) throw new Error(output + errors);
         return output.includes(
-          mode === "startup-failure" ? "SERVICE_INITIALIZATION_FAILED" : '"state":"ready"'
+          mode === "startup-failure" ? "SERVICE_INITIALIZATION_FAILED" : '"state": "ready"'
         );
       }, 5000);
       const started = Date.now();
@@ -153,6 +153,7 @@ test(
         process.execPath,
         [
           resolve("apps/cli/dist/index.js"),
+          "--json",
           "--home",
           home,
           component,
@@ -180,7 +181,7 @@ test(
       });
       await waitFor(() => {
         if (child.exitCode !== null) throw Error(entry.output + entry.errors);
-        return entry.output.includes('"state":"ready"');
+        return entry.output.includes('"state": "ready"');
       }, 10_000);
       return entry;
     }
@@ -196,7 +197,7 @@ test(
     const status = async () => {
       let value;
       assert.equal(
-        await runCli(["--home", home, "status"], {
+        await runCli(["--json", "--home", home, "status"], {
           output: (line) => {
             value = JSON.parse(line);
           }
