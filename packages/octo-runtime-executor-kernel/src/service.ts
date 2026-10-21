@@ -51,7 +51,7 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
       try {
         await beforeDeadline(starting?.catch(() => undefined) ?? Promise.resolve(), until);
         if (startupFailure instanceof AggregateError) throw startupFailure;
-        await beforeDeadline(server?.close() ?? Promise.resolve(), until);
+        await beforeDeadline(server?.close(until) ?? Promise.resolve(), until);
       } catch {
         errors.push({ resource: "kernel", code: "KERNEL_CLEANUP_INCOMPLETE" });
       }

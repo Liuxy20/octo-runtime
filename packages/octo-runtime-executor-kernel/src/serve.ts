@@ -41,9 +41,27 @@ export function serveWorker(
 
   // 父 Kernel 断开或停止时等待 Core 取消和清理；需要替换时由 Kernel 监督器重启相同入口。
   let stopping = false;
-  const stop = (): void => {
+  let drainedExitCode: number | undefined;
+  const stop = (holdForParent = false): void => {
     if (stopping) return;
     stopping = true;
+    // Let the launcher reserve the full bounded drain only for a worker that handles EOF.
+    if (holdForParent && process.connected) process.send?.({ type: "worker.stopping" }, () => {});
+    const finish = async (code: number): Promise<void> => {
+      await logging.close();
+      drainedExitCode = code;
+      if (holdForParent && process.connected) {
+        // Windows 的树清理需要 leader 仍存活。通知只表示排空完成，不代表后代已回收。
+        // IPC 保持引用直到 launcher 执行 taskkill；owner 断连仍走下方既有退出收尾。
+        process.channel?.ref();
+        process.send?.(
+          { type: "worker.drained", cleanup: code === 0 ? "complete" : "incomplete" },
+          (error) => {
+            if (error) process.exit(code || 1);
+          }
+        );
+      } else process.exit(code);
+    };
     void host.shutdown().then(
       async (result) => {
         if (result.cleanup === "incomplete") {
@@ -52,20 +70,18 @@ export function serveWorker(
             unresolved_count: result.unresolvedInvocationIds.length
           });
         }
-        await logging.close();
-        process.exit(result.cleanup === "complete" ? 0 : 1);
+        await finish(result.cleanup === "complete" ? 0 : 1);
       },
       async () => {
-        await logging.close();
-        process.exit(1);
+        await finish(1);
       }
     );
   };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
-  process.once("SIGHUP", stop);
-  process.stdin.once("end", stop);
-  process.stdin.once("close", stop);
+  process.once("SIGINT", () => stop());
+  process.once("SIGTERM", () => stop());
+  process.once("SIGHUP", () => stop());
+  process.stdin.once("end", () => stop(process.platform === "win32"));
+  process.stdin.once("close", () => stop(process.platform === "win32"));
   // 心跳必须由执行进程主事件循环处理；独立线程应答会掩盖执行线程阻塞。
   process.on("message", (message: unknown) => {
     if (
@@ -78,5 +94,8 @@ export function serveWorker(
       process.send?.({ type: "worker.pong" });
     }
   });
-  process.once("disconnect", stop);
+  process.once("disconnect", () => {
+    if (drainedExitCode !== undefined) process.exit(drainedExitCode);
+    else stop();
+  });
 }

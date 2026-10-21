@@ -540,7 +540,14 @@ for (const mode of ["native", "canonical"]) {
     const worker = await spawnWorker({
       entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
     });
-    t.after(() => worker.close());
+    t.after(async () => {
+      if (process.platform === "win32") {
+        // 失败 fixture 的未完成清理在 Core 与 worker 都应可见，不能把 launcher 的拒绝吞掉。
+        assert.equal((await core.shutdown()).cleanup, "incomplete");
+        await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
+        assert.equal(worker.child.exitCode, 1);
+      } else await worker.close();
+    });
     assert.notEqual(worker.child.pid, process.pid);
     for (const scenario of [
       "answer",
@@ -614,7 +621,11 @@ test("worker shutdown reports incomplete cleanup with a failing exit status", as
   const worker = await spawnWorker({
     entrypoint: fileURLToPath(new URL("./fixtures/executor-incomplete-worker.mjs", import.meta.url))
   });
-  t.after(() => worker.close());
+  t.after(async () => {
+    if (process.platform === "win32")
+      await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
+    else await worker.close();
+  });
   const ready = deferred();
   const consume = (async () => {
     for await (const frame of worker.client.invokeFrames(input()))
@@ -623,7 +634,10 @@ test("worker shutdown reports incomplete cleanup with a failing exit status", as
   const rejected = assert.rejects(consume, /closed|exit|ended/i);
   await ready.promise;
   const exited = once(worker.child, "exit");
-  worker.child.stdin.end();
+  // Windows EOF 排空后保留 leader，由 close 清树；失败结果与非零退出都必须可见。
+  if (process.platform === "win32")
+    await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
+  else worker.child.stdin.end();
   assert.equal((await exited)[0], 1);
   await rejected;
 });

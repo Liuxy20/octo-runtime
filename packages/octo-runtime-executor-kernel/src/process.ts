@@ -1,5 +1,6 @@
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
-import { spawn, type ChildProcess, type ChildProcessByStdio } from "node:child_process";
+import { execFile, spawn, type ChildProcess, type ChildProcessByStdio } from "node:child_process";
+import { setTimeout as delay } from "node:timers/promises";
 import type { Readable, Writable } from "node:stream";
 import type { HostedAdapterMetadata } from "./index.js";
 import { WorkerRpcClient } from "./rpc.js";
@@ -18,12 +19,30 @@ export interface SpawnWorkerOptions {
 
 type HostedChild = ChildProcessByStdio<Writable, Readable, Readable>;
 
+// Reserve more time for tree cleanup until the worker confirms it has started shutdown.
+// A cooperating worker can use its existing 2.5 s shutdown + 1 s logging bounds.
+const WINDOWS_CLOSE_GRACE_MS = 4_000;
+const WINDOWS_TREE_CLEANUP_RESERVE_MS = 1_900;
+const WINDOWS_COOPERATIVE_CLEANUP_RESERVE_MS = 1_000;
+
 export interface WorkerProcess {
   client: WorkerRpcClient;
   child: HostedChild;
   adapters: HostedAdapterMetadata[];
   close(): Promise<void>;
   stderr(): string;
+}
+
+const closeOptions = new WeakMap<WorkerProcess, { until: number; immediate: boolean }>();
+
+/** Kernel 内部传递关闭预算；公开 WorkerProcess.close() 仍然无参数。故障恢复不等待日志排空。 */
+export function closeWorker(
+  worker: WorkerProcess,
+  until: number,
+  immediate = false
+): Promise<void> {
+  closeOptions.set(worker, { until, immediate });
+  return worker.close();
 }
 
 /**
@@ -88,18 +107,133 @@ export async function spawnWorker({
     }
     throw new Error(`${errorMessage(error)}${stderr ? `: ${stderr}` : ""}`, { cause: error });
   }
-  return {
+  let closing: Promise<void> | undefined;
+  const worker: WorkerProcess = {
     client,
     child,
     adapters,
-    // 先断开 RPC，再等待平台清理；POSIX 不以 leader exit 结束进程组回收。
-    // Windows 仅有 Node/taskkill 的常规树清理能力，不能承诺父进程提前退出后的后代已清空。
+    // 关闭 RPC 后等待正常收尾与平台清理；POSIX 不以 leader exit 结束进程组回收。
+    // Windows 排空后须保留 leader 到 taskkill；宽限内提前退出不能当作树已清空。
     close(): Promise<void> {
+      if (closing) return closing;
+      const { until = Date.now() + 5000, immediate = false } = closeOptions.get(worker) ?? {};
       client.close();
-      return cleanup();
+      // Windows 的 kill(SIGTERM) 是强制终止；先用 EOF 触发现有子进程收尾。
+      // S02：POSIX 仍回收整个所属进程组，不能只因 leader 退出而跳过 cleanup。
+      return (closing = (async () => {
+        const drained =
+          process.platform === "win32" && !immediate
+            ? await endWindowsWorkerInput(child, until)
+            : undefined;
+        try {
+          // 启动回滚与 POSIX 保留共享清理；Windows 正常关闭须验证本次 taskkill 的结果。
+          // leader 在通知后退出时，不能再用它的退出状态掩盖 taskkill 未能找到树的错误。
+          if (process.platform === "win32" && drained !== "skipped")
+            await cleanupWindowsWorker(child, until);
+          else await cleanup();
+          // Reaping the OS tree does not erase an observed Adapter cleanup failure.
+          if (drained === "incomplete")
+            throw Object.assign(new Error("EXECUTOR_CLEANUP_INCOMPLETE"), {
+              code: "EXECUTOR_CLEANUP_INCOMPLETE"
+            });
+        } finally {
+          if (process.platform === "win32") {
+            // 正常收尾或 fallback 结束后释放本层管道；回收失败仍向调用方传播。
+            child.stdin.destroy();
+            child.stdout.destroy();
+            child.stderr.destroy();
+          }
+        }
+      })());
     },
     stderr: () => stderr
   };
+  return worker;
+}
+
+/** 只回收本次 worker 的树。命令和退出确认共用截止时间，任何命令错误都保留为回收失败。 */
+async function cleanupWindowsWorker(child: HostedChild, until: number): Promise<void> {
+  const incomplete = (cause?: unknown): Error =>
+    Object.assign(new Error("PROCESS_TREE_CLEANUP_INCOMPLETE", { cause }), {
+      code: "PROCESS_TREE_CLEANUP_INCOMPLETE"
+    });
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null)
+    throw incomplete();
+  const remaining = until - Date.now();
+  if (remaining <= 0) throw incomplete();
+  await new Promise<void>((resolve, reject) => {
+    execFile(
+      "taskkill",
+      ["/PID", String(child.pid), "/T", "/F"],
+      { windowsHide: true, timeout: remaining },
+      (error) => (error ? reject(incomplete(error)) : resolve())
+    );
+  });
+  const confirmUntil = Math.min(until, Date.now() + 200);
+  while (child.exitCode === null && child.signalCode === null) {
+    const left = confirmUntil - Date.now();
+    if (left <= 0)
+      throw Object.assign(new Error("PROCESS_CLEANUP_TIMEOUT"), {
+        code: "PROCESS_CLEANUP_TIMEOUT"
+      });
+    await delay(Math.min(10, left));
+  }
+}
+
+type WindowsDrainResult = "complete" | "incomplete" | "fallback" | "skipped";
+
+/** 私有正常关闭阶段：EOF 触发排空，IPC 只确认排空结果，实际进程树仍由 cleanup 回收。 */
+function endWindowsWorkerInput(child: HostedChild, until: number): Promise<WindowsDrainResult> {
+  if (child.exitCode !== null || child.signalCode !== null || child.stdin.destroyed)
+    return Promise.resolve("skipped");
+  return new Promise<WindowsDrainResult>((resolve) => {
+    const graceUntil = Math.min(
+      Date.now() + WINDOWS_CLOSE_GRACE_MS,
+      until - WINDOWS_COOPERATIVE_CLEANUP_RESERVE_MS
+    );
+    let settled = false;
+    const finish = (result: WindowsDrainResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.off("close", fallback);
+      child.off("error", fallback);
+      child.stdin.off("error", fallback);
+      child.off("message", onMessage);
+      resolve(result);
+    };
+    const fallback = (): void => finish("fallback");
+    const onMessage = (message: unknown): void => {
+      if (!message || typeof message !== "object" || !("type" in message)) return;
+      if (message.type === "worker.stopping") {
+        // This is progress, not cleanup success. Repeated messages never extend the deadline.
+        clearTimeout(timer);
+        timer = setTimeout(fallback, Math.max(0, graceUntil - Date.now()));
+        return;
+      }
+      if (
+        message.type === "worker.drained" &&
+        "cleanup" in message &&
+        (message.cleanup === "complete" || message.cleanup === "incomplete")
+      )
+        finish(message.cleanup);
+    };
+    let timer = setTimeout(
+      fallback,
+      Math.max(0, Math.min(graceUntil, until - WINDOWS_TREE_CLEANUP_RESERVE_MS) - Date.now())
+    );
+    // 先监听再发送 EOF；worker 排空后仍存活，输出在通知/超时前持续消费。
+    child.once("close", fallback);
+    child.once("error", fallback);
+    child.stdin.once("error", fallback);
+    child.on("message", onMessage);
+    try {
+      child.stdin.end();
+    } catch {
+      // EPIPE 等故障不新增公开错误合同；真正的回收失败仍由 cleanup 抛出。
+      fallback();
+    }
+  });
 }
 
 function waitForReady<T>(

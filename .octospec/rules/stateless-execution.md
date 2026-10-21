@@ -71,6 +71,8 @@ F31 已实施统一内核与 Extra 元数据日志。SDK Extra 显式指定 logg
 
 F31 已确认并实施：按 UTC 小时命名，每序列保留最近 3 个实际文件（包含当前文件），单文件 100 MiB；不按最近 3 小时年龄删除，跨天停机后仍保留最后文件。新小时实际写入第四个文件时淘汰最旧归档，不创建无日志小时的空文件。专用 Worker 隔离磁盘写入，每进程最多 128 条在途和 128 个序列，满额、锁竞争或写入失败可丢诊断，不保证审计完整性；关闭最多等待 1 秒，不影响 Agent 执行。轮转沿用非等待互斥和普通文件校验，不删除身份、Provider 文件、用户文件或旧固定日志。详情与原生服务定义更新见[运维](../guides/operations.md)及[实施记录](../tasks/gateway-august-feature-assessment/implementation.md#f31-核心改造已实施)。
 
+正常关闭应提供上述既有有界排空机会；健康回归场景要求关闭后预期记录完整。目录可写且未触发容量限制仍不等于日志必达：Worker 超时、写入失败、锁竞争继续按可丢弃诊断处理，不能转成执行失败或无限等待。Windows worker 通过内部 EOF 进入现有 shutdown/logging.close，调用方职责不变；实现及故障回归见 [#38 记录](../journal/shared/2026-10-20-windows-host-log-close.md)。
+
 ## 核对入口
 
 [Core 导出](../../packages/octo-runtime-executor-core/src/index.ts)、[HostRunService](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[进程清理清单](../../packages/octo-runtime-executor-kernel/src/invocation-manifest.ts)、[无数据库回归](../../test/stateless-executor.test.js)。
