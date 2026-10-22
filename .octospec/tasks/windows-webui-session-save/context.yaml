@@ -1,0 +1,20 @@
+brief: .octospec/tasks/windows-webui-session-save/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: WebUI 内部存储职责和 SDK 兼容边界
+  - id: runtime-extras
+    source: repo
+    reason: 插件内部生命周期及诊断归属
+  - id: runtime-engineering
+    source: repo
+    reason: TypeScript、构建、原生 Windows 和回归验证
+  - id: commit
+    source: repo
+    reason: 中文任务与交付记录
+files_expected:
+  - packages/octo-runtime-extra-webui/src/store.ts
+  - packages/octo-runtime-extra-webui/src/index.ts
+  - test/webui-extra.test.js
+  - test/webui-session-store.test.js
+updated_at: 2026-10-22T01:40:20Z

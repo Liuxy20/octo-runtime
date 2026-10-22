@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import fs from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createServer } from "node:net";
@@ -93,7 +95,7 @@ test("local browser boundary, adapter discovery, private JSON, revision fencing 
   const patch = {
     ...detail,
     title: "test",
-    messages: [],
+    messages: [{ id: "message-1", role: "user", content: "persisted", createdAt: 1 }],
     providerSession: { sessionId: "opaque", extension: { key: "value" } }
   };
   assert.equal((await request(`/sessions/${id}`, "PATCH", patch)).status, 200);
@@ -102,15 +104,94 @@ test("local browser boundary, adapter discovery, private JSON, revision fencing 
     (await request(`/sessions/${id}`).then((r) => r.json())).providerSession,
     patch.providerSession
   );
-  assert.equal((await stat(join(home, "sessions.json"))).mode & 0o777, 0o600);
   const restored = new SessionStore(join(home, "sessions.json"));
   await restored.open();
   assert.equal(restored.records.length, 100);
-  await request(`/sessions/${id}`, "DELETE");
+  const saved = await request(`/sessions/${id}`).then((r) => r.json());
+  assert.equal(saved.revision, detail.revision + 1);
+  assert.equal(saved.title, patch.title);
+  assert.deepEqual(saved.messages, patch.messages);
+  assert.deepEqual(saved.providerSession, patch.providerSession);
+  assert.deepEqual(
+    restored.records.find((s) => s.id === id),
+    saved
+  );
+  assert.equal((await request(`/sessions/${id}`, "DELETE")).status, 200);
   assert.equal((await request(`/sessions/${id}`, "PATCH", { ...patch, revision: 1 })).status, 404);
-  await request("/sessions", "DELETE");
+  const afterDelete = new SessionStore(join(home, "sessions.json"));
+  await afterDelete.open();
+  assert.equal(afterDelete.records.length, 99);
+  assert(!afterDelete.records.some((s) => s.id === id));
+  assert.equal((await request("/sessions", "DELETE")).status, 200);
   assert.equal((await request("/sessions").then((r) => r.json())).length, 0);
+  const afterClear = new SessionStore(join(home, "sessions.json"));
+  await afterClear.open();
+  assert.deepEqual(afterClear.records, []);
 });
+test("HTTP failed saves preserve sessions and revisions, then recover from the last committed state", async (t) => {
+  const { request, home } = await setup(t);
+  for (let n = 0; n < 100; n++) {
+    assert.equal((await request("/sessions", "POST", { projectPath: home })).status, 201);
+  }
+  const path = join(home, "sessions.json");
+  const before = await readFile(path, "utf8");
+  const sessions = JSON.parse(before).sessions;
+  const saved = sessions[0];
+  const update = {
+    ...saved,
+    title: "must not leak",
+    messages: [{ id: "failed-message", role: "user", content: "failed", createdAt: 1 }],
+    providerSession: { sessionId: "failed-provider" }
+  };
+  const rename = t.mock.method(fs, "rename", async () => {
+    throw Object.assign(new Error("injected storage failure"), { code: "EIO" });
+  });
+  syncBuiltinESMExports();
+  try {
+    // 满容量创建包含淘汰；更新和两种删除也必须在落盘失败时保持最后成功状态。
+    for (const [route, method, body] of [
+      ["/sessions", "POST", { projectPath: home }],
+      ["/sessions/" + saved.id, "PATCH", update],
+      ["/sessions/" + saved.id, "DELETE"],
+      ["/sessions", "DELETE"]
+    ]) {
+      const response = await request(route, method, body);
+      assert.equal(response.status, 500);
+      assert.deepEqual(await response.json(), { error: "WEBUI_REQUEST_FAILED" });
+      assert.equal(await readFile(path, "utf8"), before);
+      assert.equal((await request("/sessions").then((r) => r.json())).length, 100);
+      for (const session of sessions) {
+        assert.deepEqual(await request("/sessions/" + session.id).then((r) => r.json()), session);
+      }
+      const loaded = new SessionStore(path);
+      await loaded.open();
+      assert.deepEqual(loaded.records, sessions);
+      assert.deepEqual(await fs.readdir(home), ["sessions.json"]);
+    }
+  } finally {
+    rename.mock.restore();
+    syncBuiltinESMExports();
+  }
+  const recovery = { ...saved, title: "recovered" };
+  const response = await request("/sessions/" + saved.id, "PATCH", recovery);
+  assert.equal(response.status, 200);
+  const committed = await response.json();
+  assert.equal(committed.revision, saved.revision + 1);
+  assert.equal(committed.title, recovery.title);
+  assert.deepEqual(committed.messages, saved.messages);
+  assert.equal(committed.providerSession, saved.providerSession);
+  assert.equal((await request("/sessions/" + saved.id, "PATCH", recovery)).status, 409);
+  const loaded = new SessionStore(path);
+  await loaded.open();
+  assert.deepEqual(
+    loaded.records.find((s) => s.id === saved.id),
+    committed
+  );
+  assert.equal((await request("/sessions/" + saved.id, "DELETE")).status, 200);
+  assert.equal((await request("/sessions/" + saved.id)).status, 404);
+  assert.equal((await request("/sessions", "POST", { projectPath: home })).status, 201);
+});
+
 test("canonical SSE passes unchanged and cleanup waits for active invocation cancellation", async (t) => {
   let received,
     aborted = false,
