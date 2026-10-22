@@ -91,7 +91,7 @@ async function initialize(ctx: ExtraContext, config: JsonObject): Promise<void> 
     errors.push("WEBUI_CONTEXT_INVALID");
     return;
   }
-  const store = new SessionStore(config.sessionStorePath);
+  const store = new SessionStore(config.sessionStorePath, ctx.log);
   try {
     await store.open();
   } catch {
