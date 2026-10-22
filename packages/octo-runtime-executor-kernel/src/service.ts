@@ -24,6 +24,7 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
 export function createKernelService(options: KernelServiceOptions): KernelService {
   const configuration = {
     ...options,
+    adapterModules: options.adapterModules && structuredClone(options.adapterModules),
     adapterConfigurations:
       options.adapterConfigurations && structuredClone(options.adapterConfigurations),
     env: options.env && { ...options.env }

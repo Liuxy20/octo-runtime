@@ -23,7 +23,7 @@ All paths are under `@mininglamp-oss/octo-runtime`. For example, import the clie
 
 ## Create a Service
 
-`createKernelService(options)` requires the listening address `endpoint` and absolute worker entry path `workerEntrypoint`. Optional settings are Adapter module `manifest`, `adapterConfigurations`, `configurations(runtimeId?)`, `env`, and `stateDirectory`. The manifest selects Adapter modules for the worker; it does not store business Agent data.
+`createKernelService(options)` requires the listening address `endpoint` and absolute worker entry path `workerEntrypoint`. Optional SDK settings are `adapterConfigurations`, `configurations(runtimeId?)`, `env`, and `stateDirectory`. SDK hosts import and register selected Adapters in their own worker code; they do not use a manifest or launch a separate top-level service. The CLI's internal runner accepts a `manifest` file or resolved `adapterModules` snapshot, mutually exclusively; these are CLI composition mechanisms, not SDK integration requirements. See [Module Loading](../concepts/module-loading.md).
 
 1. Create the service and await `initialize({signal?})`.
 2. After initialization, invoke through `kernel.client` or inspect the service with `status()`.

@@ -29,6 +29,8 @@ The CLI stores a device instance's identity and configuration in its Home direct
 
 ## Responsibilities
 
+Adapter and Extra selection belongs to the integration entry point. SDK hosts use native imports and composition without a manifest; the CLI's unified manifests contain both adapters and extras, with a built-in catalog and a Runtime Home extension. The default distribution keeps the full catalog. See [Adapter and Extra Loading](module-loading.md) for constraints, resolution anchors, and verification scope.
+
 | Component        | Owns                                                                                                   | Does not own                                           |
 | ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | Host application | Install/authenticate Providers, supply configuration, history and databases, start and close services  | Translate Provider protocols                           |

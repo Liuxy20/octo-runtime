@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareInvokeInput as preparePlayboard } from "@mininglamp-oss/octo-runtime-executor-core";
 import { once } from "node:events";
 import { WebSocketServer } from "ws";
@@ -30,19 +30,27 @@ const echoInput = (text = "hello", extra = []) =>
     contexts: context([item("octo.execution", "adapter", { type: "playboard-test" }), ...extra])
   });
 
-async function fixture(t) {
+async function fixture(t, { legacyOpenClaw = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const manifest = join(directory, "adapters.json");
+  const wrapper = join(directory, "selected-provider.mjs");
+  if (legacyOpenClaw)
+    await writeFile(
+      wrapper,
+      `export { createOpenClawAdapter as selectedAdapter } from ${JSON.stringify(pathToFileURL(join(root, "packages/octo-runtime-adapter-openclaw/dist/index.js")).href)};`
+    );
   await writeFile(
     manifest,
     JSON.stringify({
       version: 1,
       adapters: [
         {
-          type: "openclaw",
-          module: join(root, "packages/octo-runtime-adapter-openclaw/dist/index.js"),
-          export: "createOpenClawAdapter",
+          ...(legacyOpenClaw ? {} : { type: "openclaw" }),
+          module: legacyOpenClaw
+            ? wrapper
+            : join(root, "packages/octo-runtime-adapter-openclaw/dist/index.js"),
+          export: legacyOpenClaw ? "selectedAdapter" : "createOpenClawAdapter",
           factory: true
         },
         {
@@ -373,111 +381,113 @@ test("closing the NDJSON consumer cleans up Host and provider execution", async 
   assert.throws(() => process.kill(hostPid, 0), { code: "ESRCH" });
 });
 
-test("OpenClaw uses daemon startup configuration, refreshes its source and retains device identity", async (t) => {
-  const settings = await fixture(t);
-  const gateway = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-  await once(gateway, "listening");
-  t.after(() => {
-    for (const client of gateway.clients) client.terminate();
-    return new Promise((resolve) => gateway.close(resolve));
-  });
-  let token = "first-test-token";
-  const authenticated = [];
-  const methods = [];
-  gateway.on("connection", (socket) => {
-    socket.send(
-      JSON.stringify({
-        type: "event",
-        event: "connect.challenge",
-        payload: { nonce: "playboard", ts: Date.now() }
-      })
-    );
-    socket.on("message", (data) => {
-      const frame = JSON.parse(data.toString());
-      methods.push(frame.method);
-      let payload = {};
-      if (frame.method === "connect") {
-        authenticated.push(frame.params.auth.token);
-        const ok = frame.params.auth.token === token;
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok,
-            ...(ok
-              ? {
-                  payload: {
-                    type: "hello-ok",
-                    protocol: 4,
-                    features: {
-                      methods: [
-                        "agents.list",
-                        "sessions.create",
-                        "sessions.messages.subscribe",
-                        "agent",
-                        "agent.wait",
-                        "sessions.abort"
-                      ],
-                      events: ["agent"]
+for (const legacyOpenClaw of [false, true]) {
+  test(`Playboard initializes ${legacyOpenClaw ? "untyped legacy" : "typed"} OpenClaw, refreshes source and retains device identity`, async (t) => {
+    const settings = await fixture(t, { legacyOpenClaw });
+    const gateway = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    await once(gateway, "listening");
+    t.after(() => {
+      for (const client of gateway.clients) client.terminate();
+      return new Promise((resolve) => gateway.close(resolve));
+    });
+    let token = "first-test-token";
+    const authenticated = [];
+    const methods = [];
+    gateway.on("connection", (socket) => {
+      socket.send(
+        JSON.stringify({
+          type: "event",
+          event: "connect.challenge",
+          payload: { nonce: "playboard", ts: Date.now() }
+        })
+      );
+      socket.on("message", (data) => {
+        const frame = JSON.parse(data.toString());
+        methods.push(frame.method);
+        let payload = {};
+        if (frame.method === "connect") {
+          authenticated.push(frame.params.auth.token);
+          const ok = frame.params.auth.token === token;
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok,
+              ...(ok
+                ? {
+                    payload: {
+                      type: "hello-ok",
+                      protocol: 4,
+                      features: {
+                        methods: [
+                          "agents.list",
+                          "sessions.create",
+                          "sessions.messages.subscribe",
+                          "agent",
+                          "agent.wait",
+                          "sessions.abort"
+                        ],
+                        events: ["agent"]
+                      }
                     }
                   }
-                }
-              : { error: { message: "test authentication failed" } })
-          })
-        );
-        return;
-      }
-      if (frame.method === "agents.list") payload = { agents: [{ id: "main" }] };
-      if (frame.method === "sessions.create") payload = { key: frame.params.key };
-      if (frame.method === "agent")
-        payload = { status: "ok", result: { payloads: [{ text: "gateway-result" }] } };
-      if (frame.method === "agent.wait") payload = { status: "ok" };
-      socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload }));
+                : { error: { message: "test authentication failed" } })
+            })
+          );
+          return;
+        }
+        if (frame.method === "agents.list") payload = { agents: [{ id: "main" }] };
+        if (frame.method === "sessions.create") payload = { key: frame.params.key };
+        if (frame.method === "agent")
+          payload = { status: "ok", result: { payloads: [{ text: "gateway-result" }] } };
+        if (frame.method === "agent.wait") payload = { status: "ok" };
+        socket.send(JSON.stringify({ type: "res", id: frame.id, ok: true, payload }));
+      });
     });
+    const source = join(settings.directory, "provider");
+    await mkdir(source);
+    const config = join(source, "openclaw.json");
+    const save = () =>
+      writeFile(
+        config,
+        JSON.stringify({ gateway: { port: gateway.address().port, auth: { token } } })
+      );
+    await save();
+    const request = input("hello", {
+      protocol_mode: "canonical",
+      contexts: context([
+        item("octo.execution", "adapter", { type: "openclaw" }),
+        item("octo.security", "approval_policy", { mode: "full_access" })
+      ])
+    });
+    const profile = join(settings.directory, "unconfigured-home/work");
+    const run = () =>
+      execute(settings, request, { args: ["--profile", "work"], env: { OPENCLAW_HOME: source } });
+    const first = await run();
+    assert.equal(first.code, 0, first.stderr);
+    terminal(first, "completed");
+    assert.match(first.stdout, /gateway-result/);
+    const deviceFile = join(profile, "credentials/openclaw-device.json");
+    const device = await readFile(deviceFile, "utf8");
+    token = "rotated-test-token";
+    await save();
+    const second = await run();
+    assert.equal(second.code, 0, second.stderr);
+    terminal(second, "completed");
+    assert.ok(authenticated.includes(token));
+    assert.equal(await readFile(deviceFile, "utf8"), device);
+    assert.ok(methods.includes("sessions.messages.subscribe"));
+    const unreachableConfig = JSON.stringify({ gateway: { port: 1, auth: { token } } });
+    await writeFile(config, unreachableConfig);
+    const unavailable = await run();
+    assert.equal(unavailable.code, 1);
+    terminal(unavailable, "failed");
+    assert.equal(await readFile(config, "utf8"), unreachableConfig);
+    assert.equal(await readFile(deviceFile, "utf8"), device);
   });
-  const source = join(settings.directory, "provider");
-  await mkdir(source);
-  const config = join(source, "openclaw.json");
-  const save = () =>
-    writeFile(
-      config,
-      JSON.stringify({ gateway: { port: gateway.address().port, auth: { token } } })
-    );
-  await save();
-  const request = input("hello", {
-    protocol_mode: "canonical",
-    contexts: context([
-      item("octo.execution", "adapter", { type: "openclaw" }),
-      item("octo.security", "approval_policy", { mode: "full_access" })
-    ])
-  });
-  const profile = join(settings.directory, "unconfigured-home/work");
-  const run = () =>
-    execute(settings, request, { args: ["--profile", "work"], env: { OPENCLAW_HOME: source } });
-  const first = await run();
-  assert.equal(first.code, 0, first.stderr);
-  terminal(first, "completed");
-  assert.match(first.stdout, /gateway-result/);
-  const deviceFile = join(profile, "credentials/openclaw-device.json");
-  const device = await readFile(deviceFile, "utf8");
-  token = "rotated-test-token";
-  await save();
-  const second = await run();
-  assert.equal(second.code, 0, second.stderr);
-  terminal(second, "completed");
-  assert.ok(authenticated.includes(token));
-  assert.equal(await readFile(deviceFile, "utf8"), device);
-  assert.ok(methods.includes("sessions.messages.subscribe"));
-  const unreachableConfig = JSON.stringify({ gateway: { port: 1, auth: { token } } });
-  await writeFile(config, unreachableConfig);
-  const unavailable = await run();
-  assert.equal(unavailable.code, 1);
-  terminal(unavailable, "failed");
-  assert.equal(await readFile(config, "utf8"), unreachableConfig);
-  assert.equal(await readFile(deviceFile, "utf8"), device);
-});
+}
 
-test("native service startup failure removes temporary state and keeps stdout empty", async (t) => {
+test("manifest read failure removes temporary state and keeps stdout empty", async (t) => {
   const settings = await fixture(t);
   const isolated = await mkdtemp(
     join(process.platform === "darwin" ? "/tmp" : tmpdir(), "op-state-")
@@ -492,6 +502,6 @@ test("native service startup failure removes temporary state and keeps stdout em
   );
   assert.equal(result.code, 1);
   assert.equal(result.stdout, "");
-  assert.match(result.stderr, /SERVICE_INITIALIZATION_FAILED/);
+  assert.match(result.stderr, /ENOENT/);
   assert.deepEqual(await readdir(isolated), []);
 });

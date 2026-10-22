@@ -2,6 +2,8 @@
 
 当前实现的双语模块说明和 Mermaid 图见开发者文档：[English](docs/en/concepts/architecture.md) / [简体中文](docs/zh-CN/concepts/architecture.md)。本文保留设备动机、新旧比较及明确标注的未来目标。
 
+**Adapter 与 Extra 的装配约束：SDK 宿主原生 import 并组装，不要求额外 manifest；CLI 使用一份内置 manifest.json，加上 Runtime Home 下同名扩展清单，两者均有 adapters 和 extras。默认发行继续全量，未选模块不加载，Extra 的目录声明不等于启用。** FDE 的代码复制及依赖由业务方处理。统一清单与依赖解耦已在本工作树实现；完整解析、合并和生命周期要求见[基础架构规则](.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)，双语设计见[English](docs/en/concepts/module-loading.md) / [简体中文](docs/zh-CN/concepts/module-loading.md)。
+
 **设备是某台机器上，由一个特定 Home 目录承载的本地执行实例。统一设备，就是让业务先确定「在哪个实例执行」，再决定「怎么连过去」：本地直接 IPC，异地经云端下发。**
 
 **三个核心目标，共用同一个设备执行内核：**

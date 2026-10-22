@@ -55,7 +55,7 @@
     "apps/cli/dist/**/*.js",
     "apps/cli/dist/build-info.json",
     "apps/cli/README.md",
-    "apps/cli/dist/default_adapters.json",
+    "apps/cli/dist/manifest.json",
     "DEPLOYMENTS.md"
   ],
   "packageManager": "pnpm@11.19.0",
@@ -76,7 +76,7 @@
     "test:suites": "pnpm --filter @mininglamp-oss/octo-runtime-extra-webui test:ui && node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
     "docs:check": "tsc -p docs/examples/tsconfig.json && node scripts/check-developer-docs.mjs && node --test docs/checks/*.test.mjs",
     "cli": "pnpm build && node apps/cli/dist/index.js",
-    "host": "pnpm build && node packages/octo-runtime-executor-kernel/dist/runner.js --manifest apps/cli/dist/default_adapters.json",
+    "host": "pnpm build && node packages/octo-runtime-executor-kernel/dist/runner.js --manifest apps/cli/dist/manifest.json",
     "build": "pnpm --recursive --filter \"./packages/**\" --filter \"./apps/**\" run build && tsc -p public/tsconfig.json",
     "prepare": "pnpm run build",
     "typecheck": "pnpm build && tsc -p tsconfig.json --noEmit",

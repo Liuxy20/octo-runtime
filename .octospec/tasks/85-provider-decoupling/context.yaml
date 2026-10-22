@@ -1,0 +1,125 @@
+status: locally-validated
+recorded_on: 2026-10-21
+baseline: d064cfe78f6818d3c451ecf803a280245f4b0496
+baseline_source: git-fetch-origin-main
+branch: fix/85-provider-decoupling
+review_baseline: 318b0f22db5e45e6effe3b35c89bc7ef426127f9
+integration_baseline: 5ce0589d8c21e692dc25ad1a15b41018d710d0e0
+integration_recorded_on: 2026-10-22
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/85
+authorization:
+  new_worktree: requested
+  scope: octospec-proposal-and-implementation
+  user_clarification: full-default-app-sdk-native-import-cli-builtin-and-home-adapters-extras
+  implementation: authorized-in-this-worktree-after-planning
+  commit_push_pr_merge: authorized-after-implementation
+  npm_publish: not-authorized
+  github_language: english-per-user-instruction
+delivery:
+  default_app: full-catalog-single-existing-release
+  fde: business-owned-copy-and-dependency-handling
+  sdk: native-import-and-host-composition-without-any-manifest
+  cli_builtin: apps/cli/src/manifest.json
+  cli_extension: runtime-home/manifest.json
+  manifest_fields: [version, adapters, extras]
+  resolver_anchor: original-source-manifest-file-per-entry
+  resolver_choice: import-meta-resolve-4.2.0-installed-and-locked
+  sdk_top_level_services: created-in-caller-process-no-external-node-loader
+  cli_worker_snapshot: existing-node-ipc-kernel.adapters-message
+  selected_adapter_probes: unchanged
+  normative_architecture: .octospec/rules/architecture.md
+  bilingual_docs:
+    - docs/en/concepts/module-loading.md
+    - docs/zh-CN/concepts/module-loading.md
+  publish_private_packages: false
+  runtime_hot_loading: false
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-adapter-metadata
+  - runtime-extras
+  - runtime-local-execution
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/adapter-composition-ownership/brief.md
+  - .octospec/tasks/public-plugin-contracts/brief.md
+  - .octospec/tasks/unified-native-sdk-services/brief.md
+  - .octospec/tasks/unified-native-sdk-services/context.yaml
+  - .octospec/guides/workspace.md
+  - .octospec/scripts/lint.py
+  - SDK_NATIVE_INTEGRATION_FULL_GUIDE.md
+  - package.json
+  - pnpm-lock.yaml
+  - packages/*/package.json
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/runner.ts
+  - packages/octo-runtime-executor-kernel/src/manifest-adapters.ts
+  - packages/octo-runtime-executor-kernel/src/module-specifier.ts
+  - packages/octo-runtime-executor-kernel/src/serve.ts
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-host-sdk/src/index.ts
+  - packages/octo-runtime-host-sdk/src/native.ts
+  - packages/octo-runtime-host-sdk/src/extras.ts
+  - packages/octo-runtime-host-sdk/src/extra-config.ts
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - apps/cli/package.json
+  - apps/cli/src/manifest.json
+  - apps/cli/src/module-manifest.ts
+  - packages/octo-runtime-adapter-sdk/src/module-manifest.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/worker.ts
+  - apps/cli/src/playboard.ts
+  - apps/cli/src/extras.ts
+  - apps/cli/scripts/copy-manifest.mjs
+  - ARCHITECTURE.md
+  - docs/en/concepts/architecture.md
+  - docs/zh-CN/concepts/architecture.md
+  - scripts/check-developer-docs.mjs
+  - public/executor-kernel.ts
+  - public/host.ts
+  - scripts/pack-release.mjs
+  - test/adapter-host-manifest.test.js
+  - test/module-loading.test.js
+  - test/native-module-selection.test.js
+  - test/fixtures/ipc-stalled-worker.mjs
+  - test/host-process-close.test.js
+  - CONTRIBUTING.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - .octospec/tasks/85-provider-decoupling/implementation.md
+  - .octospec/tasks/85-provider-decoupling/review.md
+external_sources:
+  - https://nodejs.org/docs/latest-v24.x/api/esm.html#importmetaresolvespecifier
+  - https://github.com/wooorm/import-meta-resolve
+verification:
+  source_and_dependency_inspection: completed
+  expected_closure: verified-isolated-sdk-native-composition-without-concrete-module-packages
+  static_graph_assertions: passed-core-kernel-host-neutral-cli-full-catalog
+  runtime_implementation: locally-validated-see-implementation.md
+  real_provider: not-run
+  fde_artifact: not-built
+  full_release: local-tgz-built-see-implementation.md-for-installed-validation
+  documentation_check: baseline-docs-directory-conflict-only-no-other-errors
+  documentation_command: uv run --with pyyaml python .octospec/scripts/lint.py
+  baseline_reproduction: same-docs-directory-error-in-clean-original-main
+  bilingual_docs_check: see-implementation.md
+  bilingual_docs_command: pnpm docs:check
+  full_docs_check: includes-typescript-examples-and-native-service-behavior
+  product_checks: see-implementation.md
+  whitespace_check: git-diff-check

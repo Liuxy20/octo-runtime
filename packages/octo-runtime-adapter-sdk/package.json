@@ -5,10 +5,12 @@
   "type": "module",
   "exports": {
     ".": "./dist/index.js",
-    "./process-cleanup": "./dist/process-cleanup.js"
+    "./process-cleanup": "./dist/process-cleanup.js",
+    "./module-manifest": "./dist/module-manifest.js"
   },
   "dependencies": {
-    "@mininglamp-oss/octo-runtime-protocol": "workspace:*"
+    "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
+    "import-meta-resolve": "4.2.0"
   },
   "types": "./dist/index.d.ts",
   "files": [

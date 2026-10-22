@@ -25,8 +25,7 @@ async function options(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return {
     endpoint: componentEndpoint(directory),
-    workerEntrypoint: join(root, "packages/octo-runtime-executor-kernel/dist/runner.js"),
-    manifest: join(root, "test/fixtures/invoke-adapters.json")
+    workerEntrypoint: join(root, "test/fixtures/direct-invoke-worker.mjs")
   };
 }
 

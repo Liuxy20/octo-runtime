@@ -1005,7 +1005,7 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 | R16 | [内部连接 manager](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts)、[Extra 装配](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[配置校验](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts) |
 | R17 | [Extra 生命周期及宿主编排](../../rules/extras.md) |
 | R18 | [REST 重试](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/client.ts)、[投递重试](../../../packages/octo-runtime-extra-channel-gateway/src/delivery/dispatcher.ts)、[已有专项](../channel-rate-limit-retry/brief.md) |
-| R19 | [CLI 默认 Adapter](../../../apps/cli/src/default_adapters.json)、[Hermes ACP Adapter](../../../packages/octo-runtime-adapter-hermes/src/index.ts) |
+| R19 | [CLI 默认 Adapter](../../../apps/cli/src/manifest.json)、[Hermes ACP Adapter](../../../packages/octo-runtime-adapter-hermes/src/index.ts) |
 | R20 | [架构与产品意图归属](../../rules/architecture.md)、[Channel 规则](../../rules/channel-integration.md) |
 | R21 | [有界状态及日志](../../rules/stateless-execution.md) |
 | R22 | [工程验证规则](../../rules/engineering.md)、[既有 Channel 交付记录](../../journal/shared/2026-10-16-channel-features-delivery.md) |

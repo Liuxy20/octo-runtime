@@ -12,11 +12,8 @@ import { invokeRequest, withTimeout } from "./runtime-fixture.js";
 const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const fixture = resolve("test/fixtures/test-adapter.js");
 
-test("manifest module specifiers preserve packages and existing URLs", () => {
+test("manifest module specifiers preserve explicit URLs", () => {
   for (const specifier of [
-    "adapter-package",
-    "@scope/adapter",
-    "@scope/adapter/entry.js",
     "file:///C:/adapter%20dir/adapter.mjs",
     "file:///tmp/adapter.mjs?version=1#entry",
     "node:fs",
@@ -176,16 +173,27 @@ for (const [name, moduleSpecifier] of forms) {
 }
 
 test(
-  "manifest package import keeps the runner's existing package resolution",
+  "manifest package import resolves from its own node_modules with import conditions",
   { timeout: 10_000 },
   async (t) => {
     const { root, manifest } = await createFixture(t);
-    await writeManifest(manifest, "@mininglamp-oss/octo-runtime-adapter-codex", "codexAdapter");
-    // 只检查模块加载和注册；不 probe、不调用真实 Provider。
+    const directory = join(dirname(manifest), "node_modules", "@fixture", "adapter");
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, "package.json"),
+      JSON.stringify({
+        name: "@fixture/adapter",
+        type: "module",
+        exports: { import: "./index.js", require: "./missing.cjs" }
+      })
+    );
+    await copyFile(fixture, join(directory, "index.js"));
+    await writeManifest(manifest, "@fixture/adapter", "testAdapter");
+    // fake Adapter 验证包锚点与注册，不探测真实 Provider。
     const host = await startHost(t, root, manifest);
     assert.deepEqual(
       host.adapters.map((adapter) => adapter.type),
-      ["codex"]
+      ["test"]
     );
     await withTimeout(host.close(), 3_000, "package Host close timed out");
   }

@@ -15,7 +15,12 @@ export interface ExtraDescriptor {
   enabled?: boolean;
   config: JsonObject;
 }
-export type StoredExtra = Omit<ExtraDescriptor, "name">;
+/** CLI 配置可由 manifest 提供模块；原生代码声明 ExtraDescriptor 仍显式指定模块。 */
+export interface StoredExtra {
+  module?: string;
+  enabled?: boolean;
+  config: JsonObject;
+}
 
 export function assertStoredExtra(value: unknown): asserts value is StoredExtra {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -23,7 +28,7 @@ export function assertStoredExtra(value: unknown): asserts value is StoredExtra 
   const item = value as Record<string, unknown>;
   if (Object.keys(item).some((key) => !["module", "enabled", "config"].includes(key)))
     throw new Error("EXTRA_CONFIG_FIELD_INVALID");
-  if (typeof item.module !== "string" || !validModule(item.module))
+  if (item.module !== undefined && (typeof item.module !== "string" || !validModule(item.module)))
     throw new Error("EXTRA_MODULE_INVALID");
   if (item.enabled !== undefined && typeof item.enabled !== "boolean")
     throw new Error("EXTRA_ENABLED_INVALID");
@@ -48,15 +53,15 @@ export function extraRegistration(descriptor: ExtraDescriptor): ExtraRegistratio
   assertExtraName(descriptor.name);
   const { name, ...stored } = descriptor;
   assertStoredExtra(stored);
+  const module = stored.module;
+  if (!module) throw new Error("EXTRA_MODULE_REQUIRED");
   return {
     name,
-    module: stored.module,
+    module,
     config: stored.config,
     enabled: stored.enabled,
     load: () =>
-      import(
-        isAbsolute(stored.module) ? pathToFileURL(stored.module).href : stored.module
-      ) as Promise<ExtraPluginModule>
+      import(isAbsolute(module) ? pathToFileURL(module).href : module) as Promise<ExtraPluginModule>
   };
 }
 
@@ -71,14 +76,16 @@ export async function readExtraDirectory(directory: string): Promise<ExtraRegist
     if (!entry.isDirectory()) continue;
     assertExtraName(entry.name);
     try {
-      const file = join(directory, entry.name, "config.json");
-      const info = await lstat(file);
-      if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
-        throw new Error("EXTRA_CONFIG_PERMISSIONS_INVALID");
-      if (info.size > 1024 * 1024) throw new Error("EXTRA_CONFIG_TOO_LARGE");
-      const stored: unknown = JSON.parse(await readFile(file, "utf8"));
-      assertStoredExtra(stored);
-      registrations.push(extraRegistration({ name: entry.name, ...stored }));
+      const stored = await readStoredExtra(directory, entry.name);
+      registrations.push(
+        stored.module
+          ? extraRegistration({ ...stored, name: entry.name, module: stored.module })
+          : {
+              ...stored,
+              name: entry.name,
+              load: () => Promise.reject(new Error("EXTRA_MODULE_REQUIRED"))
+            }
+      );
     } catch (error) {
       const code =
         error instanceof Error && /^EXTRA_[A-Z_]+$/.test(error.message)
@@ -92,6 +99,19 @@ export async function readExtraDirectory(directory: string): Promise<ExtraRegist
     }
   }
   return registrations;
+}
+
+/** 宿主显式选取的配置文件；保持凭据权限校验，不解析或导入模块。 */
+export async function readStoredExtra(directory: string, name: string): Promise<StoredExtra> {
+  assertExtraName(name);
+  const file = join(directory, name, "config.json");
+  const info = await lstat(file);
+  if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
+    throw new Error("EXTRA_CONFIG_PERMISSIONS_INVALID");
+  if (info.size > 1024 * 1024) throw new Error("EXTRA_CONFIG_TOO_LARGE");
+  const stored: unknown = JSON.parse(await readFile(file, "utf8"));
+  assertStoredExtra(stored);
+  return stored;
 }
 
 function validModule(module: string): boolean {

@@ -12,6 +12,8 @@ This documentation is for developers integrating the SDK, supplying business con
 2. Follow [CLI Installation and Invocation](getting-started/cli.md) or [Your First SDK Invocation](getting-started/sdk.md).
 3. Set up your selected [Harness](guides/harnesses.md), then learn [Inputs and Contexts](concepts/inputs-and-contexts.md).
 
+For module selection, read [Adapter and Extra Loading](concepts/module-loading.md): SDK native composition and CLI built-in/user manifests.
+
 ## Guides
 
 | Task                                                                                  | Page                                                   |

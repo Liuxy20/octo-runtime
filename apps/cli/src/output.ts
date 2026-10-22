@@ -116,6 +116,12 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     SERVICE_NOT_INSTALLED: "Run this component's install command, then start it.",
     NOT_INSTALLED: "Run this component's install command, then start it.",
     EXTRA_NOT_REGISTERED: "Save this Extra's declaration with extraset before starting it.",
+    EXTRA_MANIFEST_DECLARATION_REQUIRED:
+      "Add this Extra's name and module to the selected Home manifest.json (extras array), then retry.",
+    EXTRA_MODULE_MIGRATION_REQUIRED:
+      "The saved module differs from manifest.json. Review both declarations, then save matching module text or omit module from the Extra configuration.",
+    MANIFEST_INVALID:
+      "Check manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys.",
     MANAGER_UNAVAILABLE: "Run doctor and check the current user's native service manager.",
     COMPONENT_UNAVAILABLE:
       "Check component status and the service logs; the IPC or worker is not ready.",

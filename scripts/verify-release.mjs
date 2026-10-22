@@ -95,6 +95,17 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     if (requireClean) assert.equal(build.dirty, false);
     assert.equal(new Date(build.buildTime).toISOString(), build.buildTime);
     const cli = join(installed, "apps/cli/dist/index.js");
+    const moduleManifest = JSON.parse(
+      await readFile(join(installed, "apps/cli/dist/manifest.json"), "utf8")
+    );
+    assert.equal(moduleManifest.adapters.length, 12);
+    assert.deepEqual(
+      moduleManifest.extras.map((entry) => entry.name),
+      ["channel-gateway", "channel-wecom", "webui"]
+    );
+    await assert.rejects(access(join(installed, "apps/cli/dist/default_adapters.json")), {
+      code: "ENOENT"
+    });
     const home = join(directory, "home");
     const run = (args) =>
       execute(process.execPath, [cli, ...args, "--home", home], { cwd: consumer, timeout: 10_000 });
@@ -255,6 +266,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       assert.equal(status["executor-kernel"].runtime.execution_ready, true);
       assert.equal(status["executor-kernel"].runtime.pid, child.pid);
       assert.equal(status["channel-gateway"].runtime.available, false);
+      const adapters = JSON.parse((await run(["adapter", "list", "--json"])).stdout);
+      assert.deepEqual(
+        adapters.map((adapter) => adapter.type).sort(),
+        moduleManifest.adapters.map((adapter) => adapter.type).sort()
+      );
       child.kill("SIGTERM");
       await Promise.race([
         exited,

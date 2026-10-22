@@ -14,6 +14,8 @@ Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、
 
 ## 操作指南
 
+模块选择见 [Adapter 与 Extra 载入](concepts/module-loading.md)：SDK 原生组装，以及 CLI 内置清单和用户扩展清单。
+
 | 任务                                                           | 页面                                             |
 | -------------------------------------------------------------- | ------------------------------------------------ |
 | 安装配置 Harness、开启 Codex Computer Use、共享 WorkBuddy 额度 | [Harness 安装配置](guides/harnesses.md)          |

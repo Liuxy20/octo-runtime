@@ -4,15 +4,18 @@ import { setTimeout as delay } from "node:timers/promises";
 import type { Readable, Writable } from "node:stream";
 import type { HostedAdapterMetadata } from "./index.js";
 import { WorkerRpcClient } from "./rpc.js";
+import type { AdapterModuleEntry } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 
 export interface SpawnWorkerOptions {
   entrypoint: string;
   /** CLI JSON 来源；SDK 的直接 import 入口不需要此参数。 */
   manifest?: string;
+  /** CLI 已解析的不可变装配快照；与 manifest 互斥，不改变 SDK 自有 worker 的入口。 */
+  adapterModules?: AdapterModuleEntry[];
   env?: NodeJS.ProcessEnv;
   /** 取消就绪等待并请求回收子进程；POSIX 使用进程组，Windows taskkill 不保证父先退后的后代回收。 */
   signal?: AbortSignal;
-  /** Maximum time allowed for the initial RPC readiness handshake. */
+  /** 启动快照发送和首次 RPC 就绪握手共用的最大等待时间。 */
   readyTimeoutMs?: number;
   onSpawn?: (child: ChildProcess) => Promise<void>;
 }
@@ -53,19 +56,26 @@ export function closeWorker(
 export async function spawnWorker({
   entrypoint,
   manifest,
+  adapterModules,
   env = process.env,
   signal,
   onSpawn,
   readyTimeoutMs = 15_000
 }: SpawnWorkerOptions): Promise<WorkerProcess> {
   if (signal?.aborted) throw new Error("adapter-host spawn cancelled");
+  if (manifest && adapterModules !== undefined)
+    throw new TypeError("manifest and adapterModules are mutually exclusive");
   if (!Number.isFinite(readyTimeoutMs) || readyTimeoutMs < 1) {
     throw new Error("adapter-host readyTimeoutMs must be positive");
   }
-  // 跨进程只传程序入口及可选文件路径，不序列化 Adapter 实例或工厂函数。
+  // 快照通过已有 Node IPC 发送，不占命令行/环境长度，不落盘；永不序列化模块实例。
   const child = spawn(
     process.execPath,
-    [entrypoint, ...(manifest ? ["--manifest", manifest] : [])],
+    [
+      entrypoint,
+      ...(manifest ? ["--manifest", manifest] : []),
+      ...(adapterModules === undefined ? [] : ["--adapters-from-ipc"])
+    ],
     {
       argv0: "octo-runtime-executor-kernel",
       env,
@@ -92,8 +102,18 @@ export async function spawnWorker({
   child.on("error", (error) => client.close(error));
   let adapters: HostedAdapterMetadata[];
   try {
+    // 先登记进程所有权；快照发送也可能因子进程未读取 IPC 而阻塞，须纳入就绪预算。
     await onSpawn?.(child);
-    adapters = await waitForReady(client.list(), readyTimeoutMs, signal);
+    const initialize = async () => {
+      if (adapterModules !== undefined)
+        await new Promise<void>((resolve, reject) => {
+          child.send({ type: "kernel.adapters", adapters: adapterModules }, (error) =>
+            error ? reject(error) : resolve()
+          );
+        });
+      return client.list();
+    };
+    adapters = await waitForReady(initialize(), readyTimeoutMs, signal);
   } catch (error) {
     client.close(error instanceof Error ? error : new Error(errorMessage(error)));
     try {

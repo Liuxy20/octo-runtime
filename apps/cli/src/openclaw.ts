@@ -2,11 +2,6 @@ import { readFile, mkdir, writeFile, rename, lstat, chmod, rm } from "node:fs/pr
 import { parseEnv, promisify } from "node:util";
 import { execFile } from "node:child_process";
 import type { ExtraRegistration } from "@mininglamp-oss/octo-runtime-host-sdk";
-import {
-  configuredCredential,
-  validateImBots,
-  octoCliEnvironment
-} from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
 import { randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import { homedir, networkInterfaces } from "node:os";
@@ -142,15 +137,35 @@ export async function syncCliOpenClawToolEnvironment(
   if (!channel || channel.config.bots === undefined)
     return { written: false, restartRequired: false };
   const bots = channel.config.bots;
-  validateImBots(bots);
+  if (!Array.isArray(bots) || bots.length > 64) throw new Error("IM_CONFIG_LIST_REQUIRED");
   let values: Record<string, string> | undefined;
-  for (const bot of bots) {
-    if (bot.enabled === false || bot.adapter.adapter_type !== "openclaw") continue;
-    const token = configuredCredential(bot);
+  for (const value of bots) {
+    const bot = record(value);
+    if (!bot) throw new Error("IM_CONFIG_INVALID");
+    if (bot.enabled === false || record(bot.adapter)?.adapter_type !== "openclaw") continue;
+    const token = typeof bot.bf_token === "string" ? bot.bf_token.trim() : undefined;
     if (!token) throw new Error("IM_CREDENTIALS_REQUIRED");
-    values = Object.fromEntries(
-      octoCliEnvironment(bot.api_url, token).env_variables.map(({ key, value }) => [key, value])
-    );
+    // CLI 仅校验自己要写入的工具身份；完整 Bot 配置由启动后的 Extra 校验。
+    // 不为 Kernel 的 dotenv 同步导入整个业务 Extra，否则未启动 Extra 缺包也会阻塞 Kernel。
+    if (!/^bf_[A-Za-z0-9_-]+$/.test(token)) throw new Error("IM_BOT_TOKEN_INVALID");
+    let url: URL;
+    try {
+      if (typeof bot.api_url !== "string") throw new Error();
+      url = new URL(bot.api_url);
+    } catch {
+      throw new Error("IM_API_URL_INVALID");
+    }
+    if (
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash ||
+      (url.protocol !== "https:" &&
+        !(url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)))
+    )
+      throw new Error("IM_API_URL_INVALID");
+    url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/api$/, "");
+    values = { OCTO_BOT_TOKEN: token, OCTO_API_BASE_URL: url.href.replace(/\/+$/, "") };
   }
   if (!values) return { written: false, restartRequired: false };
   const origin = await readCliOrigin(runtimeRoot);

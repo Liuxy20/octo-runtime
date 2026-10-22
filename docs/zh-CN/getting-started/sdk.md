@@ -59,7 +59,7 @@ import { selectedAdapter } from "./selected-adapter.js";
 serveWorker([selectedAdapter]);
 ```
 
-这里的 `selected-adapter.js` 是占位模块，需要由应用提供，导出符合 `HostedAdapter` 类型的 `selectedAdapter`；SDK 不包含这个示例路径。应用负责选择和打包 Adapter。内置 Runtime CLI 已有自己的 worker 和 Adapter 清单；使用清单配置的方式见 [KernelServiceOptions](../reference/kernel-ipc.md)。
+这里的 `selected-adapter.js` 是占位模块，需要由应用提供，导出符合 `HostedAdapter` 类型的 `selectedAdapter`；SDK 不包含这个示例路径。应用负责选择和打包 Adapter。SDK 使用原生 import，不需要 manifest 或外部 Node 服务启动器。内置 Runtime CLI 自己拥有独立的 worker 和清单机制，见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
 
 创建服务后，等待 `initialize()` 成功，再使用 `kernel.client`。退出时，先关闭应用创建的 Extra，等待结果消费、投递和存储操作结束，再关闭应用创建的 Kernel 和数据库。检查清理结果的 `complete` 字段；为 `false` 时，还需要处理返回的待清理资源。
 

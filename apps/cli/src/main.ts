@@ -1,6 +1,6 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { access, mkdir } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -12,7 +12,6 @@ import {
 import {
   componentEndpoint,
   createExtraService,
-  extraRegistration,
   type ExtraService
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { getExtra, readExtra, setExtra } from "./extras.js";
@@ -27,7 +26,8 @@ import {
   type ProfileConfiguration
 } from "./state.js";
 import { resolveServiceControl, type ServiceControlOptions } from "./service-control.js";
-import { initializeCliOpenClaw, syncCliOpenClawToolEnvironment } from "./openclaw.js";
+import { loadCliManifest } from "./module-manifest.js";
+import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   describeError,
@@ -78,11 +78,26 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     const endpoint = componentEndpoint(home, "executor-kernel", dependencies.platform);
     context = { component: positional[0], action: positional[1], logs: join(home, "logs") };
     const registrations = await readExtraDirectory(join(home, "extras"));
+    // 部署、停止及配置修复命令不启动模块，也不因尚未可读的启动清单而无法操作。
+    const needsManifest =
+      positional[1] === "run" ||
+      (!builtinComponents.includes(positional[0]) &&
+        !registrations.some((entry) => entry.name === positional[0]) &&
+        ["install", "start", "restart", "stop", "uninstall", "status"].includes(positional[1]));
+    const manifest = needsManifest
+      ? await loadCliManifest(
+          home,
+          flags.manifest,
+          dependencies.errorOutput ?? ((message) => process.stderr.write(`${message}\n`))
+        )
+      : undefined;
     const componentNames = [
       ...new Set([...components, ...registrations.map((entry) => entry.name)])
     ];
     const isComponent = (name: string) =>
-      builtinComponents.includes(name) || registrations.some((entry) => entry.name === name);
+      builtinComponents.includes(name) ||
+      registrations.some((entry) => entry.name === name) ||
+      manifest?.extras.some((entry) => entry.name === name) === true;
     if (positional.length === 1 && isComponent(positional[0])) {
       output(helpText(positional[0]));
       return 0;
@@ -212,37 +227,29 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     if (action === "run") {
+      if (!manifest) throw new Error("MANIFEST_INVALID");
       runningComponent = component;
       dependencies.onComponentRun?.();
       await mkdir(home, { recursive: true, mode: 0o700 });
       let handle: KernelService | ExtraService;
       if (component === "executor-kernel") {
-        // 显式清单不存在时在宿主边界保留 ENOENT，而非等待 worker 断开后丢失原因。
-        if (flags.manifest) await access(resolve(flags.manifest));
-        await initializeCliOpenClaw(paths.profileRoot, dependencies.env ?? process.env);
-        await syncCliOpenClawToolEnvironment(
-          paths.profileRoot,
-          await readExtraDirectory(join(home, "extras"))
-        );
         const config = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
         handle = createKernelService({
           endpoint,
           stateDirectory: join(home, "run"),
-          workerEntrypoint: fileURLToPath(
-            import.meta.resolve("@mininglamp-oss/octo-runtime-executor-kernel/runner")
-          ),
-          manifest: flags.manifest
-            ? resolve(flags.manifest)
-            : fileURLToPath(new URL("./default_adapters.json", import.meta.url)),
+          workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),
+          adapterModules: resolveAdapterModules(manifest),
           adapterConfigurations: readAdapterConfigurations(paths.profileRoot, config?.adapters),
           env: {
             ...(dependencies.env ?? process.env),
             OCTO_RUNTIME_HOME: home,
+            OCTO_RUNTIME_CLI_PROFILE_ROOT: paths.profileRoot,
+            OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "1",
             OCTO_RUNTIME_LOGS_DIRECTORY: join(home, "logs")
           }
         });
       } else {
-        const registration = extraRegistration(await readExtra(paths, component));
+        const registration = await readExtra(paths, component, manifest);
         const module =
           registration.enabled === false
             ? { name: registration.name, default: () => () => {} }

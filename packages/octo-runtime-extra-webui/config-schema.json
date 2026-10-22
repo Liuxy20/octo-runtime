@@ -6,12 +6,12 @@
   "$comment": "声明文件最多 1 MiB，POSIX 权限须为 0600。端口占用、路径可访问性、会话文件内容及文件权限仍需运行时检查。加载生命周期 loaded 不等于监听成功，宿主须检查插件状态中的 listening 与 errors。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["module", "config"],
+  "required": ["config"],
   "properties": {
     "module": {
       "type": "string",
       "const": "@mininglamp-oss/octo-runtime-extra-webui",
-      "description": "必填。本地 WebUI Extra 的固定包入口；宿主须预先安装并确保模块可解析。此 schema 约束包名声明，宿主通过绝对路径加载同一模块时可自行调整该约束。插件实例名及 CLI 配置目录名为 webui。"
+      "description": "可选旧声明。CLI 从 manifest.json 选择模块；省略时使用有效清单，保留时须与清单文字一致。SDK 原生 import 不需要此字段。此 schema 约束固定包名，宿主使用其他公开路径时可自行调整。"
     },
     "enabled": {
       "type": "boolean",

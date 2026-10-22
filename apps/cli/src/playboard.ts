@@ -4,13 +4,13 @@ import {
   readJsonFile,
   type ProfileConfiguration
 } from "./state.js";
-import { initializeCliOpenClaw } from "./openclaw.js";
+import { loadCliManifest } from "./module-manifest.js";
+import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import {
   readAdapterConfigurations,
   createKernelService,
   type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -93,18 +93,18 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   const temporary = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   try {
     const paths = runtimePaths(home, profile);
-    await initializeCliOpenClaw(paths.profileRoot, options.env ?? process.env);
+    const manifest = await loadCliManifest(home, options.manifest);
     const configuration = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
     kernel = createKernelService({
       endpoint:
         process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
-      workerEntrypoint: fileURLToPath(
-        import.meta.resolve("@mininglamp-oss/octo-runtime-executor-kernel/runner")
-      ),
-      manifest: options.manifest
-        ? resolve(options.manifest)
-        : fileURLToPath(new URL("./default_adapters.json", import.meta.url)),
-      env: options.env ?? process.env,
+      workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),
+      adapterModules: resolveAdapterModules(manifest),
+      env: {
+        ...(options.env ?? process.env),
+        OCTO_RUNTIME_CLI_PROFILE_ROOT: paths.profileRoot,
+        OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "0"
+      },
       adapterConfigurations: readAdapterConfigurations(paths.profileRoot, configuration?.adapters)
     });
     await kernel.initialize({ signal: controller.signal });

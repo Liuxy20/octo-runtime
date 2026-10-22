@@ -59,7 +59,7 @@ import { selectedAdapter } from "./selected-adapter.js";
 serveWorker([selectedAdapter]);
 ```
 
-`selected-adapter.js` is a placeholder module that your application supplies, exporting `selectedAdapter` with the `HostedAdapter` type. The SDK does not include that example path. Your application chooses and packages its Adapters. The bundled Runtime CLI already has its own worker and Adapter manifest; see [KernelServiceOptions](../reference/kernel-ipc.md) for manifest-based configuration.
+`selected-adapter.js` is a placeholder module that your application supplies, exporting `selectedAdapter` with the `HostedAdapter` type. The SDK does not include that example path. Your application chooses and packages its Adapters. SDK integration uses native imports without a manifest or an external Node service launcher. The bundled Runtime CLI owns its separate worker and manifest mechanism; see [Adapter and Extra Loading](../concepts/module-loading.md).
 
 After creating the service, await `initialize()` before using `kernel.client`. On exit, close the application's Extras and wait for result consumption, delivery, and storage operations to finish before closing its Kernel and database. Check the cleanup result's `complete` field. If it is `false`, handle the reported pending resources.
 

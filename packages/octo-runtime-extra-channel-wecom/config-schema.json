@@ -6,12 +6,12 @@
   "$comment": "声明文件最多 1 MiB，POSIX 权限须为 0600。Bot 按 ws_url 与 bot_id 的组合判重；凭据文件权限、目标 Agent 是否存在、Provider 是否可用等仍需运行时检查。Context 内部对象遵循 octo.context-envelope/v3，具体协议约束由现有运行时校验，本文件不重复展开。",
   "type": "object",
   "additionalProperties": false,
-  "required": ["module", "config"],
+  "required": ["config"],
   "properties": {
     "module": {
       "type": "string",
       "const": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
-      "description": "必填。企业微信 Extra 的固定包入口；宿主须预先安装并确保模块可解析。此 schema 约束包名声明，宿主通过绝对路径加载同一模块时可自行调整该约束。插件实例名及 CLI 配置目录名为 channel-wecom。"
+      "description": "可选旧声明。CLI 从 manifest.json 选择模块；省略时使用有效清单，保留时须与清单文字一致。SDK 原生 import 不需要此字段。此 schema 约束固定包名，宿主使用其他公开路径时可自行调整。"
     },
     "enabled": {
       "type": "boolean",

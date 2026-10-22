@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { Readable } from "node:stream";
@@ -79,9 +79,29 @@ for (const mode of ["hang", "reject", "startup-failure"]) {
         }),
         0
       );
+      const manifest = join(home, "explicit-manifest.json");
+      await writeFile(
+        manifest,
+        JSON.stringify({
+          version: 1,
+          adapters: [],
+          extras: [
+            { name: "channel-gateway", module: resolve("test/fixtures/stuck-cli-extra.mjs") }
+          ]
+        })
+      );
       const child = spawn(
         process.execPath,
-        [resolve("apps/cli/dist/index.js"), "--json", "--home", home, "channel-gateway", "run"],
+        [
+          resolve("apps/cli/dist/index.js"),
+          "--json",
+          "--home",
+          home,
+          "--manifest",
+          manifest,
+          "channel-gateway",
+          "run"
+        ],
         { stdio: ["ignore", "pipe", "pipe"] }
       );
       let output = "";
@@ -158,8 +178,9 @@ test(
           home,
           component,
           "run",
-          "--manifest",
-          resolve("test/fixtures/adapters.json")
+          ...(component === "executor-kernel"
+            ? ["--manifest", resolve("test/fixtures/adapters.json")]
+            : [])
         ],
         { stdio: ["ignore", "pipe", "pipe"] }
       );

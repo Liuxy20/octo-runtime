@@ -9,7 +9,7 @@ import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { once } from "node:events";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { WebSocketServer } from "ws";
 import { waitFor } from "./runtime-fixture.js";
 import {
@@ -135,119 +135,152 @@ test("unconfigured SDK probe does not discover or create files; missing device i
   await assert.rejects(stat(device), { code: "ENOENT" });
 });
 
-test("CLI daemon restart refreshes and authenticates rotated Home connection without SDK discovery", async (t) => {
-  const root = await fixture(t);
-  const source = join(root, "native");
-  const home = join(root, "runtime");
-  await mkdir(source);
-  const authenticated = [];
-  const gateways = [];
-  for (const token of ["before", "after"]) {
-    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-    await once(server, "listening");
-    gateways.push(server);
-    t.after(() => new Promise((resolve) => server.close(resolve)));
-    server.on("connection", (socket) => {
-      socket.send(
-        JSON.stringify({
-          type: "event",
-          event: "connect.challenge",
-          payload: { nonce: "rotation", ts: Date.now() }
-        })
-      );
-      socket.on("message", (data) => {
-        const frame = JSON.parse(data.toString());
-        if (frame.method === "connect") {
-          assert.equal(frame.params.auth.token, token);
-          authenticated.push(token);
-          socket.send(
-            JSON.stringify({
-              type: "res",
-              id: frame.id,
-              ok: true,
-              payload: {
-                type: "hello-ok",
-                protocol: 4,
-                features: {
-                  methods: [
-                    "agents.list",
-                    "sessions.create",
-                    "sessions.messages.subscribe",
-                    "agent",
-                    "agent.wait",
-                    "sessions.abort"
-                  ],
-                  events: ["agent"]
+for (const legacy of [false, true]) {
+  test(`CLI startup and restart initialize and refresh ${legacy ? "untyped legacy" : "typed"} OpenClaw selection`, async (t) => {
+    const root = await fixture(t);
+    const source = join(root, "native");
+    const home = join(root, "runtime");
+    await mkdir(source);
+    const authenticated = [];
+    const gateways = [];
+    for (const token of ["before", "after"]) {
+      const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+      await once(server, "listening");
+      gateways.push(server);
+      t.after(() => new Promise((resolve) => server.close(resolve)));
+      server.on("connection", (socket) => {
+        socket.send(
+          JSON.stringify({
+            type: "event",
+            event: "connect.challenge",
+            payload: { nonce: "rotation", ts: Date.now() }
+          })
+        );
+        socket.on("message", (data) => {
+          const frame = JSON.parse(data.toString());
+          if (frame.method === "connect") {
+            assert.equal(frame.params.auth.token, token);
+            authenticated.push(token);
+            socket.send(
+              JSON.stringify({
+                type: "res",
+                id: frame.id,
+                ok: true,
+                payload: {
+                  type: "hello-ok",
+                  protocol: 4,
+                  features: {
+                    methods: [
+                      "agents.list",
+                      "sessions.create",
+                      "sessions.messages.subscribe",
+                      "agent",
+                      "agent.wait",
+                      "sessions.abort"
+                    ],
+                    events: ["agent"]
+                  }
                 }
-              }
-            })
-          );
-        } else
-          socket.send(
-            JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { agents: [] } })
-          );
+              })
+            );
+          } else
+            socket.send(
+              JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { agents: [] } })
+            );
+        });
       });
-    });
-  }
-  const repo = fileURLToPath(new URL("..", import.meta.url));
-  const env = { ...process.env, OPENCLAW_HOME: source };
-  delete env.OPENCLAW_GATEWAY_URL;
-  delete env.OPENCLAW_GATEWAY_TOKEN;
-  let previousDevice;
-  for (const [index, token] of ["before", "after"].entries()) {
+    }
+    const repo = fileURLToPath(new URL("..", import.meta.url));
+    const env = { ...process.env, OPENCLAW_HOME: source };
+    const manifest = join(root, "openclaw-manifest.json");
+    const wrapper = join(root, "selected-provider.mjs");
+    const calls = join(root, "factory-calls");
     await writeFile(
-      join(source, "openclaw.json"),
+      wrapper,
+      `import { appendFileSync } from "node:fs";
+import { createOpenClawAdapter } from ${JSON.stringify(pathToFileURL(join(repo, "packages/octo-runtime-adapter-openclaw/dist/index.js")).href)};
+export function selectedAdapter() {
+  appendFileSync(${JSON.stringify(calls)}, "1");
+  return createOpenClawAdapter();
+}`
+    );
+    await writeFile(
+      manifest,
       JSON.stringify({
-        gateway: {
-          port: gateways[index].address().port,
-          auth: { token }
-        }
+        version: 1,
+        adapters: [
+          {
+            ...(legacy ? {} : { type: "openclaw" }),
+            module: legacy
+              ? wrapper
+              : join(repo, "packages/octo-runtime-adapter-openclaw/dist/index.js"),
+            export: legacy ? "selectedAdapter" : "openclawAdapter",
+            factory: legacy
+          }
+        ]
       })
     );
-    if (index === 0) await configureCliOpenClaw(join(home, "work"), {}, env);
-    const child = spawn(
-      process.execPath,
-      [
-        join(repo, "apps/cli/dist/index.js"),
-        "executor-kernel",
-        "run",
-        "--home",
-        home,
-        "--manifest",
-        join(repo, "test/fixtures/adapters.json")
-      ],
-      {
-        env,
-        stdio: ["ignore", "ignore", "pipe"]
+    delete env.OPENCLAW_GATEWAY_URL;
+    delete env.OPENCLAW_GATEWAY_TOKEN;
+    let previousDevice;
+    for (const [index, token] of ["before", "after"].entries()) {
+      await writeFile(
+        join(source, "openclaw.json"),
+        JSON.stringify({
+          gateway: {
+            port: gateways[index].address().port,
+            auth: { token }
+          }
+        })
+      );
+      if (index === 0) await configureCliOpenClaw(join(home, "work"), {}, env);
+      const child = spawn(
+        process.execPath,
+        [
+          join(repo, "apps/cli/dist/index.js"),
+          "executor-kernel",
+          "run",
+          "--home",
+          home,
+          "--manifest",
+          manifest
+        ],
+        {
+          env,
+          stdio: ["ignore", "ignore", "pipe"]
+        }
+      );
+      let diagnostics = "";
+      child.stderr.on("data", (chunk) => {
+        diagnostics += chunk;
+      });
+      const exited = once(child, "exit");
+      try {
+        const client = attachKernel({ endpoint: componentEndpoint(home, "executor-kernel") });
+        t.after(() => client.close());
+        await waitFor(async () => {
+          if (child.exitCode !== null) throw new Error(diagnostics);
+          return await client.status().then(
+            (status) => status.execution_ready && authenticated.includes(token),
+            () => false
+          );
+        }, 5000);
+        const snapshot = await loadLocalOpenClawGateway(join(home, "default"));
+        const listed = await client.list();
+        assert.equal(listed.find((adapter) => adapter.type === "openclaw").available, true);
+        if (legacy) assert.equal(await readFile(calls, "utf8"), "1".repeat(index + 1));
+        assert.equal((await loadLocalOpenClawGateway(join(home, "work"))).token, "before");
+        assert.equal(snapshot.token, token);
+        assert.equal(snapshot.url, `ws://127.0.0.1:${gateways[index].address().port}/`);
+        if (previousDevice) assert.deepEqual(snapshot.device, previousDevice);
+        previousDevice = snapshot.device;
+      } finally {
+        child.kill("SIGTERM");
+        await exited;
       }
-    );
-    let diagnostics = "";
-    child.stderr.on("data", (chunk) => {
-      diagnostics += chunk;
-    });
-    const exited = once(child, "exit");
-    try {
-      const client = attachKernel({ endpoint: componentEndpoint(home, "executor-kernel") });
-      t.after(() => client.close());
-      await waitFor(async () => {
-        if (child.exitCode !== null) throw new Error(diagnostics);
-        return await client.status().then(
-          (status) => status.execution_ready && authenticated.includes(token),
-          () => false
-        );
-      }, 5000);
-      const snapshot = await loadLocalOpenClawGateway(join(home, "default"));
-      assert.equal((await loadLocalOpenClawGateway(join(home, "work"))).token, "before");
-      assert.equal(snapshot.token, token);
-      assert.equal(snapshot.url, `ws://127.0.0.1:${gateways[index].address().port}/`);
-      if (previousDevice) assert.deepEqual(snapshot.device, previousDevice);
-      previousDevice = snapshot.device;
-    } finally {
-      child.kill("SIGTERM");
-      await exited;
     }
-  }
-});
+  });
+}
 
 test("shared Host probes and invokes each Runtime connection and uses only the Context Agent target", async (t) => {
   const root = await fixture(t);

@@ -24,7 +24,7 @@ const endpoint = componentEndpoint(home);
 const kernel = createKernelService({
   endpoint,
   workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
-  manifest: resolve("apps/cli/dist/default_adapters.json"),
+  manifest: resolve("apps/cli/dist/manifest.json"),
   env: { ...process.env, OCTO_RUNTIME_HOME: home }
 });
 await kernel.initialize();

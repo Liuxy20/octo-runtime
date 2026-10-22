@@ -21,6 +21,11 @@ import type { WorkerRpc } from "./rpc.js";
 import { acquireEndpoint } from "./endpoint.js";
 import { InvocationManifest } from "./invocation-manifest.js";
 import {
+  readModuleManifest,
+  resolveAdapterModules,
+  type AdapterModuleEntry
+} from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
+import {
   KernelError,
   type LookupKey,
   type RunRef,
@@ -32,6 +37,8 @@ export interface KernelServerOptions {
   endpoint: string;
   workerEntrypoint: string;
   manifest?: string;
+  /** CLI 装配快照；SDK 原生 worker 无需清单或此字段。 */
+  adapterModules?: AdapterModuleEntry[];
   env?: NodeJS.ProcessEnv;
   adapterConfigurations?: Record<string, AdapterProbeOptions>;
   stateDirectory?: string;
@@ -110,10 +117,16 @@ function validateParams(method: string, params: Record<string, unknown>): void {
  * 启动失败也执行回收；close 失败会保留所有权证据，客户端断开不等同于 owner 关闭。
  */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
+  if (options.manifest && options.adapterModules !== undefined)
+    throw new TypeError("manifest and adapterModules are mutually exclusive");
+  // 文件仅在服务启动时读取一次；worker 自动恢复沿用快照，不因磁盘改动改变加载集合。
+  const adapterModules = options.manifest
+    ? resolveAdapterModules(await readModuleManifest(options.manifest, { legacy: true }))
+    : options.adapterModules;
   const instance = randomUUID();
   let manifest: InvocationManifest | undefined;
   const worker = new WorkerSupervisor(
-    { entrypoint: options.workerEntrypoint, manifest: options.manifest, env: options.env },
+    { entrypoint: options.workerEntrypoint, adapterModules, env: options.env },
     (pid) => manifest?.setWorker(pid, options.workerEntrypoint) ?? Promise.resolve()
   );
   const configure = (input: InvokeInput) => {

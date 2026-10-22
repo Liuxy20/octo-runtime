@@ -74,6 +74,8 @@ Global options are `--home <path>`, `--profile <name>`, and `--manifest <path>`.
 
 ## Try One Invocation
 
+The CLI selects Adapters and Extras from its built-in manifest plus `<Home>/manifest.json`. Both have `adapters` and `extras`; declaring an Extra does not enable or start it. `--manifest` replaces both sources completely. See [Adapter and Extra Loading](../concepts/module-loading.md) for examples, resolution anchors and migration of legacy Extra `module` settings.
+
 Create `request.json` with this content:
 
 ```json

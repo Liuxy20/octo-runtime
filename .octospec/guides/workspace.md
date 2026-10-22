@@ -128,19 +128,19 @@ pnpm --filter @mininglamp-oss/octo-runtime-adapter-codex list
 
 宿主保留预编译方案，将上述过滤构建及独立 Host 入口编译前置到原有 `dev` / `build` 命令，保留原有开发、检查与打包步骤；不要求安装时的 `prepare` 或额外脚本文件。开发启动后仅 App 源码由原服务监听，修改 Runtime 源码需重新编译。普通安装覆盖所有 workspace 项目，构建过滤本身不限制安装范围。
 
-源码 SDK 宿主按实际依赖闭包裁剪模块，不能仅按是否启用判断可否排除。内置 Kernel runner 的 Provider 依赖仍须保留；自定义 worker 入口只注册宿主显式选择的 Adapter。已发布单包通过 /host、/executor-kernel、/executor-core、/extra、/protocol 子路径消费，完整示例见两篇 SDK 指南。
+源码 SDK 宿主按实际依赖闭包裁剪模块，不能仅按是否启用判断可否排除。Core、Kernel、Host SDK 不持有具体 Provider/Extra 依赖；具体模块及其共享依赖由选择它们的宿主声明，自定义 worker 原生 import 并注册所选 Adapter。已发布单包仍保留完整默认目录，通过 /host、/executor-kernel、/executor-core、/extra、/protocol 子路径消费，完整示例见两篇 SDK 指南。
 
 ## 新增 Adapter Package
 
-以下步骤描述当前实现。已确认的目标改造为 [CLI 与 SDK 分别选择集合](../tasks/adapter-composition-ownership/brief.md)：CLI 自管清单，SDK 嵌入代码自管选择，宿主 App 自行管理依赖、裁剪及打包，框架不承诺客户包体。实施后新增 Adapter 不应自动加载到所有客户产品；对接文档和加载代码的详细中文注释必须同步交付。在改造完成前，不能把下面的共享 JSON 当作长期责任划分。
+以下步骤描述已实现的 [CLI 与 SDK 分别选择集合](../tasks/85-provider-decoupling/brief.md)：CLI 自管清单，SDK 嵌入代码自管选择，宿主 App 自行管理依赖、裁剪及打包，框架不承诺客户包体。新增 Adapter 不自动加载到所有客户产品；对接文档和加载代码的详细中文注释必须同步交付。
 
 以 `foo` provider 为例：
 
 1. 创建 `packages/octo-runtime-adapter-foo/package.json`、`src/index.ts` 和 `README.md`。
 2. 包名使用 `@mininglamp-oss/octo-runtime-adapter-foo`，依赖 `@mininglamp-oss/octo-runtime-adapter-sdk: workspace:*`。
 3. 实现 metadata、probe、invoke、session 和 canonical event mapping。
-4. CLI 默认项在 [default_adapters.json](../../apps/cli/src/default_adapters.json) 注册 type/module/export；SDK 在各自 Host 入口直接 import 并注册，不复制 CLI 资源。
-5. 使用内置 runner 时，在 `packages/octo-runtime-executor-kernel/package.json` 增加所需 workspace dependency；标准 CLI 发行时同步根生产依赖。自定义 SDK worker 则由宿主管理其依赖和 serveWorker 注册集合。
+4. CLI 默认项在 [manifest.json](../../apps/cli/src/manifest.json) 注册 type/module/export；SDK 在各自 Host 入口直接 import 并注册，不复制 CLI 资源。
+5. 新增标准 CLI 默认项时，在 `apps/cli/package.json` 增加所需 workspace dependency，并同步根发行装配的生产依赖；不得把具体 Provider 依赖加回 Core、Kernel 或 Host SDK。自定义 SDK worker 由宿主管理其依赖和 serveWorker 注册集合。
 6. 若根测试直接 import 该包，在根 `devDependencies` 增加 workspace dependency。
 7. 在 `test/` 添加 native event、success/error/cancel/session resume 契约测试。
 8. README 至少说明包的作用、设计原则、适用场景、明确边界和最小用法，并在 [Packages And Adapter Guide](../../packages/README.md) 与 provider matrix 中建立入口。

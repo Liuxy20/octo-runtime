@@ -25,7 +25,7 @@ const request = {
 
 test("default adapters reject unsupported approval modes at their execution boundary", async () => {
   const manifest = JSON.parse(
-    await readFile(new URL("../apps/cli/src/default_adapters.json", import.meta.url), "utf8")
+    await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
   assert.equal(manifest.adapters.length, 12);
   for (const entry of manifest.adapters) {

@@ -57,7 +57,7 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 产品选择的加载集合也独立于以上状态。CLI 与 SDK 嵌入代码分别决定集合；Host 不因框架支持更多类型或机器上探测到更多 Provider 就自行加载。默认来源拆分已实施，SDK 不读取 CLI 清单，见 [方案及影响](../tasks/adapter-composition-ownership/brief.md)。
 
-2026-10-15 最新决定：CLI 默认集合固定为 `apps/cli/src/default_adapters.json`，SDK 在自己的独立 Host 入口直接 import 并注册，不读取或复制 CLI 清单。后续将追加 `<home>/extra_adapters.json`（默认 `~/.octo-runtime/extra_adapters.json`）中的第三方 Adapter，采用既有 version/adapters 描述格式。按 type 保留先出现项，内置优先；同名外部项忽略且不执行其模块。SDK 不自动读取此文件。客户只持有发行包，也应能通过公开 `/adapter` 与 `/protocol` 合同开发独立 Dify 等 Adapter；内部包继续 private。公开 Adapter 入口与外部追加加载均待实施，详细路径、错误与验收规则见上述任务及[公开插件合同](../tasks/public-plugin-contracts/brief.md)。
+2026-10-21 最新决定并已实施：CLI 默认集合统一为 `apps/cli/src/manifest.json`，与 `<home>/manifest.json` 用户扩展合并；两份均含 adapters、extras，不再新增 extra_adapters.json。Adapter 按 type、Extra 按 name 内置优先，忽略同名扩展且不解析或执行其模块。同一文件重复键报错。SDK 原生 import 并注册，不读取或生成 manifest，不以外部 Node 代启顶层服务。具体来源、解析、激活与迁移遵守[整体架构约束](architecture.md#cli-与-sdk-的-adapterextra-装配约束)。客户只持有发行包时的 `/adapter` 公共开发入口仍是[公开插件合同](../tasks/public-plugin-contracts/brief.md)的独立待办，本次不发布 private 包。
 
 Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 
@@ -75,11 +75,11 @@ Host 按执行合同校验来源、输出模式和实际交互 responder；审�
 
 ### Manifest 模块路径
 
-manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点开头的相对路径，由 Host loader 转换为 file URL；相对路径以 manifest 所在目录为基准，不能以宿主 cwd 为基准。包 specifier 与已有 file URL 保留原解析语义。平台差异封装在内部，不要求 SDK 调用方预转换 URL、选择 OS 或改变现有启动接口。
+manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点开头的相对路径，由 Host loader 转换为 file URL；相对路径以 manifest 所在目录为基准，不能以宿主 cwd 为基准。裸包名同样以原始 manifest 位置按 ESM node/import 条件与 exports 解析；已有 file URL 保持显式位置。合并清单不得丢失来源，不回退到 Kernel、cwd 或全局包目录。平台差异封装在内部，不要求 SDK 调用方预转换 URL、选择 OS 或改变现有启动接口。
 
 ### CLI 帮助与开发者高级入口
 
-普通 CLI `--help` 说明默认使用内置 Adapter、无需 Adapter 配置，不展示高级 `--manifest` 参数。隐藏只影响帮助渲染，不能删除参数解析、优先级或显式清单执行支持。现有显式 manifest 是完整加载集合，不是自动追加；第三方结构式模块可由其加载，但 `/adapter` 公开 SDK 和 extra_adapters.json 自动追加仍须分别实施验收。
+普通 CLI `--help` 说明默认使用内置 Adapter、无需 Adapter 配置，不展示高级 `--manifest` 参数。隐藏只影响帮助渲染，不能删除参数解析、优先级或显式清单执行支持。显式 manifest 是完整加载集合，不是自动追加；用户追加已统一由 `<Home>/manifest.json` 实现，不另设 extra_adapters.json。`/adapter` 公开 SDK 仍为独立待办。
 
 开发者用法、公开 import、完整 Extra/Adapter 示例及 SDK/CLI 兼容边界见[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)。公开合同属于增量导出，不能据此声称使用旧物理清单路径的宿主无需迁移。
 

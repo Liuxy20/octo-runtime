@@ -23,7 +23,7 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## 创建服务
 
-`createKernelService(options)` 必须提供监听地址 `endpoint` 和 worker 入口文件绝对路径 `workerEntrypoint`。可选参数包括 Adapter 模块清单 `manifest`、`adapterConfigurations`、`configurations(runtimeId?)`、`env` 和 `stateDirectory`。`manifest` 决定 worker 加载哪些 Adapter 模块，不保存业务 Agent 数据。
+`createKernelService(options)` 必须提供监听地址 `endpoint` 和 worker 入口文件绝对路径 `workerEntrypoint`。SDK 可选参数包括 `adapterConfigurations`、`configurations(runtimeId?)`、`env` 和 `stateDirectory`。SDK 宿主在自己的 worker 代码中 import 并注册所选 Adapter，不使用 manifest，也不代启另一个顶层服务。CLI 内部 runner 接受互斥的 `manifest` 文件或已解析 `adapterModules` 快照；这是 CLI 的装配机制，不是 SDK 的接入条件。见[模块载入](../concepts/module-loading.md)。
 
 1. 创建服务对象后，等待 `initialize({signal?})` 完成。
 2. 初始化成功后，使用 `kernel.client` 发起调用，或通过 `status()` 查看服务状态。

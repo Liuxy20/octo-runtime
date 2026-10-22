@@ -2,6 +2,8 @@
 
 CLI 是 Host SDK 的一个宿主，负责自己的 JSON 配置与原生用户服务。桌面或其他 HostApp 使用 SDK 接入。
 
+模块由 CLI 内置 `manifest.json` 与所选 Home 的 `manifest.json` 合并选择，均含 `adapters` 和 `extras`。默认发行全量；未启动 Extra 不导入，清单不保存业务凭据或启用设置。条目以原始清单文件为解析锚点，同名内置优先；显式 `--manifest` 完整替换两份默认来源。SDK 原生 import，不读取这些文件。双语说明见 [English](../../docs/en/concepts/module-loading.md) / [简体中文](../../docs/zh-CN/concepts/module-loading.md)。
+
 ## 命令
 
 ```text
@@ -53,7 +55,7 @@ octo-runtime channel-gateway restart
 octo-runtime extraget channel-gateway
 ```
 
-gateway.json 是完整声明 `{ "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway", "config": { "bots": [] } }`。每次整份替换，保存文件权限为 POSIX 0600。extraset 不打印凭据；extraget 按显式请求返回完整配置，路径写入 stderr。
+gateway.json 可使用 `{ "config": { "bots": [] } }`，模块由 manifest 声明。旧 `module` 可保留，但必须与有效清单文字完全一致；自定义 Extra 先加入 Home 清单，冲突明确提示迁移。每次整份替换，保存文件权限为 POSIX 0600。extraset 不打印凭据；extraget 按显式请求返回完整配置，路径写入 stderr。
 
 ## 临时执行
 

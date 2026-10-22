@@ -2,11 +2,16 @@ import { join } from "node:path";
 import {
   assertExtraName,
   assertStoredExtra,
-  readExtraDirectory,
-  type ExtraDescriptor,
+  readStoredExtra,
+  type ExtraRegistration,
+  type ExtraPluginModule,
   type StoredExtra
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { withSetupLock, writeJsonAtomic, type RuntimePaths } from "./state.js";
+import {
+  resolveModuleSpecifier,
+  type ModuleManifest
+} from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 
 /** Generic full replacement: no platform-specific CLI fields or validation. */
 export async function setExtra(
@@ -39,30 +44,37 @@ export async function setExtra(
   });
 }
 
-export async function readExtra(paths: RuntimePaths, name: string): Promise<ExtraDescriptor> {
+/** CLI 将模块目录与业务配置装配；仅 load 时解析/import，禁用项及未启动项不执行模块。 */
+export async function readExtra(
+  paths: RuntimePaths,
+  name: string,
+  manifest: ModuleManifest
+): Promise<ExtraRegistration> {
   assertExtraName(name);
-  const entries = await readExtraDirectory(join(paths.home, "extras"));
-  const entry = entries.find((item) => item.name === name);
-  if (!entry) throw new Error("EXTRA_NOT_REGISTERED");
-  // Invalid stored declarations carry a controlled read error through their loader.
-  if (!entry.module) await entry.load();
+  const stored = await getExtra(paths, name);
+  const entry = manifest.extras.find((item) => item.name === name);
+  if (!entry) throw new Error("EXTRA_MANIFEST_DECLARATION_REQUIRED");
+  if (stored.module !== undefined && stored.module !== entry.module)
+    throw new Error("EXTRA_MODULE_MIGRATION_REQUIRED");
   return {
     name,
-    module: entry.module!,
-    config: entry.config,
-    ...(entry.enabled === undefined ? {} : { enabled: entry.enabled })
+    module: entry.module,
+    config: stored.config,
+    enabled: stored.enabled,
+    load: () =>
+      import(
+        resolveModuleSpecifier(entry.module, entry.sourceManifest)
+      ) as Promise<ExtraPluginModule>
   };
 }
 
 export async function getExtra(paths: RuntimePaths, name: string): Promise<StoredExtra> {
   assertExtraName(name);
-  const entries = await readExtraDirectory(join(paths.home, "extras"));
-  const entry = entries.find((item) => item.name === name);
-  if (!entry) throw new Error("EXTRA_NOT_REGISTERED");
-  if (!entry.module) await entry.load();
-  return {
-    module: entry.module!,
-    ...(entry.enabled === undefined ? {} : { enabled: entry.enabled }),
-    config: entry.config
-  };
+  try {
+    return await readStoredExtra(join(paths.home, "extras"), name);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT")
+      throw new Error("EXTRA_NOT_REGISTERED", { cause: error });
+    throw error;
+  }
 }

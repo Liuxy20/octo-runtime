@@ -102,12 +102,45 @@ importers:
 
   apps/cli:
     dependencies:
-      '@mininglamp-oss/octo-runtime-adapter-sdk':
+      '@mininglamp-oss/octo-runtime-adapter-antigravity':
         specifier: workspace:*
-        version: link:../../packages/octo-runtime-adapter-sdk
+        version: link:../../packages/octo-runtime-adapter-antigravity
+      '@mininglamp-oss/octo-runtime-adapter-claude-code':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-claude-code
+      '@mininglamp-oss/octo-runtime-adapter-codebuddy':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-codebuddy
+      '@mininglamp-oss/octo-runtime-adapter-codex':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-codex
+      '@mininglamp-oss/octo-runtime-adapter-hermes':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-hermes
+      '@mininglamp-oss/octo-runtime-adapter-kimi-code':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-kimi-code
+      '@mininglamp-oss/octo-runtime-adapter-mcode':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-mcode
       '@mininglamp-oss/octo-runtime-adapter-openclaw':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-adapter-openclaw
+      '@mininglamp-oss/octo-runtime-adapter-opencode':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-opencode
+      '@mininglamp-oss/octo-runtime-adapter-qodercli':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-qodercli
+      '@mininglamp-oss/octo-runtime-adapter-qoderclicn':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-qoderclicn
+      '@mininglamp-oss/octo-runtime-adapter-sdk':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-sdk
+      '@mininglamp-oss/octo-runtime-adapter-zcode-gui':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-zcode-gui
       '@mininglamp-oss/octo-runtime-cross-service':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-cross-service
@@ -120,6 +153,12 @@ importers:
       '@mininglamp-oss/octo-runtime-extra-channel-gateway':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-extra-channel-gateway
+      '@mininglamp-oss/octo-runtime-extra-channel-wecom':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-extra-channel-wecom
+      '@mininglamp-oss/octo-runtime-extra-webui':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-extra-webui
       '@mininglamp-oss/octo-runtime-host-sdk':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-host-sdk
@@ -253,6 +292,9 @@ importers:
       '@mininglamp-oss/octo-runtime-protocol':
         specifier: workspace:*
         version: link:../octo-runtime-protocol
+      import-meta-resolve:
+        specifier: 4.2.0
+        version: 4.2.0
 
   packages/octo-runtime-adapter-zcode-gui:
     dependencies:
@@ -276,45 +318,9 @@ importers:
 
   packages/octo-runtime-executor-kernel:
     dependencies:
-      '@mininglamp-oss/octo-runtime-adapter-antigravity':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-antigravity
-      '@mininglamp-oss/octo-runtime-adapter-claude-code':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-claude-code
-      '@mininglamp-oss/octo-runtime-adapter-codebuddy':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-codebuddy
-      '@mininglamp-oss/octo-runtime-adapter-codex':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-codex
-      '@mininglamp-oss/octo-runtime-adapter-hermes':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-hermes
-      '@mininglamp-oss/octo-runtime-adapter-kimi-code':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-kimi-code
-      '@mininglamp-oss/octo-runtime-adapter-mcode':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-mcode
-      '@mininglamp-oss/octo-runtime-adapter-openclaw':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-openclaw
-      '@mininglamp-oss/octo-runtime-adapter-opencode':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-opencode
-      '@mininglamp-oss/octo-runtime-adapter-qodercli':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-qodercli
-      '@mininglamp-oss/octo-runtime-adapter-qoderclicn':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-qoderclicn
       '@mininglamp-oss/octo-runtime-adapter-sdk':
         specifier: workspace:*
         version: link:../octo-runtime-adapter-sdk
-      '@mininglamp-oss/octo-runtime-adapter-zcode-gui':
-        specifier: workspace:*
-        version: link:../octo-runtime-adapter-zcode-gui
       '@mininglamp-oss/octo-runtime-executor-core':
         specifier: workspace:*
         version: link:../octo-runtime-executor-core
@@ -1131,6 +1137,9 @@ packages:
 
   immutable@5.1.9:
     resolution: {integrity: sha512-m8nVez3rwrgmWxtLMt1ZYXB2Lv7OKYn/disyxAlSDYAlKSlFoPPfIAmAM/M5xqL4m4C/wAPw7S2/CNaUii1Hxg==}
+
+  import-meta-resolve@4.2.0:
+    resolution: {integrity: sha512-Iqv2fzaTQN28s/FwZAoFq0ZSs/7hMAHJVX+w8PZl3cY19Pxk6jFFalxQoIfW2826i/fDLXv8IiEZRIT0lDuWcg==}
 
   imurmurhash@0.1.4:
     resolution: {integrity: sha512-JmXMZ6wuvDmLiHEml9ykzqO6lwFbof0GG4IkcGaENdCRDDmMVnny7s5HsIgHCbaq0w2MyPhDqkhTUgS2LU2PHA==}
@@ -2477,6 +2486,8 @@ snapshots:
   ignore@7.0.12: {}
 
   immutable@5.1.9: {}
+
+  import-meta-resolve@4.2.0: {}
 
   imurmurhash@0.1.4: {}
 

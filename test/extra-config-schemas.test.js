@@ -63,10 +63,11 @@ for (const name of Object.keys(packages)) {
     const minimal = declaration(name, config);
     const snapshot = structuredClone(minimal);
     accepts(name, minimal);
+    accepts(name, { config });
+    assertStoredExtra({ config });
     assert.deepEqual(minimal, snapshot);
     for (const invalid of [
       {},
-      { config },
       { module: minimal.module },
       { ...minimal, module: "another-package" },
       { ...minimal, enabled: "true" },

@@ -22,14 +22,18 @@ const octo = (workdir, overrides = {}) => ({
   ...overrides
 });
 
-test("generic extra configuration stays independent; CLI OpenClaw tool preparation is the only channel dependency", async () => {
+test("CLI owns the complete Extra catalog while generic configuration and Kernel stay neutral", async () => {
   for (const app of ["cli"]) {
     const manifest = JSON.parse(
       await readFile(new URL(`../apps/${app}/package.json`, import.meta.url), "utf8")
     );
     assert.deepEqual(
       Object.keys(manifest.dependencies).filter((name) => name.includes("-extra-")),
-      ["@mininglamp-oss/octo-runtime-extra-channel-gateway"]
+      [
+        "@mininglamp-oss/octo-runtime-extra-channel-gateway",
+        "@mininglamp-oss/octo-runtime-extra-channel-wecom",
+        "@mininglamp-oss/octo-runtime-extra-webui"
+      ]
     );
   }
   const kernel = JSON.parse(

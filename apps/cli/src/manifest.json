@@ -61,5 +61,10 @@
       "module": "@mininglamp-oss/octo-runtime-adapter-antigravity",
       "export": "antigravityAdapter"
     }
+  ],
+  "extras": [
+    { "name": "channel-gateway", "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway" },
+    { "name": "channel-wecom", "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom" },
+    { "name": "webui", "module": "@mininglamp-oss/octo-runtime-extra-webui" }
   ]
 }

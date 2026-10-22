@@ -72,6 +72,8 @@ octo-runtime executor-kernel uninstall
 
 全局参数包括 `--home <path>`、`--profile <name>` 和 `--manifest <path>`。操作同一个服务时使用相同的 Home；profile 选择该 Home 内的配置，不会另建一个 Kernel 服务。默认 Home 在 macOS/Linux 上为 `~/.octo-runtime`；Windows 设置了 `LOCALAPPDATA` 时为 `%LOCALAPPDATA%\OctoRuntime`，也可以通过 `OCTO_RUNTIME_HOME` 覆盖。
 
+CLI 从内置清单加 `<Home>/manifest.json` 选择 Adapter 和 Extra。两份均含 `adapters` 和 `extras`；声明 Extra 不等于启用或启动。`--manifest` 完整替换两份来源。格式、解析锚点和旧 Extra `module` 字段迁移见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
+
 ## 试运行一次调用
 
 创建 `request.json`，内容如下：

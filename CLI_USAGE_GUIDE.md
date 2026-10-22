@@ -32,13 +32,15 @@ node apps/cli/dist/index.js --help
 | --- | --- |
 | `--home PATH` | 配置、日志、运行状态与组件端点所属的 Home |
 | `--profile NAME` | Kernel 启动或 playboard 使用的 Provider 配置；省略时读取 Home 的 `default_profile`，未配置则为 `default` |
-| `--manifest PATH` | Kernel 启动或 playboard 使用的 Adapter 清单；省略时使用 CLI 内置清单 |
+| `--manifest PATH` | 显式完整替换 Adapter/Extra 清单；省略时合并 CLI 内置与所选 Home 的 manifest.json |
 
 Home 默认采用 `OCTO_RUNTIME_HOME`；未设置时，Windows 使用 `%LOCALAPPDATA%\OctoRuntime`，其他平台使用 `~/.octo-runtime`。Windows 未设置 `LOCALAPPDATA` 时也回退到用户目录下的 `.octo-runtime`。
 
 每个 Home 有一个 Kernel 服务和各自独立的 Extra 服务。profile 选择 Provider 配置，不额外创建一组服务；服务 ID 和端点按 Home 与组件隔离。Home 不是 Provider 的执行工作目录。
 
 `extraset` / `extraget` 只读写 `<home>/extras/<name>/config.json`，不接受 `--profile`。所有安装、启停和查询操作须选择同一个 Home。以下示例均使用默认 Home；自定义时统一添加 `--home /absolute/runtime-home`。
+
+CLI 内置 `apps/cli/src/manifest.json` 同时声明 `adapters` 和 `extras`，再追加 `<home>/manifest.json` 的用户扩展；同名内置优先。每个条目的相对路径和裸包名以其原始清单为解析锚点。完整规则和格式见[模块载入](docs/zh-CN/concepts/module-loading.md)。这是 CLI 装配方式；SDK 原生 import 并在宿主进程构造服务，不使用 manifest 或外部 Node 代启。
 
 ## 3. 独立组件的生命周期
 
@@ -142,6 +144,8 @@ JSON
 ```
 
 `extraset` 保存完整声明，不连接 Bot、不安装插件，也不自动重启组件。每次整体替换，不按 `bot_id` 合并；多个 Bot 须放入同一个 `config.bots` 数组一起保存。POSIX 配置文件权限为 `0600`。
+
+上述旧式 `module` 仍可保留，但文字必须与有效 manifest 声明一致；新配置可省略，只保存 `enabled?` 和 `config`。自定义 Extra 须先加入 Home 清单的 `extras`。冲突报 `EXTRA_MODULE_MIGRATION_REQUIRED`，缺声明报 `EXTRA_MANIFEST_DECLARATION_REQUIRED`；不会自动改写用户文件。
 
 首次保存后使用上一节的 `run` 或 `start`。后台 Gateway 已运行时，修改配置后只重启 Gateway：
 

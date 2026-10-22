@@ -357,19 +357,24 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 保留原 Home、身份、profile、配置和执行语义，不为入口迁移重新初始化 Runtime。旧 remove-adapter-host-app 任务保留命令的约定已被本轮明确删除 daemon 的决定替代；当前 CLI 是 executor-kernel/channel-gateway 两组六动作。单一 npm 发行物必须携带实际 runner 与生产依赖。当前验收范围见 [独立组件任务](../tasks/executor-kernel-host-lifecycle/acceptance.md)。
 
-#### Adapter 加载集合的归属
+#### CLI 与 SDK 的 Adapter/Extra 装配约束
 
-CLI 的第三方追加目标为：专属默认 JSON 集合，加 `<home>/extra_adapters.json` 第三方清单；按 type 去重，已有则忽略外部项，不加载其模块。客户无需源码即可开发独立 Adapter，公开类型与工具通过单一 npm 包提供。SDK 产品不自动读取此 CLI 文件。追加加载及 `/adapter` 入口尚未实施，见[装配任务](../tasks/adapter-composition-ownership/brief.md)；已实施的 `/extra` 与 `/protocol` 入口及其验证边界见[第三方插件合同](../tasks/public-plugin-contracts/brief.md)。
+2026-10-21 用户明确：本节同时约束 Adapter 和 Extra，取代此前“仅 Adapter 默认清单”和 SDK 可继承 CLI 文件的解释。以下要求已在本工作树实现；具体实现与验证范围见 [Issue 85](../tasks/85-provider-decoupling/brief.md)。SDK 原生 import 与 CLI 内部 runner 必须保持两种独立装配路径，禁止恢复 startOwnedKernel 或外部 Node 顶层服务加载器。
 
-CLI 与客户产品的 SDK 嵌入代码各自决定加载哪些 Adapter。CLI 维护自己的默认 JSON，SDK 在代码中直接导入；SDK 是产品内部嵌入实现，不独立发包，也不要求终端用户另行装配。框架支持的全部 Adapter 不等于产品本次加载集合，Host 只加载显式选择，不自行扩充。Provider 的安装仍由 HostApp 决定。
+1. **SDK 原生装配。** Electron 及其他 SDK 宿主在接入代码中直接 import 所需 Adapter 和 Extra。SDK 不要求、读取、复制或生成永久或临时 manifest，不扫描 CLI Home 或默认集合。宿主 App 选择模块、配置、函数依赖和部署；FDE 如何复制代码与处理依赖由业务方负责。
+2. **保持执行位置。** Kernel 服务在宿主调用进程原生构造；Adapter 在宿主选择的内部 worker 入口 import 并注册到唯一 AgentExecutor。Extra 在宿主服务进程 import 后传给 createExtraService，函数依赖直接注入。跨进程只传 worker 入口和必要可序列化启动信息，不传实例或函数，不以外部 Node 或 CLI 代启顶层服务。
+3. **CLI 一份统一内置目录。** `apps/cli/src/manifest.json` 使用 `adapters`、`extras` 两个数组，随自身 dist 交付；将现有 `default_adapters.json` 的内容并入，不继续维护第二份默认目录。默认发布 App 仍携带完整默认 Adapter/Extra 集合，目录全量不等于全部 Extra 已配置、启用或自启。
+4. **CLI 用户扩展。** 在 `<Runtime Home>/manifest.json` 读取同样具有 `adapters`、`extras` 的扩展清单；默认 `~/.octo-runtime/manifest.json`，`--home` 指定时跟随该 Home。缺失表示无扩展，损坏或无法读取明确失败；不能把该文件推广成 SDK 宿主接入条件。
+5. **合并先于加载。** Adapter 按 type、Extra 按 name，各自内置优先、用户追加；报告忽略的同名扩展且不解析、不导入、不调用其工厂。同一文件的重复键报错，空数组不触发全量回退。显式 --manifest 继续是完整替换，不隐式叠加默认与 Home 来源。
+6. **保留来源锚点。** 每个保留条目的相对路径和裸包名都以其原始 manifest 文件位置解析，不能在合并后改用另一来源的目录。裸包遵守默认 ESM node/import 条件及 exports；查找失败不再尝试 cwd、Kernel 或全局包目录。SDK 的直接 import 使用调用文件的 Node 原生解析，不经过此 CLI 清单逻辑。
+7. **依赖归装配入口。** Kernel、Core、Host SDK 的生产闭包不得反向引入具体 Provider 或业务 Extra；Adapter SDK、Protocol、共享传输等框架依赖可以保留。完整默认模块由 App/CLI 显式依赖。新增模块不能自动进入未选择它的 SDK 产品。
+8. **加载与激活分别定义。** Kernel 仅使用 adapters，不加载或管理 Extra；对应 Extra 显式启动且启用时才 import/initialize。未选模块不加载、不 probe，未启动 Extra 的缺包不阻塞 Kernel。已选 Adapter 保持现有探测合同，不因本约束新增另一套握手或能力目录。
+9. **业务配置独立。** manifest 只声明模块，不存业务凭据、config、enabled、自启或函数依赖。CLI 的 Extra 配置仍由 `<Home>/extras/<name>/config.json` 管理。旧 module 声明与统一 manifest 的迁移必须明确报冲突，不能静默换实现、改写用户配置或重置身份。
+10. **两种接入共享执行和生命周期。** 保留 invoke、取消、排空、错误、Extra 独立关闭及资源所有权；不自动安装、不运行时热加载、不重放业务 Run。装配代码、双语文档和真实发行验证同步维护，不能以 workspace 导入成功替代包外验证。
 
-CLI 的默认清单必须位于 `apps/cli/src/default_adapters.json`，作为 CLI 专属资源构建和交付，不能放在仓库根目录伪装成全产品共享配置。SDK 的选择写在其自身装配代码中，直接 `import` 所需 Adapter 并注册，不维护或复制 CLI 的 JSON。隔离模式的实例在 worker 子进程内创建；显式 direct 模式在宿主进程创建，不把函数或实例跨进程序列化。宿主决定集合，CLI 与 SDK 共享执行机制，不共享选择来源。
+双语设计和实施状态见 [中文](../../docs/zh-CN/concepts/module-loading.md) / [English](../../docs/en/concepts/module-loading.md)。本节是整体架构责任的唯一规范正文；旧任务中 default_adapters.json、extra_adapters.json 和 owned launcher 的描述按其历史状态理解，不作为本次新接口要求。
 
-通用执行层共享加载与校验机制，不共享产品默认全量清单。SDK 不得通过构建复制 CLI 清单而继承 CLI 的选择。生产依赖、依赖裁剪及最终包体由宿主 App 自行管理，Runtime 只要求选中模块可解析，不承诺产物只包含选中项，也不替客户调整依赖树。独立 Host 子进程保留。
-
-此改造必须同步对接文档，并提供使用真实接口的完整加载示例。示例与加载关键实现必须用中文代码注释说明选择的用途、责任来源、字段、路径解析、子进程传递、失败与重启行为；只给一段无注释调用代码不满足交付要求。
-
-CLI 保留自己的默认清单；原生 Kernel 服务接收显式 workerEntrypoint，自定义内部 worker 通过 serveWorker 注册宿主选择的 Adapter。此入口只用于执行代码，不能启动服务替身，也不接受外部 Node 可执行路径。SDK 不默认继承 CLI 全量集合。显式 manifest 仍是内置 worker runner 的配置输入。第三方追加清单等后续范围见 [Adapter 装配归属方案](../tasks/adapter-composition-ownership/brief.md)。
+旧式显式 --manifest 允许省略 Adapter type。CLI 自有执行 worker 先仅装配所选实例，再根据其真实 metadata.type 完成 OpenClaw 连接准备，之后进入既有 serveWorker/list 就绪链；不得按包名猜测、省略初始化或在父进程重复实例化工厂。CLI Kernel 与 Playboard 共享此顺序；通用清单 runner 不包含产品准备逻辑，SDK 保持宿主自有 worker 的原生 import。
 
 ### Extra 外部接入插件
 
