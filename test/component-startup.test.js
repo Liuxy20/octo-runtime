@@ -42,6 +42,7 @@ test(
     const home = await mkdtemp(join(tmpdir(), "ocs-"));
     t.after(() => rm(home, { recursive: true, force: true }));
     const pidFile = join(home, "worker-pid");
+    const manifestFile = join(home, "kernel-invocations.json");
     const options = {
       endpoint: componentEndpoint(home),
       stateDirectory: home,
@@ -55,19 +56,24 @@ test(
     void starting.catch(() => undefined);
     let worker;
     // 文件存在不代表 PID 已写完，空内容会被 Number 转成当前进程组的 0。
+    // 子进程写出 PID 也不代表父进程已完成身份登记；Windows PowerShell 查询可超过清理预算。
+    // 本用例验证登记完成后的启动取消，须等原子清单确认所有权，再要求完整回滚。
     await waitFor(async () => {
       const text = await readFile(pidFile, "utf8").catch(() => "");
       if (!/^[1-9]\d*$/.test(text)) return false;
       worker = Number(text);
-      return Number.isSafeInteger(worker);
-    });
+      const manifest = await readFile(manifestFile, "utf8")
+        .then(JSON.parse)
+        .catch(() => undefined);
+      return Number.isSafeInteger(worker) && manifest?.worker?.pid === worker;
+    }, 15_000);
     controller.abort();
     await assert.rejects(
       starting,
       (error) => error instanceof ServiceInitializationError && error.cleanup.complete
     );
     assert.equal(alive(worker), false);
-    await assert.rejects(access(join(home, "kernel-invocations.json")), { code: "ENOENT" });
+    await assert.rejects(access(manifestFile), { code: "ENOENT" });
     if (process.platform !== "win32") {
       await assert.rejects(access(options.endpoint), { code: "ENOENT" });
       await assert.rejects(access(`${options.endpoint}.owner`), { code: "ENOENT" });

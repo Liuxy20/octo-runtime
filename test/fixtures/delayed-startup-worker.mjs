@@ -1,6 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 await writeFile(process.env.OCTO_TEST_WORKER_PID, String(process.pid));
-await new Promise((resolve) => setTimeout(resolve, 10_000));
-serveWorker([]);
+// 保持未就绪直到父进程取消，避免慢身份登记与固定启动 timer 争抢先后。
+setInterval(() => {}, 1000);

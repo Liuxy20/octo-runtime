@@ -1,0 +1,15 @@
+baseline: a7eda0cd73f12313c88d65a05505ba4629b43290
+branch: fix/ci-heartbeat-timeout
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+scope:
+  - test/kernel-heartbeat.test.js
+  - test/kernel-worker-supervision.test.js
+  - test/component-startup.test.js
+  - test/fixtures/delayed-startup-worker.mjs
+  - .octospec/tasks/ci-heartbeat-timeout
+  - .octospec/journal/shared/2026-10-22-ci-heartbeat-timeout.md
+authorization: 用户要求新 worktree、提交 PR 并合入最新 main；OSS 提交与 PR 使用英文。

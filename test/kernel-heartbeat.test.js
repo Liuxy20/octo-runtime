@@ -2,6 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WorkerHeartbeat } from "../packages/octo-runtime-executor-kernel/dist/heartbeat.js";
 
+test("an early timer tick keeps the fixed deadline and the next tick observes expiry", () => {
+  let now = 0;
+  const health = new WorkerHeartbeat(
+    () => now,
+    () => now
+  );
+  assert.equal(health.tick().type, "ping");
+  for (now = 999.9; now < 5000; now += 1000) {
+    assert.equal(health.tick().type, "waiting");
+  }
+  assert.equal(health.tick().type, "expired");
+});
+
 for (const gap of ["wall", "monotonic", "both", "rollback"]) {
   test(`scheduler ${gap} gap starts a fresh bounded probe and fences old pongs`, () => {
     let wall = 10000,

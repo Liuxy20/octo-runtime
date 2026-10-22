@@ -25,24 +25,39 @@ test(
 );
 
 test(
-  "idle workers remain healthy; a blocked main loop is replaced within the heartbeat bound",
-  { timeout: 18_000, skip: process.platform === "win32" },
+  "idle workers remain healthy; a blocked main loop is reaped before a ready replacement",
+  { timeout: 35_000, skip: process.platform === "win32" },
   async (t) => {
     const supervisor = new WorkerSupervisor({
       entrypoint: resolve("test/fixtures/heartbeat-worker.mjs")
     });
     await supervisor.start();
-    t.after(() => supervisor.close());
+    t.after(async () => {
+      t.diagnostic(`worker status before cleanup: ${JSON.stringify(supervisor.status)}`);
+      await supervisor.close();
+    });
     const first = supervisor.status;
     await new Promise((resolve) => setTimeout(resolve, 5500));
     assert.equal(supervisor.status.pid, first.pid);
     process.kill(first.pid, "SIGUSR2");
-    const started = Date.now();
+    // 心跳截止由 kernel-heartbeat.test.js 的可控时钟精确验证；真实进程还需回收、退避和启动。
+    // 分别等待故障检测和替代进程就绪，避免把整个恢复过程误限为一个心跳预算。
+    await waitFor(
+      () =>
+        supervisor.status.state === "recovering" || supervisor.status.generation > first.generation,
+      8000
+    );
     await waitFor(
       () => supervisor.status.generation > first.generation && supervisor.status.state === "ready",
-      7000
+      15_000
     );
-    assert.ok(Date.now() - started < 6500);
+    assert.notEqual(supervisor.status.pid, first.pid);
+    assert.equal(supervisor.status.restart_attempt, 1);
+    assert.throws(() => process.kill(first.pid, 0), { code: "ESRCH" });
+    assert.deepEqual(
+      (await supervisor.client.list()).map((adapter) => adapter.type),
+      ["test"]
+    );
   }
 );
 
