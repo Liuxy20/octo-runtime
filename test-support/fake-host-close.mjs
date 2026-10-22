@@ -105,7 +105,6 @@ export async function serveCloseFixture(options = {}) {
   const close = RuntimeLogging.prototype.close;
   RuntimeLogging.prototype.close = async function () {
     mark("logging.close.started");
-    if (options.loggingDelayMs) await delay(options.loggingDelayMs);
     if (options.logWriteDelayMs) this.kernel("info", "fixture.close_tail");
     await close.call(this);
     mark("logging.close.finished");

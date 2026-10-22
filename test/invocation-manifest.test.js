@@ -4,11 +4,39 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import childProcess from "node:child_process";
+import { syncBuiltinESMExports } from "node:module";
 import {
   InvocationManifest,
   processStartIdentity,
   reapOrphanedInvocationManifest
 } from "../packages/octo-runtime-executor-kernel/dist/invocation-manifest.js";
+
+test(
+  "Windows process identity remains stable without management module loading",
+  { skip: process.platform !== "win32" },
+  async (t) => {
+    const expected = await processStartIdentity(process.pid);
+    assert.match(expected, /^windows:\d+$/);
+    const execFile = childProcess.execFile;
+    t.mock.method(childProcess, "execFile", (file, args, ...rest) => {
+      if (file === "powershell.exe") {
+        // 仍执行真实查询，只移除 Get-Process 所属模块并禁止自动加载，暴露隐藏的 cmdlet 依赖。
+        args = [
+          ...args.slice(0, -1),
+          `Remove-Module Microsoft.PowerShell.Management -ErrorAction SilentlyContinue; $PSModuleAutoLoadingPreference='None'; ${args.at(-1)}`
+        ];
+      }
+      return execFile(file, args, ...rest);
+    });
+    syncBuiltinESMExports();
+    t.after(() => {
+      t.mock.restoreAll();
+      syncBuiltinESMExports();
+    });
+    assert.equal(await processStartIdentity(process.pid), expected);
+  }
+);
 
 test("invocation manifest persists only process and invocation metadata", async () => {
   const directory = await mkdtemp(join(tmpdir(), "oh-invocation-manifest-"));

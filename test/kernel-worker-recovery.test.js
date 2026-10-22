@@ -33,6 +33,10 @@ test(
     await waitFor(async () => (await starts()).length === 4, 10_000);
     await waitFor(async () => (await starts()).length === 5, 18_000);
     const failed = await starts();
+    assert.deepEqual(
+      failed.map((start) => start.blocked),
+      [false, true, true, true, true]
+    );
     assert.ok(failed[4].time - failed[3].time >= 15_000);
     assert.equal((await client.status()).execution_ready, false);
     assert.equal((await client.status()).worker.state, "recovering");
@@ -41,6 +45,7 @@ test(
     const recovered = await client.status();
     const allStarts = await starts();
     assert.equal(allStarts.length, 6);
+    assert.equal(allStarts[5].blocked, false);
     assert.ok(allStarts[5].time - allStarts[4].time >= 15_000);
     assert.equal(recovered.kernel_instance_id, original.kernel_instance_id);
     assert.equal(recovered.pid, original.pid);

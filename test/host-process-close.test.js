@@ -419,7 +419,8 @@ test(
   "Windows Host close gives slow shutdown its budget and leaves an independent Host usable",
   windows,
   async (t) => {
-    const f = await fixture(t, { shutdownDelayMs: 2400, loggingDelayMs: 800 });
+    // 慢写入位于 RuntimeLogging 的一秒预算内，不能在 close 外再叠加一段等待。
+    const f = await fixture(t, { shutdownDelayMs: 2400, logWriteDelayMs: 800 });
     const other = await fixture(t);
     const host = await f.start(),
       sibling = await other.start();
@@ -701,7 +702,7 @@ test(
   "Windows Host SDK Kernel worker slow close preserves logs and starts again",
   { ...windows, timeout: 25000 },
   async (t) => {
-    const f = await fixture(t, { shutdownDelayMs: 2400, loggingDelayMs: 800 });
+    const f = await fixture(t, { shutdownDelayMs: 2400, logWriteDelayMs: 800 });
     for (let i = 0; i < 2; i++) {
       const kernel = createKernelService({
         endpoint: componentEndpoint(f.home),

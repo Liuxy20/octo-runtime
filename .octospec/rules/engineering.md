@@ -37,6 +37,8 @@ supersedes: []
 - CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
 - 自动化测试使用 fake Provider，不调用真实模型。真实接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录自动化检查与实际联调结果，不把 mock 结果当作线上证据。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。
+- 生命周期测试从合同事件开始计时：进程启动/握手、失联发现、退避和清理分别对应各自预算；fixture 的人工延迟须放在被验证的真实预算内。子进程写出 PID 不等于父进程完成身份登记。
+- 跨进程 fixture 先确定本次结果再发布通知，避免观察方恢复环境反过来改变已记录的尝试。启动拒绝须保留原始 cause 和完整聚合清理事实，不能吞掉后只报轮询超时；重复验证须在任一次失败时立即失败。
 - 修改 Run / Context 协议后，同步构建 Worker、Runtime 和桌面应用，重启受影响的本地进程，验证内置运行时注册及执行。仅完成全局链接不算重启验证。
 - UI 或真实桌面接口变更，还须通过 CDP 驱动真实 renderer，对着线上测试环境验证；具体方法遵循生态根目录的开发约束。
 - 凭据从受保护配置读取，不进入知识文件、模型上下文、日志、截图或提交。Provider workdir 不代表操作系统安全隔离。

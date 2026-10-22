@@ -54,15 +54,18 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
       ]
     });
     const events = [];
-    const started = Date.now();
+    let finalAnswerAt;
     for await (const event of adapter.invoke(
       invokeRequest({
         modelInput: mode,
         signal: AbortSignal.timeout(5_000),
         agentConfig: { providerOptions: { finalizationTimeoutMs: 60 } }
       })
-    ))
+    )) {
+      if (event.type === "message.update" && event.payload.text === "answer preserved")
+        finalAnswerAt ??= performance.now();
       events.push(event);
+    }
     const terminals = events.filter((event) =>
       ["run.failed", "run.completed", "run.cancelled"].includes(event.type)
     );
@@ -75,7 +78,11 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
     if (["stall", "ignore-interrupt"].includes(mode)) {
       assert.equal(terminals[0].type, "run.failed");
       assert.equal(terminals[0].payload.code, "CODEX_FINALIZATION_TIMEOUT");
-      assert.ok(Date.now() - started < 4_000);
+      assert.equal(terminals[0].payload.timeoutMs, 60);
+      // 收尾截止从最终答案开始；子进程启动和协议握手不属于这个预算。
+      assert.ok(Number.isFinite(finalAnswerAt));
+      const elapsed = performance.now() - finalAnswerAt;
+      assert.ok(elapsed < 4_000, `finalization elapsed=${elapsed}ms`);
     } else assert.equal(terminals[0].type, "run.completed");
   });
 }
