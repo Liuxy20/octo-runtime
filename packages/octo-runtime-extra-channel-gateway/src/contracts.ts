@@ -69,6 +69,7 @@ export type ScopedOctoBotConfig = OctoBotConfig & { spaceId: string };
 /** 平台归一化后的单条消息。平台回调身份与正文保留在 connector 的闭包内。 */
 export interface ImInboundMessage {
   position?: { messageSeq: number };
+  /** 同代次卡片重试：buildContext 返回 Gateway 已组合的冻结快照，不再采集或追加默认项。 */
   historyRetry?: boolean;
   bindHistoryTurn?(token: ImGapTurnToken): void;
   markRead?(signal: AbortSignal): Promise<void>;

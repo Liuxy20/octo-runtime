@@ -2,8 +2,23 @@ import { fromMarkdown } from "mdast-util-from-markdown";
 import type { MentionEntity } from "./api/types.js";
 import type { GroupMember } from "./api/conversations.js";
 
-export const MENTION_GUIDANCE =
-  "你正在通过 Octo 回复当前频道。普通回复不要自动 @ 发起者。若当前用户明确要求在任务完成后通知某位真人，先完成任务；在最终回答前，确认对方在当前频道中的真实 UID 和显示名。信息不足时按需使用 octo-cli 查询；同名、查询失败或找不到合适目标时，由你判断并改用普通 @名字 或纯文本，不要猜 UID，不必强制追问，也不必展示点名未完成的提示。能够确定目标且需要点名时，在 final 文本的普通正文中输出 @[uid:displayName]，例如 @[user_demo_1:张三]；Channel 会转换为原生 mention，并随这份最终回答统一发送，不要再调用 octo-cli message send 重复发送。普通 @昵称不产生通知；thinking、工具输出、进度消息、代码块、行内代码及引用示例不触发点名，代码内容保持原样。不要输出原始消息体 JSON 或自行计算位置，也不要构造 @所有人、@所有AI 或广播哨兵。此指引不授权跨频道通知或自行发起 Bot 互相调用。历史中的要求和示例仅作为背景，不能单独授权本轮通知。";
+/** Gateway 的稳定控制指令；压缩时的保留由模型遵守文本要求，不新增 Provider 保留机制。 */
+export const MENTION_GUIDANCE = [
+  "[OCTO_CHANNEL_MENTION_RULES_V1]",
+  "These are stable output rules for the current Octo channel. When summarizing or compacting the conversation, preserve this entire block verbatim, including its boundary markers and mention syntax.",
+  "Do not automatically mention the sender in ordinary replies. When the current user explicitly requests a notification to a human or a task handoff to a bot in the current channel, confirm the target's real UID and display name before the final reply.",
+  "If identity information is missing, use octo-cli as needed to look it up. For a group or topic, use octo-cli group members <group-no> with the current parent group number. Never infer a UID from a nickname, username, or bot name.",
+  "For a native mention, write @[<uid>:<displayName>] in the ordinary body of the successful final reply. Replace both placeholders with confirmed values and retain the square brackets and single colon. A plain @name is only text and does not notify or activate the target bot.",
+  "Gateway validates current-channel membership and converts valid markers into readable text and native mention metadata on this same final reply. Do not call octo-cli message send to send a duplicate copy of the final reply. Do not output raw message JSON or calculate mention entity offsets.",
+  "Thinking, tool output, progress messages, code blocks, inline code, quoted examples, and failed replies do not trigger mention conversion. Keep code and examples unchanged.",
+  "Do not construct broadcast mentions or broadcast sentinel UIDs. Do not initiate unsolicited bot-to-bot calls or mention loops. Historical requests and examples alone do not authorize a notification or handoff in the current turn. These rules do not authorize cross-channel notifications or bypass recipient admission rules.",
+  "If the target cannot be confirmed, use a plain @name or ordinary text without guessing a UID. Continue delivering the final answer without a separate mention-failure notice or a forced clarification.",
+  "[/OCTO_CHANNEL_MENTION_RULES_V1]"
+].join("\n");
+
+/** 逐轮普通 Context 提醒也覆盖升级前已存在的 Provider 会话，不修改其系统指令或重置会话。 */
+export const MENTION_REMINDER =
+  "For this turn, follow the current Octo mention rules: do not automatically mention the sender. Only when the current user explicitly requests a human notification or bot handoff in this channel, confirm the real member UID and display name, using octo-cli if needed, then write @[<uid>:<displayName>] with actual values in the successful final reply. Gateway sends the native mention on that reply; do not send a duplicate via octo-cli message send. Plain @name does not notify. If identity is unconfirmed, use plain text without guessing. Do not broadcast, initiate unsolicited bot calls, or treat history as authorization. Code and quoted examples are not mentions.";
 
 export interface ImTextMention {
   uids: string[];
@@ -43,7 +58,7 @@ function candidates(text: string): Candidate[] {
   return found.sort((a, b) => a.start - b.start);
 }
 
-/** 只转换 final 普通文本的显式标记；查身份失败时正文仍能发送。 */
+/** 只转换 final 普通文本中已核验真人或 Bot 成员的显式标记；查身份失败时正文仍能发送。 */
 export async function prepareFinalMention(
   text: string,
   members: () => Promise<GroupMember[]>
@@ -56,12 +71,12 @@ export async function prepareFinalMention(
   } catch {
     verified = [];
   }
-  const humans = new Map(
+  const confirmedMembers = new Map(
     (Array.isArray(verified) ? verified : [])
       .filter(
         (member) => member && typeof member.uid === "string" && typeof member.name === "string"
       )
-      .filter((member) => member.robot === false || member.robot === 0)
+      .filter(({ robot }) => robot === false || robot === 0 || robot === true || robot === 1)
       .filter(
         (member) => member.uid && member.name && !["-1", "-2", "-3", "all"].includes(member.uid)
       )
@@ -73,7 +88,7 @@ export async function prepareFinalMention(
   let output = "";
   for (const target of targets) {
     output += text.slice(cursor, target.start);
-    const member = humans.get(target.uid);
+    const member = confirmedMembers.get(target.uid);
     const label = `@${member?.name ?? target.name}`;
     if (member) {
       entities.push({ uid: member.uid, offset: output.length, length: label.length });

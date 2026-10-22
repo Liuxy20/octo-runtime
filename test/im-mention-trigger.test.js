@@ -86,6 +86,25 @@ test("AI broadcast cannot bypass sender, space, group, self or message identity 
   );
 });
 
+test("self mentions never admit an AgentRun even when the bot is explicitly authorized as sender", () => {
+  const authorized = { ...config, allowed_sender_ids: ["bot", "owner", "other-bot"] };
+  for (const mention of [{ uids: ["bot"] }, { ais: 1 }, { uids: ["bot"], ais: 1 }]) {
+    for (const [channelType, channelId] of [
+      [1, "bot"],
+      [2, "group"],
+      [5, "group____topic"]
+    ]) {
+      const ownMessage = message(mention, { fromUid: "bot", channelType, channelId });
+      assert.equal(acceptsImMessage(authorized, "bot", ownMessage), false);
+      assert.equal(acceptsImMessage(authorized, "owner", ownMessage), false);
+      assert.equal(
+        acceptsImMessage(authorized, "owner", { ...ownMessage, fromUid: "other-bot" }),
+        true
+      );
+    }
+  }
+});
+
 test("omitted, null and empty group scopes are unrestricted; nonempty scopes restrict parent groups", () => {
   for (const [groupIds, expected] of [
     [undefined, true],

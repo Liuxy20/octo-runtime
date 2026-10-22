@@ -12,7 +12,7 @@
 
 ## 初始化与动态 Context
 
-入口为 `extra(context, jsonConfig)(dependencies)`：外层同步返回函数，内层异步启动。CLI 以 `{}` 初始化，使用各 Bot 显式配置的 context；下面的新配置示例均包含“我是明略科技的Octo助理”。省略 context 不会自动填充。instructions.entries 只接受 `{ text }`，旧 source 字段会被拒绝。
+入口为 `extra(context, jsonConfig)(dependencies)`：外层同步返回函数，内层异步启动。CLI 以 `{}` 初始化，使用各 Bot 显式配置的 context；下面的新配置示例均包含“我是明略科技的Octo助理”。省略 context 不会自动填充人设；Gateway 会为本轮请求追加渠道默认的英文 mention 控制指令。instructions.entries 只接受 `{ text }`，旧 source 字段会被拒绝。
 
 宿主通过 `createExtraService({module, config, endpoint, dependencies: {loadContexts}})` 后 initialize，在当前进程注入业务函数。`loadContexts(botConfig, {signal})` 返回 ContextItem 数组或 Promise，每个接纳轮次调用一次；同 namespace/name 动态整项覆盖并保留位置，新项按顺序追加，重试复用本轮快照。函数不进入 JSON，插件内部 manager 不向宿主暴露。
 
@@ -198,7 +198,11 @@ IM Agent 使用固定工作目录，任务 Context 的 workspace 不得覆盖；
 
 新收到的富文本（type=14）及合并转发（type=11）支持文本阅读，正文统一放入本轮 Context v3 的 `extra.im/message-content`；保留段落、转发来源及顺序，不展开频道历史。内部 mention、`/reset`、`/stop` 不参与准入或命令；图片/附件仅标明未读取。文本预算为 12000 Unicode 码点、转发条目与富文本块合计 128 个、访问深度 0..3，超量明确标记，完全没有有效支持文本则不执行。
 
-普通回复不自动 @ 发起者。用户明确要求通知真人时，模型可按首次 `extra.im/mention-instructions` 指引查询 UID，在成功的最终回答普通正文中输出 `@[uid:displayName]`；Channel 按当前群成员校验，转换成可读正文和原生 mention，一并通过原连接发送。代码块、行内代码、引用和进度不转换。查不到或无法确认真人时退为普通 @名字，正文继续发送；不另发 CLI 消息、不开放模型出站 Bot 点名或广播。历史只自动尝试一次；尚无 Provider binding 时，Channel 在下一次调用中显式重提短指引。
+普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群的 Bot 交接任务时，模型查询真实 UID，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 核验当前成员的 UID、显示名及明确的真人/Bot 身份，转换为可读正文和原生 `mention.uids/entities`，通过原连接统一发送。代码块、行内代码、引用和进度不转换。查不到或身份无法确认时退为普通 @名字，正文继续发送；不另发 CLI 消息、不开放广播或自行发起 Bot 循环调用。接收 Bot 仍需显式允许发送 Bot，并满足原有 Space、群范围及真实 mention 准入。
+
+当前 Bot 自己发出的消息永不触发 AgentRun，即使真实 `mention.uids` 点名自己、带 `mention.ais` 或自己被列入 `allowed_sender_ids`；此规则覆盖私聊、群聊和话题。其他已授权发送者点名当前 Bot 仍按原准入执行。
+
+Gateway 在请求装配时生成唯一的 `octo.control/instructions`：`entries = [...hostEffectiveEntries, ...gatewayDefaultEntries]`，保序且不去重，不修改宿主输入、不累计上一轮结果。宿主静态/动态 Context 仍先按原整项替换规则得到本轮有效值；公共 `mergeContext` 和 `mandatory` 语义不变。默认指令与宿主内容均计入 Context 预算，不静默丢弃。新 Provider 会话沿原生控制通道使用完整英文规则；逐轮 `extra.im/mention-instructions` 提供英文短提醒，使既有 Provider 会话也收到更新，不自动 reset。完整规则以 `[OCTO_CHANNEL_MENTION_RULES_V1]` 标记，并要求模型在摘要或压缩时原样保留；保留效果以模型为准，不新增 compaction 保留或验证机制。历史仍只自动尝试一次。
 
 ## 长任务与 Codex 重试
 

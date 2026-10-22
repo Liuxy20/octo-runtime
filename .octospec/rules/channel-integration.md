@@ -50,6 +50,8 @@ ChannelGateway 与 WeCom 各自以整个 Extra 为加载、卸载和配置重载
 
 2026-10-16 F25 用户确认：尊重真实发送者的明确授权，不因发送者是其他已知 Bot 而额外拒绝。当前 allowed_sender_ids 同时用于私聊和群/话题，显式名单替代默认 owner；群/话题仍须满足允许群及真实 mention 条件，回复留在原频道或话题、按其权限可见。自身消息继续拒绝，不通过正文或名称猜测 Bot 身份，也不新增私聊/群聊拆分授权开关。
 
+2026-10-22 Issue #101 明确：channel-gateway 在命令处理、Context 准备与 AgentRun 调度前拒绝真实 `fromUid === config.bot_id` 的自消息。自己 @ 自己、携带 `mention.uids=[自己的UID]`、`mention.ais=1/true` 或自己被显式列入 `allowed_sender_ids` 均不得绕过；私聊、群聊和话题一致。该约束不禁止其他已授权发送者点名当前 Bot，也不根据正文中的自称判断身份。
+
 已授权 A/B 在群中持续互相 @ 的循环属于协作模型边界，不要求 Channel 承担通用多 Agent 协作治理。需要受控协作时另行设计协作模型；不得借此在 Channel 新增已知 Bot 黑名单、内容循环识别、跨 Bot 全局状态或自动协作编排，不将这些列为延期待办。现有准入、容量及执行期限继续有效，不承诺授权双方永不循环。详见 [F25 评审](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf25-已知-bot-过滤与防互触发)。
 
 Octo 群/话题消息必须通过真实发送者、Space 与群范围准入，且本条入站消息满足以下真实 mention 条件之一，才有资格进入既有命令处理或任务调度：`payload.mention.uids` 包含当前 Bot ID；或 `payload.mention.ais` 为数字 1/布尔 true，且 all/humans 均未置位。all/humans 同样只把数字 1/布尔 true 视为置位，存在这些标记时抑制单独的 ais 路径，但不覆盖有效的当前 Bot UID 点名。具体矩阵及实施计划见[Mention 入站方案](../tasks/channel-mention-context/inbound-trigger.md)。
@@ -88,7 +90,13 @@ IM 后台配置对应的 Agent 使用固定目录，不按任务选择或改变 
 
 该本地实现覆盖原准入、排队/取消、reset代次、重试与预算边界，不改变WeCom、Host或协议。默认store将元数据计入原1024/4MiB/24h边界，自定义store缺少可选原子patch能力时明确unknown。成功ACK及能关联原发送/卡片的自身RECV才可按原turn排除自身位置；未关联/已淘汰位置保守处理。真实服务端可见性、序号同域与Agent取材仍须按[实施记录](../tasks/channel-context-gap/implementation.md)验收，不能由fake测试推断已部署。
 
-出站普通回复不自动 @ 发起者。显式真人通知由模型理解需求、按需查询身份，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 用结构化 Markdown 解析排除代码和引用，再校验当前成员并转换为人类协议 `content + mention.uids/entities`，经原连接统一发送。失败目标退为普通 @名字，不阻断正文、不另发失败提示或补发。模型出站 Bot 与广播仍不开放；进度、工具、thinking 和失败终态不转换。Channel 对新 session 或无 Provider binding 的调用显式提交 mention 指引；历史的一次资格不受指引重提影响。
+出站普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群 Bot 交接任务时，由模型理解需求、按需查询真实身份，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 用结构化 Markdown 解析排除代码和引用，再核验当前成员的 UID、显示名和明确身份：真人 `robot=0/false`、Bot `robot=1/true`。有效目标转换为人类协议 `content + mention.uids/entities`，经原连接统一发送；身份未知、非成员及广播 UID 不生成原生 mention。失败目标退为普通 @名字，不阻断正文、不另发失败提示或补发。广播、自行发起 Bot 调用不因此开放；进度、工具、thinking 和失败终态不转换。接收 Bot 仍必须通过现有发送者、Space、群范围和真实 mention 准入，自消息始终拒绝。
+
+Gateway 默认 mention 控制指令与逐轮提醒均使用英文。请求装配先消费宿主已解析的本轮有效 Context，再将 `octo.control/instructions.payload.entries` 组合为 `[...hostEffectiveEntries, ...gatewayDefaultEntries]`；同 key 只保留一个 item，原顺序和显式重复内容均保留，不修改宿主输入、不累计上一轮结果。此为 Gateway 局部组合，不改变公共 `mergeContext`、静态/动态宿主整项替换或 `mandatory` 的可信来源及覆盖合同。完整组合内容计入 Context 预算；允许沿现有规则省略自动辅助材料，不静默丢弃默认控制指令或显式业务材料。
+
+同代次卡片重试沿用 occurrence 中已经组合的完整冻结 Context，不重新读取宿主或历史，不再次追加 Gateway 默认指令。重放来源由现有内部 `historyRetry` 标记确定，不能扫描规则文本或去重宿主显式重复项；原请求符合预算时，不能因重复追加默认内容而使重试超过预算。重试回归必须比较完整 Context 和 inputs，覆盖连续重试及接近预算上限的群/话题。
+
+新 Provider 会话通过原生控制通道使用完整默认规则；每轮普通输入都显式提供可选 `extra.im/mention-instructions` 英文短提醒，让升级前已有 Provider binding 也能收到新提示，不自动 reset。完整控制规则以 `[OCTO_CHANNEL_MENTION_RULES_V1]` / `[/OCTO_CHANNEL_MENTION_RULES_V1]` 标记，并要求模型在摘要或 compaction 时原样保留。按用户决定，保留以模型行为为准，不新增 compaction 保留机制或验证要求。历史的一次资格不受提醒重提影响。实施和验证记录见[Issue #101](../tasks/101-bot-mention/brief.md)。
 
 ## 业务工具与产物交付边界
 

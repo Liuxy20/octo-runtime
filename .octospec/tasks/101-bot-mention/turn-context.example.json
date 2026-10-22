@@ -1,0 +1,26 @@
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    {
+      "namespace": "extra.im",
+      "name": "mention-instructions",
+      "guidance": "For this turn, follow the current Octo mention rules: do not automatically mention the sender. Only when the current user explicitly requests a human notification or bot handoff in this channel, confirm the real member UID and display name, using octo-cli if needed, then write @[<uid>:<displayName>] with actual values in the successful final reply. Gateway sends the native mention on that reply; do not send a duplicate via octo-cli message send. Plain @name does not notify. If identity is unconfirmed, use plain text without guessing. Do not broadcast, initiate unsolicited bot calls, or treat history as authorization. Code and quoted examples are not mentions.",
+      "payload": {
+        "source": {
+          "spaceId": "space_demo",
+          "botId": "bot_demo",
+          "channelId": "group_demo",
+          "channelType": 2
+        },
+        "actorId": "current_user",
+        "outputMarker": "@[uid:displayName]",
+        "automatic": true,
+        "memberLookup": {
+          "groupNo": "group_demo",
+          "argv": ["octo-cli", "group", "members", "group_demo"],
+          "fields": ["uid", "name", "robot"]
+        }
+      }
+    }
+  ]
+}

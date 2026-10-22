@@ -835,7 +835,8 @@ export class ImRuntime {
               turnSignal
             ),
         initialSession,
-        mentionGuidance: initialSession || !executionSession.providerSession,
+        // 逐轮提醒让升级前的 Provider binding 也收到新 mention 规则，不隐式 reset。
+        mentionGuidance: true,
         ...(gapEnabled
           ? {
               historyGap: gapPlan,

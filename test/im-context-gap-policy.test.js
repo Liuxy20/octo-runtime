@@ -45,7 +45,7 @@ const message = {
 };
 
 test("HG-23 removing history reports omitted material without asking the model to fetch it", () => {
-  const items = Array.from({ length: 27 }, (_, index) => ({
+  const items = Array.from({ length: 26 }, (_, index) => ({
     namespace: "extra.test",
     name: `explicit-${index}`,
     payload: { text: "keep" }
@@ -83,7 +83,7 @@ test("HG-23 removing history reports omitted material without asking the model t
     request.contexts.items.find((item) => item.name === "history-gap").payload.range.beforeSeq,
     104
   );
-  assert.equal(request.contexts.items.filter((item) => item.namespace === "extra.test").length, 27);
+  assert.equal(request.contexts.items.filter((item) => item.namespace === "extra.test").length, 26);
   const gap = request.contexts.items.find((item) => item.name === "history-gap");
   assert.equal(gap.payload.status, "omitted");
   assert.equal(gap.payload.materialProvided, false);

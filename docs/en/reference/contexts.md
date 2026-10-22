@@ -149,6 +149,8 @@ The catalog marks the ten built-ins other than inline/references as `persistent`
 
 Session instructions must come from configuration trusted by the application. Configuration resolution requires them in `mandatory`, rejecting instructions in `defaults` and control instructions submitted by untrusted requests. The local SDK/IPC assumes the application has authorized the source; JSON validation checks structure, not author identity.
 
+Octo Gateway separately combines the application's effective instructions with its own channel defaults before invoking Kernel: application entries first, then Gateway entries, in one `octo.control/instructions` item. These channel defaults are not `ContextConfiguration.defaults`; instructions remain forbidden in that configuration layer. This local composition does not change the public merge or authorization rules. See [Integrate Extras](../guides/extras.md) for ordering, budgets, and continued-session reminders.
+
 ## Business Extensions
 
 Application background data can use `extra.<domain>/<name>`, such as `extra.project/selection`. Supply an object `payload` and optional `guidance`. No registration is needed for each business data type.

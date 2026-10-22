@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { waitFor } from "./runtime-fixture.js";
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
+import { MENTION_GUIDANCE } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
 
 for (const kind of ["gateway", "wecom"]) {
   const base = `../packages/octo-runtime-extra-channel-${kind}/dist/`;
@@ -93,8 +94,9 @@ for (const kind of ["gateway", "wecom"]) {
     await waitFor(() => replies.length === 2);
     send("second");
     await waitFor(() => replies.length === 3);
-    assert.equal(requests[0].controlInstructions, "我是明略科技的Octo助理");
-    assert.equal(requests[1].controlInstructions, "dynamic persona");
+    const suffix = kind === "gateway" ? `\n${MENTION_GUIDANCE}` : "";
+    assert.equal(requests[0].controlInstructions, `我是明略科技的Octo助理${suffix}`);
+    assert.equal(requests[1].controlInstructions, `dynamic persona${suffix}`);
     assert.deepEqual(config.context.items, [persona]);
     send("third");
     await waitFor(() => replies.length === 4);

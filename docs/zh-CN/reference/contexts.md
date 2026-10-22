@@ -149,6 +149,8 @@
 
 会话指令只能来自应用信任的配置。配置解析要求将指令放在 `mandatory`，拒绝 `defaults` 中的指令和不可信请求提交的控制指令。本地 SDK/IPC 假定应用已完成来源授权；JSON 校验只检查结构，不能验证作者身份。
 
+Octo Gateway 在调用 Kernel 前，单独将宿主本轮有效指令与渠道默认指令组合：宿主 entries 在前、Gateway entries 在后，只生成一个 `octo.control/instructions` item。这里的渠道默认不是 `ContextConfiguration.defaults`，该配置层仍禁止 instructions。这一局部组合不改变公共合并和来源授权规则。顺序、预算及续聊提醒见[接入 Extra](../guides/extras.md)。
+
 ## 业务扩展
 
 应用自己的背景数据可以使用 `extra.<domain>/<name>`，例如 `extra.project/selection`。提供对象 `payload`，并按需添加 `guidance`；无需为每种业务数据注册类型。

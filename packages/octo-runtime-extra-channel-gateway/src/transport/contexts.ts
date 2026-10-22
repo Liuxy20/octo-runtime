@@ -22,7 +22,7 @@ import {
   type ImGapPlan
 } from "../application/context-gap.js";
 import { OctoApiError } from "./api/errors.js";
-import { MENTION_GUIDANCE } from "./mentions.js";
+import { MENTION_REMINDER } from "./mentions.js";
 import { messageContent } from "./message-content.js";
 
 export async function build_im_contexts(
@@ -142,7 +142,7 @@ export async function build_im_contexts(
     const instructions: ContextItem = {
       namespace: "extra.im",
       name: "mention-instructions",
-      guidance: MENTION_GUIDANCE,
+      guidance: MENTION_REMINDER,
       payload: {
         source,
         actorId: message.fromUid,

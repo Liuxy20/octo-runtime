@@ -568,7 +568,7 @@ test("Channel public input keeps automatic material budget fallback without drop
   const context = {
     schema: "octo.context-envelope/v3",
     items: [
-      ...Array.from({ length: 28 }, (_, i) => ({
+      ...Array.from({ length: 27 }, (_, i) => ({
         namespace: "extra.business",
         name: `item-${i}`,
         payload: {}
@@ -594,13 +594,13 @@ test("Channel public input keeps automatic material budget fallback without drop
   assert.equal(request.contexts.items.length, 32);
   assert.equal(
     request.contexts.items.filter((item) => item.namespace === "extra.business").length,
-    28
+    27
   );
   assert.equal(
     request.contexts.items.some((item) => item.namespace === "extra.im"),
     false
   );
-  assert.equal(context.items.length, 30);
+  assert.equal(context.items.length, 29);
   context.items.at(-2).payload.automatic = false;
   assert.throws(create, /CONTEXT_BUDGET_EXCEEDED/);
 });

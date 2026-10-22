@@ -26,6 +26,8 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 
 dependencies.loadContexts(botConfig,{signal}) 返回当前 ContextItem 数组或 Promise。函数在宿主同进程直接调用，读取的数据变化无需重载连接。超时或取消后真实 Promise 未结束仍占额度；返回值最多 32 项 / 64 KiB。静态 context 与动态项的合并、业务指引和准入规则继续按 [Gateway 合同](packages/octo-runtime-extra-channel-gateway/README.md)。
 
+Gateway 将渠道默认英文 mention 指令与宿主本轮有效 `octo.control/instructions.payload.entries` 保序拼接为一个 item，宿主在前、默认在后；宿主静态/动态项之间仍按原规则整项替换。默认内容也占 Context 预算。用户明确要求的 Bot 交接支持原生 mention，接收 Bot 的发送者授权仍须配置；当前 Bot 自己 @ 自己的消息不会触发 AgentRun。完整提示及逐轮英文提醒见上述 Gateway 合同。
+
 不要把函数、源码或模块实例放进 config。替换函数引用按整体停止/加载处理。调用方处理 signal 的正常取消，dispose 的真实失败仍须报告。
 
 ## 自定义会话存储

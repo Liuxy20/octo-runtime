@@ -53,6 +53,8 @@
 
 - [Issue 95：Grok Build ACP](tasks/95-grok-build-acp/brief.md)：从最新 `origin/main@102fb9c` 新建 worktree，先补[官方资料与固定版本参考](tasks/95-grok-build-acp/reference.md)，再复用既有 ACP client 逐轮拉起 CLI；特殊逻辑仅在 `grok-build` 包内，共享层无行为改动。已 rebase 到 main@4857d0e，全量 Node1610/UI35、发行包及并发隔离通过，真实文本流与跨进程续聊通过。用户已授权 PR 与合并，遵守 CI 和评审保护；见[收尾与未验范围](journal/shared/2026-10-22-95-grok-build-acp.md)。
 
+- [Issue 101：Bot mention 与渠道默认英文指令](tasks/101-bot-mention/brief.md)：基于最新 main@102fb9c 在独立 worktree 实施。Gateway 默认与宿主有效 instructions.entries 保序拼接，真人/Bot 原生 mention 共用原发送链，逐轮英文提醒覆盖已有 Provider binding；真实自己 @ 自己始终不触发 AgentRun，约束已回写 Channel 与架构规则。Node 1499 通过/35 跳过，UI 35 通过；[实施记录](journal/shared/2026-10-22-101-bot-mention.md)区分本地验证和未进行的真实双 Bot 联调。compaction 按用户要求以模型为准，不新增验证机制；用户已授权 PR 交付并按门禁合并 main，远端状态以 GitHub 为准。
+
 - [Issue 99：模型 Context 指引与数据边界](tasks/99-context-guidence-cdata/brief.md)：基于最新 `main@20c3771`，共享 renderer 使用标准 XML 注释、原始 Markdown `<guidence>` 和 `<data>` CDATA 包装，数据中的终止符按相邻区段保真。格式、内容保留、过滤及多输入路径验证见[交付记录](journal/shared/2026-10-22-99-context-guidence-cdata.md)。
 
 - [Issue 40：OpenClaw 7.1 至当前稳定版兼容](tasks/40-openclaw-compatibility/brief.md)：从 `origin/main@88fa71d` 创建独立 worktree，已实施真实握手合同选择、旧创建＋会话权限 patch、ask→full 回退与桥接、终态及取消对账。追加用户提供的 6.11 后，27 标签、54 条模式流程自动化通过，OpenClaw 92 通过／1 跳过；追加前全量 Node 1562 通过／34 跳过、UI 35 通过。真实 6.11 的 probe、文本、工具和取消，以及真实 9.4 的文本和取消通过。见[6.11 验证](tasks/40-openclaw-compatibility/remote-6.11-validation.md)、[实施记录](tasks/40-openclaw-compatibility/implementation.md)、[版本矩阵](tasks/40-openclaw-compatibility/compatibility-matrix.md)和[journal](journal/shared/2026-10-22-40-openclaw-compatibility-implementation.md)。内网地址脱敏；用户接受代表验收并授权交付，其他真实 reviewer／harness、事故 build 和 IM 保留后续覆盖。

@@ -4,11 +4,12 @@ import { setImmediate as settle } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
 import {
   prepareFinalMention,
-  MENTION_GUIDANCE
+  MENTION_REMINDER
 } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
 import { WukongConnection } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/wukong.js";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
+import { acceptsImMessage } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/normalize.js";
 
 const members = [
   { uid: "u", name: "李白", robot: 0 },
@@ -42,11 +43,14 @@ test("only final Markdown text markers convert; examples, escapes and quotes rem
     return members;
   });
   assert.equal(queries, 1);
-  assert.deepEqual(result.mention.uids, ["u"]);
-  assert.equal(result.mention.entities.length, 2);
+  assert.deepEqual(result.mention.uids, ["u", "bot"]);
+  assert.equal(result.mention.entities.length, 3);
   assert.equal(result.mention.entities[0].offset, "😀已完成，".length);
   for (const entity of result.mention.entities)
-    assert.equal(result.text.slice(entity.offset, entity.offset + entity.length), "@李白");
+    assert.equal(
+      result.text.slice(entity.offset, entity.offset + entity.length),
+      entity.uid === "u" ? "@李白" : "@机器人"
+    );
   assert.ok(result.text.includes("@机器人、@陌生人"));
   assert.ok(result.text.endsWith("```\n@[u:李白]\n```"));
   assert.deepEqual(
@@ -57,12 +61,14 @@ test("only final Markdown text markers convert; examples, escapes and quotes rem
   );
 });
 
-test("identity lookup failure and unconfirmed human identity never block the final body or create broadcasts", async () => {
+test("identity lookup failure and unconfirmed member identity never block the final body or create broadcasts", async () => {
   for (const read of [
     async () => {
       throw new Error("403");
     },
     async () => [{ uid: "u", name: "李白" }],
+    async () => [{ uid: "u", name: "李白", robot: 2 }],
+    async () => [{ uid: "u", name: "李白", robot: "1" }],
     async () => null,
     async () => [null],
     async () => members.filter((m) => m.robot)
@@ -71,21 +77,36 @@ test("identity lookup failure and unconfirmed human identity never block the fin
       text: "已完成 @李白 @张三"
     });
   }
-  const result = await prepareFinalMention("@[-3:所有AI] @[all:所有人]", async () => members);
-  assert.deepEqual(result, { text: "@所有AI @所有人" });
+  const text = "@[-1:全部] @[-2:真人] @[-3:所有AI] @[all:所有人]";
+  const result = await prepareFinalMention(text, async () => [
+    ...members,
+    ...["-1", "-2", "-3", "all"].map((uid) => ({ uid, name: "broadcast", robot: 1 }))
+  ]);
+  assert.deepEqual(result, { text: "@全部 @真人 @所有AI @所有人" });
 });
 
-test("first Context guidance matches the reviewed example exactly", async () => {
+test("boolean human and bot flags are valid and mixed Unicode entity offsets remain exact", async () => {
+  const result = await prepareFinalMention("😀 @[h:stale] 和 @[b:stale] @[b:again]", async () => [
+    { uid: "h", name: "人😀", robot: false },
+    { uid: "b", name: "Bot🤖", robot: true }
+  ]);
+  assert.deepEqual(result.mention.uids, ["h", "b"]);
+  assert.deepEqual(result.mention.entities, [
+    { uid: "h", offset: 3, length: 4 },
+    { uid: "b", offset: 10, length: 6 },
+    { uid: "b", offset: 17, length: 6 }
+  ]);
+  assert.equal(result.text, "😀 @人😀 和 @Bot🤖 @Bot🤖");
+});
+
+test("per-turn Context reminder matches the current English example exactly", async () => {
   const example = JSON.parse(
     await readFile(
-      new URL(
-        "../.octospec/tasks/channel-mention-context/first-context.example.json",
-        import.meta.url
-      ),
+      new URL("../.octospec/tasks/101-bot-mention/turn-context.example.json", import.meta.url),
       "utf8"
     )
   );
-  assert.equal(example.items[0].guidance, MENTION_GUIDANCE);
+  assert.equal(example.items[0].guidance, MENTION_REMINDER);
 });
 
 test("transport resolves topic members once and sends mention with final text on the original connection", async (t) => {
@@ -94,10 +115,11 @@ test("transport resolves topic members once and sends mention with final text on
   const sends = [],
     admitted = [];
   t.mock.method(globalThis, "fetch", async (url) => {
-    if (url.endsWith("/auth/verify-bot")) return Response.json({ bot_uid: "bot", space_id: "s" });
+    if (url.endsWith("/auth/verify-bot"))
+      return Response.json({ bot_uid: "sender-bot", space_id: "s" });
     if (url.endsWith("/bot/register"))
       return Response.json({
-        robot_id: "bot",
+        robot_id: "sender-bot",
         owner_uid: "owner",
         owner_channel_id: "owner",
         ws_url: "wss://im-test.deepminer.com.cn/ws",
@@ -120,9 +142,10 @@ test("transport resolves topic members once and sends mention with final text on
   });
   const transport = new GatewayTransport(
     {
-      bot_id: "bot",
+      bot_id: "sender-bot",
       api_url: "https://im-test.deepminer.com.cn/api",
       group_ids: ["group"],
+      allowed_sender_ids: ["owner", "sender-bot"],
       adapter: { adapter_type: "codex" }
     },
     async () => "bf_fixture",
@@ -142,14 +165,43 @@ test("transport resolves topic members once and sends mention with final text on
   assert.equal(admitted.length, 1);
   await admitted[0].reply("@[u:李白]", "progress");
   assert.equal(queries, 0);
-  await admitted[0].replyFinal("完成 @[u:李白]", "final:run");
-  await admitted[0].replyFinal("完成 @[u:李白]", "final:run");
+  await admitted[0].replyFinal("完成 @[u:李白]，@[bot:机器人] 请继续", "final:run");
+  await admitted[0].replyFinal("完成 @[u:李白]，@[bot:机器人] 请继续", "final:run");
   assert.equal(queries, 1);
   assert.equal(sends[1][0], "group____topic");
   assert.equal(sends[1][1], 5);
-  assert.equal(sends[1][2], "完成 @李白");
-  assert.deepEqual(sends[1][5].uids, ["u"]);
+  assert.equal(sends[1][2], "完成 @李白，@机器人 请继续");
+  assert.deepEqual(sends[1][5], {
+    uids: ["u", "bot"],
+    entities: [
+      { uid: "u", offset: 3, length: 3 },
+      { uid: "bot", offset: 7, length: 4 }
+    ]
+  });
   assert.equal(sends[0][5], undefined);
+  const handoff = {
+    ...message,
+    messageId: "handoff",
+    fromUid: "sender-bot",
+    payload: { type: 1, content: sends[1][2], mention: sends[1][5] }
+  };
+  const recipient = {
+    bot_id: "bot",
+    spaceId: "s",
+    group_ids: ["group"],
+    allowed_sender_ids: ["sender-bot"]
+  };
+  assert.equal(acceptsImMessage(recipient, "owner", handoff), true);
+  assert.equal(
+    acceptsImMessage({ ...recipient, allowed_sender_ids: ["owner"] }, "owner", handoff),
+    false
+  );
+  receive({
+    ...handoff,
+    messageId: "self-mention",
+    payload: { ...handoff.payload, mention: { uids: ["sender-bot"], ais: 1 } }
+  });
+  assert.equal(admitted.length, 1, "self-mentions must not reach AgentRun admission");
   receive({
     ...message,
     messageId: "ignored",

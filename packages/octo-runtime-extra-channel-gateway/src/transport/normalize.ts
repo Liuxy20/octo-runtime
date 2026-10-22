@@ -35,6 +35,7 @@ export function acceptsImMessage(
   owner: string,
   message: ImMessage
 ): boolean {
+  // 自己发出的消息永不触发 AgentRun，即使真实 @ 自己、@所有AI 或显式列入发送者名单。
   if (
     message.fromUid === config.bot_id ||
     isRulesNotification(message) ||

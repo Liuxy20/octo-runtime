@@ -46,3 +46,5 @@
 | Harness 安装、Computer Use、账号额度                | 2026-10-21 核对源码命令及厂商官方文档；未执行 Provider 安装、登录、付费调用或桌面工具操作。 |
 
 2026-10-21 在 macOS 上通过构建、文档检查（16 组双语页面、14 个 JSON 示例、全部 12 类内置 Context 示例、4 项测试）、MCP/IPC 定向测试（7 项），以及 tgz 打包安装验证。全部 16 张图使用 Mermaid CLI 12.0.0 和本地 Chrome 成功渲染。补充 CLI 和 Harness 安装配置后，再次通过文档检查，并对照构建后的 CLI 帮助核对命令；此次未修改图表或 Runtime 代码。
+
+2026-10-22，基于 `102fb9caf995d9eb1ac53acaf5b91922be4f023d` 的 Issue #101 实施分支同步更新中英文说明，覆盖 Gateway 指令组合（宿主在前、渠道默认在后）、Bot mention、自消息拒绝、逐轮提醒及模型遵守的 compaction 保留提示。这些局部更新补充上述基线，不改变公共 Context schema 或合并规则。顺序调整后，Gateway 构建和相关 90 项测试通过；未进行线上双 Bot 联调。Compaction 保留按设计交给模型，不属于验证范围。

@@ -403,6 +403,8 @@ Extra 的函数式入口负责封装内部流程：宿主传入完整配置和�
 
 静态 `config.bots[i].context.items` 与本轮函数结果在 Channel 业务边界合并：同 namespace/name 动态整项替换、保留静态位置，新 key 按动态顺序追加；不拼接 payload 或 instructions.entries，不保存上一轮动态结果。动态空数组保留静态项，加载失败不以旧结果兜底。Host/Adapter 只处理本轮显式快照，不读取宿主存储。动态系统指令取得成功与 Provider 续聊实际应用不同，沿既有可信指令会话合同，不自动 reset。
 
+2026-10-22 Issue #101 补充：上述静态/动态宿主取值完成后，Octo Gateway 在本轮请求装配时将渠道默认英文 mention 指令和宿主有效 `octo.control/instructions.payload.entries` 保序拼接为唯一 item，宿主在前、默认在后。此局部业务默认不改变静态/动态替换、公共 Context 合并或强制约束，也不向其他 Extra 注入 Octo 提示。逐轮英文短提醒覆盖旧 Provider binding；自消息包括真实自己 @ 自己均不触发 AgentRun。完整合同见[Channel 规则](channel-integration.md)。
+
 两渠道沿用两阶段函数式入口。统一原生 Extra 服务在调用进程中直接注入依赖，函数不进入 JSON 或 Kernel。逐轮读取、结果容量、实际在途和失败事实必须保留，不恢复子进程代理或 dependencyModule。[逐轮 Context 专题](../guides/channel-dynamic-contexts.md)及[SDK 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)与实际 API 一致。本地自动化与真实 IM 验收分别记录。
 
 | 插件方向 | 状态 | 边界 |

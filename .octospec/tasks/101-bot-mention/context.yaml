@@ -1,0 +1,39 @@
+task: 101-bot-mention
+status: implemented-local-validation-passed
+baseline: 102fb9caf995d9eb1ac53acaf5b91922be4f023d
+integration_baseline: c3b442a
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+references:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/101
+  - .octospec/tasks/channel-mention-context/brief.md
+  - /Users/lvsijia/github.com/Mininglamp-OSS/openclaw-channel-octo
+validation:
+  source_probes: 4 passed
+  targeted_node_tests: 94 passed
+  host_first_followup: gateway_build_and_90_related_tests_passed
+  frozen_card_retry_p2: reproduced_before_fix_and_314_channel_tests_passed_after_fix
+  windows_ci_followup: rebalance_drain_fixture_delays_without_changing_production_deadlines
+  full_node_tests: 1499 passed, 35 skipped, 0 failed
+  ui_tests: 35 passed
+  developer_docs_tests: 4 passed
+  bilingual_concept_audit: six_pages_updated_and_docs_checks_passed
+  build: passed
+  typescript: passed
+  eslint: passed
+  names: passed
+  octospec_lint: passed_after_fixing_obsolete_root_docs_ban
+  provider_compaction: model_instruction_only_no_verification_required
+  live_im_handoff: not_run

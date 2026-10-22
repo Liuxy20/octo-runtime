@@ -73,9 +73,10 @@ def main():
             if not (path.parent / target.split("#", 1)[0]).exists():
                 errors.append(f"{name}: 本地链接失效: {target}")
 
-    for directory in (ROOT / "docs", ROOT / "packages/octo-runtime-protocol/docs"):
-        if directory.exists():
-            errors.append(f"已退出的文档目录仍存在: {directory.relative_to(ROOT)}")
+    # 根 docs/ 是双语开发者文档；仅旧协议包文档目录仍禁止恢复。
+    legacy_docs = ROOT / "packages/octo-runtime-protocol/docs"
+    if legacy_docs.exists():
+        errors.append(f"已退出的文档目录仍存在: {legacy_docs.relative_to(ROOT)}")
 
     if errors:
         print("\n".join(errors), file=sys.stderr)

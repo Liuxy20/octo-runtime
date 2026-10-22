@@ -7,6 +7,8 @@ import {
 } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
 import { MemoryImSessionStore } from "../packages/octo-runtime-extra-channel-gateway/dist/application/session-store.js";
+import { MENTION_GUIDANCE } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
+import { CONTEXT_MAX_BYTES } from "../packages/octo-runtime-protocol/dist/index.js";
 
 const config = {
   bot_id: "gap-bot",
@@ -15,7 +17,7 @@ const config = {
   adapter: { adapter_type: "codex", workdir: process.cwd() }
 };
 
-async function fixture(context, behavior, historyResponse) {
+async function fixture(context, behavior, historyResponse, configuredItems = []) {
   let callbacks;
   let storeKey;
   let prepares = 0;
@@ -45,7 +47,7 @@ async function fixture(context, behavior, historyResponse) {
     sessions: store,
     prepareContexts: async () => {
       prepares++;
-      return [];
+      return structuredClone(configuredItems);
     },
     kernel: {
       async *invoke(request) {
@@ -243,26 +245,97 @@ test("HG-18 failure leaves a repairable interval that includes the failed trigge
 });
 
 test("HG-19 same-generation card retry reuses frozen contexts without new history or configured-context IO", async (context) => {
-  const current = await fixture(context, async function* (_request, count) {
-    yield { protocolVersion: 2, type: count === 2 ? "run.failed" : "run.completed", payload: {} };
-  });
+  const current = await fixture(
+    context,
+    async function* (_request, count) {
+      yield {
+        protocolVersion: 2,
+        type: count === 2 || count === 3 ? "run.failed" : "run.completed",
+        payload: {}
+      };
+    },
+    undefined,
+    [
+      {
+        namespace: "octo.control",
+        name: "instructions",
+        payload: { entries: [{ text: MENTION_GUIDANCE }, { text: MENTION_GUIDANCE }] }
+      }
+    ]
+  );
   current.send(100);
   await current.idle();
   current.send(103);
   await current.idle();
-  const gap = current.requests[1].contexts.items.find((item) => item.name === "history-gap");
+  const frozen = structuredClone(current.requests[1]);
+  assert.equal(
+    frozen.contexts.items.find((item) => item.namespace === "octo.control").payload.entries.length,
+    3,
+    "two explicit host copies and one Gateway default must remain distinct entries"
+  );
   const revision = current.binding().gap.revision;
   const fetches = current.historyCalls.length;
-  assert.equal(current.controls[1].retry("owner", "retry-1"), true);
-  await current.idle();
-  assert.deepEqual(
-    current.requests[2].contexts.items.find((item) => item.name === "history-gap"),
-    gap
-  );
+  for (let retry = 1; retry <= 2; retry++) {
+    assert.equal(current.controls[retry].retry("owner", `retry-${retry}`), true);
+    await current.idle();
+    assert.equal(current.requests.length, retry + 2);
+    assert.deepEqual(current.requests.at(-1).contexts, frozen.contexts);
+    assert.deepEqual(current.requests.at(-1).inputs, frozen.inputs);
+    assert.notEqual(current.requests.at(-1).invocationId, frozen.invocationId);
+  }
   assert.equal(current.prepares(), 2);
   assert.equal(current.binding().gap.revision, revision);
   assert.equal(current.historyCalls.length, fetches);
 });
+
+for (const conversationKind of ["group", "thread"]) {
+  test(`HG-19 near-budget ${conversationKind} card retries preserve the complete snapshot`, async (context) => {
+    const current = await fixture(context, async function* () {
+      yield { protocolVersion: 2, type: "run.failed", payload: {} };
+    });
+    let builds = 0;
+    current.send(100, {
+      conversationKind,
+      conversationId: conversationKind === "group" ? "group" : "group____topic",
+      async buildContext() {
+        builds++;
+        return {
+          schema: "octo.context-envelope/v3",
+          items: [
+            {
+              namespace: "octo.control",
+              name: "instructions",
+              payload: { entries: [{ text: "host persona" }, { text: "host persona" }] }
+            },
+            {
+              namespace: "extra.business",
+              name: "required",
+              payload: { text: "x".repeat(62000) }
+            }
+          ]
+        };
+      }
+    });
+    await current.idle();
+    assert.equal(current.requests.length, 1);
+    const frozen = structuredClone(current.requests[0]);
+    const bytes = Buffer.byteLength(JSON.stringify(frozen.contexts));
+    assert.ok(bytes <= CONTEXT_MAX_BYTES);
+    assert.ok(
+      bytes + Buffer.byteLength(JSON.stringify({ text: MENTION_GUIDANCE })) > CONTEXT_MAX_BYTES
+    );
+    for (let retry = 1; retry <= 2; retry++) {
+      assert.equal(current.controls.at(-1).retry("owner", `budget-retry-${retry}`), true);
+      await current.idle();
+      assert.equal(current.requests.length, retry + 1, "retry must reach Kernel invocation");
+      assert.deepEqual(current.requests.at(-1).contexts, frozen.contexts);
+      assert.deepEqual(current.requests.at(-1).inputs, frozen.inputs);
+    }
+    assert.equal(builds, 1);
+    assert.equal(current.prepares(), 1);
+    assert.equal(current.historyCalls.length, 0);
+  });
+}
 
 test("HG-20 reset rejects old-generation ACKs and late handoff patches", async (context) => {
   let finish;

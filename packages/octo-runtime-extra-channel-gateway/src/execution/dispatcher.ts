@@ -11,11 +11,13 @@ import {
   mergeContext,
   type ApprovalMode,
   type ContextEnvelope,
+  type ContextInstructionsPayload,
   type InvokeInput
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig, ImInboundMessage, ImSession } from "../contracts.js";
 import { validateImConfig } from "../lifecycle/configuration.js";
 import { compactHistoryGap, historyGapContext } from "../application/context-gap.js";
+import { MENTION_GUIDANCE } from "../transport/mentions.js";
 
 export type ImInvocationInput = InvokeInput & {
   runId: string;
@@ -101,7 +103,32 @@ export function createImInvocation(
     ]
   };
   // Channel 只组装公开 InvokeInput；执行解析和指令渲染统一交给 Host，避免再次拒绝业务 Context。
+  // 宿主已先解析静态/动态 Context；渠道默认指令只在本轮与有效 entries 保序组合一次。
+  // 不改变公共 mergeContext 或动态人设替换合同，也不把上一轮的组合结果累积回来。
   let submitted = context;
+  // 同代次卡片重试已从 occurrence 取得组合后的冻结快照，不能再次追加或按文本去重。
+  if (!message.historyRetry) {
+    const instructions = context.items.find(
+      (item) => item.namespace === "octo.control" && item.name === "instructions"
+    );
+    const channelInstructions = {
+      namespace: "octo.control",
+      name: "instructions",
+      payload: {
+        entries: [
+          ...((instructions?.payload as unknown as ContextInstructionsPayload | undefined)
+            ?.entries ?? []),
+          { text: MENTION_GUIDANCE }
+        ]
+      }
+    };
+    submitted = {
+      schema: context.schema,
+      items: instructions
+        ? context.items.map((item) => (item === instructions ? channelInstructions : item))
+        : [...context.items, channelInstructions]
+    };
+  }
   let snapshot: ContextEnvelope | undefined;
   // 执行默认项也占协议预算；只降级本渠道自动追加的辅助材料，不丢弃显式业务项。
   for (const optional of [

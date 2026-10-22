@@ -231,8 +231,9 @@ for (const cleanupIncomplete of [false, true]) {
     windows,
     async (t) => {
       const f = await fixture(t, {
-        shutdownDelayMs: 2490,
-        logWriteDelayMs: 950,
+        // 总排空仍接近宽限上限；把延迟主要放在 shutdown，给日志线程的一秒上限留出调度余量。
+        shutdownDelayMs: 3200,
+        logWriteDelayMs: 250,
         // 仅偏移 trace 时间戳，确保顺序断言不依赖父子进程时钟一致。
         traceClockOffsetMs: 60_000,
         cleanupIncomplete
@@ -273,7 +274,11 @@ for (const cleanupIncomplete of [false, true]) {
       t.diagnostic(
         `full drain: cleanupStart=${cleanupStarted - started} ms, close=${elapsed} ms, tail=${logs.some((row) => row.event === "fixture.close_tail")}, complete=${result.complete}`
       );
-      assert.equal(logs.filter((row) => row.event === "fixture.close_tail").length, 1);
+      assert.equal(
+        logs.filter((row) => row.event === "fixture.close_tail").length,
+        1,
+        JSON.stringify(trace)
+      );
       assert.equal(result.complete, !cleanupIncomplete, JSON.stringify(result));
       assert.equal(stopped(pid), true);
       assert.equal(existsSync(join(stateDirectory, "kernel-invocations.json")), cleanupIncomplete);
