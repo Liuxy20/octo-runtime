@@ -27,7 +27,7 @@ test("default adapters reject unsupported approval modes at their execution boun
   const manifest = JSON.parse(
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
-  assert.equal(manifest.adapters.length, 12);
+  assert.equal(manifest.adapters.length, 13);
   for (const entry of manifest.adapters) {
     const adapter = (await import(entry.module))[entry.export];
     if (entry.type === "antigravity") {

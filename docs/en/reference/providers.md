@@ -6,7 +6,7 @@ A Provider is the program that executes Agent tasks, such as Codex or Claude Cod
 
 For installation, account configuration, Codex Computer Use, and CodeBuddy/WorkBuddy credits, see [Harness Installation and Configuration](../guides/harnesses.md). For Runtime service commands and `octo-cli` dependencies, see [CLI Installation and Invocation](../getting-started/cli.md).
 
-The table describes support in revision `d44f5cd`. Confirm that your actual Provider version and account configuration work; registering an Adapter alone does not make it ready to execute.
+The table describes the checked-in Adapters. Confirm that your actual Provider version and account configuration work; registering an Adapter alone does not make it ready to execute.
 
 | Adapter type                                                    | Native transport   | Public output modes | Per-invocation MCP                             |
 | --------------------------------------------------------------- | ------------------ | ------------------- | ---------------------------------------------- |
@@ -18,6 +18,9 @@ The table describes support in revision `d44f5cd`. Confirm that your actual Prov
 | `openclaw`                                                      | Gateway            | canonical           | Unsupported                                    |
 | `zcode-gui`                                                     | GUI runtime client | canonical           | Unsupported                                    |
 | `antigravity`                                                   | Provider CLI       | canonical           | Unsupported                                    |
+| `grok-build` | Grok CLI ACP stdio | canonical | stdio; HTTP when advertised; final `${` literals rejected |
+
+Grok Build uses the shared ACP client and starts a CLI process per invocation. Version 1.0.67 has been checked for text streaming and cross-process session continuation on macOS arm64. See the [Grok adapter](../../../packages/octo-runtime-adapter-grok-build/README.md) for authentication, configuration, and validation limits.
 
 The MCP column describes connections configured through `octo.execution/mcp` on each invocation. A Provider's own MCP configuration is a separate source of settings. See the [MCP guide](../guides/mcp.md) for optional fields and restrictions.
 

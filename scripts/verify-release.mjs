@@ -102,7 +102,14 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const moduleManifest = JSON.parse(
       await readFile(join(installed, "apps/cli/dist/manifest.json"), "utf8")
     );
-    assert.equal(moduleManifest.adapters.length, 12);
+    assert.equal(moduleManifest.adapters.length, 13);
+    const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
+    assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");
+    const grokModule = await import(
+      pathToFileURL(join(installed, "node_modules", grokEntry.module, "dist/index.js")).href
+    );
+    assert.equal(grokModule[grokEntry.export].metadata.type, "grok-build");
+    assert.deepEqual(grokModule[grokEntry.export].metadata.protocolSupport.modes, ["canonical"]);
     assert.deepEqual(
       moduleManifest.extras.map((entry) => entry.name),
       ["channel-gateway", "channel-wecom", "webui"]

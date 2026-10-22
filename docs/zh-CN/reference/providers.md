@@ -6,7 +6,7 @@ Provider 是实际执行 Agent 任务的程序，例如 Codex 或 Claude Code。
 
 安装、账号配置、Codex Computer Use 和 CodeBuddy/WorkBuddy 共享额度见 [Harness 安装配置](../guides/harnesses.md)。Runtime 服务命令和 `octo-cli` 依赖见 [CLI 安装与调用](../getting-started/cli.md)。
 
-下表记录源码 `d44f5cd` 中的支持情况。使用前还需确认实际 Provider 版本和账号配置可用，不能只根据 Adapter 已注册就认定能够执行。
+下表记录当前源码中的 Adapter。使用前还需确认实际 Provider 版本和账号配置可用，不能只根据 Adapter 已注册就认定能够执行。
 
 | Adapter type                                                    | 原生传输           | 公开输出模式       | 逐轮 MCP                        |
 | --------------------------------------------------------------- | ------------------ | ------------------ | ------------------------------- |
@@ -18,6 +18,9 @@ Provider 是实际执行 Agent 任务的程序，例如 Codex 或 Claude Code。
 | `openclaw`                                                      | Gateway            | canonical          | 不支持                          |
 | `zcode-gui`                                                     | GUI runtime client | canonical          | 不支持                          |
 | `antigravity`                                                   | Provider CLI       | canonical          | 不支持                          |
+| `grok-build` | Grok CLI ACP stdio | canonical | stdio；广告支持时使用 HTTP；最终 `${` 字面量拒绝 |
+
+Grok Build 使用共享 ACP client，每次调用启动一个 CLI 进程。已在 macOS arm64 验证 1.0.67 的文本流和跨进程会话续聊。认证、配置和验证限制见 [Grok adapter](../../../packages/octo-runtime-adapter-grok-build/README.md)。
 
 表中的 MCP 列表示通过本轮 `octo.execution/mcp` 配置连接的能力。Provider 自己已有的 MCP 配置是另一种配置来源。可选字段和使用限制见 [MCP 指南](../guides/mcp.md)。
 

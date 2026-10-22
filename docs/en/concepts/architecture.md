@@ -42,6 +42,8 @@ Adapter and Extra selection belongs to the integration entry point. SDK hosts us
 
 Local SDK invocation can use Kernel alone, without an Extra, cloud login, or IM connection. `octo-runtime` is the CLI for starting and managing Runtime. `octo-cli` is a separate business API tool; install and configure its credentials separately if the Agent needs to call it.
 
+Provider harness login, authorization, and credential preparation belong to the user, host application, and harness. Runtime passes the ordinary execution environment and performs required protocol handshakes, including ACP authentication using supported methods advertised by the harness. It does not inspect Provider-specific authentication environment variables or credential files, infer login state from a missing variable, or log in and refresh credentials on the user's behalf. The harness resolves its own credential sources and reports whether authentication succeeds; Runtime reports real failures. This does not change Runtime's own security or an Extra's explicit business credential contract.
+
 ## Invocation Sequence
 
 ```mermaid

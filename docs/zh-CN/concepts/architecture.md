@@ -42,6 +42,8 @@ Adapter 与 Extra 由接入入口选择。SDK 宿主原生 import 和组装，�
 
 本地 SDK 调用可以只使用 Kernel，不需要 Extra、云端登录或 IM 连接。`octo-runtime` 是启动和管理 Runtime 的 CLI；`octo-cli` 则是独立的业务 API 工具。如果 Agent 需要调用 `octo-cli`，应用需要另外安装并配置凭据。
 
+Provider harness 的登录、授权及凭据准备归使用者、宿主与 harness。Runtime 传递普通执行环境并完成必要的协议握手，包括使用 harness 广告的受支持方式进行 ACP 认证；不检查 Provider 专属认证环境变量或凭据文件，不因某个变量缺失而推断未登录，也不代办登录和凭据刷新。harness 自行解析认证来源并判断认证是否成功，Runtime 如实返回失败。框架自身安全及 Extra 显式业务凭据合同仍按各自规则执行。
+
 ## 调用时序
 
 ```mermaid

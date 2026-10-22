@@ -23,6 +23,7 @@ CLI 默认加载集合以 [manifest.json](../../apps/cli/src/manifest.json) 为�
 | [ZCode](../../packages/octo-runtime-adapter-zcode-gui/README.md) | 私有 NDJSON RPC stdio | canonical |
 | [Antigravity](../../packages/octo-runtime-adapter-antigravity/README.md) | agy stream-json stdio | canonical |
 | Hermes、Kimi Code、MCode、Qoder CLI、Qoder CN | ACP stdio | canonical |
+| [Grok Build](../../packages/octo-runtime-adapter-grok-build/README.md) | Grok CLI ACP stdio，共享通用 client | canonical |
 
 Host 公共 `invoke` 默认 native。使用 canonical-only Adapter，或需要统一事件的业务方，必须显式指定 `{ protocolMode: "canonical" }`。模式不支持时在接纳前拒绝，不从 canonical 重建原生输出，见 [输出模式合同](../rules/output-protocol.md)。当前仓库不再提供 Worker 远程接入包。
 

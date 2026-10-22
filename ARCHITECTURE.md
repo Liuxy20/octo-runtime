@@ -4,6 +4,8 @@
 
 **Adapter 与 Extra 的装配约束：SDK 宿主原生 import 并组装，不要求额外 manifest；CLI 使用一份内置 manifest.json，加上 Runtime Home 下同名扩展清单，两者均有 adapters 和 extras。默认发行继续全量，未选模块不加载，Extra 的目录声明不等于启用。** FDE 的代码复制及依赖由业务方处理。统一清单与依赖解耦已在本工作树实现；完整解析、合并和生命周期要求见[基础架构规则](.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)，双语设计见[English](docs/en/concepts/module-loading.md) / [简体中文](docs/zh-CN/concepts/module-loading.md)。
 
+**Provider harness 的登录、授权及凭据准备归使用者、宿主与 harness。Runtime 只负责调用和必要的协议握手，不检查特定认证环境变量、不读取 harness 凭据文件，也不规定凭据来自环境还是预先登录。** harness 是否可用以其真实响应为准；此边界对所有 Provider 和 ACP 适用，见[认证责任规则](.octospec/rules/architecture.md#provider-harness-认证归宿主与-harness)。
+
 **设备是某台机器上，由一个特定 Home 目录承载的本地执行实例。统一设备，就是让业务先确定「在哪个实例执行」，再决定「怎么连过去」：本地直接 IPC，异地经云端下发。**
 
 **三个核心目标，共用同一个设备执行内核：**

@@ -1,0 +1,81 @@
+status: pr-review-updated
+recorded_on: 2026-10-22
+baseline: 102fb9caf995d9eb1ac53acaf5b91922be4f023d
+baseline_source: git-fetch-origin-main
+branch: feat/grok-build-acp
+rebase_target: 4857d0ea4fe7a056f5bbfb226eec6b92d139a372
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/95
+authorization:
+  new_worktree: requested
+  research_reference: explicitly-requested-before-implementation
+  implementation: requested-attempt-acp
+  commit_push_pr_merge: explicitly-authorized
+  publish: not-authorized
+  github_language: english
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-adapter-metadata
+  - runtime-context-input
+  - runtime-environment
+  - runtime-mcp
+  - runtime-reasoning
+  - runtime-output-protocol
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/guides/adapter-authoring.md
+  - .octospec/guides/workspace.md
+  - packages/octo-runtime-adapter-acp/src/index.ts
+  - packages/octo-runtime-acp-client/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/reasoning.ts
+external_sources:
+  reference: reference.md
+  grok_cli: 1.0.67
+  grok_cli_revision: 2fe064390d07
+  source_snapshot: 2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8
+verification:
+  platform: macOS-arm64
+  initialize: passed
+  authenticate_cached_token: passed
+  session_new: passed
+  missing_session: FS_NOT_FOUND
+  streaming_and_continuation: passed-after-user-enabled-proxy
+  sdk_streaming_and_continuation: passed
+  native_tools_mcp_images: not-run
+  linux_windows: not-run
+  build_typecheck_lint_docs: passed
+  node_tests: 1610-passed-35-skipped-after-rebase
+  ui_tests: 35-passed
+  release_offline_install: passed
+  octospec_lint: baseline-docs-directory-conflict-only
+  shared_acp_behavior_diff: none
+  concurrent_same_adapter_and_standard_acp: passed
+  stream_capacity_and_eof_diagnostics: passed
+  isolation_revision_live_continuation: passed-on-retry
+  rebase: completed-with-log-only-conflict
+  post_rebase_release_offline_install: passed
+  post_rebase_full_suite: passed-on-recheck
+  auth_boundary_revision:
+    grok_fixture: 28-passed
+    full_node_suite: 1615-passed-35-skipped
+    ui_suite: 35-passed
+    typecheck_lint_names_format_docs: passed
+    provider_auth_env_dependency: removed
+    shared_acp_behavior_diff: none

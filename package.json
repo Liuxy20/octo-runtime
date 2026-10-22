@@ -93,6 +93,7 @@
     "@mininglamp-oss/octo-runtime-adapter-codebuddy": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-codex": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-hermes": "workspace:*",
+    "@mininglamp-oss/octo-runtime-adapter-grok-build": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-kimi-code": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-mcode": "workspace:*",

@@ -2,6 +2,8 @@
 
 ## 2026-10-22
 
+- 按用户要求修正 [PR 104 的认证责任边界](journal/shared/2026-10-22-95-grok-build-acp.md#pr-104-认证责任修正)：harness 的登录、授权与凭据来源归使用者、宿主及 harness。删除 `grok-build` 专属认证环境变量判断，仅依广告完成 ACP 握手，拒绝不切换认证方式；同步架构规则和双语说明，补充五项回归，不改共享 ACP 行为。
+
 - 修复 [PR #102 review 与同类问题](tasks/40-openclaw-compatibility/review.md#pr-102-外部意见与同类问题)：两项外部意见均复现，另确认旧 wait 覆盖终态、恢复步骤事件丢失和资源溢出误报成功三类缺陷。统一中间回执、终态提交及收尾，新增 17 条回归，OpenClaw 113 通过／1 GC skip；独立 Standards／Spec 最终复核无剩余已复现阻断。
 
 - 用户接受 Issue 40 现有代表实测为本次合并验收，授权提交 commit、创建 PR 及合入 main。进入最新 main 同步、双轴复核与 CI 交付；未实测版本继续保留原证据等级，不要求伪造全矩阵通过，见[任务](tasks/40-openclaw-compatibility/brief.md)。
@@ -19,6 +21,8 @@
 - 按用户确认更新 [Issue 40 整体兼容方案](tasks/40-openclaw-compatibility/design.md)：目标覆盖 7.1 至当前稳定版的完整调用生命周期；probe 与实际执行共享 Adapter 内部合同解析，按每次连接的协议号、server.version、方法及事件重新判定。旧版权限映射仍待验证，明确拒绝不代表兼容完成；仅更新 OctoSpec。
 
 - 从最新 `origin/main@88fa71d` 新建 Issue 40 独立 worktree，完成 [OpenClaw 版本兼容调研与方案](tasks/40-openclaw-compatibility/brief.md)。26 个非 beta 标签核对表明 7.x 创建 Schema 不支持当前发送的三个字段，8.1 起已有对应字段，协议号均为 4；原始 7.1 Schema 四项本地校验通过。仅规划，旧版权限等价映射与真实联调待确认，见[记录](journal/shared/2026-10-22-40-openclaw-compatibility-plan.md)。
+
+- 从最新 main@102fb9c 建立 Issue 95 worktree，先补 [Grok Build ACP 简报](tasks/95-grok-build-acp/brief.md)和[参考资料](tasks/95-grok-build-acp/reference.md)，实现 `grok-build` ACP 适配与CLI/SDK注册。按用户要求撤回共享 ACP client/adapter/审批桥改动，扩展留在新包内；同 adapter 并发与通用 ACP 的错误回复、失败、取消隔离通过。隔离修订后Node1514通过/35跳过、UI35通过、类型/lint/docs及tgz离线安装通过，1.0.67真实两轮流与跨进程续聊重试通过。OctoSpec lint仍仅有main的docs目录冲突；真实工具/MCP/图片及其他平台未验，见[收尾记录](journal/shared/2026-10-22-95-grok-build-acp.md)。用户已授权 rebase、PR 交付及合并，遵守 main 的 CI 与评审保护。
 
 - 按用户要求落实PR #96的P3：Windows Node 24/26显式运行五个恢复与Extra状态日志测试文件，保留原平台边界，本机40项通过；新增提交的远端结果及批准另行确认，merge改由用户手动操作，见[实施记录M9](tasks/93-sleep-wake-recovery/implementation.md#m9-pr-96-windows-测试覆盖补充)。
 

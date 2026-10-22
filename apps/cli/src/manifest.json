@@ -17,6 +17,11 @@
       "export": "codebuddyAdapter"
     },
     {
+      "type": "grok-build",
+      "module": "@mininglamp-oss/octo-runtime-adapter-grok-build",
+      "export": "grokBuildAdapter"
+    },
+    {
       "type": "hermes",
       "module": "@mininglamp-oss/octo-runtime-adapter-hermes",
       "export": "hermesAdapter"
