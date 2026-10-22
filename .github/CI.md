@@ -10,8 +10,9 @@ The `CI` workflow runs for every PR targeting `main`, including draft and docume
 PRs, pushes to `main`, manual dispatches and validated release calls. It has no path
 filter that could leave its required check waiting indefinitely.
 
-Ubuntu, macOS, and Windows use **Node.js 24.x**, read from `.nvmrc`, and the pnpm version
-declared in `package.json#packageManager`. CI explicitly installs ripgrep for the
+Ubuntu, macOS, and Windows each use a required **Node.js 24.x and 26.x** matrix and the pnpm version
+declared in `package.json#packageManager`. `.nvmrc` intentionally selects Node.js 24
+for local development; CI selects each major explicitly. CI installs ripgrep for the
 naming check rather than relying on the runner image. The Ubuntu/macOS matrix also
 installs Go 1.25.x to compile the native-component fixture, then executes:
 
@@ -25,7 +26,7 @@ installs Go 1.25.x to compile the native-component fixture, then executes:
 The complete test entry point includes the existing local debugging WebUI plugin
 tests. No production UI or new browser end-to-end gate is introduced. Provider tests
 use fakes unless their existing live-test opt-in is explicitly enabled. A dedicated
-Windows job builds and packs the distribution, runs Core/Kernel/Host lifecycle and
+Windows matrix builds and packs the distribution on both majors, runs Core/Kernel/Host lifecycle and
 IPC contract tests, and verifies the installed CLI with independent Kernel and Extra
 processes before uninstalling the package. Readiness uses a bounded overall deadline
 and reports the last status failure plus bounded component stderr on failure.
@@ -36,6 +37,8 @@ passing package verification does not close that release gap.
 `CI Gate` is the stable required check. It runs after the Ubuntu/macOS matrix and the
 Windows release verification, including on failure, and rejects any aggregate result other than `success`. Branch protection
 requires this check from the GitHub Actions app and an up-to-date branch.
+Neither Node.js major is optional or uses `continue-on-error`; a failed, cancelled,
+or skipped matrix makes the gate fail. `fail-fast: false` lets every entry report its result.
 
 Formatting covers owned source, tests, scripts, JSON/YAML configuration, `.github`
 collaboration files and `CONTRIBUTING.md`. Generated output, the lockfile, pinned
@@ -43,10 +46,19 @@ upstream browser sources, architecture documentation and historical Octospec rec
 are outside this formatting gate. `pnpm format` and `pnpm format:check` use identical
 file patterns and `.prettierignore`.
 
-Linux uploads the verified `octo-runtime-release` artifact for seven days. Verification
-covers empty-cache offline global installation, public type consumption, Core,
+Only Ubuntu/Node.js 24 uploads the verified `octo-runtime-release` artifact for seven
+days, preserving a single canonical archive for publishing and recovery. All matrix
+entries pack and verify their distribution. Verification covers empty-cache offline
+global installation with strict engine checks, public type consumption, Core,
 owned Kernel, independent Extra and CLI entry points, and uninstalling without
 deleting Home. It does not install Providers automatically.
+
+Release validation calls this same required dual-version CI workflow. Publishing,
+recovery and latest reconciliation intentionally run on Node.js 24; their pinned
+tooling version does not narrow consumer support. `@types/node` likewise stays on
+24 to preserve the oldest supported API baseline. Review support when new LTS
+majors arrive and before supported majors reach end of life; see the
+[Node.js support policy](../README.md#get-started).
 
 Additional workflows provide common-history validation, secret scanning, dependency
 review, weekly CodeQL, workflow sanity, PR title checks, labels and release drafting.

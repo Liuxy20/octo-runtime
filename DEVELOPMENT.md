@@ -12,7 +12,7 @@ fake Provider 和临时 SQLite 适用于合同测试。调试真实服务必须�
 
 ## 2. 环境与构建
 
-要求 Node.js 24+、pnpm 11+。实际 Provider 执行还需要宿主明确安装对应引擎并完成其认证。不要在 Runtime 探测、注册或 Run 中隐式下载依赖。
+要求 Node.js 24.x 或 26.x（LTS）、pnpm 11+。`.nvmrc` 和 `@types/node` 保留 24 作为最低支持基线，CI 持续验证 24/26；不支持 25 或未经验证的后续主版本。实际 Provider 执行还需要宿主明确安装对应引擎并完成其认证。不要在 Runtime 探测、注册或 Run 中隐式下载依赖。
 
 在本仓库根目录执行：
 

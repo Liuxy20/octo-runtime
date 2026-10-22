@@ -2,7 +2,7 @@
 
 [English](../../en/getting-started/cli.md) | [文档目录](../README.md)
 
-通过 Runtime CLI 可以启动 Executor Kernel、检查 Adapter，并试运行一次 Agent 调用。运行环境使用 Node.js 24.x。
+通过 Runtime CLI 可以启动 Executor Kernel、检查 Adapter，并试运行一次 Agent 调用。运行环境使用 Node.js 24.x 或 26.x（LTS）。
 
 ## 需要安装哪些程序
 

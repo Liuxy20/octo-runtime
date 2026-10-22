@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/getting-started/sdk.md) | [Documentation](../README.md)
 
-This page shows how to call Kernel from a Node.js application. Use Node.js 24.x and install/authenticate your chosen Provider, such as Codex, on the execution machine.
+This page shows how to call Kernel from a Node.js application. Use Node.js 24.x or 26.x (LTS) and install/authenticate your chosen Provider, such as Codex, on the execution machine.
 
 Install the SDK in your application:
 
@@ -18,7 +18,7 @@ Use a release matching this documentation's architecture. See [CLI installation]
 
 Obtain the service's actual endpoint: a socket path on macOS/Linux or a Named Pipe address on Windows. `attachKernel(endpoint)` creates a client that connects when used; Kernel must already be running.
 
-See [attach.mts](../../examples/attach.mts) for complete code using public SDK APIs. Node.js 24 can run this `.mts` file directly without compiling TypeScript first.
+See [attach.mts](../../examples/attach.mts) for complete code using public SDK APIs. Both supported Node.js majors can run this `.mts` file directly without compiling TypeScript first.
 
 From a built source checkout (`pnpm install`, then `pnpm build`):
 

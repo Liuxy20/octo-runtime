@@ -218,11 +218,15 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
   ]);
   assert.equal((await syncCliOpenClawToolEnvironment(profile, configs)).written, true);
   const content = await readFile(file, "utf8");
-  assert.deepEqual(parseEnv(content), {
-    OTHER: "line1\nline2",
-    OCTO_BOT_TOKEN: "bf_last_fixture",
-    OCTO_API_BASE_URL: base
-  });
+  // Node.js 26 返回无原型对象；此处验证 dotenv 键值，不约束解析器的对象原型。
+  assert.deepEqual(
+    { ...parseEnv(content) },
+    {
+      OTHER: "line1\nline2",
+      OCTO_BOT_TOKEN: "bf_last_fixture",
+      OCTO_API_BASE_URL: base
+    }
+  );
   assert.ok(content.startsWith("# Keep this comment\n"));
   assert.equal((content.match(/OCTO_BOT_TOKEN=/g) ?? []).length, 1);
   assert.equal((await stat(file)).mode & 0o777, 0o600);

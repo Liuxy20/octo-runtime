@@ -30,6 +30,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--prefix",
         directory,
         "--offline",
+        "--engine-strict",
         "--cache",
         join(directory, "empty-cache"),
         "--no-audit",
@@ -64,10 +65,13 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       if (name.startsWith("@mininglamp-oss/")) {
         assert.equal(dependency.version, metadata.version);
         assert.equal(dependency.private, true);
+        if (dependency.engines?.node !== undefined)
+          assert.equal(dependency.engines.node, metadata.engines.node, name);
       }
     }
     const source = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
     assert.deepEqual(metadata.exports, source.exports);
+    assert.deepEqual(metadata.engines, { node: source.engines.node });
     for (const file of ["host", "executor-kernel", "extra"]) {
       const declaration = await readFile(join(installed, `dist/public/${file}.d.ts`), "utf8");
       assert.doesNotMatch(

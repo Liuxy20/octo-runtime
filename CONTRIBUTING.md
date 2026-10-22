@@ -6,7 +6,7 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) and the
 
 ## Development Setup
 
-- **Node.js 24.x** is required. Use `nvm use` with the checked-in `.nvmrc`.
+- **Node.js 24.x or 26.x (LTS)** is required. `nvm use` selects the Node.js 24 development baseline from `.nvmrc`; use `nvm install 26 && nvm use 26` to check Node.js 26 locally.
 - Use the exact pnpm version declared in `package.json#packageManager`.
 - Install ripgrep (`rg`) for the naming check: `brew install ripgrep` on macOS or
   `sudo apt-get install ripgrep` on Ubuntu. CI installs this prerequisite explicitly.
@@ -30,6 +30,12 @@ pnpm test:suites
 `pnpm typecheck` builds the workspace before checking root types. After that build,
 `pnpm test:suites` runs the complete automated suite without rebuilding.
 Use `pnpm test` to build and run the same suites in one command.
+
+CI requires both Node.js majors to pass installation, build, type checking, tests and
+packed CLI/SDK verification. Keep `@types/node` on the Node.js 24 API baseline so
+new code remains compatible with both supported majors. Publishing workflows stay
+on Node.js 24 and consume the verified Ubuntu/24 archive. See the
+[support policy](README.md#get-started) and [CI guide](.github/CI.md).
 
 ## Project Structure and Responsibilities
 

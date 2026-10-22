@@ -1,6 +1,8 @@
 # 部署与发行
 
-对外只发布 `@mininglamp-oss/octo-runtime`，内部 workspace 包保持 private。要求 Node.js 24.x；Provider 的安装和认证由宿主负责。
+对外只发布 `@mininglamp-oss/octo-runtime`，内部 workspace 包保持 private。要求 Node.js 24.x 或 26.x（LTS），范围为 `^24.0.0 || ^26.0.0`；Provider 的安装和认证由宿主负责。
+
+CI 在两个 Node.js 主版本上持续构建、测试并验证打包后的 CLI/SDK，任一版本失败都会阻塞 CI Gate。发布、恢复及 latest 协调工具固定使用 24，并只消费 Ubuntu/24 的已验证归档；这是发行工具基线，不限制使用方选择 26。每次新 LTS 到来或受支持版本接近 EOL 时审查支持范围，新增版本须先通过同等检查，移除支持须提前在发行说明公告。
 
 ## 构建与离线验证
 

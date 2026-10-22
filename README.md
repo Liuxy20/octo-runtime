@@ -35,7 +35,9 @@ The Executor Kernel provides local execution. Channel Gateway and Loop Daemon ar
 
 ## Get Started
 
-You need **Node.js 24.x** and an installed, authenticated Provider. Runtime does not install Provider software or sign in for you.
+You need **Node.js 24.x or 26.x (LTS)** and an installed, authenticated Provider. Runtime does not install Provider software or sign in for you.
+
+The supported range is `^24.0.0 || ^26.0.0`. Node.js 25 and future majors are outside this range. CI checks installation, build, types, automated tests, and packed CLI/SDK consumption on both supported majors. New LTS majors are added after the same checks pass; support is reviewed at each LTS transition and before a supported major reaches end of life. Removal is announced in release notes before changing the engine range.
 
 ### 1. Install
 
@@ -117,7 +119,7 @@ The developer documentation covers architecture, your first SDK call, Kernel IPC
 
 ## Development
 
-Use Node.js 24.x and the pnpm version specified in `package.json`.
+Use Node.js 24.x or 26.x and the pnpm version specified in `package.json`. `.nvmrc`, Node.js type definitions, and publishing workflows intentionally stay on Node.js 24, the oldest supported baseline; this does not restrict consumers to 24.
 
 ```bash
 pnpm install

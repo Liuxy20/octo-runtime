@@ -81,7 +81,7 @@ The CLI has no agent-run/agent-session command groups. Business task scheduling,
 
 ## Build And Link From Source
 
-Require Node.js 24+ and pnpm 11. From the repository root, install dependencies when needed:
+Require Node.js 24.x or 26.x (LTS) and pnpm 11. From the repository root, install dependencies when needed:
 
 ```bash
 pnpm install --frozen-lockfile

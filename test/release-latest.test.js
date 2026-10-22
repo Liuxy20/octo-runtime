@@ -455,7 +455,10 @@ test("Windows 发行验收覆盖独立组件和进程树清理", async () => {
   );
   assert.match(verifier, /execute\("taskkill", \["\/PID", String\(child\.pid\), "\/T", "\/F"\]/);
   assert.match(verifier, /compiled\/host\.mjs/);
-  assert.match(workflow, /name: Verify release package \(windows-latest\)/);
+  assert.match(
+    workflow,
+    /name: Verify release package \(windows-latest, Node \$\{\{ matrix\.node \}\}\)/
+  );
   assert.match(workflow, /git config --global core\.autocrlf false/);
   assert.match(workflow, /node scripts\/verify-windows-release\.mjs/);
   assert.match(workflow, /needs: \[check, verify-windows-release\]/);

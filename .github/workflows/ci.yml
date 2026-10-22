@@ -35,13 +35,14 @@ concurrency:
 
 jobs:
   check:
-    name: Build, test and package (${{ matrix.os }})
+    name: Build, test and package (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
+        node: [24, 26]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v4
         with:
@@ -49,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ matrix.node }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         # Read the pnpm version from package.json's packageManager field.
       - name: Install Go for native component fixture
@@ -110,7 +111,8 @@ jobs:
             --expected-commit "$EXPECTED_COMMIT" \
             --require-clean
       - name: Upload verified npm archive
-        if: matrix.os == 'ubuntu-latest'
+        # Keep one canonical release artifact for npm/GitHub Release consumers.
+        if: matrix.os == 'ubuntu-latest' && matrix.node == 24
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: octo-runtime-release
@@ -119,9 +121,13 @@ jobs:
           retention-days: 7
 
   verify-windows-release:
-    name: Verify release package (windows-latest)
+    name: Verify release package (windows-latest, Node ${{ matrix.node }})
     runs-on: windows-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [24, 26]
     steps:
       - name: Preserve repository line endings
         run: git config --global core.autocrlf false
@@ -131,7 +137,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version-file: .nvmrc
+          node-version: ${{ matrix.node }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

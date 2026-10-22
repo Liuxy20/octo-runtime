@@ -8,7 +8,7 @@ Electron、Tauri 2 及其他业务宿主使用 [SDK 原生接入指南](SDK_NATI
 
 ## 1. 安装与准备
 
-要求 Node.js 24.x。Provider 软件及其认证须提前准备；安装 Runtime 包不会安装 Provider 或完成认证。已发布版本可从 npm 安装，具体版本须包含本文命令：
+要求 Node.js 24.x 或 26.x（LTS）。Provider 软件及其认证须提前准备；安装 Runtime 包不会安装 Provider 或完成认证。已发布版本可从 npm 安装，具体版本须包含本文命令：
 
 ```bash
 npm install -g @mininglamp-oss/octo-runtime

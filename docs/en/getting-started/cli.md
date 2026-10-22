@@ -2,7 +2,7 @@
 
 [简体中文](../../zh-CN/getting-started/cli.md) | [Documentation](../README.md)
 
-Use the Runtime CLI to start Executor Kernel, inspect Adapters, and try an Agent invocation. Use Node.js 24.x.
+Use the Runtime CLI to start Executor Kernel, inspect Adapters, and try an Agent invocation. Use Node.js 24.x or 26.x (LTS).
 
 ## Which Programs to Install
 
