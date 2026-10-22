@@ -1,0 +1,19 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/99
+baseline: 20c3771
+branch: fix/99-context-guidence-cdata
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md

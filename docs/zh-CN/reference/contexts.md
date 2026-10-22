@@ -93,6 +93,29 @@
 
 上述类型中，只有 `inline` 和 `references` 会作为普通背景文本发给模型。会话指令单独传入，其余类型用于执行配置。业务扩展 `extra.<domain>/*` 也会作为背景文本发送。
 
+## 模型可见格式
+
+普通背景项按顺序放在 `<contexts>` 和 `<context-item namespace="..." name="...">` 中，首尾使用标准 XML 注释：
+
+```text
+<!-- Context information begins: the following is the current context -->
+<contexts>
+  <context-item namespace="extra.project" name="selection">
+    <guidence>Use the selected source.
+
+- Preserve relevant details.</guidence>
+    <data><![CDATA[{"text":"Selected source"}]]></data>
+  </context-item>
+</contexts>
+<!-- Context information ends -->
+```
+
+模型可见标签有意拼写为 `guidence`，API 字段仍为 `guidance`。指引使用原始 Markdown，保留实际换行、空行、缩进和特殊字符，不做 XML/HTML 转义，也不包 CDATA。guidance 缺省或空字符串时省略元素。
+
+数据沿用对象 payload 的 JSON 序列化：递归排序对象键，保留数组顺序。CDATA 仅包裹序列化文本，不解析或重新解释其中的 JSON、XML、YAML 等材料。文本中的 `]]>` 拆成相邻 CDATA 区段，连接各区段正文后可还原原序列化文本。
+
+主输入、multipart text 输入及显式提供的 fresh fallback 输入使用同一格式。这是面向模型的文本，原始 Markdown 可能含 XML 语法，不保证是严格 XML 交换格式；CDATA 不授予权限，也不强制执行指令边界。
+
 ## 超时字段
 
 | 字段                     | 含义         | 范围（毫秒）   |

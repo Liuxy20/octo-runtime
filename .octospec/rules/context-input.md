@@ -3,7 +3,7 @@ type: Rule
 title: 本轮模型输入与工作目录
 description: Context v3 的业务归属、固定 renderer、控制通道和工作目录边界。
 tags: ["context","model-input","workspace"]
-timestamp: 2026-10-21T00:00:00Z
+timestamp: 2026-10-22T00:00:00Z
 implementation_baseline: df63c8f
 id: runtime-context-input
 tier: repo
@@ -37,22 +37,26 @@ supersedes: []
 | `extra.<domain>/<name>`         | 是         | contexts 块完整输出 guidance 与 payload，无逐业务注册或字段投影               |
 | 其他未知可选类型                | 否         | 保存并转发，忽略消费；需要注入的扩展使用 extra 命名空间                       |
 
-框架生成的固定边界和标签统一使用英文。item 内部仅输出换行纯文本 `Guidance: ...`、`Data: ...`；guidance 缺省或空字符串时省略该行。业务 guidance 与 payload 的多语言值保留原文，不翻译、不要求模型使用英文回答。不添加 guidance/payload 子标签，不执行 XML 实体转义，不要求严格 XML。空列表或只有非注入类型时，renderer 返回空字符串。
+框架生成的固定边界和标签统一使用英文，首尾边界使用标准 XML 注释 `<!-- ... -->`。item 内部使用 `<guidence>...</guidence>` 与 `<data><![CDATA[...]]></data>` 区分使用指引和材料；`guidence` 是模型可见标签的既定拼写，输入/API 字段仍为 `guidance`。guidance 缺省或空字符串时省略元素，其余 Markdown 原样输出，保留实际换行、空行和缩进，不执行 XML/HTML 实体转义，不将换行变成字面量 `\n`，不包 CDATA。业务多语言值保留原文，不翻译、不要求模型使用英文回答。空列表或只有非注入类型时，renderer 返回空字符串。
+
+data 仅在既有 payload 序列化结果外增加 CDATA，不解析内部文本或按 JSON/XML/YAML 再次改写。既有 payload 对象合同、递归排序和 JSON 序列化保持；序列化文本中的 `]]>` 拆成相邻 CDATA 区段 `]]]]><![CDATA[>`，连接区段正文后与原序列化文本一致。这是面向模型的文本分隔，原始 Markdown 不保证严格 XML 可解析，CDATA 也不赋予或强制执行权限。
 
 完整格式示例（namespace/name 来自调用方；payload 递归排序对象键，数组保序）：
 
 ```text
-<--- Context information begins: the following is the current context --->
+<!-- Context information begins: the following is the current context -->
 <contexts>
   <context-item namespace="extra.project" name="reference">
-    Guidance: Use this reference when answering the request. 保留原文。
-    Data: {"key":"value","text":"中文 日本語"}
+    <guidence>Use this reference when answering the request.
+
+保留原文。</guidence>
+    <data><![CDATA[{"key":"value","text":"中文 日本語"}]]></data>
   </context-item>
 </contexts>
-<--- Context information ends --->
+<!-- Context information ends -->
 ```
 
-2026-10-21 / Issue #87：以上英文边界及 `Guidance:` / `Data:` 替代原中文固定格式。这是模型可见文本变更；匹配旧边界或标签的集成须同步更新断言、解析器和提示词快照，不再输出旧格式。Context v3 外壳、Run 7、内容、顺序、过滤及独立控制通道不变。
+2026-10-22 / Issue #99：在 #87 英文固定格式基础上，标准注释及 guidence/data 元素替代原非标准边界和 `Guidance:` / `Data:` 前缀。这是模型可见文本变更；匹配旧边界或标签的集成须同步更新断言、解析器和提示词快照。主输入、multipart text 与 fresh fallback 共用此格式；Context v3 外壳、Run 7、内容、顺序、过滤及独立控制通道不变。
 
 renderer 只匹配 namespace/name 的白名单 pattern，保序输出全部数据。renderer 不调用信封校验器，不做业务字段、场景、材料可用性、处理器注册、预算估算或编译应用检查。协议接纳与执行配置校验属于各自边界，不能成为追加或改写模型上下文的理由。旧 Compiler/Pipeline、预取、摘要和投影配置已删除。
 

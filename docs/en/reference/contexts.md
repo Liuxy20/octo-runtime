@@ -93,6 +93,29 @@ Example `payload`: `{"entries":[{"text":"Answer concisely."}]}`. Runtime joins e
 
 Of the built-ins above, only inline and references are sent as ordinary background text. Session instructions are passed separately; the other types configure execution. Business extensions under `extra.<domain>/*` are also sent as background text.
 
+## Model-facing Format
+
+Ordinary background items are rendered in order inside `<contexts>` and `<context-item namespace="..." name="...">`, with standard XML comments marking the beginning and end:
+
+```text
+<!-- Context information begins: the following is the current context -->
+<contexts>
+  <context-item namespace="extra.project" name="selection">
+    <guidence>Use the selected source.
+
+- Preserve relevant details.</guidence>
+    <data><![CDATA[{"text":"Selected source"}]]></data>
+  </context-item>
+</contexts>
+<!-- Context information ends -->
+```
+
+The rendered tag is intentionally spelled `guidence`; the API field remains `guidance`. Guidance is raw Markdown: actual newlines, blank lines, indentation, and special characters are preserved without XML/HTML escaping or CDATA. Absent or empty guidance omits the element.
+
+Data keeps the existing JSON serialization of the object payload, with recursively sorted object keys and array order preserved. CDATA only wraps that serialized text; it does not parse or reinterpret embedded JSON, XML, YAML, or other material. Embedded `]]>` is split across adjacent CDATA sections so joining their contents recovers the original serialized text.
+
+The same format is used for primary input, multipart text input, and explicitly supplied fresh fallback input. This is model-facing text, not a strict XML interchange format; raw Markdown may contain XML syntax. CDATA does not grant permissions or enforce instruction boundaries.
+
 ## Timeout Fields
 
 | Field                    | Meaning            | Allowed range (ms) |
