@@ -39,7 +39,7 @@ test("worker cancellation during onSpawn observes pending readiness", async () =
 
 test(
   "native Kernel startup cancellation rolls back worker, endpoint and lease",
-  { timeout: 30000 },
+  { timeout: process.platform === "win32" ? 90_000 : 30_000 },
   async (t) => {
     const home = await mkdtemp(join(tmpdir(), "ocs-"));
     t.after(() => rm(home, { recursive: true, force: true }));
@@ -75,7 +75,7 @@ test(
         registered.promise,
         starting.then(() => assert.fail("unready worker unexpectedly initialized"))
       ]),
-      15_000,
+      process.platform === "win32" ? 45_000 : 15_000,
       "worker ownership registration timed out"
     );
     assert.ok(Number.isSafeInteger(worker) && worker > 0);

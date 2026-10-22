@@ -1,0 +1,27 @@
+task: channel-default-admission
+status: pull-request-ci-in-progress
+baseline: 5c1921dced4b0852e41426f1c04582159082f482
+branch: fix/channel-default-admission
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/local-execution.md
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/110
+pull_request: https://github.com/Mininglamp-OSS/octo-runtime/pull/112
+validation:
+  targeted_node: 81 passed
+  full_node: 1630 passed, 35 skipped
+  five_bot_group_topic_isolation: 4 passed
+  ui: 35 passed
+  docs_examples: 4 passed
+  checks: build, typecheck, lint, names, docs, octospec, diff
+  adjacent_audit: .octospec/tasks/channel-default-admission/audit.md

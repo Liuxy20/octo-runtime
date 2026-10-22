@@ -39,7 +39,9 @@ Gateway 默认指令也计入最终调用的 Context 预算。宿主返回达到
 
 当前用户明确要求通知真人或向当前群的 Bot 交接任务时，模型确认目标的真实 UID，在成功 final 普通正文中输出 `@[uid:displayName]`。Gateway 核验当前成员及明确的真人标记（`robot=0/false`）或 Bot 标记（`robot=1/true`），沿原回复连接发送可读正文及原生 `mention.uids/entities`。普通 `@名字` 不产生通知。无法确认的目标退为纯文本；代码、引用示例、进度、thinking 和失败回复不转换。该能力不开放广播、CLI 重复发送或自行发起 Bot 调用。
 
-接收 Bot 仍须按真实发送者授权、Space、群范围和原生 mention 规则准入。Gateway 在命令处理、Context 准备和 AgentRun 调度前拒绝自身消息，包括自己 @ 自己和 AI 广播，即使自己的 UID 在 `allowed_sender_ids` 中也不能绕过。私聊、群和话题一致；授权其他 Bot 不代表允许当前 Bot 触发自己。
+`allowed_sender_ids` 省略时，DM 沿用平台消息准入/访问策略，群聊和话题不增加发送者限制；owner、其他用户和其他 Bot 均可按 Space、群启停/范围和原生 mention 规则触发。显式名单仅允许列出的发送者，owner 不隐式补入；`[]` 拒绝全部，`null` 非法。Gateway 不维护另一套好友名单，也不另行实施仅好友可访问的策略。卡片控制仍须匹配原任务发起者、Space、原卡片消息和频道地址。
+
+Gateway 在命令处理、Context 准备和 AgentRun 调度前拒绝自身消息，包括自己 @ 自己和 AI 广播，即使自己的 UID 在 `allowed_sender_ids` 中也不能绕过。私聊、群和话题一致。
 
 完整英文规则使用 `[OCTO_CHANNEL_MENTION_RULES_V1]` 边界，在新 Provider 会话中通过既有会话指令通道传入。每轮还提供普通 `extra.im/mention-instructions` 英文短提醒，覆盖升级前创建的续聊会话；该自动辅助材料仍受上述预算降级规则约束。短提醒不会更新已有会话的系统指令或重置会话。完整规则要求模型在摘要或 compaction 时原样保留，以模型行为为准，Runtime 不新增压缩豁免或拦截机制。会话边界见[背景资料与会话](context-and-sessions.md)。
 

@@ -47,11 +47,10 @@ test("group mention consumes metadata only and supports pure AI broadcasts", () 
     [{ entities: [{ uid: "bot" }] }, false]
   ]) {
     assert.equal(mentionsBot(mention, "bot"), expected, JSON.stringify(mention));
-    assert.equal(acceptsImMessage(config, "owner", message(mention)), expected);
+    assert.equal(acceptsImMessage(config, message(mention)), expected);
     assert.equal(
       acceptsImMessage(
         config,
-        "owner",
         message(mention, {
           channelType: 5,
           channelId: "group____topic"
@@ -62,21 +61,20 @@ test("group mention consumes metadata only and supports pure AI broadcasts", () 
   }
 });
 
-test("AI broadcast cannot bypass sender, space, group, self or message identity checks", () => {
+test("AI broadcast cannot bypass space, group, self or message identity checks", () => {
   for (const changes of [
     { fromUid: "bot" },
-    { fromUid: "stranger" },
+    { fromUid: "" },
     { channelId: "elsewhere" },
     { channelId: "other____topic", channelType: 5 },
     { messageId: "" },
     { channelType: 99 },
     { payload: { type: 1, content: "hi", space_id: "other", mention: { ais: 1 } } }
   ])
-    assert.equal(acceptsImMessage(config, "owner", message({ ais: 1 }, changes)), false);
+    assert.equal(acceptsImMessage(config, message({ ais: 1 }, changes)), false);
   assert.equal(
     acceptsImMessage(
       config,
-      "owner",
       message(undefined, {
         channelId: "owner",
         channelType: 1
@@ -95,12 +93,36 @@ test("self mentions never admit an AgentRun even when the bot is explicitly auth
       [5, "group____topic"]
     ]) {
       const ownMessage = message(mention, { fromUid: "bot", channelType, channelId });
-      assert.equal(acceptsImMessage(authorized, "bot", ownMessage), false);
-      assert.equal(acceptsImMessage(authorized, "owner", ownMessage), false);
-      assert.equal(
-        acceptsImMessage(authorized, "owner", { ...ownMessage, fromUid: "other-bot" }),
-        true
-      );
+      assert.equal(acceptsImMessage(authorized, ownMessage), false);
+      assert.equal(acceptsImMessage(authorized, { ...ownMessage, fromUid: "other-bot" }), true);
+    }
+  }
+});
+
+test("omitted sender list admits platform-delivered users and bots; explicit lists narrow all channels", () => {
+  for (const [channelType, channelId] of [
+    [1, "peer"],
+    [2, "group"],
+    [5, "group____topic"]
+  ]) {
+    for (const fromUid of ["owner", "other-user", "other-bot", "bot", ""]) {
+      for (const allowed of [undefined, [], ["other-user", "other-bot", "bot"]]) {
+        const scoped = { ...config };
+        if (allowed !== undefined) scoped.allowed_sender_ids = allowed;
+        const incoming = message({ uids: ["bot"] }, { channelType, channelId, fromUid });
+        assert.equal(
+          acceptsImMessage(scoped, incoming),
+          Boolean(fromUid) &&
+            fromUid !== "bot" &&
+            (allowed === undefined || allowed.includes(fromUid)),
+          JSON.stringify({ channelType, fromUid, allowed })
+        );
+        if (channelType !== 1)
+          assert.equal(
+            acceptsImMessage(scoped, { ...incoming, payload: { type: 1, content: "@bot" } }),
+            false
+          );
+      }
     }
   }
 });
@@ -122,18 +144,18 @@ test("omitted, null and empty group scopes are unrestricted; nonempty scopes res
     ]) {
       const label = JSON.stringify({ groupIds, channelType });
       assert.equal(
-        acceptsImMessage(scoped, "owner", message({ uids: ["bot"] }, { channelType, channelId })),
+        acceptsImMessage(scoped, message({ uids: ["bot"] }, { channelType, channelId })),
         expected,
         label
       );
       assert.equal(
-        acceptsImMessage(scoped, "owner", message({ ais: 1 }, { channelType, channelId })),
+        acceptsImMessage(scoped, message({ ais: 1 }, { channelType, channelId })),
         expected,
         label
       );
     }
     assert.equal(
-      acceptsImMessage(scoped, "owner", message(undefined, { channelType: 1, channelId: "owner" })),
+      acceptsImMessage(scoped, message(undefined, { channelType: 1, channelId: "owner" })),
       true,
       "group scope must not restrict direct messages"
     );
@@ -150,17 +172,13 @@ test("groups_enabled is independent of group scopes and never disables direct me
         [5, "group____topic"]
       ]) {
         assert.equal(
-          acceptsImMessage(scoped, "owner", message({ uids: ["bot"] }, { channelType, channelId })),
+          acceptsImMessage(scoped, message({ uids: ["bot"] }, { channelType, channelId })),
           expected,
           JSON.stringify({ enabled, groupIds, channelType })
         );
       }
       assert.equal(
-        acceptsImMessage(
-          scoped,
-          "owner",
-          message(undefined, { channelType: 1, channelId: "owner" })
-        ),
+        acceptsImMessage(scoped, message(undefined, { channelType: 1, channelId: "owner" })),
         true
       );
     }
@@ -172,34 +190,27 @@ test("omitting group scope does not bypass sender authorization, Space or real m
   delete unrestricted.group_ids;
   for (const changes of [
     { fromUid: "bot" },
-    { fromUid: "stranger" },
+    { fromUid: "" },
     { messageId: "" },
     { channelType: 99 },
     { payload: { type: 1, content: "@bot", mention: { uids: ["bot"] }, space_id: "other" } },
     { payload: { type: 1, content: "@bot" } },
     { payload: { type: 1, content: "@bot", mention: { uids: ["other"] } } }
   ])
-    assert.equal(
-      acceptsImMessage(unrestricted, "owner", message({ uids: ["bot"] }, changes)),
-      false
-    );
+    assert.equal(acceptsImMessage(unrestricted, message({ uids: ["bot"] }, changes)), false);
   assert.equal(
-    acceptsImMessage(
-      { ...unrestricted, allowed_sender_ids: [] },
-      "owner",
-      message({ uids: ["bot"] })
-    ),
+    acceptsImMessage({ ...unrestricted, allowed_sender_ids: [] }, message({ uids: ["bot"] })),
     false
   );
   const authorized = { ...unrestricted, allowed_sender_ids: ["authorized"] };
-  assert.equal(acceptsImMessage(authorized, "owner", message({ uids: ["bot"] })), false);
+  assert.equal(acceptsImMessage(authorized, message({ uids: ["bot"] })), false);
   assert.equal(
-    acceptsImMessage(authorized, "owner", message({ uids: ["bot"] }, { fromUid: "authorized" })),
+    acceptsImMessage(authorized, message({ uids: ["bot"] }, { fromUid: "authorized" })),
     true
   );
 });
 
-test("transport without group_ids admits owner mentions and replies to each original channel", async (t) => {
+test("transport without sender or group lists admits non-owner mentions and replies to original channels", async (t) => {
   let receive;
   const admitted = [],
     sends = [];
@@ -246,7 +257,10 @@ test("transport without group_ids admits owner mentions and replies to each orig
       ]) {
         const count = admitted.length;
         receive(
-          message({ uids: ["bot"] }, { channelType, channelId, messageId: `m-${channelType}` })
+          message(
+            { uids: ["bot"] },
+            { fromUid: "other-bot", channelType, channelId, messageId: `m-${channelType}` }
+          )
         );
         if (overrides.groups_enabled === false && channelType !== 1) {
           assert.equal(admitted.length, count);
@@ -259,7 +273,7 @@ test("transport without group_ids admits owner mentions and replies to each orig
         assert.equal(sends.at(-1)[1], channelType);
       }
       receive(message(undefined));
-      receive(message({ uids: ["bot"] }, { fromUid: "stranger" }));
+      receive(message({ uids: ["bot"] }, { fromUid: "bot" }));
       assert.equal(admitted.length - before, overrides.groups_enabled === false ? 1 : 3);
       assert.equal(sends.length, admitted.length);
     } finally {

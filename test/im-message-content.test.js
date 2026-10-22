@@ -86,23 +86,22 @@ test("F02 bounds Unicode text, total nodes and nested expansion with explicit tr
   assert.match(deep.text, /嵌套内容已省略/);
 });
 test("F02 only outer authorization and mentions admit a new complex message", () => {
-  assert.equal(acceptsImMessage(config, "owner", message(forward)), false);
-  assert.equal(
-    acceptsImMessage(config, "owner", message({ ...forward, mention: { uids: ["bot"] } })),
-    true
-  );
+  assert.equal(acceptsImMessage(config, message(forward)), false);
+  assert.equal(acceptsImMessage(config, message({ ...forward, mention: { uids: ["bot"] } })), true);
   for (const change of [{ fromUid: "stranger" }, { fromUid: "bot" }, { channelId: "other" }])
     assert.equal(
-      acceptsImMessage(config, "owner", {
-        ...message({ ...rich, mention: { uids: ["bot"] } }),
-        ...change
-      }),
+      acceptsImMessage(
+        { ...config, allowed_sender_ids: ["owner"] },
+        {
+          ...message({ ...rich, mention: { uids: ["bot"] } }),
+          ...change
+        }
+      ),
       false
     );
   assert.equal(
     acceptsImMessage(
       config,
-      "owner",
       message({
         type: 11,
         msgs: [{ payload: { type: 1, content: "@bot", mention: { uids: ["bot"] } } }]
@@ -115,7 +114,7 @@ test("F02 only outer authorization and mentions admit a new complex message", ()
     { type: 14, plain: " " },
     { type: 14, content: [{ type: "image" }] }
   ])
-    assert.equal(acceptsImMessage(config, "owner", { ...message(payload), channelType: 1 }), false);
+    assert.equal(acceptsImMessage(config, { ...message(payload), channelType: 1 }), false);
 });
 test("F02 new-message materials use Context v3 and never fetch or expand history", async (t) => {
   t.mock.method(globalThis, "fetch", () => {

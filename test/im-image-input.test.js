@@ -31,14 +31,14 @@ test("standalone images use the same explicit UID/AI broadcast gate and reject a
     channelType: 2,
     payload: { type: 2, url: "image.png" }
   };
-  assert.equal(acceptsImMessage(config, "owner", message), false);
+  assert.equal(acceptsImMessage(config, message), false);
   for (const mention of [{ uids: ["images"] }, { ais: 1 }]) {
     message.payload.mention = mention;
-    assert.equal(acceptsImMessage(config, "owner", message), true);
+    assert.equal(acceptsImMessage(config, message), true);
   }
   for (const type of ["2", 3, 11, 14]) {
     message.payload.type = type;
-    assert.equal(acceptsImMessage(config, "owner", message), false);
+    assert.equal(acceptsImMessage(config, message), false);
   }
 });
 

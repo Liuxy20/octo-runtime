@@ -356,7 +356,9 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 后续设计、实现与评审必须先声明需求属于业务入口、通用执行合同还是 Provider 限制，再确定修改边界；不能将一层的需求无条件扩大到另一层。责任矩阵、源码入口与典型误判见 [IM Agent 与 invoke 边界](../guides/im-agent-invocation-boundary.md)。
 
-2026-10-17 群准入属于 Channel：groups_enabled 表达群/话题启停，省略为 true；group_ids 仅表达可选父群范围，省略、null、[] 均不限制，非空名单才约束范围。二者不影响私聊，禁用群必须显式 false。不保留旧空名单禁用的兼容语义。群范围开放不改变 owner 默认、显式发送者授权、Space 或真实 @ 门槛；CLI/SDK 共用插件实现，宿主和执行内核不得新增兜底授权。字段约束及例子统一见[渠道准入合同](channel-integration.md#本轮输入)和[事故计划](../tasks/channel-group-admission/plan.md)。
+2026-10-17 群准入属于 Channel：groups_enabled 表达群/话题启停，省略为 true；group_ids 仅表达可选父群范围，省略、null、[] 均不限制，非空名单才约束范围。二者不影响私聊，禁用群必须显式 false。不保留旧空名单禁用的兼容语义。字段约束及例子统一见[渠道准入合同](channel-integration.md#本轮输入)和[事故计划](../tasks/channel-group-admission/plan.md)。
+
+2026-10-22 Issue #110 用户明确修正默认发送者准入：`allowed_sender_ids` 省略时，DM 沿用平台好友准入，群聊和子区（话题）不增加发送者限制；owner、其他用户与其他 Bot 均可通过真实 mention 触发 AgentRun。Gateway 不额外查询或维护好友名单，不回退为仅 owner。显式名单仍限制所有频道，非空时仅允许列出的真实发送者，`[]` 拒绝全部，`null` 非法，owner 不隐式补入。自消息始终拒绝，Space、消息结构、群启停、父群范围和真实 @ 门槛继续生效。卡片操作还须匹配原任务发起者、原卡片和频道，准入开放不授予控制他人 Run 的权限。CLI/SDK 共用插件实现；宿主、Kernel/AgentExecutor 和 Adapter 不补做 IM 好友或发送者策略。此合同取代旧的省略时 owner 默认，平台实际好友校验不由本地回归代替验收，见[修复任务](../tasks/channel-default-admission/brief.md)。
 
 业务标签及其匹配也由业务方管理。自有 `metadata.capabilities`、执行计划 `required_capabilities` 和整个 `ExecutionTarget` / AbilityProvider 预留合同已删除；不另建能力注册或分发体系。Host 保留协议转发和执行生命周期职责，执行模式、审批、输入及来源按真实执行支持校验，详见 [Adapter 元数据](adapter-metadata.md)。
 

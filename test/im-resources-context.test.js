@@ -41,10 +41,10 @@ test("F04: resources preserve source and address without fetching or provider at
     assert.match(item.guidance, /是否读取/);
     assert.ok(item.payload.text.includes(payload.url ?? "drive-link"));
     assert.equal(
-      acceptsImMessage(config, "owner", incoming({ ...payload, mention: { uids: ["bot"] } })),
+      acceptsImMessage(config, incoming({ ...payload, mention: { uids: ["bot"] } })),
       true
     );
-    assert.equal(acceptsImMessage(config, "owner", incoming(payload)), false);
+    assert.equal(acceptsImMessage(config, incoming(payload)), false);
   }
 });
 test("F04: missing addresses remain explicit, arbitrary objects and unsupported message types stay excluded", async () => {
@@ -63,11 +63,7 @@ test("F04: missing addresses remain explicit, arbitrary objects and unsupported 
   );
   assert.deepEqual(empty, []);
   assert.equal(
-    acceptsImMessage(
-      config,
-      "owner",
-      incoming({ type: 17, content: "card", mention: { uids: ["bot"] } })
-    ),
+    acceptsImMessage(config, incoming({ type: 17, content: "card", mention: { uids: ["bot"] } })),
     false
   );
 });

@@ -271,7 +271,7 @@ test("HG-06 span is not a text count; missing or invalid more cannot confirm cov
 test("HG-11/12 observation scope does not grant execution permission or accept other spaces/groups", () => {
   assert.equal(observesImScope(config, source.channelId, 5, "space"), true);
   assert.equal(
-    acceptsImMessage(config, "owner", {
+    acceptsImMessage(config, {
       ...message,
       fromUid: "stranger",
       payload: { type: 1, content: "/reset" }
@@ -285,7 +285,7 @@ test("HG-11/12 observation scope does not grant execution permission or accept o
     [config, "owner", 1, "space"]
   ])
     assert.equal(observesImScope(settings, channel, type, space), false);
-  assert.equal(acceptsImMessage(config, "owner", { ...message, fromUid: "bot" }), false);
+  assert.equal(acceptsImMessage(config, { ...message, fromUid: "bot" }), false);
 });
 
 test("HG-22 metadata patch is atomic, bounded, generation-fenced and does not create or renew bindings", (context) => {

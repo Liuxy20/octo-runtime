@@ -129,7 +129,7 @@ JSON
 | `approval_mode` | 可选 | 默认 `full_access`；支持范围按所选 Adapter 合同 |
 | `groups_enabled` | 可选 | 省略或 `true` 开启群/话题，`false` 关闭群/话题；不影响私聊，`null` 非法 |
 | `group_ids` | 可选 | 省略、`null`、`[]` 不增加群范围限制；非空名单按父群 ID 限制群及话题，不影响私聊；禁用使用 `groups_enabled: false` |
-| `allowed_sender_ids` | 可选 | 省略仅允许服务端认证所得 owner；显式名单替代 owner，`[]` 不允许任何发送者，`null` 非法；同时约束私聊、群和话题 |
+| `allowed_sender_ids` | 可选 | 省略时 DM 沿用平台好友准入，群/话题不增加发送者限制；显式非空名单仅允许列出的发送者，owner 不隐式补入，`[]` 拒绝全部，`null` 非法；自消息始终拒绝 |
 | `run_timeout_ms` | 可选 | 默认 `86400000`（一天），范围 `100..86400000`；包含所有尝试、恢复等待与交互等待 |
 | `codex_retry` | 可选 | Codex 恢复策略；各子字段均可选，默认值见下文；不影响其他 Extra |
 | `config.authorized_space_ids` | 可选 | 租户授权列表；省略不按此项限制，`[]` 不授权任何 Space |
@@ -192,13 +192,13 @@ octo-runtime channel-gateway restart
 
 IM Agent 使用固定工作目录，任务 Context 的 workspace 不得覆盖；reset 只切换会话和 Provider binding。新会话首次普通输入自动尝试一次读取当前 DM/群/话题此前最多 15 条消息，裁剪为最多 1500 Unicode 字符的纯文本背景。失败或空结果继续当前任务，同一会话后续不再自动拉取；reset 后下一条普通消息重新获得一次资格，也可以包含 reset 前历史。不提供旧 `history_limit` 模式，不新增上下文或 binding 持久化。
 
-群/话题须通过发送者及范围准入，并在本条消息中真实点名当前 Bot UID，或提供纯 `mention.ais=1` 的 @所有AI。all/humans 置位时抑制单独 ais 路径，直接 UID 点名仍有效。正文名称、Markdown 示例及前一条消息的 @ 不构成触发，不提供免 @ 开关。
+`allowed_sender_ids` 省略时，DM 好友权限由平台负责，Gateway 不额外查询或维护好友名单；群/话题允许 owner、其他用户及其他 Bot 触发。显式名单仍约束所有频道。群/话题须通过 Space、启停及范围准入，并在本条消息中真实点名当前 Bot UID，或提供纯 `mention.ais=1` 的 @所有AI。all/humans 置位时抑制单独 ais 路径，直接 UID 点名仍有效。正文名称、Markdown 示例及前一条消息的 @ 不构成触发，不提供免 @ 开关。卡片操作必须匹配原任务发起者、Space、原卡片及频道，不能操作别人的 Run。
 
 独立图片消息（type=2）仅接入 Codex，每条一张，无需说明文字；群/话题图片自身仍须满足上述 mention 门槛。支持 PNG/JPEG/WebP，单图最多 2 MiB，先准入再下载，原字节经 `inputs` 传递。下载逐跳校验地址，仅向原 API 同源发送 Bot 凭据；不下载历史、富文本或转发中的图片，不写图片文件。其他引擎明确返回不支持，不静默转成文本执行。
 
 新收到的富文本（type=14）及合并转发（type=11）支持文本阅读，正文统一放入本轮 Context v3 的 `extra.im/message-content`；保留段落、转发来源及顺序，不展开频道历史。内部 mention、`/reset`、`/stop` 不参与准入或命令；图片/附件仅标明未读取。文本预算为 12000 Unicode 码点、转发条目与富文本块合计 128 个、访问深度 0..3，超量明确标记，完全没有有效支持文本则不执行。
 
-普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群的 Bot 交接任务时，模型查询真实 UID，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 核验当前成员的 UID、显示名及明确的真人/Bot 身份，转换为可读正文和原生 `mention.uids/entities`，通过原连接统一发送。代码块、行内代码、引用和进度不转换。查不到或身份无法确认时退为普通 @名字，正文继续发送；不另发 CLI 消息、不开放广播或自行发起 Bot 循环调用。接收 Bot 仍需显式允许发送 Bot，并满足原有 Space、群范围及真实 mention 准入。
+普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群的 Bot 交接任务时，模型查询真实 UID，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 核验当前成员的 UID、显示名及明确的真人/Bot 身份，转换为可读正文和原生 `mention.uids/entities`，通过原连接统一发送。代码块、行内代码、引用和进度不转换。查不到或身份无法确认时退为普通 @名字，正文继续发送；不另发 CLI 消息、不开放广播或自行发起 Bot 循环调用。接收 Bot 省略发送者名单时允许其他 Bot 按上述规则触发；配置显式名单时发送 Bot 必须在名单中，并满足 Space、群范围及真实 mention 准入。
 
 当前 Bot 自己发出的消息永不触发 AgentRun，即使真实 `mention.uids` 点名自己、带 `mention.ais` 或自己被列入 `allowed_sender_ids`；此规则覆盖私聊、群聊和话题。其他已授权发送者点名当前 Bot 仍按原准入执行。
 

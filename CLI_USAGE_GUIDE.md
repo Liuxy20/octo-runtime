@@ -178,7 +178,7 @@ octo-runtime status
 - OpenClaw：将 adapter 改为 `{ "adapter_type": "openclaw", "provider_agent_id": "main" }`，不填写 `workdir`。CLI 在 Kernel 启动时刷新已保存连接来源；首次发现可指定 `OPENCLAW_HOME`。OpenClaw Gateway 须自行启动，Runtime 不代为启动。连接与工具环境的影响见 [OpenClaw 合同](.octospec/rules/openclaw.md)。
 - 本地 Provider 的 `workdir` 省略时使用并创建 `~/octo-runtime/channels/{bot_id}`，此路径不随 CLI Home 改变。
 - `groups_enabled: false` 关闭群与话题入口；`group_ids` 省略、`null` 或 `[]` 均表示不增加群范围限制。群消息仍须真实 @Bot 并通过发送者权限检查。
-- `allowed_sender_ids` 省略时仅允许认证所得 owner；显式名单替代 owner，`[]` 拒绝所有发送者。
+- `allowed_sender_ids` 省略时 DM 沿用平台好友准入，群/话题不额外限制发送者；显式名单只允许列出的发送者，owner 不隐式补入，`[]` 拒绝全部，`null` 非法。自消息始终忽略。
 
 全部字段与多 Bot 配置见 [Gateway 配置说明](packages/octo-runtime-extra-channel-gateway/README.md) 和 [配置 Schema](packages/octo-runtime-extra-channel-gateway/config-schema.json)。动态 `loadContexts` 函数由 SDK 宿主注入，不能写入 CLI JSON，见 [SDK Gateway 指南](SDK_CHANNEL_GATEWAY_GUIDE.md)。
 

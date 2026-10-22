@@ -51,6 +51,8 @@
 
 ## 当前任务
 
+- [Issue 110：Gateway 默认发送者准入](tasks/channel-default-admission/brief.md)：独立 worktree 基于 `main@5c1921d`；消息及卡片入口省略名单时不回退 owner，DM 沿用平台准入、群/话题不额外限制发送者。架构与文档同步，五 Bot 群/子区触发及 stop/reset 隔离回归通过，Node 1630 通过/35 跳过、UI 35 通过，尚未提交；见[可执行性 100/100 与 gap](tasks/channel-default-admission/assessment.md)、[验证记录](journal/shared/2026-10-22-channel-default-admission.md)及[相邻入口检查](tasks/channel-default-admission/audit.md)。
+
 - [Issue 95：Grok Build ACP](tasks/95-grok-build-acp/brief.md)：从最新 `origin/main@102fb9c` 新建 worktree，先补[官方资料与固定版本参考](tasks/95-grok-build-acp/reference.md)，再复用既有 ACP client 逐轮拉起 CLI；特殊逻辑仅在 `grok-build` 包内，共享层无行为改动。已 rebase 到 main@4857d0e，全量 Node1610/UI35、发行包及并发隔离通过，真实文本流与跨进程续聊通过。用户已授权 PR 与合并，遵守 CI 和评审保护；见[收尾与未验范围](journal/shared/2026-10-22-95-grok-build-acp.md)。
 
 - [Issue 101：Bot mention 与渠道默认英文指令](tasks/101-bot-mention/brief.md)：基于最新 main@102fb9c 在独立 worktree 实施。Gateway 默认与宿主有效 instructions.entries 保序拼接，真人/Bot 原生 mention 共用原发送链，逐轮英文提醒覆盖已有 Provider binding；真实自己 @ 自己始终不触发 AgentRun，约束已回写 Channel 与架构规则。Node 1499 通过/35 跳过，UI 35 通过；[实施记录](journal/shared/2026-10-22-101-bot-mention.md)区分本地验证和未进行的真实双 Bot 联调。compaction 按用户要求以模型为准，不新增验证机制；用户已授权 PR 交付并按门禁合并 main，远端状态以 GitHub 为准。

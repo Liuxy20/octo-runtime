@@ -60,6 +60,8 @@ worker 加载 Adapter，并使用同一 AgentExecutor。独立 Node IPC 心跳�
 
 worker 丢失令活动源产生一次 lost；已保留终态不改写。重启不恢复旧 Run、不重新 invoke。进程身份清单只用于孤儿清理，不是业务持久化。清理失败禁止替代实例。
 
+Windows 进程身份登记调用系统 PowerShell 查询真实启动 UTC ticks，冷启动与查询共用 30 秒期限；该期限独立于后续 RPC 就绪和关闭预算，不缓存 PID 身份。登记失败保留系统错误 cause，不能退回 PID 或猜测启动时间；公开探测仍以未知身份返回，孤儿回收遇到未知身份时不终止目标。
+
 ## 有界资源
 
 源窗口沿中央 StreamLimitPolicy：默认每 Run 4096 帧 / 32 MiB，全局 128 MiB / 128 Run、终态 TTL 120 秒。Kernel 最多 64 连接 / 16 订阅，客户端最多 32 个在途连接。写入等待 drain 最多 5 秒；接收行使用中央 HostFrame 上限，invoke 使用中央 32 MiB 上限。客户端按异步消费施加背压，不增加无界事件队列。

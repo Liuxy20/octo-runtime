@@ -119,7 +119,7 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
       res.end(
         JSON.stringify({
           robot_id: "bot",
-          owner_uid: "owner",
+          owner_uid: "registered-owner",
           owner_channel_id: "owner",
           im_token: "secret",
           ws_url: `ws://127.0.0.1:${server.address().port}`
@@ -301,7 +301,6 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
   const runtime = new ImRuntime(
     {
       enabled: true,
-      allowed_sender_ids: ["owner", "other"],
       api_url: `http://127.0.0.1:${server.address().port}`,
       bot_id: "bot",
       bf_token: "bf_fixture",
@@ -351,6 +350,7 @@ test("IM owns one binary WS, reuses session, resets provider handle, and replies
       )
     );
   };
+  // DM 已由平台投递；发起者不是注册 owner，其卡片仍须由原发起者控制。
   send("hello");
   await waitFor(() => replies.length === 1);
   assert.equal(replies[0], "完整答复 @李白");

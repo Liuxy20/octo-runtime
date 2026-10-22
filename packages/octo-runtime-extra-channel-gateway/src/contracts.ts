@@ -48,6 +48,7 @@ export interface ImCommonConfig {
     initial_delay_ms?: number;
     max_delay_ms?: number;
   };
+  /** 省略沿用平台消息准入；显式名单限制所有频道，空数组拒绝全部发送者。 */
   allowed_sender_ids?: string[];
 }
 

@@ -12,6 +12,46 @@ import {
   reapOrphanedInvocationManifest
 } from "../packages/octo-runtime-executor-kernel/dist/invocation-manifest.js";
 
+test("Windows identity queries stay fresh and preserve registration failures", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const directory = await mkdtemp(join(tmpdir(), "oh-identity-query-"));
+  t.after(async () => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    Object.defineProperty(process, "platform", platform);
+    await rm(directory, { recursive: true, force: true });
+  });
+  Object.defineProperty(process, "platform", { ...platform, value: "win32" });
+  const failure = Object.assign(new Error("identity query timed out"), {
+    code: "ETIMEDOUT",
+    killed: true
+  });
+  let result = "100";
+  t.mock.method(childProcess, "execFile", (_file, _args, _options, callback) => {
+    callback(result === "failure" ? failure : null, result, "");
+  });
+  syncBuiltinESMExports();
+  assert.equal(await processStartIdentity(1234), "windows:100");
+  result = "200";
+  assert.equal(await processStartIdentity(1234), "windows:200");
+  result = "invalid";
+  assert.equal(await processStartIdentity(1234), undefined);
+  result = "failure";
+  assert.equal(await processStartIdentity(1234), undefined);
+  const path = join(directory, "invocations.json");
+  const { manifest } = await InvocationManifest.open(path);
+  try {
+    await assert.rejects(manifest.setWorker(1234, "/worker.js"), (error) => {
+      assert.match(error.message, /cannot identify worker process 1234/);
+      assert.equal(error.cause, failure);
+      return true;
+    });
+    assert.equal(JSON.parse(await readFile(path, "utf8")).worker, undefined);
+  } finally {
+    await manifest.close();
+  }
+});
+
 test(
   "Windows process identity remains stable without management module loading",
   { skip: process.platform !== "win32" },

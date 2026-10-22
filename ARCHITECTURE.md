@@ -248,4 +248,4 @@ Channel Gateway 在调用执行内核前校验消息身份、Space、发送者�
 
 群入口是否启用与允许哪些群是两个问题：groups_enabled 省略或 true 开启群/话题，false 关闭群/话题；group_ids 省略、null 或 [] 不增加群范围限制，非空名单只允许列出的父群及其话题。二者都不限制私聊。关闭群必须明确使用 groups_enabled: false，不用空名单暗示禁用，也不保留旧空名单语义的兼容分支。
 
-不限制群范围不等于允许所有人触发：allowed_sender_ids 省略仍只允许服务端认证所得 owner，显式名单替代 owner，[] 拒绝所有发送者。群/话题还必须在本条消息中真实 @Bot；话题按父群校验，回复留在原话题。错误类型必须报配置错误。精确定义、例子及此次默认配置无响应的修复验收见[群准入事故计划](.octospec/tasks/channel-group-admission/plan.md)，现行强制合同见[渠道规则](.octospec/rules/channel-integration.md#本轮输入)。
+`allowed_sender_ids` 省略时采用平台默认权限：DM 沿用平台好友准入，群聊和子区（话题）不增加发送者限制，owner、其他用户与其他 Bot 均可通过真实 mention 触发。Gateway 不维护另一套好友名单。显式非空名单仅允许列出的发送者，`[]` 拒绝全部，`null` 非法，owner 不隐式补入。自消息始终拒绝；群/话题仍须在本条消息中真实 @Bot，并满足 Space、启停与父群范围；回复留在原话题。卡片操作还须匹配原任务发起者、原消息及频道，不能控制他人的 Run。2026-10-22 的此项修正取代旧 owner 默认，精确定义见[渠道规则](.octospec/rules/channel-integration.md#本轮输入)，验证见[#110 任务](.octospec/tasks/channel-default-admission/brief.md)。

@@ -30,14 +30,11 @@ export function observesImScope(
   );
 }
 
-export function acceptsImMessage(
-  config: ScopedOctoBotConfig,
-  owner: string,
-  message: ImMessage
-): boolean {
+export function acceptsImMessage(config: ScopedOctoBotConfig, message: ImMessage): boolean {
   // 自己发出的消息永不触发 AgentRun，即使真实 @ 自己、@所有AI 或显式列入发送者名单。
   if (
     message.fromUid === config.bot_id ||
+    !message.fromUid ||
     isRulesNotification(message) ||
     !message.messageId ||
     !message.channelId ||
@@ -46,7 +43,9 @@ export function acceptsImMessage(
     (message.payload.space_id && message.payload.space_id !== config.spaceId)
   )
     return false;
-  if (!(config.allowed_sender_ids ?? [owner]).includes(message.fromUid)) return false;
+  // 省略时沿用平台准入：DM 好友权限由平台负责，群/话题不增加发送者限制。
+  if (config.allowed_sender_ids && !config.allowed_sender_ids.includes(message.fromUid))
+    return false;
   const contentSupported = (): boolean =>
     ![11, 14].includes(message.payload.type as number) || Boolean(messageContent(message.payload));
   if (message.channelType === 1) return contentSupported();

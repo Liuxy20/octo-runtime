@@ -210,7 +210,7 @@
               },
               "allowed_sender_ids": {
                 "type": "array",
-                "description": "可选。允许触发本 Bot 的真实 Octo 发送者 ID 白名单；省略时仅允许服务端注册返回的 owner，显式名单替代默认 owner 名单，空数组拒绝所有发送者。不能使用展示名称代替身份；群/话题仍须满足真实 mention 和平台范围准入。",
+                "description": "可选。允许触发本 Bot 的真实 Octo 发送者 ID 白名单；省略时 DM 沿用平台好友准入，群/话题不增加发送者限制。显式非空名单仅允许列出的发送者，owner 不隐式补入，空数组拒绝全部，null 非法。自消息始终拒绝；群/话题仍须满足真实 mention、Space、启停与父群范围准入。",
                 "items": {
                   "type": "string",
                   "minLength": 1,

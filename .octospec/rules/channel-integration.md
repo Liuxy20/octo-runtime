@@ -46,9 +46,13 @@ ChannelGateway 与 WeCom 各自以整个 Extra 为加载、卸载和配置重载
 
 2026-10-17 群准入合同：启停与范围分开表达。Octo Bot 的 groups_enabled 省略或 true 开启群/话题入口，false 关闭全部群/话题；group_ids 省略、null 或 [] 不增加群范围限制，非空数组按父群 ID 限定群及话题。两个字段均不影响私聊。groups_enabled 的 null/非布尔值及 group_ids 的错误类型/空 ID 必须拒绝。无旧空名单禁用群的兼容分支，需要禁用时明确写 groups_enabled: false。
 
-这里的“不限制”只针对群范围，不代表放开授权：allowed_sender_ids 省略仍仅允许认证所得 owner，显式名单替代默认 owner，[] 拒绝所有发送者，null 非法；自身、错 Space、非法消息和无真实 @ 的群消息继续拒绝。名单外群不会因直接点名而放行；话题按父群检查，但执行和回复留在原话题地址。配置解释和准入属于 Channel，不由宿主、Context renderer 或 Kernel/AgentExecutor 补救。事故证据、配置例子和验收见[群准入专项](../tasks/channel-group-admission/plan.md)。
+2026-10-22 Issue #110 修正默认发送者准入：`allowed_sender_ids` 省略时，Gateway 不额外限制发送者；DM 沿用平台好友准入，群聊和子区（话题）允许 owner、其他用户和其他 Bot 通过真实 mention 触发。显式非空名单仅允许列出的真实发送者，`[]` 拒绝所有发送者，`null` 非法，owner 不隐式补入。平台维护好友关系和消息投递权限，Gateway 不新增好友查询或本地名单。此合同取代旧的省略时仅 owner 默认，见[任务与验收](../tasks/channel-default-admission/brief.md)。
 
-2026-10-16 F25 用户确认：尊重真实发送者的明确授权，不因发送者是其他已知 Bot 而额外拒绝。当前 allowed_sender_ids 同时用于私聊和群/话题，显式名单替代默认 owner；群/话题仍须满足允许群及真实 mention 条件，回复留在原频道或话题、按其权限可见。自身消息继续拒绝，不通过正文或名称猜测 Bot 身份，也不新增私聊/群聊拆分授权开关。
+自身、空发送者、错 Space、非法消息和无真实 @ 的群消息继续拒绝。名单外群不会因直接点名而放行；话题按父群检查，但执行和回复留在原话题地址。配置解释和准入属于 Channel，不由宿主、Context renderer 或 Kernel/AgentExecutor 补救。群范围历史证据见[群准入专项](../tasks/channel-group-admission/plan.md)。
+
+2026-10-16 F25 确认的不因发送者是其他 Bot 而额外拒绝的原则继续生效；发送者默认值以上述 #110 合同为准。`allowed_sender_ids` 的显式名单同时用于私聊和群/话题；群/话题仍须满足允许群及真实 mention 条件，回复留在原频道或话题、按其权限可见。自身消息继续拒绝，不通过正文或名称猜测 Bot 身份，也不新增私聊/群聊拆分授权开关。
+
+卡片回调使用相同的可选发送者名单语义，省略时不回退 owner。控制操作必须同时匹配原任务发起者、Space、原卡片消息及频道地址；其他发送者有资格创建自己的任务，不代表能取消、重试或回答别人的 Run。
 
 2026-10-22 Issue #101 明确：channel-gateway 在命令处理、Context 准备与 AgentRun 调度前拒绝真实 `fromUid === config.bot_id` 的自消息。自己 @ 自己、携带 `mention.uids=[自己的UID]`、`mention.ais=1/true` 或自己被显式列入 `allowed_sender_ids` 均不得绕过；私聊、群聊和话题一致。该约束不禁止其他已授权发送者点名当前 Bot，也不根据正文中的自称判断身份。
 

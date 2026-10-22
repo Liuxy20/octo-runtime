@@ -61,9 +61,13 @@ export class InvocationManifest {
     if (pid === undefined) {
       this.#worker = undefined;
     } else {
-      const started = await processStartIdentity(pid);
-      if (!started) throw new Error(`cannot identify worker process ${pid}`);
-      this.#worker = { pid, started, entrypoint };
+      try {
+        const started = await queryProcessStartIdentity(pid);
+        if (!started) throw new Error("system process start identity unavailable");
+        this.#worker = { pid, started, entrypoint };
+      } catch (cause) {
+        throw new Error(`cannot identify worker process ${pid}`, { cause });
+      }
     }
     await this.#persist();
   }
@@ -148,6 +152,15 @@ export async function reapOrphanedInvocationManifest(path: string): Promise<Orph
 
 /** 查询系统启动时间以区分 PID 复用；失败时不返回可用于回收的身份，绝不以 PID 本身兜底。 */
 export async function processStartIdentity(pid: number): Promise<string | undefined> {
+  try {
+    return await queryProcessStartIdentity(pid);
+  } catch {
+    return undefined;
+  }
+}
+
+// 登记失败保留系统查询原因；公开探测与孤儿回收仍以 undefined 表示身份未知。
+async function queryProcessStartIdentity(pid: number): Promise<string | undefined> {
   if (!Number.isSafeInteger(pid) || pid < 1) return undefined;
   if (process.platform === "linux") {
     try {
@@ -175,7 +188,7 @@ export async function processStartIdentity(pid: number): Promise<string | undefi
     });
   }
   if (process.platform === "win32") {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       execFile(
         "powershell.exe",
         [
@@ -184,13 +197,23 @@ export async function processStartIdentity(pid: number): Promise<string | undefi
           "-NonInteractive",
           "-Command",
           // 直接调用系统进程对象，避免 Get-Process 的命令发现/模块自动加载占用身份查询预算。
-          // 保持 UTC ticks 身份格式；不增加超时，也不缓存可能已经复用的 PID。
+          // 保持 UTC ticks 身份格式，不缓存可能已经复用的 PID。
           `$PSModuleAutoLoadingPreference='None'; $target=[System.Diagnostics.Process]::GetProcessById(${pid}); try { [Console]::Out.Write($target.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)) } finally { $target.Dispose() }`
         ],
-        { encoding: "utf8", timeout: 10_000, windowsHide: true },
+        // 冷启动 PowerShell/.NET 也占用查询期限；10 秒已在独立 Windows CI 中反复超时。
+        // 身份登记独立于后续 RPC 就绪与关闭预算，失败仍禁止使用未知 PID。
+        { encoding: "utf8", timeout: 30_000, windowsHide: true },
         (error, stdout) => {
+          if (error) {
+            reject(
+              error instanceof Error
+                ? error
+                : new Error("Windows process identity query failed", { cause: error })
+            );
+            return;
+          }
           const value = stdout.trim();
-          resolve(error || !/^\d+$/.test(value) ? undefined : `windows:${value}`);
+          resolve(!/^\d+$/.test(value) ? undefined : `windows:${value}`);
         }
       );
     });

@@ -111,7 +111,7 @@ export class GatewayTransport {
             this.callbacks.onRulesChanged?.(change);
           return;
         }
-        if (!acceptsImMessage(this.scopedConfig, registration.owner_uid, message)) return;
+        if (!acceptsImMessage(this.scopedConfig, message)) return;
         let finalReply: { key: string; value: ReturnType<typeof prepareFinalMention> } | undefined;
         let historyTurn: ImGapTurnToken | undefined;
         const outputObserver = () => {
@@ -338,8 +338,7 @@ export class GatewayTransport {
               const idle = [...this.#bindings].find(([, binding]) => !binding.active);
               if (idle) this.#bindings.delete(idle[0]);
             }
-            if (!this.#polling)
-              this.#polling = this.#pollActions(token, registration.owner_uid, signal);
+            if (!this.#polling) this.#polling = this.#pollActions(token, signal);
             return {
               interaction: async (request) => {
                 const document = interactionCard(request);
@@ -462,7 +461,7 @@ export class GatewayTransport {
     if (!connection.connected) throw new ImConnectionError("IM_DISCONNECTED", true);
     this.#connected = true;
   }
-  async #pollActions(token: string, owner: string, signal: AbortSignal): Promise<void> {
+  async #pollActions(token: string, signal: AbortSignal): Promise<void> {
     if (this.config.cards === false) return;
     let cursor = 0,
       failures = 0;
@@ -489,7 +488,8 @@ export class GatewayTransport {
           }
           if (
             action.spaceId !== this.#spaceId ||
-            !(this.config.allowed_sender_ids ?? [owner]).includes(action.operatorUid)
+            (this.config.allowed_sender_ids &&
+              !this.config.allowed_sender_ids.includes(action.operatorUid))
           ) {
             cursor = event.event_id;
             continue;

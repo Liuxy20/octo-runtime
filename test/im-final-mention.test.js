@@ -188,14 +188,10 @@ test("transport resolves topic members once and sends mention with final text on
   const recipient = {
     bot_id: "bot",
     spaceId: "s",
-    group_ids: ["group"],
-    allowed_sender_ids: ["sender-bot"]
+    group_ids: ["group"]
   };
-  assert.equal(acceptsImMessage(recipient, "owner", handoff), true);
-  assert.equal(
-    acceptsImMessage({ ...recipient, allowed_sender_ids: ["owner"] }, "owner", handoff),
-    false
-  );
+  assert.equal(acceptsImMessage(recipient, handoff), true);
+  assert.equal(acceptsImMessage({ ...recipient, allowed_sender_ids: ["owner"] }, handoff), false);
   receive({
     ...handoff,
     messageId: "self-mention",
