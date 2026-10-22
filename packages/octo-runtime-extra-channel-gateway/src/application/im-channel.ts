@@ -80,7 +80,6 @@ export class ImRuntime {
   readonly #busyNotifications = new Map<string, Promise<void>>();
   readonly #busyNotifiedAt = new Map<string, number>();
   #retry = 0;
-  #everOnline = false;
   #disconnecting?: Promise<void>;
   constructor(
     config: ImBotConfig,
@@ -141,7 +140,6 @@ export class ImRuntime {
       this.dependencies.signal?.addEventListener("abort", this.#ownerStopped, { once: true });
       this.#delivery = new ImDeliveryDispatcher(this.#signal);
     }
-    this.#everOnline = false;
     this.#retry = 0;
     this.#error = undefined;
     this.#state = "connecting";
@@ -154,6 +152,9 @@ export class ImRuntime {
   }
   async #connect(recovering: boolean): Promise<void> {
     if (this.#closed || this.#draining || this.#signal.aborted) return;
+    this.#log(recovering ? "channel.retry_started" : "channel.connecting", {
+      attempt: this.#retry
+    });
     this.#connectionAbort?.abort();
     try {
       await this.#disconnecting;
@@ -161,7 +162,7 @@ export class ImRuntime {
     } catch {
       this.#state = this.#closed ? "stopped" : "failed";
       if (!this.#closed) this.#error = "IM_DISPOSE_FAILED";
-      this.#everOnline = false;
+      this.#diagnostic("IM_DISPOSE_FAILED");
       return;
     }
     if (this.#closed || this.#draining || this.#signal.aborted) return;
@@ -202,7 +203,6 @@ export class ImRuntime {
       }
       if (disconnected) throw disconnected;
       starting = false;
-      this.#everOnline = true;
       this.#state = "online";
       this.#log("channel.connected", { state: "online" });
       this.#error = undefined;
@@ -213,29 +213,27 @@ export class ImRuntime {
       const failure = connectionFailure(error);
       this.#connectionAbort.abort();
       this.#error = failure.message;
-      const retry = recovering && this.#everOnline && failure.retryable;
+      // Offline startup and later disconnects share recovery; only error semantics decide eligibility.
+      const retry = failure.retryable;
       this.#state = retry ? "retrying" : "failed";
       this.#log("channel.connection_failed", { state: this.#state, code: failure.message });
       try {
         await connector.close();
       } catch {
-        this.#everOnline = false;
         if (!this.#closed) this.#state = "failed";
         this.#diagnostic("IM_DISPOSE_FAILED");
         return;
       }
-      if (!retry) this.#everOnline = false;
       if (retry) this.#scheduleReconnect(failure.retryAfterMs);
     }
   }
   #lostConnection(connector: GatewayTransport, failure: ImConnectionError): void {
     this.#log("channel.disconnected", { code: failure.message });
     this.#error = failure.message;
-    const retry = this.#everOnline && failure.retryable;
+    const retry = failure.retryable;
     this.#state = retry ? "retrying" : "failed";
-    if (!retry) this.#everOnline = false;
     this.#connectionAbort?.abort();
-    // 先收回旧连接资源，再计时；停止信号与迟到回调不能建立第二条连接。
+    // Reap the old connection before backoff; shutdown and stale callbacks cannot create a second owner.
     this.#disconnecting = connector.close();
     void this.#disconnecting.then(
       () => {
@@ -243,7 +241,6 @@ export class ImRuntime {
       },
       () => {
         if (!this.#closed) this.#state = "failed";
-        this.#everOnline = false;
         this.#diagnostic("IM_DISPOSE_FAILED");
       }
     );
@@ -257,9 +254,14 @@ export class ImRuntime {
       this.#reconnect
     )
       return;
-    const delayMs = Math.max(Math.min(30_000, 5_000 * 2 ** this.#retry), retryAfterMs);
-    this.#retry = Math.min(3, this.#retry + 1);
-    // Node 超过 2^31-1 的 timeout 会变为 1ms；长 Retry-After 分段等待，不能绕过限流。
+    const delayMs = Math.max([5_000, 10_000, 15_000][Math.min(2, this.#retry)], retryAfterMs);
+    this.#retry = Math.min(Number.MAX_SAFE_INTEGER, this.#retry + 1);
+    this.#log("channel.retry_scheduled", {
+      state: "retrying",
+      delay_ms: delayMs,
+      attempt: this.#retry
+    });
+    // Node clamps oversized timers to 1ms. Partition long Retry-After waits without bypassing throttling.
     const deadline = performance.now() + delayMs;
     const wake = (): void => {
       if (this.#closed || this.#draining || this.#signal.aborted || this.#state !== "retrying")
@@ -1219,7 +1221,6 @@ export class ImRuntime {
     this.#state = "stopped";
     this.#log("channel.stopped", { state: "stopped" });
     this.#error = undefined;
-    this.#everOnline = false;
     this.#retry = 0;
     for (const preparation of this.#preparing.values()) preparation.abort();
     // 执行终态之后 session.tail 仍可能在结束卡片或发送 final，连接在 drain 后统一撤销。

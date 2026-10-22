@@ -93,6 +93,42 @@ export function createExtraService<D extends object>(
   let server: net.Server | undefined;
   let binding: Promise<void> | undefined;
   let release: (() => Promise<void>) | undefined;
+  let healthTimer: NodeJS.Timeout | undefined;
+  let healthCheck: Promise<boolean> | undefined;
+  let lastAvailable: boolean | undefined;
+  const logState = (event: string, state: string, code?: string) =>
+    logs?.extra(name)(code ? "warn" : "info", event, { state, ...(code ? { code } : {}) });
+  const kernelAvailable = (): Promise<boolean> => {
+    if (healthCheck) return healthCheck;
+    healthCheck = (
+      client?.status().then(
+        (value) => value.execution_ready,
+        () => false
+      ) ?? Promise.resolve(false)
+    )
+      .then((available) => {
+        if (!owner.signal.aborted && available !== lastAvailable) {
+          lastAvailable = available;
+          logState(
+            available ? "kernel.available" : "kernel.unavailable",
+            available ? "available" : "unavailable"
+          );
+        }
+        return available;
+      })
+      .finally(() => {
+        healthCheck = undefined;
+      });
+    return healthCheck;
+  };
+  const watchKernel = (): void => {
+    // Allow one probe at a time and schedule after settlement; emit transitions, not idle heartbeats.
+    void kernelAvailable().finally(() => {
+      if (owner.signal.aborted || !logging) return;
+      healthTimer = setTimeout(watchKernel, 5000);
+      healthTimer.unref();
+    });
+  };
   const sockets = new Set<net.Socket>();
   let finishClosed!: (result: ServiceCleanupResult) => void;
   const closed = new Promise<ServiceCleanupResult>((resolve) => {
@@ -102,11 +138,7 @@ export function createExtraService<D extends object>(
     phase,
     name,
     pid: process.pid,
-    kernel_available:
-      (await client?.status().then(
-        (value) => value.execution_ready,
-        () => false
-      )) ?? false,
+    kernel_available: await kernelAvailable(),
     plugin: !enabled
       ? { phase: "disabled" }
       : phase === "ready" && plugins
@@ -135,6 +167,8 @@ export function createExtraService<D extends object>(
   const close = (): Promise<ServiceCleanupResult> => {
     if (closing) return closing;
     phase = "closing";
+    logState("service.closing", phase);
+    clearTimeout(healthTimer);
     shutdownUntil ??= shutdownDeadline();
     const draining = beginDrain();
     owner.abort();
@@ -176,7 +210,6 @@ export function createExtraService<D extends object>(
           });
       });
       client?.close();
-      await attempt("logs", () => logs?.close());
       if (!errors.length)
         await attempt("control-endpoint", async () => {
           if (!release) return;
@@ -184,6 +217,12 @@ export function createExtraService<D extends object>(
             await rm(controlEndpoint, { force: true });
           await release();
         });
+      logState(
+        errors.length ? "service.cleanup_incomplete" : "service.closed",
+        errors.length ? "failed" : "closed",
+        errors.length ? "EXTRA_CLEANUP_INCOMPLETE" : undefined
+      );
+      await attempt("logs", () => logs?.close());
       if (acquired) {
         if (errors.length) ownership.failed = true;
         else owners.delete(key);
@@ -235,6 +274,8 @@ export function createExtraService<D extends object>(
         acquired = true;
         client = attachKernel({ endpoint });
         logs = new RuntimeLogging(logging);
+        logState("service.initializing", phase);
+        if (logging) watchKernel();
         plugins = new ExtraPlugins([], client, () => logs!.extra(name));
         if (enabled)
           await plugins.load(
@@ -301,9 +342,11 @@ export function createExtraService<D extends object>(
           owner.signal.throwIfAborted();
         }
         phase = "ready";
+        logState("service.ready", phase);
       })();
       initialized = Promise.race([starting, cancelled])
         .catch(async (error: unknown) => {
+          logState("service.failed", "failed", "SERVICE_INITIALIZATION_FAILED");
           throw new ServiceInitializationError(error, await close());
         })
         .finally(() => {

@@ -73,13 +73,12 @@ for (const code of [
   "IM_CREDENTIALS_REQUIRED",
   "IM_AUTH_HTTP_401",
   "IM_REGISTER_HTTP_409",
-  "IM_CONNECT_REJECTED_2",
-  "IM_CONNECT_TIMEOUT"
+  "IM_CONNECT_REJECTED_2"
 ]) {
-  test(`initial failure ${code} is terminal, including transient failures`, async (t) => {
+  test(`initial terminal failure ${code} never retries`, async (t) => {
     const f = fixture(t);
     f.behavior(async () => {
-      throw new ImConnectionError(code, true);
+      throw new ImConnectionError(code, false);
     });
     await f.runtime.start();
     snapshot(f.runtime, "failed", code);
@@ -90,7 +89,24 @@ for (const code of [
   });
 }
 
-test("recovery stays retrying, uses 5/10/20/30/30 seconds, and resets after each success", async (t) => {
+for (const code of ["IM_CONNECT_TIMEOUT", "IM_AUTH_NETWORK_ERROR", "IM_REGISTER_HTTP_503"]) {
+  test(`initial transient failure ${code} recovers without restarting Extra`, async (t) => {
+    const f = fixture(t);
+    f.behavior(async () => {
+      throw new ImConnectionError(code, true);
+    });
+    await f.runtime.start();
+    snapshot(f.runtime, "retrying", code);
+    await f.tick(4999);
+    assert.equal(f.attempts.length, 1);
+    f.behavior(async () => {});
+    await f.tick(1);
+    snapshot(f.runtime, "online");
+    assert.equal(f.attempts.length, 2);
+  });
+}
+
+test("recovery stays retrying, uses 5/10/15/15/15 seconds, and resets after each success", async (t) => {
   const f = fixture(t);
   await f.runtime.start();
   snapshot(f.runtime, "online");
@@ -101,7 +117,7 @@ test("recovery stays retrying, uses 5/10/20/30/30 seconds, and resets after each
     f.drop();
     snapshot(f.runtime, "retrying", "IM_DISCONNECTED");
     await settle();
-    for (const delay of [5000, 10000, 20000, 30000, 30000]) {
+    for (const delay of [5000, 10000, 15000, 15000, 15000]) {
       const before = f.attempts.length;
       await f.tick(delay - 1);
       assert.equal(f.attempts.length, before);
@@ -116,7 +132,7 @@ test("recovery stays retrying, uses 5/10/20/30/30 seconds, and resets after each
           release = resolve;
         })
     );
-    await f.tick(30000);
+    await f.tick(15000);
     snapshot(f.runtime, "retrying", "IM_REGISTER_HTTP_503");
     release();
     await settle();
@@ -154,9 +170,11 @@ test("a disconnect during the first handshake cannot be overwritten by late succ
     transport.callbacks.onDisconnect("IM_DISCONNECTED", true);
   });
   await f.runtime.start();
-  snapshot(f.runtime, "failed", "IM_DISCONNECTED");
-  await f.tick(30000);
-  assert.equal(f.attempts.length, 1);
+  snapshot(f.runtime, "retrying", "IM_DISCONNECTED");
+  f.behavior(async () => {});
+  await f.tick(5000);
+  snapshot(f.runtime, "online");
+  assert.equal(f.attempts.length, 2);
 });
 
 test("terminal disconnects and unknown protocol failures stop recovery", async (t) => {
@@ -332,7 +350,7 @@ test("long waits and a delayed wake never overflow timers or replay missed attem
   await f.tick(600000);
   assert.equal(f.attempts.length, 4);
   snapshot(f.runtime, "retrying", "IM_AUTH_NETWORK_ERROR");
-  await f.tick(29999);
+  await f.tick(14999);
   assert.equal(f.attempts.length, 4);
   await f.tick(1);
   assert.equal(f.attempts.length, 5);

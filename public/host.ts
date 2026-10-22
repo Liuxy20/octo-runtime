@@ -14,6 +14,10 @@ export type {
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 export { startNativeComponent } from "@mininglamp-oss/octo-runtime-host-sdk";
 export type { NativeComponentOptions } from "@mininglamp-oss/octo-runtime-host-sdk";
+export type {
+  RuntimeLoggingOptions,
+  ExtraStatusRecord
+} from "@mininglamp-oss/octo-runtime-host-sdk";
 export { createKernelService, ServiceInitializationError } from "./executor-kernel.js";
 export type {
   KernelService,

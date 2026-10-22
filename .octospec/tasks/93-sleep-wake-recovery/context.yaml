@@ -1,0 +1,154 @@
+task: 93-sleep-wake-recovery
+phase: implementation
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/93
+issue_updated_at: '2026-10-22T02:25:08Z'
+baseline: d076474673b1aac542b08940d987c5598e5a4968
+original_baseline: 3b34415ca2a2297d48a1cec0458b15d52df9ab55
+branch: plan/93-sleep-wake-recovery
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-93
+read_at: '2026-10-22'
+workflow: .claude/skills/octospec-workflow/SKILL.md
+loaded:
+  - AGENTS.md
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/index.md
+  - .octospec/manifest.yaml
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/69-kernel-client-invoke/context.yaml
+  - .octospec/tasks/69-kernel-client-invoke/assessment.md
+  - .octospec/scripts/lint.py
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+rules:
+  - {id: runtime-architecture, path: .octospec/rules/architecture.md, sha256: 4101d5cbd87e6b5d9f835a676d97d360ab882bc4d608eca6de0c3db78b22891d}
+  - {id: runtime-protocol-design, path: .octospec/rules/protocol-design.md, sha256: 5b2abad6e825bce94701e3378ee33a4b027b6f30a3ca4a4bf4231d8f1351d578}
+  - {id: runtime-local-execution, path: .octospec/rules/local-execution.md, sha256: 1a6cf7b11b40f20a06b0d67c33eae6b51ca5a1cd60ee64a371282a0214a0a3e9}
+  - {id: runtime-lifecycle, path: .octospec/rules/runtime-lifecycle.md, sha256: c71952a484a46569eed441531a0d375a0f6ec3aec95bd9814f6d3b9e7ffed93c}
+  - {id: runtime-extras, path: .octospec/rules/extras.md, sha256: c188c835c918e7ed1abff014da9f921538b8119e1bfb62c3552fa13d6c1ba6b2}
+  - {id: runtime-channel, path: .octospec/rules/channel-integration.md, sha256: ce5432241027b851d6db82c874ba34848cdc9ccf442f74648d1946cf49dc6b25}
+  - {id: runtime-output-protocol, path: .octospec/rules/output-protocol.md, sha256: ea45f31935eb0b4185a26883041a613f97305453bdec00a97fa59845c1f76903}
+  - {id: runtime-stateless, path: .octospec/rules/stateless-execution.md, sha256: 1bd283b6728c70529ef9680114b46925be15e4399d43f86152c9ff4c59816c1b}
+  - {id: runtime-engineering, path: .octospec/rules/engineering.md, sha256: 11b676ac5e4e69b3adb6d7ef2f31f83ddc1e5d5828b33231ec8304103245e3da}
+  - {id: commit, path: .octospec/rules/collaboration.md, sha256: fe77443e68003d2c93506ee8fa4f2fd376145d57ace4d7e1b6034a4dbb7785f3}
+  - {id: runtime-adapter-metadata, path: .octospec/rules/adapter-metadata.md, sha256: 8e34e056f19a430b5db98519f9786452d3668bb28c4b3152ee4dc907733429a1}
+source_reads:
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/auth.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connector.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/supervisor.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/endpoint.ts
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/heartbeat.ts
+  - packages/octo-runtime-executor-kernel/src/serve.ts
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - packages/octo-runtime-adapter-sdk/src/runtime-log.ts
+  - packages/octo-runtime-adapter-sdk/src/runtime-log-worker.ts
+  - packages/octo-runtime-adapter-sdk/src/hourly-log.ts
+  - packages/octo-runtime-adapter-sdk/src/service-status.ts
+  - packages/octo-runtime-cross-service/src/types.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/service-control.ts
+  - apps/cli/src/help.ts
+  - apps/cli/src/logs.ts
+  - apps/cli/src/status-output.ts
+  - test/im-connection-state-machine.test.js
+  - test/kernel-worker-supervision.test.js
+  - test/kernel-worker-recovery.test.js
+  - test/kernel-heartbeat.test.js
+  - test/kernel-recovery-matrix.test.js
+  - test/recovery-dual-mode.test.js
+  - test/recovery-im-fixture.js
+  - test/extra-status-logs.test.js
+  - scripts/verify-release.mjs
+  - .github/workflows/ci.yml
+  - .github/CI.md
+  - package.json
+searched:
+  - Kernel server readiness, worker failure, invocation registry, capacities and repair budgets
+  - CLI/native composition roots, public fixtures and existing live verification scripts
+  - cross-service stdoutPath and stderrPath platform support
+  - serveWorker heartbeat responder and runtime logging whitelist
+external_sources:
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/issues/93
+    result: Full body and metadata read through gh; OPEN, P0; no comments.
+  - source: /Users/lvsijia/github.com/Mininglamp-OSS/octo-im
+    revision: 613fc2b2b3a4c23054385ee3f8238fc44a8f68e7
+    paths: [pkg/protocol/frame/common.go, internal/usecase/presence/gateway.go, internal/usecase/user/token.go]
+    result: ReasonConnectKick=12; route replacement and master token update emit it. Deployment match UNVERIFIED.
+  - source: /Users/lvsijia/github.com/Mininglamp-OSS/octo-spec/README.md
+    result: Four-phase workflow is agent-executed; user subsequently authorized staged implementation and commits.
+  - source: User clarification and read-only npm metadata for @mininglamp-oss/octo-runtime@1.1.0
+    result: Incident release 1.1.0; all Providers in scope. Local Extra config contains four enabled Bots targeting production IM, not an isolated test deployment. No credentials recorded or live Bot connections started.
+decisions:
+  confirmed:
+    - New worktree and OctoSpec P0 analysis/repair plan with executable readiness at least 95.
+    - User selects retry delays 5s, 10s, 15s, then repeated 15s; server Retry-After still respected.
+    - User requests channel-gateway logs for Extra service status stdout, excluding chat details.
+    - CLI and native SDK recovery both required by the issue.
+    - User requires English comments for changed core logic and an English commit per stage.
+    - User requires rotation retaining the latest three files; status mirror uses the existing 100 MiB per-file cap with no overflow shards.
+    - Controlled clock-gap reproduction confirmed false worker replacement; fresh sequence probes now preserve a full response deadline after gaps.
+    - Extra status stdout and mirror are implemented separately from conversation/execution records; native SDK remains silent unless a sink is provided.
+    - Follow-up Kernel review found permanent exhaustion after the fast retry budget. Ordinary startup failures now recover serially with a 15-second cooldown; cleanup and ownership failures still block replacement.
+    - The cooldown concerns internal worker startup only. Kernel and its local IPC listener are not restarted, and ordinary Provider network failures do not spend worker restart attempts.
+    - User requested the non-blocking PR 96 Windows CI coverage improvement after approval. Both Windows Node majors now select the five recovery/status suites; platform-specific skips remain explicit.
+    - User requests review and CI checks every five minutes until approval and merge readiness; merging is now reserved for the user and must never be performed by the agent.
+  proposed:
+    - 180-second measured recovery acceptance with separately accounted server Retry-After.
+  unresolved_gates:
+    - Deployed reason12 semantics and safe ownership classification.
+    - Original Kernel failure boundary and exact reporter environment.
+    - Real macOS, Windows, Linux, Provider and IM evidence.
+authorization:
+  planning_and_worktree: true
+  implementation_this_turn: true
+  commits: true
+  push_or_pr: true
+  merge: false
+  release: false
+  external_messages: false
+  git_identity: Preserve configured author; English GitHub and commit text; one Codex trailer only for authorized Codex-contributed commits.
+validation:
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: Clean baseline before planning edits
+    result: FAIL; sole diagnostic is obsolete assertion rejecting existing docs directory.
+  - command: uv run --with pyyaml python /Users/lvsijia/github.com/Mininglamp-OSS/octo-spec/scripts/octospec-lint.py .
+    scope: Final planning documents
+    result: PASS; 296 knowledge files conform to OKF.
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: Final frontmatter, rule index and local links
+    result: FAIL only on unchanged docs-directory assertion; no added frontmatter, index or link errors.
+  - scope: Context YAML, rule fingerprints, acceptance inventory and whitespace
+    result: PASS; 11 SHA-256 fingerprints, A01-A27, S01-S14, git diff --check and new-file trailing-whitespace scan.
+  - command: pnpm test
+    scope: Full workspace build and product regression at 0265807fdafa9a7f75b11bb050e631bd2a7a3bde
+    result: PASS; 35 UI tests plus 1470 Node tests passed, 32 Node tests skipped, zero failures. Includes isolated CLI and native SDK encrypted IM recovery trials.
+  - command: pnpm lint; pnpm lint:names; pnpm exec tsc -p tsconfig.json --noEmit; pnpm docs:check; pnpm format:check
+    scope: Final implementation checks after the full build completed
+    result: PASS; no naming findings; docs examples compiled and four runtime checks passed.
+  - command: node scripts/pack-release.mjs
+    scope: Local source-placeholder 0.0.0 archive only; not a published release
+    result: PASS; dist/release/mininglamp-oss-octo-runtime-0.0.0.tgz.
+  - command: node scripts/verify-release.mjs dist/release/mininglamp-oss-octo-runtime-0.0.0.tgz --expected-commit 0265807fdafa9a7f75b11bb050e631bd2a7a3bde --require-clean
+    scope: Offline installed package outside the workspace; clean M5 code commit embedded in build metadata
+    result: PASS; strict public types, native Kernel and Extras, CLI Kernel, status sink, recovery probe, assets, and uninstall preserving Home.
+  - scope: Final M6 knowledge validation
+    result: PASS; upstream OKF checker accepts 297 units, 11 updated rule fingerprints and A01-A27 implementation mapping verified. Repository checker still fails solely on its pre-existing docs-directory assertion.
+  - scope: M7 follow-up Kernel recovery implementation, based on 717dc5ad0a1c09c0f9930c752c09b84b71015bbc with local changes
+    result: PASS; 12 focused recovery tests, full build with 35 UI and 1472 Node passes plus 32 skips, lint/names/types/docs/format. Repacked dirty 0.0.0 archive passed offline external-consumer verification against the actual parent SHA; no clean-release claim.
+  - scope: Rebase onto origin/main d076474673b1aac542b08940d987c5598e5a4968; rebased product head 40598e8
+    result: PASS; all eight stage commits rebased without conflicts. Full pnpm test passed with 35 UI and 1488 Node passes, 34 Node skips and zero failures; lint/names/types/docs/format passed. User authorized push, English PR and merge, subject to required CI Gate and one approving review; repository auto-merge is disabled.
+  - scope: Real services, platform sleep/network and real Provider/IM
+    result: UNEXECUTED; all S01-S14 live rows remain open. Controlled loopback evidence does not close issue 93 or establish deployed reason12 semantics.
+  - scope: PR 96 at bdcfa94537caba1ec9dd2d116a5d698d8ea911bc
+    result: PASS; all six hosted OS/Node jobs and CI Gate succeeded, code-review succeeded, Jerry-Xin approved. User subsequently reserved manual merge and requested the P3 Windows coverage improvement; new commits require fresh hosted checks and approval.
+  - command: node --unhandled-rejections=strict --test test/extra-status-logs.test.js test/kernel-heartbeat.test.js test/kernel-worker-recovery.test.js test/im-connection-state-machine.test.js test/recovery-dual-mode.test.js
+    scope: M9 Windows CI selection; executed locally on macOS before push
+    result: PASS; 40 tests, zero skips/failures. Prettier and git diff --check passed. Native Windows execution remains pending the updated PR workflow.

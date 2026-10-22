@@ -14,6 +14,7 @@ import type { JsonObject, ExtraPluginModule } from "@mininglamp-oss/octo-runtime
 import { verifyBuiltinExtras } from "./builtin-extras.mjs";
 import { verifyKernelInvoke } from "./kernel-invoke.mjs";
 import { verifyGatewayStore } from "./gateway-store.mjs";
+import { recoveryProbe } from "./recovery-kernel-probe.mjs";
 
 const endpoint = componentEndpoint(resolve("h"));
 const owner = createKernelService({
@@ -39,6 +40,7 @@ try {
       runId: "release-native-run"
     };
     await verifyKernelInvoke(endpoint, input);
+    assert.equal((await recoveryProbe(client, input)).confirmed, true);
     for await (const _frame of owner.client.invoke({
       ...input,
       invocationId: "owned-invoke",

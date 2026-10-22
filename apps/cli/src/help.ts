@@ -69,9 +69,11 @@ Commands:
   stop          Stop this service, preserving its autostart setting
   status        Show native service, IPC and component status
   run           Run this component in the foreground
+${component === "executor-kernel" ? "" : "  logs          Tail service status logs (no conversation content)\n"}
 
 Flags: --home <path> --profile <name> --manifest <path> --json --help
 Install: --autostart=true|false
+${component === "executor-kernel" ? "" : "Logs: --lines <1..10000> (default 200) --follow --json (NDJSON)\n"}
 Kernel and Extras have independent services and autostart settings.
 An Extra may start before Kernel and connect when Kernel becomes available.`;
   return `Octo Runtime CLI (${cliVersion})
@@ -81,6 +83,7 @@ Manage the local Agent runtime and independent services.
 Usage:
 octo-runtime executor-kernel uninstall|install|start|restart|stop|status|run
 octo-runtime <extra-name> uninstall|install|start|restart|stop|status|run
+octo-runtime <extra-name> logs [--lines 200] [--follow] [--json]
 octo-runtime status [--json]
 octo-runtime adapter list
 octo-runtime adapter probe <type>

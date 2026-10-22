@@ -227,7 +227,9 @@ Extra 只对 Codex 结构化暂态限流或不可用失败（`OH-PRV-4005/4006` 
 
 更新由宿主卸载本插件、保存完整配置、重新加载；插件内所有连接重新建立。CLI 使用 `extraset channel-gateway` 保存完整声明，再用 `channel-gateway restart` 读取最新文件；前台未安装服务时停止并重新运行 `channel-gateway run`。单插件装卸通过宿主接口完成。
 
-返回的 owned handle 提供 `status()` 与 `stop()`；status 的 plugin 字段包含本插件的 `{ "bots": [...], "errors": [...] }`，kernel_available 独立表示执行端点可用性。CLI 使用 `octo-runtime status`。插件内状态及脱敏错误由插件维护；Bot 配置错误不阻止其他有效 Bot 初始化。完整示例见 [对接指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。
+原生 Extra 服务提供 `initialize()`、`status()` 与 `close()`；status 的 plugin 字段包含 `{ "bots": [...], "errors": [...] }`，kernel_available 独立表示执行端点可用性。CLI 使用 `octo-runtime status`。Bot配置错误不阻止其他有效Bot初始化。首次暂态连接失败和上线后暂态断线均按5/10/15/15秒恢复，服务端Retry-After可延长；认证拒绝、未知协议和reason12踢线仍为终态，不争抢连接或重跑未知任务。
+
+`octo-runtime channel-gateway logs --lines 200 --follow` 查看组件状态，不含聊天或session/run/message标识。CLI前台stdout与 `<home>/logs/extras/channel-gateway-status-<UTC小时>.log` 独立镜像记录服务、Kernel可用性、连接及重试；最多三份、每份100MiB。SDK默认静默，可用宿主代码选项 `logging.statusOutput(record)` 接入。完整示例见 [对接指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。
 
 Bot 的 `deliveries` 与 `cardDeliveries` 只返回当前保留的回执总数，例如 `"cardDeliveries": 123`，不返回 effectKey/messageId 明细，也不是进程启动以来的累计发送数。原有投递重试和最多 512 条的防重回执缓存保持不变；512 是当前容量选择而非协议要求。状态读取直接取缓存数量，不复制完整回执列表。
 

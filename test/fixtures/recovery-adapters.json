@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "adapters": [{ "type": "test", "module": "./recovery-adapter.js", "export": "testAdapter" }]
+}

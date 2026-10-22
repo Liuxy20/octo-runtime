@@ -30,6 +30,11 @@ Windows matrix builds and packs the distribution on both majors, runs Core/Kerne
 IPC contract tests, and verifies the installed CLI with independent Kernel and Extra
 processes before uninstalling the package. Readiness uses a bounded overall deadline
 and reports the last status failure plus bounded component stderr on failure.
+Both Windows majors also run the recovery and Extra status-log suites: heartbeat
+clock gaps, repeated worker-readiness failures, Gateway connection recovery,
+bounded status output, log following/rotation and the native SDK loopback IM trial.
+The CLI signal-injection variant and POSIX process-group cleanup injection retain
+their platform-specific skips; the SDK recovery trial runs on Windows.
 These checks do not register native user services. Windows cleanup of descendants
 whose process leader has already exited still lacks a Job Object-level guarantee;
 passing package verification does not close that release gap.

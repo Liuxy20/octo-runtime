@@ -2,6 +2,16 @@
 
 ## 2026-10-22
 
+- 按用户要求落实PR #96的P3：Windows Node 24/26显式运行五个恢复与Extra状态日志测试文件，保留原平台边界，本机40项通过；新增提交的远端结果及批准另行确认，merge改由用户手动操作，见[实施记录M9](tasks/93-sleep-wake-recovery/implementation.md#m9-pr-96-windows-测试覆盖补充)。
+
+- 按用户授权将Issue 93八个阶段提交无冲突rebase到main@d076474；全量35项UI、1488项Node通过，34项跳过，静态与文档检查通过。更新推送/PR/合并授权与保护要求，原事故仍待现场验收，见[实施记录M8](tasks/93-sleep-wake-recovery/implementation.md#m8-同步-main-与提交-pr)。
+
+- 补充 Issue 93 Kernel复核修复：快速worker替换限速触发后改为串行15秒冷却恢复，清理失败仍禁止替换；本地IPC监听持续存在，普通网络错误不触发worker重启。全量35项UI与1472项Node通过、32项跳过，包外验证通过，见[实施记录M7](tasks/93-sleep-wake-recovery/implementation.md#m7-复核后补充修复)。
+
+- 按后续授权完成 Issue 93 共享层恢复修复和Extra状态日志，分阶段英文提交；状态系列保留最近三份、每份100MiB。CLI/SDK本地加密IM端到端、全量回归和离线发行包验证通过；reason12部署语义与真实合盖等现场门槛仍开放，见[实施与验证记录](tasks/93-sleep-wake-recovery/implementation.md)。
+
+- 新建 Issue 93 独立 worktree，完成[CLI/SDK睡眠恢复规划](tasks/93-sleep-wake-recovery/brief.md)，用户追加5/10/15/15秒重试和仅Extra状态的stdout/logs要求。M0-M6、27项断言、14类场景及95分自评均已落文档；未实施、未真实联调或提交，见[记录](journal/shared/2026-10-22-93-sleep-wake-recovery-plan.md)。
+
 - 按用户要求将最新 main@5ce0589 合入 PR 91 分支，解决本文件和知识索引中的新增记录冲突，保留双方记录。Context 英文格式与 Windows 顺序断言修复完整保留，Adapter/Extra 装配合同不变。类型构建、lint、格式、双语文档及完整回归通过（Node 1453 通过/32 平台跳过，UI 35 通过），见[本轮记录](journal/shared/2026-10-21-provider-decoupling-implementation.md#2026-10-22-同步最新-main)。
 
 ## 2026-10-21

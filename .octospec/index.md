@@ -51,6 +51,8 @@
 
 ## 当前任务
 
+- [Issue 93：CLI/SDK 睡眠和网络恢复](tasks/93-sleep-wake-recovery/brief.md)：独立分支已rebase到 `main@d076474`，共享层恢复和有界Extra状态日志已实施，[PR #96](https://github.com/Mininglamp-OSS/octo-runtime/pull/96)原提交通过全部平台门禁及审查，按P3补充Windows测试选择。用户要求5/10/15/15秒重试、仅服务状态日志，merge由用户手动操作。见[实施记录](tasks/93-sleep-wake-recovery/implementation.md)、[双模式验收](tasks/93-sleep-wake-recovery/acceptance.md)及[95分规划评估](tasks/93-sleep-wake-recovery/assessment.md)；原事故根因、reason12部署语义及真实矩阵仍待取证，不关闭P0。
+
 - [Issue 85：Adapter/Extra 解耦与双模式载入](tasks/85-provider-decoupling/brief.md)：起始基线 `origin/main@d064cfe`，交付时更新到 `main@318b0f2`，分支 `fix/85-provider-decoupling`。默认发行全量，SDK 原生 import、调用进程装配、无 manifest，CLI 内置与 Home 双清单按原始来源解析；FDE 自行复制及管理依赖。[17 项验收及边界](tasks/85-provider-decoupling/implementation.md)、[双语文档](../docs/zh-CN/concepts/module-loading.md)及[架构约束](rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)已同步。[本地审查](tasks/85-provider-decoupling/review.md)两项发现均修复复审通过；全量回归和实际 tgz 验证通过，按后续授权进入 PR 合并流程，未发布 npm。
 
 - [Issue 87：Context 固定英文格式](tasks/87-english-context-framing/brief.md)：基于最新 `main@d064cfe` 独立 worktree，规划可执行性 [98 分](tasks/87-english-context-framing/assessment.md) 后实施。共享边界及标签英文，业务多语言内容和执行语义保持；Node 1439 通过/10 跳过、UI 35 通过，检查与基线 OKF 目录冲突见[交付记录](journal/shared/2026-10-21-87-english-context-framing.md)。

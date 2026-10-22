@@ -65,6 +65,8 @@ Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervis
 
 ## CLI
 
+Extra新增 `logs [--lines 1..10000] [--follow] [--json]`，默认200条，JSON为NDJSON。只读取当前Home对应Extra的独立状态系列，最近三份最多4MiB，重建白名单记录；不得读普通执行日志或链接到外部文件。日志路由先于配置解析、模块载入及管理器操作。空日志stderr提示并成功；参数/权限错误非零；follow跟随轮转并在Ctrl+C释放监听。CLI前台Extra向stdout写状态，最多128条/1MiB，背压不阻塞服务，恢复后报告丢弃数量。后台镜像不依赖manager的stdoutPath，不引入shell wrapper。
+
 start/restart 成功结果复用本组件 status 的查询与格式化：展示服务、自启、IPC、Manager、PID、Worker/Extra 业务状态和服务定义路径；JSON 保留 component/action 并提供同一 service/runtime 数据。启动成功不等同于 Bot 已连通，业务状态沿 Extra 自身接口反馈。
 
 CLI 遵循[面向普通用户的产品默认值](architecture.md#cli-面向普通用户的产品默认值)，为 executor-kernel 与每个已配置 Extra 提供 uninstall/install/start/restart/stop/status/run；内置 Extra 名为 channel-gateway、channel-wecom、webui。裸组件显示用途、配置/启动入口和命令帮助。install 默认注册并开启本组件自启，首次和重复安装相同；只有显式 --autostart=false 才禁用，再次普通 install 恢复开启。start 在组件锁内检查安装状态，未安装时自动注册本组件并开启自启，向 stderr 打印安装及启动阶段进度，随后启动并等待 IPC 就绪；安装失败不继续启动，--json 的 stdout 只保留最终结果。已安装时保留服务定义及自启设置；restart 未安装返回 3。显式禁用时 start/restart 保留 cross-service 的 SERVICE_DISABLED 并提示 install --autostart=true，不安装或控制另一组件。stop 不修改自启；uninstall 保留 Home 和用户数据。两个自启服务或多个 Extra 不依赖启动顺序；Extra 先启动可报告 Kernel 不可用，Kernel 后续上线时沿现有 client 恢复可用状态，不创建替代 Kernel。

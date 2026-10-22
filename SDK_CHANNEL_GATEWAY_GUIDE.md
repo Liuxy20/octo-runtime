@@ -16,6 +16,10 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 2. 从受保护配置源取得 Bot 值，并导入 Gateway 模块。
 3. createExtraService({endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
 4. extra.status() 的 plugin 为插件 JSON；Bot online 与 kernel_available 分别判断。
+
+连接恢复在Gateway内完成：首次暂态离线与上线后暂态断线均等待5、10、15秒，之后每15秒；Retry-After可延长。宿主无需另写重连或重建服务。认证/凭据错误及明确终端踢线仍失败；reason12部署语义未确认前保持终态。旧任务结果未知时不重新invoke。
+
+原生Extra可选 `logging: { directory: absolutePath, statusOutput: record => hostLogger(record) }` 是宿主代码选项，不放入Bot JSON。SDK默认不写stdout；sink只收到服务生命周期、Kernel可用性转换和Gateway连接/重试，不含chat、session/run/message标识、模型输出、工具参数及凭据。状态同时镜像到directory下 `extras/<extra>-status-<UTC小时>.log`，最多三份、每份100MiB；日志失败不改变执行结果。CLI自动接入stdout，使用 `octo-runtime channel-gateway logs --follow` 查看状态。业务onStatus仍同步，不负责异步探测或重启。
 5. 配置变更先等待 extra.close() 且 complete=true，再保存并创建新实例；Kernel 保持运行。
 
 ## 逐轮 Context

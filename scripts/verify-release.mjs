@@ -203,6 +203,8 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       "gateway-store"
     ])
       await cp(join(root, `test-support/public-extra/${name}.mts`), join(consumer, `${name}.mts`));
+    for (const name of ["recovery-kernel-probe", "recovery-native-host"])
+      await cp(join(root, `test-support/${name}.mts`), join(consumer, `${name}.mts`));
     await execute(
       process.execPath,
       [
@@ -214,6 +216,8 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "kernel-invoke.mts",
         "builtin-extras.mts",
         "gateway-store.mts",
+        "recovery-kernel-probe.mts",
+        "recovery-native-host.mts",
         "--module",
         "NodeNext",
         "--target",
@@ -307,6 +311,8 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         nativeKernel: true,
         independentExtra: true,
         gatewayHostStore: true,
+        extraStatusSink: true,
+        sdkRecoveryProbe: true,
         cliKernel: true,
         uninstallPreservedHome: true,
         version: metadata.version

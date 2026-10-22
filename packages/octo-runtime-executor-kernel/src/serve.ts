@@ -89,9 +89,11 @@ export function serveWorker(
       typeof message === "object" &&
       "type" in message &&
       message.type === "kernel.ping" &&
+      "probe" in message &&
+      Number.isSafeInteger(message.probe) &&
       process.connected
     ) {
-      process.send?.({ type: "worker.pong" });
+      process.send?.({ type: "worker.pong", probe: message.probe });
     }
   });
   process.once("disconnect", () => {

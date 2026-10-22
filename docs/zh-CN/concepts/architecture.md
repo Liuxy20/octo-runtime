@@ -88,15 +88,20 @@ flowchart TB
   Failure --> Lost[未完成执行标为 lost]
   Lost --> Cleanup{执行资源已回收?}
   Cleanup -->|否| Block[不创建冲突的替代 worker]
-  Cleanup -->|是| Budget{还能重启?}
+  Cleanup -->|是| Budget{还有快速额度?}
   Budget -->|是| Backoff[等待后启动新 worker]
-  Backoff --> Ready
-  Budget -->|否| Exhausted[拒绝新执行并报告状态]
+  Backoff --> Attempt
+  Budget -->|否| Cooldown[等待15秒再单次尝试启动]
+  Cooldown --> Attempt[启动一个worker]
+  Attempt -->|就绪| Ready
+  Attempt -->|失败| Rollback{启动资源已回收?}
+  Rollback -->|是| Budget
+  Rollback -->|否| Block
 ```
 
 Kernel 每秒检查一次 worker 主循环心跳，连续 5 秒未响应时判定失联。worker 启动后最多等待 15 秒就绪。启动替代 worker 前先清理旧 worker 的执行资源；清理未完成时，不创建可能与旧资源冲突的 worker。
 
-故障替换按 250、1000、4000 毫秒间隔退避，60 秒内最多替换三次；稳定运行 60 秒后重新计数。新 worker 不会重跑旧请求。
+快速替换按 250、1000、4000 毫秒间隔退避，60 秒活跃观测时间最多快速尝试三次。额度耗尽后保持 `recovering`，每次等待 15 秒再单次尝试启动；启动和清理完成后才开始下一次等待。短暂就绪不会退出低频策略，连续健康观测 60 秒才恢复快速额度。清理或所有权未确认时保持 `exhausted`，阻止替换并保留关闭失败。关闭服务会取消等待。恢复期间 Kernel 进程、实例和本地监听保持不变，不依赖网络连通性；新 worker 不会重跑旧请求。
 
 创建 Kernel 后，先等待 `initialize()` 完成，再使用 `kernel.client`。应用退出时，先关闭由应用创建的 Extra，等待结果消费和投递结束，再关闭自己创建的 Kernel。通过 `attachKernel` 获得的客户端只需关闭连接，不会关闭服务。清理结果中 `complete=false` 表示还有资源未确认释放，应检查返回的错误和待清理资源。
 

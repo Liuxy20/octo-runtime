@@ -6,8 +6,9 @@ import {
 } from "./process.js";
 import type { KernelStatus } from "./types.js";
 import { KernelError } from "./types.js";
+import { WorkerHeartbeat } from "./heartbeat.js";
 
-/** Kernel 独占 worker 的创建与回收；清理失败时禁止启动替代实例。 */
+/** Kernel exclusively owns worker replacement; incomplete cleanup prevents a second owner. */
 export class WorkerSupervisor {
   #worker?: WorkerProcess;
   #generation = 0;
@@ -16,10 +17,10 @@ export class WorkerSupervisor {
   #closing = false;
   #recovery?: Promise<void>;
   #timer?: NodeJS.Timeout;
-  #lastPong = 0;
-  #pendingPing = false;
-  #stableSince = 0;
+  #heartbeat?: WorkerHeartbeat;
+  #activeTime = 0;
   #attempts: number[] = [];
+  #slowRecovery = false;
   #abort = new AbortController();
   #cleanupFailure?: AggregateError;
   #closeUntil?: number;
@@ -65,15 +66,20 @@ export class WorkerSupervisor {
       throw error;
     }
     if (this.#closing) {
-      await closeWorker(worker, this.#closeUntil ?? Date.now() + 5000, true);
+      try {
+        await closeWorker(worker, this.#closeUntil ?? Date.now() + 5000, true);
+      } catch (error) {
+        // A late startup still owns resources; failed rollback must block every future replacement.
+        throw (this.#cleanupFailure = new AggregateError([error], "WORKER_CLEANUP_INCOMPLETE"));
+      }
       return;
     }
     this.#worker = worker;
     this.#generation++;
     this.#state = "ready";
-    this.#stableSince = Date.now();
-    this.#lastPong = Date.now();
-    this.#pendingPing = false;
+    const heartbeat = new WorkerHeartbeat();
+    this.#heartbeat = heartbeat;
+    let elapsed = 0;
     worker.child.on("message", (message: unknown) => {
       if (
         this.#worker === worker &&
@@ -82,20 +88,22 @@ export class WorkerSupervisor {
         "type" in message &&
         message.type === "worker.pong"
       ) {
-        this.#lastPong = Date.now();
-        this.#pendingPing = false;
+        heartbeat.pong("probe" in message ? message.probe : undefined);
       }
     });
     worker.child.once("exit", () => this.#failed(worker));
     worker.child.once("error", () => this.#failed(worker));
     this.#timer = setInterval(() => {
-      if (Date.now() - this.#lastPong >= 5000) {
+      if (this.#closing || this.#worker !== worker || this.#state !== "ready") return;
+      const probe = heartbeat.tick();
+      this.#activeTime += heartbeat.activeMs - elapsed;
+      elapsed = heartbeat.activeMs;
+      if (probe.type === "expired") {
         this.#failed(worker);
         return;
       }
-      if (!this.#pendingPing && worker.child.connected) {
-        this.#pendingPing = true;
-        worker.child.send({ type: "kernel.ping" }, (error) => {
+      if (probe.type === "ping" && worker.child.connected) {
+        worker.child.send({ type: "kernel.ping", probe: probe.id }, (error) => {
           if (error) this.#failed(worker);
         });
       }
@@ -107,32 +115,35 @@ export class WorkerSupervisor {
     if (this.#closing || this.#worker !== worker || this.#state !== "ready") return;
     clearInterval(this.#timer);
     this.#state = "recovering";
-    // 先拒绝原 RPC，让 Run 源生成唯一 lost 终态；恢复只允许新 Run。
+    // Reject the old RPC first so its source emits one lost terminal. Recovery admits new work only.
     worker.client.close(new KernelError("WORKER_LOST"));
-    if (Date.now() - this.#stableSince >= 60_000) {
+    if ((this.#heartbeat?.healthyMs ?? 0) >= 60_000) {
       this.#attempts = [];
       this.#attempt = 0;
+      this.#slowRecovery = false;
     }
-    this.#recovery = this.#recover(worker).catch(() => {
-      this.#state = "exhausted";
+    this.#recovery = this.#recover(worker).catch((error: unknown) => {
+      // Only unconfirmed cleanup or ownership ends recovery; ordinary startup failures stay retryable.
+      this.#cleanupFailure ??= new AggregateError([error], "WORKER_RECOVERY_BLOCKED");
+      if (!this.#closing) this.#state = "exhausted";
     });
   }
   async #recover(worker: WorkerProcess): Promise<void> {
-    // 旧 worker 清理成功才允许替换，避免两个 Provider 实例并行持有同一执行资源。
-    // 只恢复服务可用性，不重放旧 Run；旧流已由 #failed 标为 lost。
+    // Reap the old worker before replacement to prevent concurrent Provider owners.
+    // Restore service availability only; #failed already marked old runs lost and never replays them.
     // Preserve baseline recovery for leaders that exited before close began. On Windows this
     // path cannot verify detached descendants; EOF-close checks require a live leader at entry.
     if (worker.child.exitCode !== null || worker.child.signalCode !== null) await worker.close();
     else await closeWorker(worker, Date.now() + 4800, true);
     await this.recordWorker?.(undefined);
     this.#worker = undefined;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      if (this.#closing) return;
-      this.#attempts = this.#attempts.filter((at) => Date.now() - at < 60_000);
-      if (this.#attempts.length >= 3) break;
-      const delay = [250, 1000, 4000][this.#attempts.length];
-      this.#attempts.push(Date.now());
-      this.#attempt++;
+    while (!this.#closing) {
+      // Suspend time and clock changes must not replenish a recently exhausted restart budget.
+      this.#attempts = this.#attempts.filter((at) => this.#activeTime - at < 60_000);
+      if (this.#attempts.length >= 3) this.#slowRecovery = true;
+      // Exhausting the fast budget opens a bounded-rate recovery loop, not a permanent outage.
+      // Keep slow recovery across short-lived workers until 60 seconds of health is observed.
+      const delay = this.#slowRecovery ? 15_000 : [250, 1000, 4000][this.#attempts.length];
       await new Promise<void>((resolve) => {
         const finish = () => {
           clearTimeout(timer);
@@ -143,15 +154,16 @@ export class WorkerSupervisor {
         this.#abort.signal.addEventListener("abort", finish, { once: true });
       });
       if (this.#closing) return;
+      if (!this.#slowRecovery) this.#attempts.push(this.#activeTime);
+      this.#attempt = Math.min(Number.MAX_SAFE_INTEGER, this.#attempt + 1);
       try {
         await this.#spawn();
         return;
       } catch (error) {
         if (error instanceof AggregateError) throw error;
-        /* 普通启动失败已回收；聚合清理错误禁止继续替换。 */
+        /* Ordinary startup failures are reaped; aggregate cleanup failures prevent replacement. */
       }
     }
-    this.#state = "exhausted";
   }
   async close(until = Date.now() + 5000): Promise<void> {
     this.#closing = true;

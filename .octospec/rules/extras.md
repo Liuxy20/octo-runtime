@@ -77,6 +77,8 @@ ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteractio
 
 初始化、Kernel 不可达、业务连接失败、dispose 失败和进程退出分别报告；日志不携带凭据或私有错误正文。可选 logging.directory 使用统一元数据白名单。登录、云端登记和 IM 建联不是本地 Kernel 或其他 Extra 的前提。
 
+Issue93新增组件状态专用白名单：可选非JSON `logging.statusOutput(record)` 在宿主进程接收服务生命周期、Kernel可用性转换及Gateway连接/重试；SDK默认静默。不得携带session/run/message标识、聊天正文、模型输出、工具参数、凭据。镜像由现有有界日志Worker写入 `extras/<extra>-status-<UTC小时>.log`，复用三份/每份100MiB保留。callback不进入workerData，sink异常与磁盘失败独立退化。Kernel探测单个在途、完成后5秒再检查，只打印转换，close取消；onStatus仍同步，不重启服务。
+
 三个内置插件为 channel-gateway、channel-wecom 和 webui，都从主包 /extras/<name> 公开模块导入，并复用函数式入口。公开配置 Schema 从主包 /extras/<name>/config-schema.json 获取。没有 Extra 也可执行本地请求。
 
 验证：[生命周期](../../test/host-sdk-lifecycle.test.js)、[实际依赖与启动](../../test/extra-startup.test.js)、[插件加载器](../../test/extras.test.js)、[SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。真实 IM 与平台证据单独记录。

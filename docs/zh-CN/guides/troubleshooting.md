@@ -6,10 +6,15 @@
 
 ## 服务无法连接
 
+使用 `octo-runtime channel-gateway logs --lines 200 --json` 读取服务状态，添加 `--follow` 观察连接和重试转换，Ctrl+C退出。仅包含Extra生命周期、Kernel可用性和连接状态，不含聊天正文、session/run/message标识、模型输出、工具参数或凭据。命令只读 `<home>/logs/extras/<extra>-status-<UTC小时>.log`，Kernel离线或模块配置损坏时仍可读取；最多读取最近三份中的4MiB，每份上限100MiB。空日志成功并向stderr提示。
+
+CLI Extra同时将状态写stdout。原生SDK默认静默，可在绝对路径 `logging.directory` 旁提供 `logging.statusOutput(record)`；文件与有界stdout均尽力诊断，不阻塞恢复。Gateway首次暂态离线及后续暂态断线等待5、10、15秒，之后每15秒；Retry-After可延长。认证失败和包含reason12的终端踢线需诊断，不自动争抢。IM在线不证明执行或投递成功。
+
 | 现象或错误码                    | 处理步骤                                                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `KERNEL_UNAVAILABLE` 或连接失败 | 确认 endpoint 正确、Kernel 已初始化、客户端使用相同 OS 账号。检查 `status().execution_ready` 和 worker 状态。`attachKernel` 不会启动服务。 |
-| `WORKER_RESTART_EXHAUSTED`      | 查看 worker 启动和清理错误，修复入口文件或 Provider 环境后恢复服务。替代 worker 不会恢复旧执行。                                           |
+| worker 状态 `recovering`       | Kernel 保持本地监听并串行重试。三次快速尝试后，每次继续等待15秒；修复worker环境后可自动恢复执行，无须重启Kernel。 |
+| `WORKER_RESTART_EXHAUSTED`      | 清理或所有权未确认，自动替换已阻断。先排查旧worker与所有权记录，再恢复服务；替代worker不会恢复旧执行。 |
 
 ## 输入被拒绝
 

@@ -149,6 +149,14 @@ jobs:
         run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/zcode-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/kernel-worker-supervision.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/component-startup.test.js test/extra-startup.test.js test/native-startup.test.js test/service-bind-startup.test.js
       - name: Verify Gateway drain and finalization on Windows
         run: node --test test/gateway-host-session-store.test.js test/gateway-shutdown-drain.test.js test/gateway-runner-drain.test.js test/im-extra-disposal.test.js test/im-task-retry.test.js test/im-protocol.test.js test/im-context-gap-wire.test.js
+      - name: Verify recovery and Extra status logs on Windows
+        run: >-
+          node --unhandled-rejections=strict --test
+          test/extra-status-logs.test.js
+          test/kernel-heartbeat.test.js
+          test/kernel-worker-recovery.test.js
+          test/im-connection-state-machine.test.js
+          test/recovery-dual-mode.test.js
       - name: Verify Windows worker log drain and close budget
         run: node --unhandled-rejections=strict --test test/host-process-close.test.js
       - name: Verify Host logging on Windows

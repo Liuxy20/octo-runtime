@@ -1,6 +1,7 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { mkdir } from "node:fs/promises";
+import { once } from "node:events";
+import { lstat, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -17,6 +18,8 @@ import {
 import { getExtra, readExtra, setExtra } from "./extras.js";
 import { cliVersionInfo, helpText } from "./help.js";
 import { runForegroundService } from "./foreground.js";
+import { showExtraLogs } from "./logs.js";
+import { StatusOutput } from "./status-output.js";
 import {
   defaultRuntimeHome,
   runtimePaths,
@@ -45,6 +48,7 @@ export interface CliDependencies extends ServiceControlOptions {
   sleep?: (ms: number) => Promise<void>;
   /** CLI 入口选择前台组件的退出策略；仅确认命令类型，不表示服务 ready。 */
   onComponentRun?: () => void;
+  logsSignal?: AbortSignal;
 }
 const components = ["executor-kernel", "channel-gateway"] as const;
 const builtinComponents: readonly string[] = [...components, "channel-wecom", "webui"];
@@ -53,8 +57,11 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
   let json = args.includes("--json");
   let context: { component?: string; action?: string; logs?: string } = {};
   let runningComponent: string | undefined;
+  let statusOutput: StatusOutput | undefined;
   try {
     const { flags, positional } = parse(args);
+    if ((flags.lines !== undefined || flags.follow !== undefined) && positional[1] !== "logs")
+      throw new Error("INVALID_ARGUMENTS");
     json = Boolean(flags.json);
     if (flags.version || positional[0] === "version") {
       output(cliVersionInfo);
@@ -70,6 +77,49 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     const home = resolve(flags.home ?? defaultRuntimeHome(dependencies.env, dependencies.platform));
+    // Route logs before config/module/manager access so offline failures remain diagnosable.
+    if (positional[1] === "logs") {
+      const extra = positional[0];
+      context = { component: extra, action: "logs", logs: join(home, "logs", "extras") };
+      if (
+        positional.length !== 2 ||
+        extra === "executor-kernel" ||
+        !/^[a-z][a-z0-9-]{0,63}$/.test(extra) ||
+        flags.autostart !== undefined
+      )
+        throw new Error("INVALID_ARGUMENTS");
+      if (!builtinComponents.includes(extra)) {
+        const registration = await lstat(join(home, "extras", extra, "config.json")).catch(
+          (error: NodeJS.ErrnoException) => {
+            if (error.code === "ENOENT") return undefined;
+            throw error;
+          }
+        );
+        if (!registration?.isFile() || registration.isSymbolicLink())
+          throw new Error("EXTRA_NOT_FOUND");
+      }
+      if (flags.lines !== undefined && !/^[1-9][0-9]{0,4}$/.test(flags.lines))
+        throw new Error("INVALID_ARGUMENTS");
+      await showExtraLogs({
+        home,
+        extra,
+        lines: Number(flags.lines ?? 200),
+        follow: Boolean(flags.follow),
+        json,
+        output:
+          dependencies.output ??
+          (async (line, signal) => {
+            if (!process.stdout.write(`${line}\n`)) await once(process.stdout, "drain", { signal });
+          }),
+        errorOutput:
+          dependencies.errorOutput ??
+          ((line) => {
+            process.stderr.write(`${line}\n`);
+          }),
+        signal: dependencies.logsSignal
+      });
+      return 0;
+    }
     const root = await readJsonFile<RuntimeHomeConfiguration>(
       runtimePaths(home, "default").rootConfig
     );
@@ -255,8 +305,14 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
             ? { name: registration.name, default: () => () => {} }
             : await registration.load();
         if (module.name !== registration.name) throw new Error("EXTRA_NAME_MISMATCH");
+        if (!dependencies.output) statusOutput = new StatusOutput(process.stdout);
         handle = createExtraService({
-          logging: { directory: join(home, "logs") },
+          logging: {
+            directory: join(home, "logs"),
+            statusOutput: dependencies.output
+              ? (record) => output(JSON.stringify(record))
+              : statusOutput!.write
+          },
           module,
           config: registration.config,
           dependencies: {},
@@ -265,7 +321,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           controlEndpoint: componentEndpoint(home, component, dependencies.platform)
         });
       }
-      return runForegroundService(
+      return await runForegroundService(
         handle,
         () => publish({ component, state: "ready" }, `${component}: ready`),
         async (error: unknown) => {
@@ -357,7 +413,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       await recordStartupFailure(context.logs, runningComponent, error);
     const failure = { ...describeError(error), ...context };
     const code = failure.code;
-    if (json) output(JSON.stringify({ error: failure }, null, 2));
+    if (json)
+      output(JSON.stringify({ error: failure }, null, context.action === "logs" ? undefined : 2));
     else
       (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
         `${[context.component, context.action].filter(Boolean).join(" ") || "octo-runtime"}: ${code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${failure.message}${context.logs ? `\nLogs: ${context.logs}` : ""}`
@@ -371,6 +428,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           : /UNAVAILABLE|SERVICE_PROCESS_EXITED/.test(code)
             ? 4
             : 1;
+  } finally {
+    statusOutput?.close();
   }
 }
 async function componentStatus(
@@ -450,12 +509,24 @@ function parse(args: string[]) {
     const match = /^--([a-z-]+)(?:=(.*))?$/.exec(arg);
     if (
       !match ||
-      !["home", "profile", "manifest", "json", "help", "version", "autostart"].includes(match[1]) ||
+      ![
+        "home",
+        "profile",
+        "manifest",
+        "json",
+        "help",
+        "version",
+        "autostart",
+        "lines",
+        "follow"
+      ].includes(match[1]) ||
       Object.hasOwn(flags, match[1])
     )
       throw new Error("INVALID_ARGUMENTS");
     const key = match[1];
-    flags[key] = ["json", "help", "version"].includes(key) ? "true" : (match[2] ?? args[++i]);
+    flags[key] = ["json", "help", "version", "follow"].includes(key)
+      ? "true"
+      : (match[2] ?? args[++i]);
     if (
       !flags[key] ||
       flags[key].startsWith("--") ||

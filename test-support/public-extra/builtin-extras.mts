@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:net";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
+import { createExtraService, type ExtraStatusRecord } from "@mininglamp-oss/octo-runtime/host";
 import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 import * as wecom from "@mininglamp-oss/octo-runtime/extras/channel-wecom";
 import * as webui from "@mininglamp-oss/octo-runtime/extras/webui";
@@ -10,11 +10,18 @@ import * as webui from "@mininglamp-oss/octo-runtime/extras/webui";
 /** 只安装实际主包，原生构造全部内置模块并确认发行物包含可读取的静态资源。 */
 export async function verifyBuiltinExtras(endpoint: string): Promise<void> {
   for (const module of [gateway, wecom]) {
+    const statusRows: ExtraStatusRecord[] = [];
     const extra = createExtraService({
       endpoint,
       module,
       config: { bots: [] },
-      dependencies: { loadContexts: () => [] }
+      dependencies: { loadContexts: () => [] },
+      logging: {
+        directory: resolve("status-logs"),
+        statusOutput: (record) => {
+          statusRows.push(record);
+        }
+      }
     });
     try {
       await extra.initialize();
@@ -26,6 +33,9 @@ export async function verifyBuiltinExtras(endpoint: string): Promise<void> {
     } finally {
       assert.equal((await extra.close()).complete, true);
     }
+    assert.ok(statusRows.some((record) => record.event === "service.ready"));
+    assert.ok(statusRows.some((record) => record.event === "service.closed"));
+    assert.doesNotMatch(JSON.stringify(statusRows), /session_id|run_id|invocation_id/);
   }
   const listener = createServer();
   await new Promise<void>((accept) => listener.listen(0, "127.0.0.1", accept));

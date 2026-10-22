@@ -88,15 +88,20 @@ flowchart TB
   Failure --> Lost[Mark unfinished executions lost]
   Lost --> Cleanup{Execution resources reclaimed?}
   Cleanup -->|no| Block[Do not replace conflicting worker]
-  Cleanup -->|yes| Budget{Can restart?}
+  Cleanup -->|yes| Budget{Fast retry available?}
   Budget -->|yes| Backoff[Wait then start a new worker]
-  Backoff --> Ready
-  Budget -->|no| Exhausted[Reject new executions and report status]
+  Backoff --> Attempt
+  Budget -->|no| Cooldown[Wait 15 seconds before one startup attempt]
+  Cooldown --> Attempt[Start one worker]
+  Attempt -->|ready| Ready
+  Attempt -->|failed| Rollback{Startup resources reclaimed?}
+  Rollback -->|yes| Budget
+  Rollback -->|no| Block
 ```
 
 Kernel checks the worker's main-loop heartbeat every second and considers it lost after 5 seconds without a response. Worker startup allows 15 seconds for readiness. Before replacement, Kernel cleans up the old worker's execution resources. Incomplete cleanup blocks creation of a worker that could conflict with those resources.
 
-Replacement backoff is 250, 1000, and 4000 ms, with at most three replacements in 60 seconds. Running stably for 60 seconds resets that count. A new worker does not rerun old requests.
+Fast replacement backoff is 250, 1000, and 4000 ms, with at most three fast attempts in 60 seconds of observed active time. After that budget is spent, Kernel stays `recovering` and waits 15 seconds before each single startup attempt. Startup and cleanup finish before the next wait begins. Slow recovery persists across short-lived workers; 60 seconds of observed health restores the fast budget. Unconfirmed cleanup or ownership blocks recovery in `exhausted` and remains a close failure. Closing cancels the wait. The Kernel process, instance and local listener remain intact throughout recovery and do not depend on network connectivity. A new worker does not rerun old requests.
 
 After creating Kernel, await `initialize()` before using `kernel.client`. At shutdown, close the application's Extras, wait for result consumption and delivery, then close the Kernel it created. A client obtained through `attachKernel` closes its connections without closing the service. A cleanup result of `complete=false` means some resources are not confirmed released; inspect the returned errors and pending resources.
 

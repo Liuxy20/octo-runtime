@@ -38,7 +38,7 @@ executionEnvOverrides 逐次传递；signal 仅在本地。Kernel 当前 wire �
 
 ## worker
 
-worker 实例化唯一 AgentExecutor。执行通道为 stdio NDJSON；独立 Node IPC 的 ping/pong 由 worker 主循环响应。1 秒检查、5 秒失联，启动就绪预算 15 秒。失败先回收受管进程组，再按 250/1000/4000 ms 退避，60 秒窗口最多三次替换。稳定 60 秒后重置预算。耗尽后 Kernel 保留 status，拒绝新执行。
+worker 实例化唯一 AgentExecutor。执行通道为 stdio NDJSON；独立 Node IPC 的 ping/pong 由 worker 主循环响应。1 秒检查，单个 probe 5 秒未响应判失联；长调度间隔后重新探测，启动就绪预算 15 秒。失败先回收受管进程组，再按 250/1000/4000 ms 退避，60 秒活跃观测窗口最多三次快速替换。快速额度耗尽后保持 recovering，每次冷却 15 秒再串行尝试，直到恢复或关闭；连续健康观测 60 秒后重置策略。仅清理或所有权确认失败保持 exhausted，阻止替换并保留 close 失败。恢复不重启 Kernel 进程或本地监听，status 保持可查，close 取消冷却。
 
 worker 丢失时，未完成 Run 产生一次 lost 终态；已接纳的完成终态保持原样。新 worker 只接纳新 Run，不重放旧请求。进程清理失败禁止替换。进程身份清单仅用于回收孤儿，不保存业务执行历史。
 

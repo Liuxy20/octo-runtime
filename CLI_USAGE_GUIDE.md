@@ -59,6 +59,7 @@ octo-runtime <extra-name> uninstall|install|start|restart|stop|status|run
 | `stop` | 停止本组件，保留服务定义和自启设置 |
 | `uninstall` | 停止并移除本组件服务定义，保留 Home、身份、配置和凭据 |
 | `run` | 前台运行本组件；收到 Ctrl+C 或 SIGTERM 后等待清理 |
+| `<extra-name> logs` | 查看 Extra 服务状态日志；默认末尾200条，支持 `--lines 1..10000`、`--follow`、`--json`（NDJSON） |
 
 `<extra-name>` 可为 channel-gateway、channel-wecom、webui 或通过 extraset 保存的名称。直接运行 `octo-runtime executor-kernel` 会显示组件帮助；`--help` 也可查看。各组件分别执行 install，默认开启自启；只有显式 --autostart=false 才关闭，再次普通 install 会恢复自启。服务在用户登录/用户 manager 激活时自动启动，不保证未登录时运行。自启或手动启动不要求前后顺序；Extra 先启动时报告 Kernel 不可用，Kernel 后续上线后恢复可用状态，不需要重新启动 Extra。
 
@@ -77,6 +78,19 @@ octo-runtime channel-gateway run
 ```
 
 两个命令均持续运行。退出 Gateway 不会停止 Kernel；退出 Kernel 不会停止 Gateway。Gateway 也可以先启动，此时状态中 `kernel_available=false`，尚不能执行模型任务。不要对同一 Home 的同一组件同时使用前台运行和后台服务启动。
+
+### 服务状态日志
+
+```bash
+octo-runtime channel-gateway logs --lines 200
+octo-runtime channel-gateway logs --follow --json
+```
+
+Extra 前台 `run` 的 stdout 输出结构化状态事件，包含服务初始化/关闭、Kernel可用性转换和Gateway连接/重试计划。只记录组件工作状态，不包含聊天正文、会话/Run/消息标识、模型输出、工具参数或凭据；Bot以稳定脱敏endpoint标识区分。SDK默认静默，可通过非JSON的 `logging.statusOutput(record)` 接入宿主日志。
+
+CLI同时镜像到 `<home>/logs/extras/<extra>-status-<UTC小时>.log`，不依赖原生管理器捕获stdout，Windows任务同样可查询。保留当前文件及最近两份归档，每份最多100MiB。stdout最多缓冲128条/1MiB，恢复后报告丢弃数量；诊断失败不阻塞服务。`logs` 只读状态系列，最多读取最近三份中的4MiB，不读普通执行日志。空日志成功并向stderr提示；`--follow` 支持轮转和Ctrl+C。无需Kernel、模块清单或原生管理器在线。
+
+Gateway首次暂态离线和上线后暂态断线均等待5、10、15秒，之后每15秒；Retry-After可延长。缺失凭据、认证拒绝及明确终端踢线仍失败，不自动争抢。Bot online只证明IM连接，不能证明Provider或原任务成功；未知结果不得自动重跑。
 
 ### 后台用户服务
 
