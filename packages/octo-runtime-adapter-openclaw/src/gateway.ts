@@ -1,5 +1,6 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import WebSocket, { type RawData } from "ws";
+import { isGatewayRunPending } from "./compatibility.js";
 
 export interface OpenClawDeviceIdentity {
   deviceId: string;
@@ -23,11 +24,13 @@ export interface OpenClawGatewayEvent {
 export interface OpenClawGatewayHello {
   type: "hello-ok";
   protocol: number;
+  server?: { version?: string };
   features?: { methods?: string[]; events?: string[] };
   auth?: { deviceToken?: string; scopes?: string[]; role?: string };
 }
 
 interface PendingRequest {
+  method: string;
   resolve: (value: unknown) => void;
   reject: (error: Error) => void;
   expectFinal: boolean;
@@ -63,7 +66,19 @@ function messageText(data: RawData): string {
   return Buffer.from(data).toString("utf8");
 }
 
-function errorFromFrame(frame: GatewayFrame): Error {
+/** 保留原生错误码和 RPC，兼容判断不依赖拼接字符串或记录完整 details。 */
+export class OpenClawGatewayRpcError extends Error {
+  constructor(
+    readonly code: string | undefined,
+    readonly method: string,
+    message: string
+  ) {
+    super(message);
+    this.name = "OpenClawGatewayRpcError";
+  }
+}
+
+function errorFromFrame(frame: GatewayFrame, method: string): Error {
   const native = record(frame.error);
   const message =
     typeof native?.message === "string" ? native.message : "OpenClaw Gateway request failed";
@@ -71,7 +86,11 @@ function errorFromFrame(frame: GatewayFrame): Error {
   const requestId =
     typeof details?.requestId === "string" ? ` (pairing request ${details.requestId})` : "";
   const code = typeof native?.code === "string" ? ` [${native.code}]` : "";
-  return new Error(`${message}${requestId}${code}`);
+  return new OpenClawGatewayRpcError(
+    typeof native?.code === "string" ? native.code : undefined,
+    method,
+    `${message}${requestId}${code}`
+  );
 }
 
 function withRequestId(error: Error, requestId: string): Error {
@@ -241,8 +260,10 @@ export class OpenClawGatewayClient {
         ).then(
           (value) => {
             const hello = record(value) as OpenClawGatewayHello | undefined;
-            if (!hello || hello.type !== "hello-ok")
-              throw new Error("OpenClaw Gateway returned an invalid hello response");
+            if (!hello || hello.type !== "hello-ok") {
+              finish(new Error("OpenClaw Gateway returned an invalid hello response"));
+              return;
+            }
             this.#hello = hello;
             finish(undefined, hello);
           },
@@ -265,6 +286,8 @@ export class OpenClawGatewayClient {
       onAccepted?: (value: unknown) => void;
     } = {}
   ): Promise<unknown> {
+    if (options.signal?.aborted)
+      return Promise.reject(new Error(`OpenClaw Gateway request ${method} aborted`));
     const socket = this.#socket;
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       return Promise.reject(new Error("OpenClaw Gateway is not connected"));
@@ -272,6 +295,7 @@ export class OpenClawGatewayClient {
     const id = randomUUID();
     return new Promise((resolve, reject) => {
       const pending: PendingRequest = {
+        method,
         resolve,
         reject,
         expectFinal: options.expectFinal === true,
@@ -284,6 +308,7 @@ export class OpenClawGatewayClient {
       if (timeoutMs !== undefined) {
         pending.timer = setTimeout(() => {
           if (!this.#pending.delete(id)) return;
+          pending.cleanup?.();
           reject(new Error(`OpenClaw Gateway request ${method} timed out after ${timeoutMs}ms`));
         }, timeoutMs);
         pending.timer.unref?.();
@@ -294,7 +319,6 @@ export class OpenClawGatewayClient {
         pending.cleanup?.();
         reject(new Error(`OpenClaw Gateway request ${method} aborted`));
       };
-      if (options.signal?.aborted) return abort();
       options.signal?.addEventListener("abort", abort, { once: true });
       pending.cleanup = () => options.signal?.removeEventListener("abort", abort);
       this.#pending.set(id, pending);
@@ -357,7 +381,7 @@ export class OpenClawGatewayClient {
     const pending = this.#pending.get(frame.id);
     if (!pending) return;
     const payload = record(frame.payload);
-    if (frame.ok === true && pending.expectFinal && payload?.status === "accepted") {
+    if (frame.ok === true && pending.expectFinal && isGatewayRunPending(payload)) {
       pending.accepted?.(frame.payload);
       return;
     }
@@ -365,7 +389,7 @@ export class OpenClawGatewayClient {
     if (pending.timer) clearTimeout(pending.timer);
     pending.cleanup?.();
     if (frame.ok === true) pending.resolve(frame.payload);
-    else pending.reject(errorFromFrame(frame));
+    else pending.reject(errorFromFrame(frame, pending.method));
   }
 
   #failPending(error: Error): void {

@@ -1,0 +1,111 @@
+{
+  "realGateway": true,
+  "imDelivery": false,
+  "results": [
+    {
+      "scenario": "full_access",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.9.4"
+        }
+      ],
+      "terminal": "run.completed",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "permissionMode": "full"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 0
+    },
+    {
+      "scenario": "ask",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.9.4"
+        }
+      ],
+      "terminal": "run.completed",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "permissionMode": "guarded"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "exec.approval.list"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 0
+    },
+    {
+      "scenario": "cancel",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.9.4"
+        }
+      ],
+      "terminal": "run.cancelled",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "permissionMode": "full"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "sessions.abort"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 0
+    }
+  ]
+}

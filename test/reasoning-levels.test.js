@@ -82,7 +82,7 @@ test("native carriers receive mapped effort while the input request keeps xhigh"
       }
     }
   });
-  assert.equal(openclaw.createParams.thinkingLevel, "high");
+  assert.equal(openclaw.createParams.thinkingLevel, undefined);
   assert.equal(openclaw.agentParams.thinking, "high");
   assert.equal(request.agentConfig.effort, "xhigh");
 });

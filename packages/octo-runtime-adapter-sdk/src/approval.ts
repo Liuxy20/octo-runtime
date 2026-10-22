@@ -37,7 +37,12 @@ export class AcpApprovalBridge {
   constructor(
     readonly request: InvokeRequest,
     readonly timeoutMs = 600_000,
-    readonly options: { providerDecisions?: boolean; providerManagedExpiry?: boolean } = {}
+    readonly options: {
+      providerDecisions?: boolean;
+      providerManagedExpiry?: boolean;
+      /** 仅由 Adapter 在首个审批前设置，用于已授权的原生兼容回退；不改写请求策略与身份。 */
+      effectiveApprovalMode?: "ask" | "full_access";
+    } = {}
   ) {
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1)
       throw new Error("APPROVAL_TIMEOUT_INVALID");
@@ -47,6 +52,8 @@ export class AcpApprovalBridge {
   requestPermission(params: RecordValue, providerExpiresAt?: number): Promise<RecordValue> {
     if (this.#closed || this.request.signal?.aborted)
       return Promise.reject(new Error("APPROVAL_WAIT_UNAVAILABLE"));
+    const automatic =
+      (this.options.effectiveApprovalMode ?? this.request.approvalMode) === "full_access";
     const options = Array.isArray(params.options) ? params.options.filter(isObject) : [];
     const option = (kind: string): string | undefined => {
       const candidate = options.find((value) => value.kind === kind);
@@ -57,8 +64,7 @@ export class AcpApprovalBridge {
     const allow = option("allow_once");
     const always = this.options.providerDecisions ? option("allow_always") : undefined;
     const decline = option("reject_once");
-    if (!allow && !always && !decline && this.request.approvalMode !== "full_access")
-      return Promise.resolve(cancelled());
+    if (!allow && !always && !decline && !automatic) return Promise.resolve(cancelled());
     if (this.#pending.size >= 16 || this.request.signal?.aborted)
       return Promise.reject(new Error("APPROVAL_WAIT_UNAVAILABLE"));
     const interactionId = `interaction_${randomUUID()}`;
@@ -114,10 +120,8 @@ export class AcpApprovalBridge {
         written,
         confirm,
         fail,
-        responding: this.request.approvalMode === "full_access",
-        ...(this.request.approvalMode === "full_access"
-          ? { automaticOutcome: allow ? "accepted" : "cancelled" }
-          : {})
+        responding: automatic,
+        ...(automatic ? { automaticOutcome: allow ? "accepted" : "cancelled" } : {})
       });
     });
     const tool = isObject(params.toolCall)
@@ -169,8 +173,7 @@ export class AcpApprovalBridge {
         }
       }
     });
-    if (this.request.approvalMode === "full_access")
-      this.#pending.get(interactionId)!.resolve(allow ? selected(allow) : cancelled());
+    if (automatic) this.#pending.get(interactionId)!.resolve(allow ? selected(allow) : cancelled());
     return result;
   }
 

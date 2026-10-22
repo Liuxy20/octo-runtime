@@ -7,6 +7,7 @@ test("OpenClaw Gateway preserves new thought phases, native answer IDs and comme
   const client = {
     connect: async () => ({
       protocol: 4,
+      server: { version: "2026.9.1" },
       features: {
         methods: [
           "agents.list",

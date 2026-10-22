@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { DriverQueue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { createOpenClawAdapter } from "../packages/octo-runtime-adapter-openclaw/dist/index.js";
 
-function fixture() {
+function fixture({ onWait } = {}) {
   let listener,
     finish,
     runId,
@@ -14,6 +14,7 @@ function fixture() {
   const client = {
     connect: async () => ({
       protocol: 4,
+      server: { version: "2026.9.1" },
       features: {
         methods: [
           "agents.list",
@@ -41,7 +42,10 @@ function fixture() {
       calls.push(method);
       if (method === "agents.list") return { agents: [{ id: "main" }] };
       if (method === "sessions.create") return { key: params.key };
-      if (method === "agent.wait") return { status: "ok" };
+      if (method === "agent.wait") {
+        onWait?.();
+        return { status: "ok" };
+      }
       if (method !== "agent") return {};
       runId = "accepted-real-run";
       options.onAccepted({ runId });
@@ -144,6 +148,54 @@ test("overflow cleans up a paused invocation immediately without reconnecting or
     events.some((e) => e.type === "run.completed"),
     false
   );
+});
+
+test("broadcasts after native completion cannot overflow or abort the completed run", async () => {
+  const f = fixture();
+  await f.source.next();
+  await f.source.next();
+  f.finish();
+  assert.equal((await f.source.next()).value.type, "model_step.finished");
+  for (let i = 0; i < 4097; i++) f.own(i + 2);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(f.calls.filter((method) => method === "sessions.abort").length, 0);
+  const events = [];
+  for await (const event of f.source) events.push(event);
+  assert.equal(events.at(-1).type, "run.completed");
+  assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
+});
+
+test("overflow during lifecycle reconciliation wins over its successful wait result", async () => {
+  const f = fixture({
+    onWait: () => {
+      for (let i = 0; i < 4097; i++) f.own(i + 3);
+    }
+  });
+  await f.source.next();
+  await f.source.next();
+  f.emit({
+    event: "agent",
+    payload: {
+      runId: "accepted-real-run",
+      seq: 2,
+      stream: "lifecycle",
+      data: { phase: "end" }
+    }
+  });
+  const events = [];
+  for await (const event of f.source) events.push(event);
+  assert.equal(events.at(-1).type, "run.failed");
+  assert.match(events.at(-1).payload.message, /STREAM_QUEUE_ITEMS_EXCEEDED/);
+  assert.equal(
+    events.some((event) => event.type === "run.completed"),
+    false
+  );
+  assert.equal(
+    events.find((event) => event.type === "model_step.finished").payload.status,
+    "failed"
+  );
+  assert.equal(f.calls.filter((method) => method === "sessions.abort").length, 1);
+  assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
 });
 
 test("DriverQueue exact item, count and byte boundaries discard backlog on failure", async () => {

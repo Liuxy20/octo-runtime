@@ -1,0 +1,12 @@
+{
+  "realGateway": true,
+  "transport": "local TCP relay to user-authorized private ws endpoint; not WSS validation",
+  "available": true,
+  "handshakes": [
+    {
+      "version": "2026.6.11",
+      "protocol": 4
+    }
+  ],
+  "calls": ["connect", "agents.list"]
+}

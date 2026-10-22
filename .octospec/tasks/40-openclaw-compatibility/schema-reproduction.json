@@ -1,0 +1,53 @@
+{
+  "tag": "2026.7.1",
+  "validator": "TypeBox Compile; original AST schema expression and primitives; local installed dependency",
+  "results": [
+    {
+      "name": "current_default",
+      "valid": false,
+      "errors": [
+        {
+          "instancePath": "",
+          "keyword": "additionalProperties",
+          "message": "must not have additional properties",
+          "params": {
+            "additionalProperties": ["permissionMode", "idempotencyKey"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "remove_permission_only",
+      "valid": false,
+      "errors": [
+        {
+          "instancePath": "",
+          "keyword": "additionalProperties",
+          "message": "must not have additional properties",
+          "params": {
+            "additionalProperties": ["idempotencyKey"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "remove_permission_and_idempotency_with_effort",
+      "valid": false,
+      "errors": [
+        {
+          "instancePath": "",
+          "keyword": "additionalProperties",
+          "message": "must not have additional properties",
+          "params": {
+            "additionalProperties": ["thinkingLevel"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "common_fields",
+      "valid": true,
+      "errors": []
+    }
+  ]
+}

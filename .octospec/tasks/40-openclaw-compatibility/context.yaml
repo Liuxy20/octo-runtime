@@ -1,0 +1,158 @@
+task: 40-openclaw-compatibility
+phase: accepted-delivery-in-progress
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/40
+baseline: 88fa71db6f32c7898bfcc05d40eb2a44fd91d141
+delivery_baseline: 102fb9caf995d9eb1ac53acaf5b91922be4f023d
+branch: research/40-openclaw-compatibility
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-40
+read_at: "2026-10-22"
+workflow: .claude/skills/octospec-workflow/SKILL.md
+authorization:
+  - User requested examination of PR 102 review findings and analogous defects; confirmed defects are fixed within the existing delivery scope.
+  - Create a new worktree from latest origin/main.
+  - Research issue 40 with OctoSpec and propose causes and a solution.
+  - User subsequently authorized implementation, local verification, and OctoSpec updates.
+  - User also authorized live verification against the provided private Gateway and approved its test device pairing.
+  - User accepted the representative validation as sufficient for this delivery and explicitly authorized commits, push, PR creation and merge into main, subject to repository protection rules.
+user_evidence:
+  - Actual remote hello confirmed 2026.6.11/protocol 4 after user approved pairing; probe and five text/tool/cancellation scenarios passed. Private address and credentials are redacted. See remote-6.11-validation.md.
+  - User reports 2026.9.1 works and 2026.7.1 does not.
+  - Target compatibility extends from 2026.7.1 through current releases.
+confirmed_direction:
+  - Support 2026.7.1 through current stable releases across session creation, execution, streaming, approvals, cancellation, terminal state, and cleanup.
+  - Resolve compatibility inside the OpenClaw adapter from actual handshake protocol, server.version, methods and events, and verified version contracts; protocol v4 alone is insufficient.
+  - Share one contract resolver between read-only probe and invocation; revalidate every new connection or reconnection instead of trusting a cached probe decision.
+  - Keep the public Runtime calling interface unified; callers do not supply provider version branches.
+  - Permissions are business intent, mainly full_access and ask; approximate native mappings and explicit degradation are allowed without requiring legacy versions to reproduce modern guarded filesystem boundaries.
+  - User explicitly authorizes broader per-invocation permissions for compatibility; when ask is unavailable, fall back to full_access with a notice and without per-call confirmation. Keep ask when it is available.
+  - The approval bridge and required approval transport checks must follow effective full_access after ask falls back, while preserving the original request identity and Context hash. Missing human approval transport alone must not block an available full path.
+  - This authorization applies to the OpenClaw adapter compatibility task, not global policy changes or other providers. Explicit refusal alone does not satisfy old-version usability acceptance.
+  - The 27 audited tags include 2026.6.11 plus the original 26 releases from 7.1 onward; support for unlisted releases requires continued contract verification.
+proposed_details:
+  - Exact audited release lookup with shared contract implementations; no unbounded version ranges or floating-point version comparison.
+  - Legacy full/off and allowlist/on-miss session patches are first-choice candidates, subject to reviewer and harness verification; unsupported ask falls back to full instead of requiring stricter always handling.
+  - Reuse run.notice/provider_diagnostic for explicit degradation; do not add public permission modes or notice fields.
+  - Four implementation slices and explicit contract, permission, lifecycle, fault, and cleanup acceptance cases are documented in implementation-plan.md.
+loaded:
+  - AGENTS.md
+  - CLAUDE.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/scripts/lint.py
+  - .octospec/tasks/93-sleep-wake-recovery/context.yaml
+  - .octospec/tasks/93-sleep-wake-recovery/brief.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+rules:
+  - { id: runtime-architecture, path: .octospec/rules/architecture.md }
+  - { id: runtime-openclaw, path: .octospec/rules/openclaw.md }
+  - { id: runtime-adapter-metadata, path: .octospec/rules/adapter-metadata.md }
+  - { id: runtime-protocol-design, path: .octospec/rules/protocol-design.md }
+  - { id: runtime-output-protocol, path: .octospec/rules/output-protocol.md }
+  - { id: runtime-reasoning, path: .octospec/rules/reasoning.md }
+  - { id: runtime-environment, path: .octospec/rules/environment.md }
+  - { id: runtime-mcp, path: .octospec/rules/mcp.md }
+  - { id: runtime-context-input, path: .octospec/rules/context-input.md }
+  - { id: runtime-engineering, path: .octospec/rules/engineering.md }
+  - { id: commit, path: .octospec/rules/collaboration.md }
+precedence:
+  - User requires English GitHub issues, PRs, and commits for this OSS organization.
+  - User requires authorization for commits and the Codex coauthor trailer when applicable.
+  - Delivery commits, push, PR creation and merge are explicitly authorized by the user; repository protection rules still apply.
+source_reads:
+  - packages/octo-runtime-adapter-openclaw/src/index.ts
+  - packages/octo-runtime-adapter-openclaw/src/gateway.ts
+  - packages/octo-runtime-adapter-openclaw/README.md
+  - packages/octo-runtime-adapter-sdk/src/approval.ts
+  - packages/octo-runtime-protocol/src/experience.ts
+  - test/openclaw-approval.test.js
+  - test/adapter-permission-modes.test.js
+  - packages/octo-runtime-adapter-sdk/src/native.ts
+  - test/acp-approval.test.js
+  - test/adapters.test.js
+  - test/playboard.test.js
+  - test/openclaw-runtime-connection.test.js
+  - test/openclaw-message-segments.test.js
+  - test/openclaw-queue-bounds.test.js
+  - package.json
+source_searches:
+  - OpenClaw runtime connection, message segment, approval and queue fixtures.
+  - Unconditional creation fields, handshake, probe, subscriptions, terminal and cancellation paths.
+external_sources:
+  - source: https://github.com/Mininglamp-OSS/octo-runtime/issues/40
+    method: gh issue view; complete body and comments
+    result: No comments; raw diagnostic trace and serving Gateway build absent.
+  - source: https://github.com/openclaw/openclaw
+    method: gh tags/latest-release/contents/tree APIs; read-only
+    revisions: See source-evidence.json for 27 exact commit SHAs and source file digests.
+    result: All 27 tags use protocol 4; creation-field boundary separates checked 6.11/7.x tags from 8.1 onward.
+  - source: https://github.com/openclaw/openclaw/releases/latest
+    result: v2026.10.5 published 2026-10-18T21:47:25Z; beta 10.10 excluded.
+  - source: Local installed OpenClaw package metadata
+    result: Version 2026.9.4; TypeBox dependency used only for offline Schema compilation. No user configuration or credentials read.
+  - source: Existing local Gateway connection used by explicit live QA scripts
+    result: Read existing config/token without printing or modifying it; actual hello 2026.9.4/protocol 4. Only fixed text and cancellation scenarios; no tools or IM. Whitelisted results saved to live-gateway-evidence.json.
+  - source: User-authorized private Gateway; address and credentials redacted
+    result: User approved pairing. Actual hello 2026.6.11/protocol 4; Adapter probe, two text, two fixed exec and one cancellation scenarios passed through a temporary local TCP relay. Production remote WSS requirement unchanged. See live-gateway-6.11*-evidence.json and remote-6.11-validation.md.
+upstream_detail_reads:
+  representative_versions: [2026.6.11, 2026.7.1, 2026.8.1, 2026.9.1, 2026.10.5]
+  paths:
+    - packages/gateway-protocol/src/schema/sessions.ts
+    - packages/gateway-protocol/src/schema/sessions-create.ts
+    - packages/gateway-protocol/src/schema/sessions-patch.ts
+    - packages/gateway-protocol/src/schema/sessions-row.ts
+    - packages/gateway-protocol/src/schema/agent.ts
+    - packages/gateway-protocol/src/schema/frames.ts
+    - packages/gateway-protocol/src/schema/exec-approvals.ts
+    - packages/gateway-protocol/src/schema/primitives.ts
+    - packages/gateway-protocol/src/version.ts
+    - packages/gateway-protocol/src/schema/closed-object.ts
+    - src/gateway/server-methods/exec-approval.ts
+    - src/gateway/server-methods/agent.ts
+    - src/gateway/server-methods/agent-wait.ts
+    - src/gateway/server-methods/agent-wait-dedupe.ts
+    - src/agents/agent-run-terminal-outcome.ts
+    - src/agents/run-termination.ts
+    - src/shared/agent-liveness.ts
+    - src/gateway/agent-turn/agent-job.ts
+    - src/gateway/server-methods/sessions-create.ts
+    - src/gateway/server-methods/sessions.ts
+    - src/gateway/session-create-service.ts
+    - src/gateway/sessions-patch.ts
+    - src/gateway/device-auth.ts
+    - src/gateway/methods/core-descriptors.ts
+    - docs/tools/permission-modes.md
+    - docs/gateway/permission-modes.md
+  note: Paths differ between versions; 404s were resolved through source tree and imports. The list is a union, not a claim every version contains every path.
+verification:
+  - scope: Final local verification after PR 102 fixes
+    result: Default-concurrency pnpm test:suites passed with Node 1587 passed, 35 conditional skips, zero failures and WebUI 35 passed. Full build/typecheck, lint, naming, formatting, developer docs (four tests) and diff passed. OctoSpec retains only the existing docs-directory conflict. New hosted CI and reviewer approval are tracked separately from the old c3e4f1f results.
+  - scope: PR 102 review findings and adjacent lifecycle/transport defects
+    result: Both external findings reproduced at c3e4f1f; three adjacent defect groups also reproduced and fixed. Added 17 regressions plus expanded intermediate-response coverage. All OpenClaw tests had 113 passes and one GC skip. Standards and Spec rechecks found no remaining reproduced blockers. Loopback WS evidence is controlled transport verification, not another live Gateway deployment. See review.md.
+  - scope: Delivery verification after synchronization with main 102fb9c and late-cancellation fix
+    result: WebUI 35 passed; complete Node suite with --test-concurrency=4 had 1570 passed, 35 conditional skips and zero failures. Default-concurrency runs each failed a different unmodified timing-sensitive test; isolated Codex/compatibility 101 and process cleanup 11 all passed. Build/typecheck, lint, names, format and developer docs passed after synchronization; OpenClaw rebuilt after the race fix. See implementation.md and review.md.
+  - scope: 27-tag protocol/create/agent field audit
+    result: PASS; source-evidence.json records source and exact revisions. Not full semantic compatibility.
+  - scope: Original 7.1 SessionsCreateParamsSchema with local TypeBox Compile
+    result: PASS; four checks reproduce three unsupported fields and common-field acceptance. schema-reproduction.json stores the result.
+  - scope: Repository OctoSpec checker before changes
+    result: FAIL; only pre-existing docs-directory prohibition conflicts with current docs directory. Used uv with pyyaml after system Python lacked yaml.
+  - scope: Repository OctoSpec checker after documentation changes
+    result: Same single pre-existing docs-directory error; no new OKF metadata, index or local-link failures.
+  - scope: Research artifact formatting and whitespace
+    result: Prettier applied to new task artifacts and journal; git diff --check passed.
+  - scope: Source-derived request projections
+    result: 27 fixed release ASTs extracted into four distinct strict transmitted-field projections; create/agent digests match source-evidence.json. 6.11 and 7.1 projections are identical for the three transmitted RPC schemas. Not full upstream Schema copies.
+  - scope: Final local repository verification
+    result: Build/typecheck, lint, names, format, developer docs and diff passed. Complete test:suites passed with WebUI 35 and Node 1562 passed, 34 conditional skips, zero failures. Initial outdated mocks and lint/build race corrected, not baseline exceptions. Added pre-ACK cancellation, contradictory abort evidence and pending lifecycle regressions.
+  - scope: Real Gateway text and cancellation
+    result: Actual hello 2026.9.4/protocol 4. full_access and ask text completed, ask stayed guarded; accepted cancellation confirmed by one abort and agent.wait. Existing live queue script also passed with 27 native events. No tools or IM tested; see live-gateway-evidence.json.
+  - scope: Real 6.11 Gateway and focused regression after version addition
+    result: Adapter probe available with only connect/agents.list. Five text/tool/cancellation scenarios passed, ask explicitly fell back full with one notice, exactly one exec with fixed printf command per tool run, one abort/wait for cancellation. 54 strict mode flows; all six OpenClaw test files had 92 passes and one GC skip. Build/typecheck and lint passed again. No IM or global policy changes.
+unresolved:
+  - Actual Gateway build serving the reported diagnostic.
+  - Real legacy reviewer/harness behavior and actual full/off effects under stricter host policies. Current unknown-reviewer fallback is explicit, not a manual-ask equivalence claim.
+  - Full version-specific lifecycle and permission behavior beyond strict transmitted-field projections and representative handler audits.
+  - Other live representative Gateways, real CLI/SDK integration and IM validation. Actual 6.11 probe/text/tool/cancellation and 9.4 text/cancellation are separately verified; production remote WSS deployment is not exercised by the 6.11 TCP relay.

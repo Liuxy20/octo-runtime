@@ -2,6 +2,24 @@
 
 ## 2026-10-22
 
+- 修复 [PR #102 review 与同类问题](tasks/40-openclaw-compatibility/review.md#pr-102-外部意见与同类问题)：两项外部意见均复现，另确认旧 wait 覆盖终态、恢复步骤事件丢失和资源溢出误报成功三类缺陷。统一中间回执、终态提交及收尾，新增 17 条回归，OpenClaw 113 通过／1 GC skip；独立 Standards／Spec 最终复核无剩余已复现阻断。
+
+- 用户接受 Issue 40 现有代表实测为本次合并验收，授权提交 commit、创建 PR 及合入 main。进入最新 main 同步、双轴复核与 CI 交付；未实测版本继续保留原证据等级，不要求伪造全矩阵通过，见[任务](tasks/40-openclaw-compatibility/brief.md)。
+
+- 用户批准配对后完成 [6.11 真实 Gateway 验证](tasks/40-openclaw-compatibility/remote-6.11-validation.md)：probe 及 full／ask 回退文本、固定 exec、取消共五场景通过；6.11 加入精确合同，27 标签／54 模式流程及全部 OpenClaw 回归 92 通过、1 跳过。完整构建／类型及 lint 再验通过，真实内网地址与配对编号已从交付文档脱敏，凭据未入库。测试经临时本地 TCP 转发，正式远程 WSS 校验保留。前一条配对待批准状态已解除，7.1 仍按源码与自动化证据记录。
+
+- 按用户授权尝试远程 OpenClaw 6.11 验证：地址可达但认证返回 NOT_PAIRED，固定 QA 设备身份待批准，尚未执行模型或取得实际版本。脚本补充显式远程凭据、固定设备文件及只读 probe；本机 9.4 probe 回归通过。官方 6.11 固定源码预核对及待验项见[记录](tasks/40-openclaw-compatibility/remote-6.11-validation.md)，不将其记为真实兼容通过。
+
+- 按用户授权实施 [Issue 40 多版本兼容](tasks/40-openclaw-compatibility/implementation.md)：实际握手后按 26 标签选择 create／旧会话 patch，ask 不可用时向 full 回退并同步审批桥，修复取消竞态、终态归因及 Gateway 预取消／超时清理。全量 Node 1562 通过／34 跳过、UI 35 通过，构建／类型／lint／命名／格式／开发文档通过；真实 hello 9.4 的 full／ask 文本和一次 abort 取消验证通过。其他版本和原生工具／reviewer／IM 继续待验，OctoSpec 保留原 docs 目录错误；未提交或推送，见[记录](journal/shared/2026-10-22-40-openclaw-compatibility-implementation.md)。
+
+- 按用户明确纠正更新 [Issue 40 权限回退](tasks/40-openclaw-compatibility/implementation-plan.md)：ask 不可用时直接采用 full_access，权限向大兼容，无需逐次确认；ask 可用时保留。桥接与实际模式同步，人工审批通道缺失不阻断可用 full 路径，通知实际回退。撤回此前助手提出的“权限只能收紧”规则；仅文档，未实现或提交。
+
+- 细化 [Issue 40 实施与验收](tasks/40-openclaw-compatibility/implementation-plan.md)，按用户补充将权限改为 full_access／提醒两类业务意图，不要求旧版完整复制新版文件边界。补充精确标签判定、首选／备选策略、调用顺序和失败处理；最初建议的回退方向随后按用户纠正更新，以上一条为准。仅计划，尚未实现或联调。
+
+- 按用户确认更新 [Issue 40 整体兼容方案](tasks/40-openclaw-compatibility/design.md)：目标覆盖 7.1 至当前稳定版的完整调用生命周期；probe 与实际执行共享 Adapter 内部合同解析，按每次连接的协议号、server.version、方法及事件重新判定。旧版权限映射仍待验证，明确拒绝不代表兼容完成；仅更新 OctoSpec。
+
+- 从最新 `origin/main@88fa71d` 新建 Issue 40 独立 worktree，完成 [OpenClaw 版本兼容调研与方案](tasks/40-openclaw-compatibility/brief.md)。26 个非 beta 标签核对表明 7.x 创建 Schema 不支持当前发送的三个字段，8.1 起已有对应字段，协议号均为 4；原始 7.1 Schema 四项本地校验通过。仅规划，旧版权限等价映射与真实联调待确认，见[记录](journal/shared/2026-10-22-40-openclaw-compatibility-plan.md)。
+
 - 按用户要求落实PR #96的P3：Windows Node 24/26显式运行五个恢复与Extra状态日志测试文件，保留原平台边界，本机40项通过；新增提交的远端结果及批准另行确认，merge改由用户手动操作，见[实施记录M9](tasks/93-sleep-wake-recovery/implementation.md#m9-pr-96-windows-测试覆盖补充)。
 
 - 按用户授权将Issue 93八个阶段提交无冲突rebase到main@d076474；全量35项UI、1488项Node通过，34项跳过，静态与文档检查通过。更新推送/PR/合并授权与保护要求，原事故仍待现场验收，见[实施记录M8](tasks/93-sleep-wake-recovery/implementation.md#m8-同步-main-与提交-pr)。

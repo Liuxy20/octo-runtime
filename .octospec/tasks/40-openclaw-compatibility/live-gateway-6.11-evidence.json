@@ -1,0 +1,129 @@
+{
+  "realGateway": true,
+  "imDelivery": false,
+  "results": [
+    {
+      "scenario": "full_access",
+      "requestedPermission": "full_access",
+      "effectivePermission": "full_access",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.6.11"
+        }
+      ],
+      "terminal": "run.completed",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "fields": ["agentId", "key"]
+        },
+        {
+          "method": "sessions.patch",
+          "execSecurity": "full",
+          "execAsk": "off"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 0
+    },
+    {
+      "scenario": "ask",
+      "requestedPermission": "ask",
+      "effectivePermission": "full_access",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.6.11"
+        }
+      ],
+      "terminal": "run.completed",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "fields": ["agentId", "key"]
+        },
+        {
+          "method": "sessions.patch",
+          "execSecurity": "full",
+          "execAsk": "off"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 1
+    },
+    {
+      "scenario": "cancel",
+      "requestedPermission": "full_access",
+      "effectivePermission": "full_access",
+      "handshakes": [
+        {
+          "protocol": 4,
+          "version": "2026.6.11"
+        }
+      ],
+      "terminal": "run.cancelled",
+      "toolCalls": 0,
+      "calls": [
+        {
+          "method": "connect"
+        },
+        {
+          "method": "agents.list"
+        },
+        {
+          "method": "sessions.create",
+          "fields": ["agentId", "key"]
+        },
+        {
+          "method": "sessions.patch",
+          "execSecurity": "full",
+          "execAsk": "off"
+        },
+        {
+          "method": "sessions.messages.subscribe"
+        },
+        {
+          "method": "agent"
+        },
+        {
+          "method": "sessions.abort"
+        },
+        {
+          "method": "agent.wait"
+        }
+      ],
+      "permissionFallbacks": 0
+    }
+  ]
+}

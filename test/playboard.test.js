@@ -418,6 +418,7 @@ for (const legacyOpenClaw of [false, true]) {
                     payload: {
                       type: "hello-ok",
                       protocol: 4,
+                      server: { version: "2026.9.1" },
                       features: {
                         methods: [
                           "agents.list",

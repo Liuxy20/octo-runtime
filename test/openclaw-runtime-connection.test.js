@@ -169,6 +169,7 @@ for (const legacy of [false, true]) {
                 payload: {
                   type: "hello-ok",
                   protocol: 4,
+                  server: { version: "2026.9.1" },
                   features: {
                     methods: [
                       "agents.list",
@@ -299,6 +300,7 @@ test("shared Host probes and invokes each Runtime connection and uses only the C
         async connect() {
           return {
             protocol: 4,
+            server: { version: "2026.9.1" },
             features: {
               methods: [
                 "agents.list",

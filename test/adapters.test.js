@@ -109,6 +109,7 @@ function openClawGatewayHello() {
   return {
     type: "hello-ok",
     protocol: 4,
+    server: { version: "2026.9.1" },
     features: { methods: openClawGatewayMethods, events: ["agent"] }
   };
 }
@@ -1091,7 +1092,7 @@ test("control instructions use private provider-native carriers", async () => {
   assert.equal(openclaw.agentParams.promptMode, undefined);
   assert.equal(openclaw.createParams.cwd, undefined);
   assert.equal(openclaw.createParams.model, "provider/model");
-  assert.equal(openclaw.createParams.thinkingLevel, "medium");
+  assert.equal(openclaw.createParams.thinkingLevel, undefined);
   assert.match(openclaw.sessionKey, /^agent:octo-openclaw-runner:octo-run:run-1:/);
 });
 

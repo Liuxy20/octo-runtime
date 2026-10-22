@@ -3,7 +3,7 @@ type: Rule
 title: OpenClaw 连接与执行合同
 description: profile 连接、已有 Agent、原生工作区及目标解析。
 tags: ["openclaw","adapter","workspace"]
-timestamp: 2026-10-15T00:00:00Z
+timestamp: 2026-10-22T00:00:00Z
 implementation_baseline: df63c8f
 id: runtime-openclaw
 tier: repo
@@ -92,6 +92,20 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 `provider_agent_id` 随执行计划解析和冻结，不进入模型提示词。本地连接配置不得设置或覆盖目标 Agent。Gateway 探测检查协议与公开执行能力，不要求存在名为 `main` 的 Agent；执行时验证本轮指定的目标。目标缺失必须明确失败，不切换到其他 Agent。
 
 统一执行接口不表示各 Provider 能力相同。OpenClaw Adapter 声明 `metadata.workspace: false`，忽略 `octo.execution/workspace` 和 `workdir`，不检查或创建本地工作区、不分配随机目录、不覆盖目标 Agent 的原生工作区。本地调用不增加 Worker 回执门槛。Context 快照不改写，审批模式、环境变量和恢复等能力按实际支持范围校验。业务上下文由每轮发起方决定，显式重复照常传递，不自动补齐、缓存或追加。
+
+## Gateway 版本与会话权限
+
+probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同解析器，以真实 hello 的协议号、server.version、必要方法及事件交叉判定。当前精确表为已核对的 2026.6.11，加 2026.7.1 至 2026.10.5 的 26 个正式标签，共 27 个，包含维护后缀；不按版本大小推测中间未列版本、beta、fork、未知补丁或未来版本。probe 只检查基础调用合同和只读 agents.list，不保证特定目标 Agent 或请求权限；invocation 每次重新判定，不依赖旧 probe 缓存。
+
+创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model、可信系统指令和 deliver:false。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
+
+权限按业务意图兼容：可用的新版 ask 使用 guarded，ask 通道／授权不可用时直接采用已授权的 full_access；旧版会话参数无法确认人工 reviewer，当前按此原因回退 full/off。回退通过一次 run.notice/provider_diagnostic 告知实际版本、requested、effective 和原因；不额外询问、不改原请求／Context hash，审批桥单独按 effective full 处理本次 allow-once。full 不代表绕过宿主禁止、sandbox 或 harness 限制，不改全局策略；全部已知权限路径不可用时返回真实错误。assisted 仍不支持。
+
+终态同时核对 status、endedAt、stopReason、aborted 和超时归因；正常成功的 stop 不是取消，rpc/stop 的非成功回执和 restart 才按取消处理。等待超时不等于执行结束，pendingError 不作为终态；执行超时、blocked/abandoned 不报成功。取消桥与执行循环共用一次 abort/对账，确认后关闭连接。断线对账只读已有执行，按实际完成／失败／取消返回，不重跑任务。
+
+RPC expectFinal、终态归一化和 wait 共用中间回执判定：accepted／queued／in_flight／pending／running 及 pendingError 保留原请求，不能提前丢弃最终答案或 usage。并发对账先返回局部结果，再仅填充未知终态；旧 wait 或主动关闭造成的错误不能覆盖已确认取消。断线恢复仍须发布已开始模型步骤的匹配结束事件。确认终态后忽略迟到广播；确认前发生的队列容量失败保留原始异常，并在对账返回和正常出口阻止成功收尾。真实 transport cleanup 错误仍须传播，不能因已知执行终态而吞掉。
+
+上述为代码合同与自动化验证范围，不能代替各 Gateway、reviewer／harness 和 IM 的真实验收。源码及逐标签证据见[Issue 40 实施记录](../tasks/40-openclaw-compatibility/implementation.md)。
 
 ## 操作入口
 
