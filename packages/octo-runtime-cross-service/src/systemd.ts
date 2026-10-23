@@ -309,12 +309,8 @@ function renderSystemdUnitNormalized(spec: NormalizedServiceSpec): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}`)
     .join("\n");
-  const output = spec.stdoutPath
-    ? `StandardOutput=${systemdQuote(`append:${spec.stdoutPath}`)}\n`
-    : "";
-  const error = spec.stderrPath
-    ? `StandardError=${systemdQuote(`append:${spec.stderrPath}`)}\n`
-    : "";
+  const output = spec.stdoutPath ? `StandardOutput=append:${systemdPath(spec.stdoutPath)}\n` : "";
+  const error = spec.stderrPath ? `StandardError=append:${systemdPath(spec.stderrPath)}\n` : "";
   return `[Unit]
 Description=${escapeSystemdText(spec.description)}
 After=network-online.target
@@ -325,7 +321,7 @@ StartLimitBurst=${spec.restart.maxBurst}
 [Service]
 Type=simple
 ExecStart=:${[spec.command, ...spec.args].map(systemdQuote).join(" ")}
-WorkingDirectory=${systemdQuote(spec.workingDirectory)}
+WorkingDirectory=${systemdPath(spec.workingDirectory)}
 ${environment ? `${environment}\n` : ""}Restart=${restart}
 RestartSec=${spec.restart.delaySeconds}s
 TimeoutStopSec=${spec.timeoutStopSeconds}s
@@ -344,6 +340,16 @@ function systemdUnit(spec: NormalizedServiceSpec): string {
 
 function systemdQuote(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("%", "%%")}"`;
+}
+
+function systemdPath(value: string): string {
+  const trailingBackslashes = value.match(/\\+$/)?.[0].length ?? 0;
+  if (/[ \t]$/.test(value))
+    throw new ServiceError(
+      "UNSUPPORTED_SPEC",
+      "systemd path directives cannot preserve trailing spaces or tabs"
+    );
+  return `${value.replaceAll("%", "%%")}${trailingBackslashes % 2 === 0 ? "" : " "}`;
 }
 
 function escapeSystemdText(value: string): string {

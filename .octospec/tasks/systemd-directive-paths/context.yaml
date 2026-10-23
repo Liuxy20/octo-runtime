@@ -1,0 +1,24 @@
+status: locally-validated
+recorded_on: 2026-10-22
+validated_on: 2026-10-23
+baseline: fe19d350431534da4ed3a76f3466add4ced86d81
+baseline_source: git-fetch-origin-main
+branch: fix/systemd-directive-paths
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/113
+rules:
+  - runtime-architecture
+  - runtime-engineering
+  - runtime-lifecycle
+  - commit
+sources:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/collaboration.md
+  - packages/octo-runtime-cross-service/src/systemd.ts
+  - test/cross-service.test.js
+  - systemd upstream src/core/load-fragment.c

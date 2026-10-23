@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import {
   LaunchdUserBackend,
@@ -100,6 +100,78 @@ test("Windows renderer uses a least-privilege current-user logon task", () => {
   assert.equal(quoteWindowsArgument("C:\\path with space\\"), '"C:\\path with space\\\\"');
 });
 
+for (const directory of [
+  "/home/alice/.octo-runtime",
+  "/home/trusted user/.octo runtime",
+  "/home/alice/100% literal %h %n",
+  '/home/alice/中文 "quoted" \\literal',
+  "/home/alice/trailing\\\\"
+]) {
+  test(`systemd renders literal path directives for ${directory}`, () => {
+    const spec = {
+      ...unixSpec,
+      workingDirectory: directory,
+      stdoutPath: join(directory, 'out "quoted" %n.log'),
+      stderrPath: join(directory, "err \\literal %h.log"),
+      args: ["with spaces", 'with "quotes"', "100%", "\\literal"],
+      environment: { OCTO_PROFILE: 'with "quotes" \\literal 100%' }
+    };
+    const lines = renderSystemdUnit(spec).split("\n");
+    assert.ok(lines.includes(`WorkingDirectory=${directory.replaceAll("%", "%%")}`));
+    assert.ok(lines.includes(`StandardOutput=append:${spec.stdoutPath.replaceAll("%", "%%")}`));
+    assert.ok(lines.includes(`StandardError=append:${spec.stderrPath.replaceAll("%", "%%")}`));
+    assert.ok(
+      lines.includes(
+        'ExecStart=:"/opt/octo runtime/bin/octo-daemon" "with spaces" "with \\"quotes\\"" "100%%" "\\\\literal"'
+      )
+    );
+    assert.ok(lines.includes('Environment="OCTO_PROFILE=with \\"quotes\\" \\\\literal 100%%"'));
+  });
+}
+
+for (const field of ["workingDirectory", "stdoutPath", "stderrPath"]) {
+  for (const suffix of ["\v", "\f"]) {
+    test(`systemd preserves ${JSON.stringify(suffix)} in ${field}`, () => {
+      const path = `/home/alice/path${suffix}`;
+      const directive = {
+        workingDirectory: "WorkingDirectory",
+        stdoutPath: "StandardOutput",
+        stderrPath: "StandardError"
+      }[field];
+      const prefix = field === "workingDirectory" ? "" : "append:";
+      assert.ok(
+        renderSystemdUnit({ ...unixSpec, [field]: path })
+          .split("\n")
+          .includes(`${directive}=${prefix}${path}`)
+      );
+    });
+  }
+  for (const count of [1, 2, 3, 4]) {
+    test(`systemd preserves ${count} trailing backslashes in ${field}`, () => {
+      const path = `/home/alice/path${"\\".repeat(count)}`;
+      const directive = {
+        workingDirectory: "WorkingDirectory",
+        stdoutPath: "StandardOutput",
+        stderrPath: "StandardError"
+      }[field];
+      const prefix = field === "workingDirectory" ? "" : "append:";
+      assert.ok(
+        renderSystemdUnit({ ...unixSpec, [field]: path })
+          .split("\n")
+          .includes(`${directive}=${prefix}${path}${count % 2 === 0 ? "" : " "}`)
+      );
+    });
+  }
+  for (const suffix of [" ", "\t"]) {
+    test(`systemd rejects unrepresentable ${field} suffix ${JSON.stringify(suffix)}`, () => {
+      assert.throws(
+        () => renderSystemdUnit({ ...unixSpec, [field]: `/home/alice/path${suffix}` }),
+        (error) => error instanceof ServiceError && error.code === "UNSUPPORTED_SPEC"
+      );
+    });
+  }
+}
+
 test("Windows backend rejects fields Task Scheduler cannot preserve", () => {
   assert.throws(
     () =>
@@ -151,6 +223,59 @@ test("systemd install is idempotent and does not start a new service", async (t)
   assert.equal(runner.calls.filter((call) => call.args.includes("start")).length, 0);
   assert.ok(runner.calls.every((call) => call.options?.env !== process.env));
 });
+
+for (const useXdg of [false, true]) {
+  test(`systemd reinstall repairs quoted path directives in ${useXdg ? "XDG" : "default"} config and reloads before starting`, async (t) => {
+    const home = await mkdtemp(join(tmpdir(), "octo-systemd-reinstall-"));
+    t.after(() => rm(home, { recursive: true, force: true }));
+    const spec = {
+      ...unixSpec,
+      workingDirectory: home,
+      stdoutPath: join(home, "stdout.log"),
+      stderrPath: join(home, "stderr.log")
+    };
+    const configHome = join(home, useXdg ? "xdg-config" : ".config");
+    const environment = useXdg ? { XDG_CONFIG_HOME: configHome } : {};
+    const unitPath = join(configHome, "systemd", "user", `${spec.id}.service`);
+    const repaired = renderSystemdUnit(spec);
+    await mkdir(dirname(unitPath), { recursive: true });
+    await writeFile(
+      unitPath,
+      repaired.replace(/^(WorkingDirectory|StandardOutput|StandardError)=(.*)$/gm, '$1="$2"')
+    );
+    let reloaded = false;
+    let started = false;
+    const runner = new FakeRunner((_command, args) => {
+      if (args.includes("daemon-reload")) reloaded = true;
+      if (args.includes("enable") || args.includes("start")) assert.equal(reloaded, true);
+      if (args.includes("start")) started = true;
+      if (args.includes("show"))
+        return result(
+          0,
+          `LoadState=${reloaded ? "loaded" : "bad-setting"}\nUnitFileState=enabled\nActiveState=${started ? "active" : "inactive"}\nSubState=${started ? "running" : "dead"}\nMainPID=${started ? 123 : 0}\n`
+        );
+      return result();
+    });
+    const backend = new SystemdUserBackend({
+      platform: "linux",
+      runner,
+      homeDirectory: home,
+      environment
+    });
+    const previous = await backend.inspect(spec);
+    assert.equal(previous.definitionPath, unitPath);
+    assert.deepEqual(previous.drift, ["definition_content"]);
+    await backend.install(spec);
+    assert.equal(await readFile(unitPath, "utf8"), repaired);
+    assert.equal(started, false);
+    await backend.start(spec);
+    assert.equal(started, true);
+    await backend.install(spec);
+    assert.equal(runner.calls.filter((call) => call.args.includes("daemon-reload")).length, 1);
+    assert.equal(runner.calls.filter((call) => call.args.includes("restart")).length, 0);
+    assert.ok(runner.calls.every((call) => call.options?.env === environment));
+  });
+}
 
 test("launchd install then start bootstraps the current user's LaunchAgent", async (t) => {
   const home = await mkdtemp(join(tmpdir(), "octo-cross-service-launchd-"));
