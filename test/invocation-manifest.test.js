@@ -28,6 +28,7 @@ test("Windows identity queries stay fresh and preserve registration failures", a
   });
   let result = "100";
   t.mock.method(childProcess, "execFile", (_file, _args, _options, callback) => {
+    assert.equal(_options.timeout, 40_000);
     callback(result === "failure" ? failure : null, result, "");
   });
   syncBuiltinESMExports();

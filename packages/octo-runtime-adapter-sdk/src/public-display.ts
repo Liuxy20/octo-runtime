@@ -17,11 +17,21 @@ export function sanitizePublicValue(value: unknown, key = "", depth = 0): unknow
 }
 
 function redactCredentialText(value: string): string {
-  return value
-    .replace(
-      /-----BEGIN [^-]*PRIVATE KEY-----[\s\S]*?-----END [^-]*PRIVATE KEY-----/gi,
-      "[REDACTED]"
-    )
+  // 单向扫描 PEM，避免多个未闭合 BEGIN 反复扫描后缀；截断的私钥同样不能公开。
+  const begin = /-----BEGIN [^-]*PRIVATE KEY-----/gi;
+  const end = /-----END [^-]*PRIVATE KEY-----/gi;
+  const parts: string[] = [];
+  let offset = 0;
+  for (let match = begin.exec(value); match; match = begin.exec(value)) {
+    parts.push(value.slice(offset, match.index), "[REDACTED]");
+    end.lastIndex = begin.lastIndex;
+    const closing = end.exec(value);
+    offset = closing ? end.lastIndex : value.length;
+    begin.lastIndex = offset;
+  }
+  parts.push(value.slice(offset));
+  return parts
+    .join("")
     .replace(/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [REDACTED]")
     .replace(
       /\b(api[_-]?key|(?:access[_-]?|refresh[_-]?|bf[_-]?)?token|password|passwd|secret)\s*["']?\s*[:=]\s*["']?[^\s,;&"'}]+/gi,

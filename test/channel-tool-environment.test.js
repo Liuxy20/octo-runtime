@@ -56,6 +56,50 @@ test("channel tool URL normalization removes only the final api segment", () => 
   assert.throws(() => octoCliEnvironment(base, ""), /IM_BOT_TOKEN_INVALID/);
 });
 
+test("CLI dotenv and Gateway preserve URL normalization parity for repeated separators", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "octo-tool-url-parity-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const native = join(root, "native"),
+    profile = join(root, "profile");
+  await mkdir(native);
+  await writeFile(
+    join(native, "openclaw.json"),
+    JSON.stringify({ gateway: { auth: { token: "gateway-fixture" } } })
+  );
+  await configureCliOpenClaw(profile, { openclawHome: native });
+  const origin = "https://example.invalid";
+  for (const [suffix, expected] of [
+    ["/tenant///api/", "/tenant"],
+    ["/tenant///api////", "/tenant"],
+    ["/tenant///", "/tenant"],
+    ["/tenant///api/tools////", "/tenant///api/tools"],
+    ["///api/", ""],
+    ["/api/", ""],
+    ["", ""],
+    ["/tenant///apiX///", "/tenant///apiX"]
+  ]) {
+    const apiUrl = origin + suffix;
+    await syncCliOpenClawToolEnvironment(profile, [
+      {
+        name: "channel-gateway",
+        config: {
+          bots: [
+            {
+              bot_id: "fixture",
+              bf_token: token,
+              api_url: apiUrl,
+              adapter: { adapter_type: "openclaw" }
+            }
+          ]
+        }
+      }
+    ]);
+    const actual = parseEnv(await readFile(join(native, ".env"), "utf8")).OCTO_API_BASE_URL;
+    assert.equal(actual, origin + expected, apiUrl);
+    assert.equal(actual, octoCliEnvironment(apiUrl, token).env_variables[1].value, apiUrl);
+  }
+});
+
 test("tool overrides cross a real Host subprocess and reach child tools without changing Context", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "octo-tool-env-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -229,7 +273,10 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
   );
   assert.ok(content.startsWith("# Keep this comment\n"));
   assert.equal((content.match(/OCTO_BOT_TOKEN=/g) ?? []).length, 1);
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  const info = await stat(file);
+  assert.ok(info.isFile());
+  // Windows 不提供 POSIX 权限位；正文和普通文件断言仍在所有平台执行。
+  if (process.platform !== "win32") assert.equal(info.mode & 0o777, 0o600);
   assert.deepEqual(await syncCliOpenClawToolEnvironment(profile, configs), {
     file,
     written: false,

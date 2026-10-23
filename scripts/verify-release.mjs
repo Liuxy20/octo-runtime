@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
-import { access, cp, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { access, cp, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 import { readReleaseBuildInfo } from "./read-release-build-info.mjs";
+import {
+  runReleaseCommand as execute,
+  stopReleaseProcess,
+  withReleaseDirectory
+} from "./release-process.mjs";
 
-const execute = promisify(execFile);
 export async function verifyRelease(archiveInput, { expectedCommit, requireClean = false } = {}) {
   if (expectedCommit !== undefined && !/^[a-f0-9]{40,64}$/.test(expectedCommit))
     throw new Error("Invalid expected commit");
   const archive = resolve(archiveInput);
+  // Windows 外层验收须覆盖 40 秒身份查询、后续 15 秒就绪与资源关闭，不能提前杀掉 owner。
+  const runtimeCheckTimeout = process.platform === "win32" ? 60_000 : 30_000;
   const root = resolve(import.meta.dirname, "..");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "orc-"));
   const npm = join(
@@ -36,9 +41,9 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--no-audit",
         "--no-fund"
       ],
-      { cwd: directory, timeout: 60_000 }
+      { cwd: directory, timeout: 60_000, label: `Offline npm ${args[0]}` }
     );
-  try {
+  await withReleaseDirectory(directory, async () => {
     await npmRun(["install", archive]);
     const consumer = process.platform === "win32" ? directory : join(directory, "lib");
     const installed = join(consumer, "node_modules/@mininglamp-oss/octo-runtime");
@@ -119,7 +124,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     });
     const home = join(directory, "home");
     const run = (args) =>
-      execute(process.execPath, [cli, ...args, "--home", home], { cwd: consumer, timeout: 10_000 });
+      execute(process.execPath, [cli, ...args, "--home", home], {
+        cwd: consumer,
+        timeout: 10_000,
+        label: `CLI ${args.join(" ") || "help"}`
+      });
     const version = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;
     for (const args of [["--version"], ["-v"], ["version"]])
       assert.equal((await run(args)).stdout.trim(), version);
@@ -167,7 +176,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--typeRoots",
         join(root, "node_modules/@types")
       ],
-      { cwd: consumer, timeout: 30_000 }
+      { cwd: consumer, timeout: 30_000, label: "Compile documentation examples" }
     );
     await cp(join(root, "test/fixtures/invoke-adapter.js"), join(consumer, "docs-adapter.mjs"));
     await writeFile(
@@ -198,7 +207,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       assert.equal(completed, true);
     `
       ],
-      { cwd: consumer, timeout: 30_000 }
+      { cwd: consumer, timeout: runtimeCheckTimeout, label: "Run documentation service example" }
     );
     for (const name of [
       "plugin",
@@ -239,7 +248,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--outDir",
         "compiled"
       ],
-      { cwd: consumer, timeout: 30_000 }
+      { cwd: consumer, timeout: 30_000, label: "Compile public SDK fixtures" }
     );
     await execute(
       process.execPath,
@@ -248,14 +257,15 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--eval",
         'await (await import("./compiled/executor.mjs")).verifyExecutorCore(); await import("./compiled/host.mjs");'
       ],
-      { cwd: consumer, timeout: 30_000 }
+      { cwd: consumer, timeout: runtimeCheckTimeout, label: "Run public SDK component integration" }
     );
     const child = spawn(
       process.execPath,
       [cli, "executor-kernel", "run", "--json", "--home", home],
       {
         cwd: consumer,
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["ignore", "pipe", "pipe"],
+        detached: process.platform !== "win32"
       }
     );
     let stdout = "",
@@ -271,7 +281,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       child.once("error", reject);
     });
     try {
-      const end = Date.now() + 30_000;
+      const end = Date.now() + runtimeCheckTimeout;
       while (!/"state"\s*:\s*"ready"/.test(stdout)) {
         if (child.exitCode !== null || child.signalCode !== null || Date.now() >= end)
           throw new Error(`Kernel CLI failed: ${stdout} ${stderr}`);
@@ -286,7 +296,9 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         adapters.map((adapter) => adapter.type).sort(),
         moduleManifest.adapters.map((adapter) => adapter.type).sort()
       );
-      child.kill("SIGTERM");
+      // Windows 的 SIGTERM 会直接杀掉 leader，之后无法再沿原 PID 找到 worker 树。
+      if (process.platform === "win32") await stopReleaseProcess(child);
+      else child.kill("SIGTERM");
       await Promise.race([
         exited,
         new Promise((_, reject) => {
@@ -297,12 +309,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       if (process.platform !== "win32") assert.equal(child.exitCode, 0);
     } finally {
       if (child.exitCode === null && child.signalCode === null) {
-        if (process.platform === "win32")
-          await execute("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
-            timeout: 5000,
-            windowsHide: true
-          });
-        else child.kill("SIGKILL");
+        await stopReleaseProcess(child, { termGraceMs: 0 });
         await exited;
       }
     }
@@ -325,9 +332,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         version: metadata.version
       })
     );
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
+  });
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.includes("--live"))

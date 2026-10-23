@@ -5,6 +5,7 @@
 // Adapted from Mininglamp-OSS/openclaw-channel-octo/src/api-fetch.ts.
 import { randomUUID } from "node:crypto";
 import { OctoApiError, OctoApiStatusMismatchError, OctoApiProtocolError } from "./errors.js";
+import { trimTrailingSlashes } from "./url.js";
 
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -137,7 +138,7 @@ async function requestJson<T>(
   signal?: AbortSignal,
   opts: JsonRequestOptions = {}
 ): Promise<T | undefined> {
-  const url = `${apiUrl.replace(/\/+$/, "")}${path}`;
+  const url = `${trimTrailingSlashes(apiUrl)}${path}`;
   const retryOn429 = opts.retryOn429 ?? true;
   let waited = 0;
 

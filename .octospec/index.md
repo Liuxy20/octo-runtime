@@ -51,6 +51,8 @@
 
 ## 当前任务
 
+- [Issue 81 与 Dependabot 安全整改](tasks/81-security-remediation/brief.md)：基于 `main@445d2bb`，原 35 条及新增 7 条均有[逐条处置](tasks/81-security-remediation/disposition.md)；修复项在分支扫描不再命中，其余按证据分别登记误报，Vitest 升至 4.1.12，六平台 CI 通过。用户已授权合并 [PR #115](https://github.com/Mininglamp-OSS/octo-runtime/pull/115)，仍需满足 GitHub 至少一位 reviewer 批准及 CI Gate；最终 main 重扫和 Dependabot 状态待合并后核对，见[验证记录](journal/shared/2026-10-23-81-security-remediation.md)。
+
 - [Issue 110：Gateway 默认发送者准入](tasks/channel-default-admission/brief.md)：独立 worktree 基于 `main@5c1921d`；消息及卡片入口省略名单时不回退 owner，DM 沿用平台准入、群/话题不额外限制发送者。架构与文档同步，五 Bot 群/子区触发及 stop/reset 隔离回归通过，Node 1630 通过/35 跳过、UI 35 通过，尚未提交；见[可执行性 100/100 与 gap](tasks/channel-default-admission/assessment.md)、[验证记录](journal/shared/2026-10-22-channel-default-admission.md)及[相邻入口检查](tasks/channel-default-admission/audit.md)。
 
 - [Issue 95：Grok Build ACP](tasks/95-grok-build-acp/brief.md)：从最新 `origin/main@102fb9c` 新建 worktree，先补[官方资料与固定版本参考](tasks/95-grok-build-acp/reference.md)，再复用既有 ACP client 逐轮拉起 CLI；特殊逻辑仅在 `grok-build` 包内，共享层无行为改动。已 rebase 到 main@4857d0e，全量 Node1610/UI35、发行包及并发隔离通过，真实文本流与跨进程续聊通过。用户已授权 PR 与合并，遵守 CI 和评审保护；见[收尾与未验范围](journal/shared/2026-10-22-95-grok-build-acp.md)。

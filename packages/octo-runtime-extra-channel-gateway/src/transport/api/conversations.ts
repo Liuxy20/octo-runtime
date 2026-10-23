@@ -5,6 +5,7 @@
 // Adapted from Mininglamp-OSS/openclaw-channel-octo/src/api-fetch.ts.
 import type { ChannelType } from "./types.js";
 import { DEFAULT_TIMEOUT_MS, postJson, getJson } from "./client.js";
+import { trimTrailingSlashes } from "./url.js";
 
 // Fetch the groups the bot belongs to
 export async function fetchBotGroups(params: {
@@ -184,7 +185,7 @@ export async function fetchUserInfo(params: {
   uid: string;
   log?: { info?: (msg: string) => void; error?: (msg: string) => void };
 }): Promise<{ uid: string; name: string; avatar?: string } | null> {
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/user/info?uid=${encodeURIComponent(params.uid)}`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/user/info?uid=${encodeURIComponent(params.uid)}`;
   try {
     const resp = await fetch(url, {
       method: "GET",
@@ -223,7 +224,7 @@ export async function searchSpaceMembers(params: {
   if (params.keyword) query.set("keyword", params.keyword);
   if (params.spaceId) query.set("space_id", params.spaceId);
   if (params.limit) query.set("limit", String(params.limit));
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/space/members?${query.toString()}`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/space/members?${query.toString()}`;
   const resp = await fetch(url, {
     headers: { Authorization: `Bearer ${params.botToken}` },
     signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS)

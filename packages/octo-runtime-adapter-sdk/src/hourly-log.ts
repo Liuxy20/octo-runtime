@@ -142,14 +142,23 @@ export class HourlyLogWriter {
         throw error;
       }
       if (this.#hour() !== hour) return false;
-      if (existsSync(path) && !lstatSync(path).isFile()) throw new Error("LOG_NOT_REGULAR_FILE");
+      // 在已打开的描述符上验证实际目标；O_NOFOLLOW 拒绝链接，O_NONBLOCK 避免 FIFO 卡住。
       output = openSync(
         path,
-        constants.O_WRONLY | constants.O_CREAT | constants.O_APPEND | (constants.O_NOFOLLOW ?? 0),
+        constants.O_WRONLY |
+          constants.O_CREAT |
+          constants.O_APPEND |
+          (constants.O_NOFOLLOW ?? 0) |
+          (constants.O_NONBLOCK ?? 0),
         0o600
       );
       const stat = fstatSync(output);
       if (!stat.isFile() || stat.nlink !== 1) throw new Error("LOG_NOT_REGULAR_FILE");
+      if (!constants.O_NOFOLLOW) {
+        const entry = lstatSync(path);
+        if (!entry.isFile() || entry.dev !== stat.dev || entry.ino !== stat.ino)
+          throw new Error("LOG_NOT_REGULAR_FILE");
+      }
       if (stat.size + bytes > maximum) {
         this.#fullHour = hour;
         return false;

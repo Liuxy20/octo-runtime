@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import WebSocket, { WebSocketServer } from "ws";
 
@@ -26,8 +28,10 @@ const observerAccount = {
 assert.ok(observerAccount.token?.startsWith("bf_"));
 assert.equal(observerAccount.api, account.api);
 assert.notEqual(observerAccount.id, account.id);
-const screenshots = process.env.OCTO_CONNECTION_SCREENSHOTS ?? "/tmp/octo-connection-renderer";
-await mkdir(screenshots, { recursive: true });
+const screenshotRoot = process.env.OCTO_CONNECTION_SCREENSHOTS ?? tmpdir();
+await mkdir(screenshotRoot, { recursive: true });
+// 每次运行独占私有目录；保留截图用于人工验收，避免覆盖可预测的共享临时文件。
+const screenshots = await mkdtemp(join(screenshotRoot, "octo-connection-renderer-"));
 let blocked = false,
   upstreamUrl,
   authAttempts = 0;
@@ -188,7 +192,14 @@ async function screen(state) {
     throw error;
   }
   const result = await command("Page.captureScreenshot", { format: "png" });
-  await writeFile(`${screenshots}/${state}.png`, Buffer.from(result.data, "base64"));
+  await writeFile(
+    `${screenshots}/${state}-${randomUUID()}.png`,
+    Buffer.from(result.data, "base64"),
+    {
+      mode: 0o600,
+      flag: "wx"
+    }
+  );
 }
 try {
   await command("Runtime.enable");

@@ -7,6 +7,7 @@ import type { ChannelType } from "./types.js";
 import { MessageType, type SendMessageResult } from "./types.js";
 import { postJson, generateClientMsgNo, DEFAULT_TIMEOUT_MS } from "./client.js";
 import { OctoApiError } from "./errors.js";
+import { trimTrailingSlashes } from "./url.js";
 
 export interface CardTemplateRef {
   id: string;
@@ -319,7 +320,7 @@ export async function getCardProfile(params: {
   botToken: string;
   signal?: AbortSignal;
 }): Promise<CardProfileManifest> {
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/card/profile`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/card/profile`;
   const resp = await fetch(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${params.botToken}` },

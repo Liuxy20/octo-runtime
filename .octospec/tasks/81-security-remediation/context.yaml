@@ -1,0 +1,39 @@
+baseline: 445d2bb
+rules_read:
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/openclaw.md
+  - .octospec/_global/security.md
+additional_scope:
+  - Windows CI 显式执行新增安全回归和日志、dotenv 用例，覆盖不支持 O_NOFOLLOW 的描述符校验。
+  - PR review 5623626814 的 P2 umask fixture 与 P3 CLI/Gateway 重复斜杠规范化一致性回归。
+  - Windows CI 39897739552 的超时与 EBUSY：修复发行验收进程树所有权和原始失败诊断。
+  - 用户明确要求 Windows 身份查询期限调整为 40 秒；同步外层验收预算，身份验证失败仍关闭启动。
+  - PR review 5623908244：终止失败后的 close 等待须有界，保留 spawn 原始 errno。
+user_override:
+  - GitHub issue/PR 与提交说明使用英文。
+  - 未授权时不创建提交。
+authorization:
+  commit_push_pr: true
+  merge: true
+  alert_disposition: true
+  source: 用户后续明确要求按已说明的逐条处置流程提交 PR 并合并 main。
+merge_gate:
+  required_approving_review_count: 1
+  required_status_checks: [CI Gate]
+  strict: true
+  enforce_admins: true
+  auto_merge_allowed: false
+  checked_pr: 115

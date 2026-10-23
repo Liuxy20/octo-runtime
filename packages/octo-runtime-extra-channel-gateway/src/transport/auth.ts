@@ -1,4 +1,5 @@
 import { connectionFetch, connectionJson, httpConnectionFailure } from "./connection-error.js";
+import { trimTrailingSlashes } from "./api/url.js";
 
 /** Resolve tenant scope through the octo-auth verify-bot contract. */
 export async function verifyBotIdentity(
@@ -7,7 +8,7 @@ export async function verifyBotIdentity(
   signal: AbortSignal
 ): Promise<{ bot_uid: string; space_id: string }> {
   const response = await connectionFetch(
-    `${apiUrl.replace(/\/+$/, "")}/v1/auth/verify-bot`,
+    `${trimTrailingSlashes(apiUrl)}/v1/auth/verify-bot`,
     {
       method: "POST",
       redirect: "error",

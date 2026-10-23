@@ -7,6 +7,7 @@ import {
   assertJsonByteLimit
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig } from "../contracts.js";
+import { trimTrailingSlashes } from "../transport/api/url.js";
 
 export const IM_MAX_BOTS = 64;
 export const IM_MAX_CONFIG_OPERATIONS = 64;
@@ -134,7 +135,7 @@ export function validateImConfig(config: ImBotConfig): void {
 
 /** Stable local lookup key, not a caller-supplied identity or authorization token. */
 export function imBotIdentity(config: ImBotConfig): string {
-  const identity = ["octo", new URL(config.api_url).href.replace(/\/+$/, ""), config.bot_id];
+  const identity = ["octo", trimTrailingSlashes(new URL(config.api_url).href), config.bot_id];
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 

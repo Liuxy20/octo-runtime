@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 连接探针：仅验证真实企业微信鉴权与心跳 ACK，不发送聊天消息或调用模型。
 // 探针成功只证明连接可用，不能代替客户端思考气泡与回复验收。
-import { readFileSync, statSync } from "node:fs";
+import { closeSync, constants, fstatSync, lstatSync, openSync, readFileSync } from "node:fs";
 import { setTimeout as delay } from "node:timers/promises";
 import { WecomConnection } from "../dist/index.js";
 
@@ -14,10 +14,24 @@ process.once("SIGTERM", stop);
 try {
   let credentials;
   if (file) {
-    const info = statSync(file);
-    if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
-      throw new Error("WECOM_CREDENTIAL_FILE_REQUIRES_0600");
-    credentials = JSON.parse(readFileSync(file, "utf8"));
+    const fd = openSync(
+      file,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    );
+    try {
+      // 检查与读取必须使用同一描述符，不能重新按路径读取凭据。
+      const info = fstatSync(fd);
+      if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
+        throw new Error("WECOM_CREDENTIAL_FILE_REQUIRES_0600");
+      if (!constants.O_NOFOLLOW) {
+        const entry = lstatSync(file);
+        if (!entry.isFile() || entry.dev !== info.dev || entry.ino !== info.ino)
+          throw new Error("WECOM_CREDENTIAL_FILE_REQUIRES_0600");
+      }
+      credentials = JSON.parse(readFileSync(fd, "utf8"));
+    } finally {
+      closeSync(fd);
+    }
   } else {
     credentials = { appBot: process.env.WECOM_APP_BOT, appSecret: process.env.WECOM_APP_SECRET };
   }

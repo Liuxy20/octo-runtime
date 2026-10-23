@@ -1,4 +1,5 @@
-import { lstat, readFile, readdir } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import {
@@ -105,13 +106,36 @@ export async function readExtraDirectory(directory: string): Promise<ExtraRegist
 export async function readStoredExtra(directory: string, name: string): Promise<StoredExtra> {
   assertExtraName(name);
   const file = join(directory, name, "config.json");
-  const info = await lstat(file);
-  if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
-    throw new Error("EXTRA_CONFIG_PERMISSIONS_INVALID");
-  if (info.size > 1024 * 1024) throw new Error("EXTRA_CONFIG_TOO_LARGE");
-  const stored: unknown = JSON.parse(await readFile(file, "utf8"));
-  assertStoredExtra(stored);
-  return stored;
+  const handle = await open(
+    file,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+  );
+  try {
+    // 权限、大小和读取绑定同一个文件，不允许检查后换成链接或其他目标。
+    const info = await handle.stat();
+    if (!info.isFile() || (process.platform !== "win32" && info.mode & 0o077))
+      throw new Error("EXTRA_CONFIG_PERMISSIONS_INVALID");
+    if (!constants.O_NOFOLLOW) {
+      const entry = await lstat(file);
+      if (!entry.isFile() || entry.dev !== info.dev || entry.ino !== info.ino)
+        throw new Error("EXTRA_CONFIG_PERMISSIONS_INVALID");
+    }
+    const maximum = 1024 * 1024;
+    if (info.size > maximum) throw new Error("EXTRA_CONFIG_TOO_LARGE");
+    const bytes = Buffer.alloc(maximum + 1);
+    let length = 0;
+    while (length < bytes.length) {
+      const { bytesRead } = await handle.read(bytes, length, bytes.length - length, null);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    if (length > maximum) throw new Error("EXTRA_CONFIG_TOO_LARGE");
+    const stored: unknown = JSON.parse(bytes.subarray(0, length).toString("utf8"));
+    assertStoredExtra(stored);
+    return stored;
+  } finally {
+    await handle.close();
+  }
 }
 
 function validModule(module: string): boolean {

@@ -1,4 +1,5 @@
 import type { ContextEnvsPayload } from "@mininglamp-oss/octo-runtime-protocol";
+import { trimTrailingSlashes } from "../transport/api/url.js";
 
 /** Both values belong to the same configured channel, never the inbound message. */
 export function octoCliEnvironment(apiUrl: string, token: string): ContextEnvsPayload {
@@ -17,11 +18,11 @@ export function octoCliEnvironment(apiUrl: string, token: string): ContextEnvsPa
     url.hash
   )
     throw new Error("IM_API_URL_INVALID");
-  url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/api$/, "");
+  url.pathname = trimTrailingSlashes(url.pathname).replace(/\/api$/, "");
   return {
     env_variables: [
       { key: "OCTO_BOT_TOKEN", value: token },
-      { key: "OCTO_API_BASE_URL", value: url.href.replace(/\/+$/, "") }
+      { key: "OCTO_API_BASE_URL", value: trimTrailingSlashes(url.href) }
     ]
   };
 }

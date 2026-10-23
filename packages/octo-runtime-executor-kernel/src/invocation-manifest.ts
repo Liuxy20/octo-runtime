@@ -200,9 +200,9 @@ async function queryProcessStartIdentity(pid: number): Promise<string | undefine
           // 保持 UTC ticks 身份格式，不缓存可能已经复用的 PID。
           `$PSModuleAutoLoadingPreference='None'; $target=[System.Diagnostics.Process]::GetProcessById(${pid}); try { [Console]::Out.Write($target.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)) } finally { $target.Dispose() }`
         ],
-        // 冷启动 PowerShell/.NET 也占用查询期限；10 秒已在独立 Windows CI 中反复超时。
+        // PowerShell 冷启动与查询共用 40 秒；Windows CI 曾在 30 秒期限被系统命令超时终止。
         // 身份登记独立于后续 RPC 就绪与关闭预算，失败仍禁止使用未知 PID。
-        { encoding: "utf8", timeout: 30_000, windowsHide: true },
+        { encoding: "utf8", timeout: 40_000, windowsHide: true },
         (error, stdout) => {
           if (error) {
             reject(

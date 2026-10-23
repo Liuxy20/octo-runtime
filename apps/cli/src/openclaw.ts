@@ -1,4 +1,5 @@
-import { readFile, mkdir, writeFile, rename, lstat, chmod, rm } from "node:fs/promises";
+import { constants } from "node:fs";
+import { readFile, mkdir, writeFile, rename, lstat, open, rm } from "node:fs/promises";
 import { parseEnv, promisify } from "node:util";
 import { execFile } from "node:child_process";
 import type { ExtraRegistration } from "@mininglamp-oss/octo-runtime-host-sdk";
@@ -164,8 +165,17 @@ export async function syncCliOpenClawToolEnvironment(
         !(url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)))
     )
       throw new Error("IM_API_URL_INVALID");
-    url.pathname = url.pathname.replace(/\/+$/, "").replace(/\/api$/, "");
-    values = { OCTO_BOT_TOKEN: token, OCTO_API_BASE_URL: url.href.replace(/\/+$/, "") };
+    let end = url.pathname.length;
+    while (end > 0 && url.pathname[end - 1] === "/") end--;
+    url.pathname = url.pathname.slice(0, end).replace(/\/api$/, "");
+    // 去掉 /api 后可能露出多重尾斜杠，仍需全部移除，并保留路径内部的分隔符。
+    const href = url.href;
+    end = href.length;
+    while (end > 0 && href[end - 1] === "/") end--;
+    values = {
+      OCTO_BOT_TOKEN: token,
+      OCTO_API_BASE_URL: href.slice(0, end)
+    };
   }
   if (!values) return { written: false, restartRequired: false };
   const origin = await readCliOrigin(runtimeRoot);
@@ -177,9 +187,24 @@ export async function syncCliOpenClawToolEnvironment(
   if (!directory.isDirectory()) throw new Error("OPENCLAW_ENV_DIRECTORY_INVALID");
   let previous = "";
   try {
-    const info = await lstat(file);
-    if (!info.isFile()) throw new Error("OPENCLAW_ENV_FILE_INVALID");
-    previous = await readFile(file, "utf8");
+    const handle = await open(
+      file,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    );
+    try {
+      // 校验、读取和收紧权限绑定同一目标；拒绝链接，避免检查后重新按路径操作。
+      const info = await handle.stat();
+      if (!info.isFile()) throw new Error("OPENCLAW_ENV_FILE_INVALID");
+      if (!constants.O_NOFOLLOW) {
+        const entry = await lstat(file);
+        if (!entry.isFile() || entry.dev !== info.dev || entry.ino !== info.ino)
+          throw new Error("OPENCLAW_ENV_FILE_INVALID");
+      }
+      await handle.chmod(0o600);
+      previous = await handle.readFile("utf8");
+    } finally {
+      await handle.close();
+    }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
@@ -204,7 +229,6 @@ export async function syncCliOpenClawToolEnvironment(
   )
     throw new Error("OPENCLAW_ENV_UPDATE_INVALID");
   if (content === previous) {
-    await chmod(file, 0o600);
     return { file, written: false, restartRequired: true };
   }
   const temporary = join(origin.openclaw_home, `.octo-env-${randomUUID()}.tmp`);

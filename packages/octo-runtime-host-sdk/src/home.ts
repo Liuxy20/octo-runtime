@@ -259,12 +259,16 @@ function validateHome(homeInput: string, platform: NodeJS.Platform): string {
 }
 
 function appSlug(appId: string): string {
-  const slug = appId
+  const normalized = appId
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9._-]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
+    .replace(/[^a-z0-9._-]+/g, "-");
+  // 保持原有 slug/身份映射，只以线性扫描移除首尾连字符。
+  let start = 0,
+    end = normalized.length;
+  while (start < end && normalized[start] === "-") start++;
+  while (end > start && normalized[end - 1] === "-") end--;
+  const slug = normalized.slice(start, end).slice(0, 48);
   if (!slug || !/^[a-z0-9]/.test(slug)) {
     throw new HostRuntimeError(
       "APP_ID_INVALID",

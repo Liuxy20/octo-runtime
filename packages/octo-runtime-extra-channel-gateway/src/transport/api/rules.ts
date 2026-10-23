@@ -5,6 +5,7 @@
 // Adapted from Mininglamp-OSS/openclaw-channel-octo/src/api-fetch.ts.
 import { DEFAULT_TIMEOUT_MS } from "./client.js";
 import { OctoApiError } from "./errors.js";
+import { trimTrailingSlashes } from "./url.js";
 
 export interface RuleDocument {
   content: string;
@@ -57,7 +58,7 @@ export async function getMentionPref(params: {
   groupNo: string; // 父群 group_no（thread 复合 channel_id 须先取父群）
   log?: { info?: (msg: string) => void; error?: (msg: string) => void };
 }): Promise<MentionPref> {
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/mention_pref`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/mention_pref`;
   try {
     const resp = await fetch(url, {
       method: "GET",
@@ -113,7 +114,7 @@ export async function getGroupMd(params: {
   signal?: AbortSignal;
   log?: { info?: (msg: string) => void; error?: (msg: string) => void };
 }): Promise<{ content: string; version: number; updated_at: string | null; updated_by: string }> {
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/md`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/md`;
   const resp = await fetch(url, {
     method: "GET",
     headers: {
@@ -145,7 +146,7 @@ export async function getThreadMd(params: {
   signal?: AbortSignal;
   log?: { info?: (msg: string) => void; error?: (msg: string) => void };
 }): Promise<{ content: string; version: number; updated_at: string | null; updated_by: string }> {
-  const url = `${params.apiUrl.replace(/\/+$/, "")}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/threads/${encodeURIComponent(params.shortId)}/md`;
+  const url = `${trimTrailingSlashes(params.apiUrl)}/v1/bot/groups/${encodeURIComponent(params.groupNo)}/threads/${encodeURIComponent(params.shortId)}/md`;
   const resp = await fetch(url, {
     method: "GET",
     headers: { Authorization: `Bearer ${params.botToken}` },

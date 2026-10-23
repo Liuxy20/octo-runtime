@@ -5,6 +5,7 @@ import { request as httpsRequest } from "node:https";
 import { BlockList, isIP } from "node:net";
 import { IMAGE_INPUT_LIMITS, type ModelInputPart } from "@mininglamp-oss/octo-runtime-protocol";
 import { parseImageDimensions } from "./api/files.js";
+import { trimTrailingSlashes } from "./api/url.js";
 
 export class ImImageInputError extends Error {}
 
@@ -33,7 +34,7 @@ export function imageUrl(raw: unknown, apiUrl: string): URL {
     const value = raw.trim();
     if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("/")) return new URL(value, apiUrl);
     const path = value.replace(/^file\/(?:preview\/)?/, "");
-    return new URL(`${apiUrl.replace(/\/+$/, "")}/file/${path}`);
+    return new URL(`${trimTrailingSlashes(apiUrl)}/file/${path}`);
   } catch {
     throw new ImImageInputError("图片地址无效。");
   }

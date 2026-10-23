@@ -453,7 +453,7 @@ test("Windows 发行验收覆盖独立组件和进程树清理", async () => {
     resolve(root, "packages/octo-runtime-executor-kernel/src/invocation-manifest.ts"),
     "utf8"
   );
-  assert.match(verifier, /execute\("taskkill", \["\/PID", String\(child\.pid\), "\/T", "\/F"\]/);
+  assert.match(verifier, /stopReleaseProcess\(child\)/);
   assert.match(verifier, /compiled\/host\.mjs/);
   assert.match(
     workflow,
@@ -462,6 +462,6 @@ test("Windows 发行验收覆盖独立组件和进程树清理", async () => {
   assert.match(workflow, /git config --global core\.autocrlf false/);
   assert.match(workflow, /node scripts\/verify-windows-release\.mjs/);
   assert.match(workflow, /needs: \[check, verify-windows-release\]/);
-  assert.match(invocationManifest, /encoding: "utf8", timeout: 30_000, windowsHide: true/);
+  assert.match(invocationManifest, /encoding: "utf8", timeout: 40_000, windowsHide: true/);
   assert.doesNotMatch(cliManifest.scripts.build, /\bchmod\b/);
 });

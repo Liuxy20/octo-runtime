@@ -2,12 +2,14 @@ import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { attachKernel } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
 
-const home = process.env.OCTO_STATELESS_LIVE_HOME ?? "/tmp/octo-runtime-im-codex-test";
+// 此探针连接已启动的测试设备，不创建 Home，也不默认连接共享临时路径。
+const home = process.env.OCTO_STATELESS_LIVE_HOME;
+assert.ok(home && isAbsolute(home), "Set OCTO_STATELESS_LIVE_HOME to the test Runtime Home");
 const socketPath = componentEndpoint(home);
 const client = attachKernel({ endpoint: socketPath });
 const pages = await fetch("http://127.0.0.1:9222/json/list").then((response) => response.json());
