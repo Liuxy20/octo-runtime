@@ -12,18 +12,95 @@ import { canonicalTerminalStatus } from "@mininglamp-oss/octo-runtime-protocol";
  * --thinking --auto`) for full access and ACP for interactive approval.
  * Both transports normalize provider output into canonical events.
  */
-import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
+import { AcpInvocationError, createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import {
   createJsonCliAdapter,
   probeCommand,
   providerInputText,
+  ProviderProcessError,
   type AdapterInvocationContext,
   type CanonicalEvent,
-  type InvokeRequest
+  type InvokeRequest,
+  type ProbeResult
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join, parse, resolve } from "node:path";
+
+export const MINIMUM_OPENCODE_VERSION = "2.1.3";
+
+class OpenCodeInputError extends Error {}
+
+/** 检查本轮实际选中的程序；未知版本与 V1 都不能进入执行传输。 */
+export async function probeOpenCode(
+  command = "opencode",
+  env: NodeJS.ProcessEnv = process.env,
+  cwd = process.cwd()
+): Promise<ProbeResult> {
+  const qualified = command.includes("/") || command.includes("\\") || parse(command).root !== "";
+  // 本机 path 规则保留绝对路径；Windows 根相对和盘符相对路径也绑定本轮 cwd。
+  const selected = qualified ? resolve(cwd, command) : command;
+  const probeEnv = { ...env };
+  if (process.platform === "win32") {
+    // 普通对象的键区分大小写；与 Node 子进程一致，重复别名取字典序首项。
+    for (const name of ["PATH", "PATHEXT"]) {
+      const aliases = Object.keys(env)
+        .filter((key) => key.toUpperCase() === name)
+        .sort();
+      const value = aliases.length ? env[aliases[0]] : undefined;
+      for (const alias of aliases) delete probeEnv[alias];
+      if (value !== undefined) probeEnv[name] = value;
+    }
+  }
+  // 空项和相对项按子进程 cwd 查找；绝对项按本机规则保留原有含义。
+  probeEnv.PATH = (probeEnv.PATH ?? "")
+    .split(delimiter)
+    .map((entry) => resolve(cwd, entry))
+    .join(delimiter);
+  const result = await probeCommand(selected, {
+    cwd,
+    env: probeEnv
+  });
+  if (!result.available) return result;
+  if (!result.version)
+    return {
+      ...result,
+      available: false,
+      reason:
+        "OPENCODE_VERSION_DETECTION_FAILED: could not determine OpenCode version (--version failed, timed out, or returned invalid output)"
+    };
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(result.version);
+  if (
+    !match ||
+    Number(match[1]) !== 2 ||
+    Number(match[2]) < 1 ||
+    (Number(match[2]) === 1 && Number(match[3]) < 3)
+  )
+    return {
+      ...result,
+      available: false,
+      reason: `OPENCODE_VERSION_UNSUPPORTED: detected ${result.version}. ${result.version.startsWith("1.") ? "OpenCode 1 is no longer supported. " : ""}Install OpenCode >= ${MINIMUM_OPENCODE_VERSION} < 3 and retry.`
+    };
+  return result;
+}
+
+function inlineConfig(request: InvokeRequest): Record<string, unknown> {
+  const content = invocationEnvironment(request).OPENCODE_CONFIG_CONTENT;
+  if (!content) return {};
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new OpenCodeInputError(
+      "OPENCODE_CONFIG_INVALID: OPENCODE_CONFIG_CONTENT must be a JSON object"
+    );
+  }
+  if (!isRecord(parsed))
+    throw new OpenCodeInputError(
+      "OPENCODE_CONFIG_INVALID: OPENCODE_CONFIG_CONTENT must be a JSON object"
+    );
+  return parsed;
+}
 
 /** A single OpenCode stream part; tool lifecycle is carried in `state.status` (running -> completed/error). */
 interface OpenCodePart {
@@ -74,54 +151,73 @@ export async function buildOpenCodeCommand(req: InvokeRequest, command = "openco
   const runEnv = invocationEnvironment(req);
   const servers = invocationMcpServers(req, runEnv);
   assertMcpOptions(servers, "opencode", ["toolTimeoutMs"]);
-  const directory = await mkdtemp(join(tmpdir(), "octo-runtime-opencode-"));
-  const instructions = join(directory, "instructions.md");
-  await writeFile(instructions, initialControlInstructions(req), { mode: 0o600 });
-  let inline: Record<string, unknown> = {};
-  if (runEnv.OPENCODE_CONFIG_CONTENT)
-    inline = JSON.parse(runEnv.OPENCODE_CONFIG_CONTENT) as Record<string, unknown>;
+  const inline = inlineConfig(req);
   const configuredInstructions = Array.isArray(inline.instructions)
     ? inline.instructions.filter((value): value is string => typeof value === "string")
     : [];
-  // Inject harness context via a temporary instructions file, without rewriting the user's existing OpenCode config.
-  if (initialControlInstructions(req))
-    inline.instructions = [...configuredInstructions, instructions];
   if (Object.keys(servers).length) {
+    const existing = isRecord(inline.mcp) ? inline.mcp : {};
     inline.mcp = {
-      ...(isRecord(inline.mcp) ? inline.mcp : {}),
-      ...Object.fromEntries(
-        Object.entries(servers).map(([name, server]) => [
-          name,
-          {
-            ...(server.type === "stdio"
-              ? {
-                  type: "local",
-                  command: [server.command, ...(server.args ?? [])],
-                  environment: server.env ?? {}
-                }
-              : { type: "remote", url: server.url, headers: server.headers ?? {} }),
-            enabled: true,
-            ...(server.toolTimeoutMs !== undefined ? { timeout: server.toolTimeoutMs } : {})
-          }
-        ])
-      )
+      ...existing,
+      servers: {
+        ...(isRecord(existing.servers) ? existing.servers : {}),
+        ...Object.fromEntries(
+          Object.entries(servers).map(([name, server]) => [
+            name,
+            {
+              ...(server.type === "stdio"
+                ? {
+                    type: "local",
+                    command: [server.command, ...(server.args ?? [])],
+                    environment: server.env ?? {}
+                  }
+                : { type: "remote", url: server.url, headers: server.headers ?? {} }),
+              disabled: false,
+              ...(server.toolTimeoutMs !== undefined
+                ? { timeout: { execution: server.toolTimeoutMs } }
+                : {})
+            }
+          ])
+        )
+      }
     };
   }
   // Reasoning output and non-interactive tool approval are mandatory parts of
   // this adapter's provider contract.
-  const args = ["run", "--format", "json", "--thinking", "--auto"];
+  const args = ["run", "--format", "json", "--thinking", "--auto", "--standalone"];
   if (req.providerSession?.sessionId) args.push("--session", req.providerSession.sessionId);
-  if (req.agentConfig?.model) args.push("--model", req.agentConfig.model);
   const variant = mapReasoningEffort("opencode", req.agentConfig?.effort);
-  if (variant && variant !== "enabled" && variant !== "disabled") args.push("--variant", variant);
-  args.push(providerInputText(req));
+  if (req.agentConfig?.model) {
+    const model = req.agentConfig.model;
+    args.push("--model", variant ? `${model.split("#")[0]}#${variant}` : model);
+  }
+  // 先校验和转换，再创建资源；写入失败由本层回收，返回后交给 CLI helper。
+  let directory: string | undefined;
+  try {
+    if (initialControlInstructions(req)) {
+      directory = await mkdtemp(join(tmpdir(), "octo-runtime-opencode-"));
+      const instructions = join(directory, "instructions.md");
+      await writeFile(instructions, initialControlInstructions(req), { mode: 0o600 });
+      inline.instructions = [...configuredInstructions, instructions];
+    }
+  } catch (error) {
+    if (directory) await rm(directory, { recursive: true, force: true });
+    throw error;
+  }
   return {
     command,
     args,
-    env: { OPENCODE_CONFIG_CONTENT: JSON.stringify(inline), OPENCODE_CLIENT: "octo-runtime" },
-    rpcMethod: "process.argv",
+    input: providerInputText(req),
+    env: {
+      OPENCODE_CONFIG_CONTENT: JSON.stringify(inline),
+      OPENCODE_CLIENT: "octo-runtime",
+      PWD: req.workdir
+    },
+    rpcMethod: "process.stdin",
     providerSessionId: req.providerSession?.sessionId,
-    cleanup: () => rm(directory, { recursive: true, force: true })
+    cleanup: async () => {
+      if (directory) await rm(directory, { recursive: true, force: true });
+    }
   };
 }
 
@@ -242,8 +338,6 @@ export function normalizeOpenCodeEvent(native: OpenCodeNativeEvent): CanonicalEv
         ...(stepId ? { stepId } : {})
       }
     });
-    if (part.reason === "stop")
-      events.push({ protocolVersion: 2, type: "run.completed", payload: {} });
   }
   if (native.type === "error")
     events.push({
@@ -332,28 +426,27 @@ export class OpenCodeEventNormalizer {
 }
 
 export function createOpenCodeAdapter({ command = "opencode" }: { command?: string } = {}) {
-  const interactive = createAcpAdapter({
-    type: "opencode",
-    provider: "opencode",
-    command,
-    args: ["acp"],
-    env: () => ({
-      OPENCODE_CLIENT: "octo-runtime",
-      OPENCODE_CONFIG_CONTENT: JSON.stringify({
-        ...(process.env.OPENCODE_CONFIG_CONTENT
-          ? JSON.parse(process.env.OPENCODE_CONFIG_CONTENT)
-          : {}),
-        permission: "ask"
+  const interactiveAdapters = new Map<string, ReturnType<typeof createAcpAdapter>>();
+  const createInteractive = (selected: string) =>
+    createAcpAdapter({
+      type: "opencode",
+      provider: "opencode",
+      command: selected,
+      args: ["acp"],
+      // ACP 原生权限策略决定何时请求审批；桥接层逐次处理，不覆盖用户的 deny。
+      env: (request) => ({
+        OPENCODE_CLIENT: "octo-runtime",
+        PWD: request.workdir,
+        OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig(request))
       })
-    })
-  });
+    });
   const options: Parameters<typeof createJsonCliAdapter<OpenCodeNativeEvent>>[0] = {
     metadata: {
       mcp: true,
       type: "opencode",
       agentSources: ["provisioned"]
     },
-    probe: () => probeCommand(command),
+    probe: () => probeOpenCode(command),
     buildCommand: (req: InvokeRequest) => buildOpenCodeCommand(req, command),
     normalize: normalizeOpenCodeEvent,
     onSuccess: (): CanonicalEvent[] => [
@@ -368,7 +461,13 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
   const adapter = createJsonCliAdapter<OpenCodeNativeEvent>(options);
   return {
     ...adapter,
-    respondInteraction: interactive.respondInteraction,
+    async respondInteraction(
+      ...args: Parameters<ReturnType<typeof createAcpAdapter>["respondInteraction"]>
+    ) {
+      const interactive = interactiveAdapters.get(args[0]);
+      if (!interactive) throw new Error("INTERACTION_NOT_ACTIVE");
+      await interactive.respondInteraction(...args);
+    },
     async *invoke(
       request: InvokeRequest,
       context?: AdapterInvocationContext
@@ -377,15 +476,83 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
         throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
       if (request.approvalMode === "assisted")
         throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode has no qualified assisted policy");
+      request.signal?.throwIfAborted();
+      const selected = await probeOpenCode(
+        command,
+        invocationEnvironment(request),
+        request.workdir
+      );
+      if (!selected.available) throw new Error(selected.reason ?? "OpenCode is unavailable");
+      request.signal?.throwIfAborted();
+      try {
+        inlineConfig(request);
+      } catch (error) {
+        if (!(error instanceof OpenCodeInputError)) throw error;
+        yield {
+          protocolVersion: 2,
+          type: "run.failed",
+          payload: { code: "OPENCODE_CONFIG_INVALID", message: error.message }
+        };
+        return;
+      }
       if (request.approvalMode === "ask") {
-        yield* interactive.invoke(request, context);
+        if (interactiveAdapters.has(request.invocationId))
+          throw new Error("INVOCATION_ALREADY_ACTIVE");
+        const interactive = createInteractive(selected.command);
+        interactiveAdapters.set(request.invocationId, interactive);
+        try {
+          yield* interactive.invoke(request, context);
+        } catch (error) {
+          if (!(error instanceof AcpInvocationError)) throw error;
+          // 只有共享 ACP 确认 close 成功后的调用错误才收敛为失败终态。
+          yield { protocolVersion: 2, type: "run.failed", payload: { message: error.message } };
+        } finally {
+          interactiveAdapters.delete(request.invocationId);
+        }
         return;
       }
       const normalizer = new OpenCodeEventNormalizer();
-      yield* createJsonCliAdapter<OpenCodeNativeEvent>({
-        ...options,
-        normalize: (native) => normalizer.normalize(native)
-      }).invoke(request, context);
+      let finalText = false;
+      try {
+        yield* createJsonCliAdapter<OpenCodeNativeEvent>({
+          ...options,
+          reasoningLevels: request.agentConfig.model ? undefined : null,
+          buildCommand: (req) => buildOpenCodeCommand(req, selected.command),
+          normalize: (native) => {
+            const part = native.part ?? native;
+            if (native.type === "step_start" || part.type === "step-start") finalText = false;
+            if ((native.type === "text" || part.type === "text") && typeof part.text === "string")
+              finalText = true;
+            // 一个 step 的 stop 不能掩盖随后进程的失败；等待私有 CLI 正常退出。
+            return normalizer.normalize(native);
+          },
+          onSuccess: (req) => {
+            if (!finalText)
+              return [
+                {
+                  protocolVersion: 2,
+                  type: "run.failed",
+                  payload: {
+                    code: "OPENCODE_INCOMPLETE_OUTPUT",
+                    message:
+                      "OPENCODE_INCOMPLETE_OUTPUT: process exited without a final assistant response"
+                  }
+                }
+              ];
+            return options.onSuccess!(req);
+          }
+        }).invoke(request, context);
+      } catch (error) {
+        // helper 的 finally 已回收进程和临时文件；只收敛已知的进程退出，清理异常继续向上报告。
+        if (!(error instanceof ProviderProcessError)) throw error;
+        yield request.signal?.aborted
+          ? {
+              protocolVersion: 2,
+              type: "run.cancelled",
+              payload: { reason: String(request.signal.reason ?? "cancelled") }
+            }
+          : { protocolVersion: 2, type: "run.failed", payload: { message: error.message } };
+      }
     }
   };
 }

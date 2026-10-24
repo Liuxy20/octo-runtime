@@ -116,6 +116,8 @@ export interface CommandSpec {
 
 export interface JsonCliAdapterOptions<TNative> {
   metadata: AdapterMetadata;
+  /** 载体没有实际强度 setter 时设为 null，保留请求并返回未应用提示。 */
+  reasoningLevels?: ReasoningLevelMap | null;
   buildCommand: (request: InvokeRequest) => CommandSpec | Promise<CommandSpec>;
   normalize: (event: TNative, request: InvokeRequest) => CanonicalEvent[] | undefined;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
@@ -341,48 +343,51 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
   options: JsonCliAdapterOptions<TNative>
 ): Readonly<Adapter<CanonicalEvent>> {
   const { metadata, buildCommand, normalize, probe, onSuccess } = options;
-  return defineAdapter({
-    metadata,
-    ...(probe ? { probe } : {}),
-    async *invoke(
-      request: InvokeRequest,
-      context?: AdapterInvocationContext
-    ): AsyncGenerator<CanonicalEvent> {
-      const spec = await buildCommand(request);
-      let terminal = false;
-      try {
-        yield {
-          protocolVersion: 2,
-          type: "message.create",
-          payload: { role: "assistant", status: "streaming" }
-        };
-        for await (const native of spawnJsonLines({
-          ...spec,
-          cwd: spec.cwd ?? request.workdir,
-          env: invocationEnvironment(request, spec.env),
-          signal: request.signal,
-          rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
-          parseLine: parseJsonLine as (line: string) => TNative | null
-        })) {
-          const events = normalize(native, request) ?? [];
-          for (const event of events) {
-            terminal ||= isTerminal(event);
-            yield event;
+  return defineAdapter(
+    {
+      metadata,
+      ...(probe ? { probe } : {}),
+      async *invoke(
+        request: InvokeRequest,
+        context?: AdapterInvocationContext
+      ): AsyncGenerator<CanonicalEvent> {
+        const spec = await buildCommand(request);
+        let terminal = false;
+        try {
+          yield {
+            protocolVersion: 2,
+            type: "message.create",
+            payload: { role: "assistant", status: "streaming" }
+          };
+          for await (const native of spawnJsonLines({
+            ...spec,
+            cwd: spec.cwd ?? request.workdir,
+            env: invocationEnvironment(request, spec.env),
+            signal: request.signal,
+            rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
+            parseLine: parseJsonLine as (line: string) => TNative | null
+          })) {
+            const events = normalize(native, request) ?? [];
+            for (const event of events) {
+              terminal ||= isTerminal(event);
+              yield event;
+            }
+            // A provider-native semantic terminal is authoritative. Stop reading
+            // here so the subprocess generator enters its cleanup path even when
+            // the CLI leaves watchers or other handles alive after completing.
+            if (terminal) break;
           }
-          // A provider-native semantic terminal is authoritative. Stop reading
-          // here so the subprocess generator enters its cleanup path even when
-          // the CLI leaves watchers or other handles alive after completing.
-          if (terminal) break;
+          if (!terminal) {
+            const events = onSuccess?.(request) ?? [];
+            for (const event of events) yield event;
+          }
+        } finally {
+          await spec.cleanup?.();
         }
-        if (!terminal) {
-          const events = onSuccess?.(request) ?? [];
-          for (const event of events) yield event;
-        }
-      } finally {
-        await spec.cleanup?.();
       }
-    }
-  });
+    },
+    options.reasoningLevels
+  );
 }
 
 /**
@@ -392,7 +397,7 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
  */
 export async function probeCommand(
   command: string,
-  { env = process.env }: { env?: NodeJS.ProcessEnv } = {}
+  { env = process.env, cwd }: { env?: NodeJS.ProcessEnv; cwd?: string } = {}
 ): Promise<ProbeResult> {
   const candidates =
     isAbsolute(command) || command.includes("/") || command.includes("\\")
@@ -412,6 +417,7 @@ export async function probeCommand(
       try {
         const { stdout } = await promisify(execFile)(resolve(candidate), ["--version"], {
           env,
+          cwd,
           timeout: 2_000,
           maxBuffer: 4096,
           windowsHide: true

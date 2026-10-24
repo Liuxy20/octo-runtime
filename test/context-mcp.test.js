@@ -162,7 +162,7 @@ test("Codex carries private header references; Claude writes a private temporary
   const open = await buildOpenCodeCommand(req);
   try {
     assert.equal(
-      JSON.parse(open.env.OPENCODE_CONFIG_CONTENT).mcp.business.headers.Authorization,
+      JSON.parse(open.env.OPENCODE_CONFIG_CONTENT).mcp.servers.business.headers.Authorization,
       "Bearer private-value"
     );
   } finally {

@@ -136,3 +136,6 @@
 
 # F45 FP-D：已核验非秘密历史样例。
 ea1486fe153b63484a60e5f68df94596499ec8b6:packages/octo-runtime-extra-sse-demo/README.md:curl-auth-header:32
+
+# Issue #103：错误认证验收的固定无效样例，非用户凭据；依据见任务 validation.md。
+15575e62f3644f1fcdfb8798cd44c090f863edba:scripts/verify-opencode-v2.mjs:generic-api-key:203

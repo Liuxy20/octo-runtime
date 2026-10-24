@@ -1,5 +1,25 @@
 # 工程知识变更记录
 
+## 2026-10-24
+
+- [PR #116](tasks/103-opencode-v2/review.md#a5f5cac-审查与再次同步-main) rebase 到 main@c01c0c9，8 个重放提交内容一致；修复 Windows PATH／PATHEXT 大小写别名及普通 ACP 错误子类分类。Node 1705 通过/40 跳过、UI 35 项、16 个真实 OpenCode 场景通过，双轴审查无问题；新 head 托管检查待执行，见[验证](tasks/103-opencode-v2/validation.md#最新-main-与环境别名复核)。
+
+- 继续处理 [PR #116 P2](tasks/103-opencode-v2/review.md#最新-p2-与测试可移植性)：POSIX fixture 不再搬迁动态链接 Node，Windows 原生路径验证保留；非 Git 命名测试缺少 rg 时采用明确的文件遍历回退，Git 真实祖先仍要求实际 rg。补工具终态白名单回归及 PATH/UNC 文档，独立审查发现的外部链接边界已修复。上一 head 的 Windows 完整 job 均通过，macOS 首次清理超时在一次重跑后通过，细节见[记录](tasks/103-opencode-v2/validation.md#最新-p2-与托管重验)。
+
+- 修复 [PR #116 最新审查](tasks/103-opencode-v2/review.md#yujiawei-最新审查逐项处理)：缺失最终输出返回唯一失败终态，修正空文本及 step 状态，补全 Windows 根相对／盘符相对命令解析和原生 CI 测试。逐项澄清 PATH 与 rg 意见并纠正 MCP 证据措辞；本机 OpenCode 23 项、Node 1702 通过/40 跳过、UI 35 项和 16 个真实 OpenCode 场景通过，双轴复核无待修复问题，见[验证](tasks/103-opencode-v2/validation.md#yujiawei-最新审查修复)。Windows/Linux 托管结果待当前提交执行。
+
+## 2026-10-23
+
+- 按用户要求将 [PR #116](https://github.com/Mininglamp-OSS/octo-runtime/pull/116) rebase 到最新 main@cc49c8b；知识目录冲突保留双方条目，OpenCode 实现、测试和真实验收脚本不变，历史扫描指纹及命名摘要同步新提交。更新后 Node 1691 通过/40 跳过、UI 35 通过，构建、类型、lint、格式、文档与 PR 范围扫描通过，见[验证](tasks/103-opencode-v2/validation.md#rebase-到最新-main)。
+
+- 按用户明确要求增加[凭据禁止入库架构约束](rules/architecture.md#凭据值严禁进入代码仓库)：API Key 等凭据值及固定测试占位值不得提交，真实认证由宿主从仓库外注入，非功能性测试值仅运行期在内存生成。Issue 103 验收脚本移除固定错误认证值及固定 Authorization 值；不以扫描未告警替代来源审查。
+
+- 完成 [Issue 103 OpenCode 2 适配](tasks/103-opencode-v2/brief.md)：最低 2.1.3，V1 明确拒绝，修正 CLI/ACP 原生配置、环境及清理。16 个真实 DeepSeek 场景、真实测试 IM 与 V1 二进制拒绝通过；Node 1674 通过/40 跳过、UI 35 通过及工程检查通过，双轴审查无待修复问题，详见[验收](tasks/103-opencode-v2/validation.md)与[审查](tasks/103-opencode-v2/review.md)。旧 nvm 全局 V1 已按用户要求卸载，V2 安装未改动。
+
+- 用户确认本机 OpenCode 已为 2.1.3 后，复核交互式 shell 和 `~/.opencode/bin/opencode` 输出一致；Agent 非交互环境仍选中 nvm 下旧 1.18.30。更新 [Issue 103 资料](tasks/103-opencode-v2/reference.md#本机路径复核)、版本矩阵与 context，后续 V2 使用明确绝对路径，旧版保留为拒绝样本；尚未进行功能实测。
+
+- 建立 [Issue 103 OpenCode 2 调研](tasks/103-opencode-v2/brief.md)：核对 npm 2.1.3 与固定源码，明确 V1 必须 error，记录 CLI 参数、进程环境、V2 配置、ACP 续聊/权限和清理缺口；[资料](tasks/103-opencode-v2/reference.md)、[验收计划](tasks/103-opencode-v2/validation-plan.md)与[本轮证据](journal/shared/2026-10-23-103-opencode-v2-research.md)区分源码确认与未实测范围。仅文档，未修改产品实现或提交。
+
 ## 2026-10-22
 
 - 按用户要求修正 [PR 104 的认证责任边界](journal/shared/2026-10-22-95-grok-build-acp.md#pr-104-认证责任修正)：harness 的登录、授权与凭据来源归使用者、宿主及 harness。删除 `grok-build` 专属认证环境变量判断，仅依广告完成 ACP 握手，拒绝不切换认证方式；同步架构规则和双语说明，补充五项回归，不改共享 ACP 行为。

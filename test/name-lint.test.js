@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, readFile, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,12 +14,36 @@ async function fixture(t) {
   return {
     root,
     run() {
-      const result = spawnSync(process.execPath, [script, "--root", root], { encoding: "utf8" });
+      // 临时 fixture 不依赖宿主工具；Windows 环境变量名不区分大小写，两种写法都清空。
+      const result = spawnSync(process.execPath, [script, "--root", root], {
+        encoding: "utf8",
+        env: { ...process.env, PATH: "", Path: "" }
+      });
       assert.equal(result.error, undefined);
+      assert.ok(result.stdout.trim(), `lint-names produced no report: ${result.stderr}`);
       return { code: result.status, report: JSON.parse(result.stdout) };
     }
   };
 }
+
+test("name lint requires executable ripgrep inside a Git worktree instead of ignoring ignore rules", async (t) => {
+  const { root } = await fixture(t);
+  await mkdir(join(root, ".git"));
+  const child = join(root, "nested");
+  await mkdir(child);
+  const outside = await fixture(t);
+  const alias = join(outside.root, "linked");
+  await symlink(child, alias, process.platform === "win32" ? "junction" : "dir");
+  for (const directory of [child, alias]) {
+    const result = spawnSync(process.execPath, [script, "--root", directory], {
+      encoding: "utf8",
+      env: { ...process.env, PATH: "", Path: "" }
+    });
+    assert.equal(result.status, 1);
+    assert.equal(result.stdout, "");
+    assert.match(result.stderr, /RIPGREP_REQUIRED:.*Git/);
+  }
+});
 
 test("name lint accepts current names and rejects case variants without echoing source contents", async (t) => {
   const { root, run } = await fixture(t);

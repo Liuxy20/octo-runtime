@@ -10,6 +10,8 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) and the
 - Use the exact pnpm version declared in `package.json#packageManager`.
 - Install ripgrep (`rg`) for the naming check: `brew install ripgrep` on macOS or
   `sudo apt-get install ripgrep` on Ubuntu. CI installs this prerequisite explicitly.
+  Non-Git test directories fall back to Node filesystem traversal when `rg` is missing;
+  Git worktrees require the executable to preserve ignore rules. A shell function is insufficient.
 - Install Go 1.25.x to compile the native-component test fixture. CI installs it
   explicitly; Runtime users do not need Go to run the distribution.
 - Install and authenticate a Provider CLI only for explicitly requested live runs.

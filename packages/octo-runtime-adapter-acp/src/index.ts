@@ -30,6 +30,14 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 
+/** 调用已失败但 ACP 传输已成功关闭；清理异常不包装成此类型。 */
+export class AcpInvocationError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "AcpInvocationError";
+  }
+}
+
 export interface AcpAdapterDefinition {
   type: string;
   provider: string;
@@ -212,7 +220,13 @@ export function normalizeAcpUpdate(update: StandardAcpUpdate, provider: string):
       {
         protocolVersion: 2,
         type: "usage.update",
-        payload: { ...update.usage, ...(update.model !== undefined ? { model: update.model } : {}) }
+        payload: {
+          ...update.usage,
+          ...(update.used !== undefined ? { used: update.used } : {}),
+          ...(update.size !== undefined ? { size: update.size } : {}),
+          ...(update.cost !== undefined ? { cost: update.cost } : {}),
+          ...(update.model !== undefined ? { model: update.model } : {})
+        }
       }
     ];
   }
@@ -303,6 +317,8 @@ export function createAcpAdapter(
     bridge.bindTransport(() => client.close());
     let sessionId: string | undefined;
     let terminal = false;
+    let invocationFailed = false;
+    let invocationError: unknown;
     let forceCloseTimer: NodeJS.Timeout | undefined;
     const abort = (): void => {
       if (sessionId) client.cancel(sessionId);
@@ -562,12 +578,23 @@ export function createAcpAdapter(
           payload: { reason: String(request.signal.reason ?? "cancelled") }
         };
       } else {
-        throw error;
+        invocationFailed = true;
+        invocationError = error;
       }
     } finally {
       request.signal?.removeEventListener("abort", abort);
       if (forceCloseTimer) clearTimeout(forceCloseTimer);
       await client.close();
+    }
+    if (invocationFailed) {
+      // 有明确错误码的容量等结构化错误保留原对象；普通内建子类仍交给适配器归一化。
+      if (
+        invocationError instanceof Error &&
+        "code" in invocationError &&
+        (typeof invocationError.code === "string" || typeof invocationError.code === "number")
+      )
+        throw invocationError;
+      throw new AcpInvocationError(invocationError);
     }
   }
 }

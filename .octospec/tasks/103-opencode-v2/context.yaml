@@ -1,0 +1,95 @@
+status: pr-main-rebased-windows-env-acp-review-follow-up
+recorded_on: 2026-10-24
+baseline: c01c0c9144b74028b3f08ab59d9e27ed7ed8a9ff
+initial_baseline: 445d2bb24f6ffc27bb4414c835e6a0b365f9f25b
+baseline_source: git-fetch-origin-main
+branch: research/103-opencode-v2
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/103
+authorization:
+  scope: implementation-real-e2e-code-review-pr-to-main
+  v1_policy: explicit-error-no-longer-supported
+  commit_push_pr: authorized
+  npm_publish: not-authorized
+  github_language: english
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-adapter-metadata
+  - runtime-context-input
+  - runtime-environment
+  - runtime-mcp
+  - runtime-reasoning
+  - runtime-output-protocol
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .octospec/.claude/skills/octospec-workflow/SKILL.md
+  - .octospec/.claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - packages/octo-runtime-adapter-opencode/src/index.ts
+  - packages/octo-runtime-adapter-opencode/README.md
+  - packages/octo-runtime-adapter-acp/src/index.ts
+  - packages/octo-runtime-acp-client/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+external_sources:
+  reference: reference.md
+  npm_latest_v2: 2.1.3
+  minimum_supported: 2.1.3
+  source_tag: v2.1.3
+  source_revision: bb25a2f4a3f3f04d7c344bec0c0574ea3510b3b1
+verification:
+  credential_values: runtime-generated-in-memory-no-hardcoded-fixture-values
+  issue_official_docs_registry_fixed_source: read
+  local_executable_version: 2.1.3
+  local_executable: /Users/lvsijia/.opencode/bin/opencode
+  legacy_executable_version: 1.18.30
+  legacy_executable: /Users/lvsijia/.nvm/versions/node/v24.19.0/bin/opencode
+  legacy_global_installation: uninstalled-as-requested
+  shell_path_difference: interactive-selects-v2-agent-noninteractive-selected-legacy
+  local_executable_platform: macOS
+  v2_binary: user-installed-functional-tests-passed
+  runtime_e2e: cli-acp-and-live-im-passed
+  model_provider_tools_permissions_cancellation: passed-deepseek-deepseek-flash
+  product_tests: latest-main-node-1705-passed-40-skipped-ui-35-passed
+  latest_rebase_previous_head: a5f5cac91deaaf600acf6e9d12aba6212dbaabf8
+  latest_rebase_replayed_head: ef9c312
+  latest_rebase_range_diff: all-eight-commits-identical
+  latest_rebase_implementation: 15575e62f3644f1fcdfb8798cd44c090f863edba
+  latest_review_fixed_point: ef9c312
+  windows_environment_aliases: path-pathext-lexical-first-caller-unchanged-ci-pending
+  acp_error_subclasses: ordinary-builtins-wrapped-coded-and-cleanup-errors-preserved
+  latest_review: independent-standards-zero-spec-zero
+  latest_live_tests: sixteen-real-opencode-deepseek-scenarios-passed-cleanup-complete
+  latest_hosted_ci: pending-after-push
+  review_regressions: opencode-23-passed-including-native-path-and-core-cleanup
+  review_live_tests: rerun-16-real-opencode-deepseek-scenarios-cleanup-complete
+  review_fixed_point: 9ca69ac24064627a4ec77783c5f27a8b8647a55b
+  windows_native_path: ci-added-not-locally-qualified
+  previous_hosted_head: 1467724bfe67c3a7e9c9f8e33e6f50ac2c6fc12d
+  previous_hosted_ci: all-six-jobs-and-gate-passed-after-one-macos-retry
+  posix_fixture: original-node-location-preserved-no-binary-relocation
+  naming_without_rg: eight-tests-passed-non-git-fallback-git-realpath-ancestor-fail-closed
+  p2_review: standards-clear-spec-symlink-boundary-fixed-and-rechecked
+  engineering_checks: typecheck-lint-names-docs-format-passed
+  review: standards-zero-findings-spec-zero-findings
+  reviewed_implementation: 81f316e88c324e374b613dc6a12437da130fa5ff
+  rebased_implementation: 12abf7ae87b5162731d7ee6631ce050ce929619e
+  rebase_previous_head: 6700e16039b95199cc5a604bed3c32cd1899dc93
+  rebase_product_diff: unchanged-opencode-implementation-tests-and-live-verifiers
+  rebase_checks: build-types-lint-names-format-docs-secret-scan-passed
+  octospec_lint: only-three-confirmed-existing-head-frontmatter-errors
+  new_okf_frontmatter_and_context_yaml: passed
+  git_diff_check: passed

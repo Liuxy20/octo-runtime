@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { resolve, relative } from "node:path";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const rootArg = process.argv.indexOf("--root");
@@ -25,7 +25,7 @@ function containsLegacy(value, name) {
 // 任意内容变更都须重新审核，不能把文件或目录整体排除于命名检查之外。
 // 统一 CRLF/LF 后校验，以兼容 Windows checkout；此例外不改变 Gitleaks 扫描规则。
 const historicalEvidence = new Map([
-  [".gitleaksignore", "9261fbfaaa21f314aad7641eb9f3779adbc7649dc627e591699d12766814d736"],
+  [".gitleaksignore", "55a5f30d872a99b923e9ac3de8018e93e5fb90db554cfa8749b4c7e9823bdb75"],
   [
     ".octospec/tasks/gitleaks-history-triage/findings.md",
     "df331c61f2eaea9e18a36ae2150ff053f56bd555c11e57df0c2653e809ed7d70"
@@ -41,9 +41,29 @@ const args = [
   "!**/secret.md"
 ];
 const result = spawnSync("rg", args, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
-if (result.error || (result.status !== 0 && result.status !== 1))
-  throw result.error ?? new Error(result.stderr);
-const files = result.stdout.split("\0").filter(Boolean);
+let files;
+if (result.error?.code === "ENOENT") {
+  // 非 Git fixture 不依赖宿主工具；Git 工作树仍由 rg 保留完整忽略规则。
+  for (let directory = realpathSync(root); ; directory = dirname(directory)) {
+    if (existsSync(join(directory, ".git")))
+      throw new Error("RIPGREP_REQUIRED: install an executable rg on PATH to scan a Git worktree");
+    if (dirname(directory) === directory) break;
+  }
+  files = [];
+  const visit = (directory) => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (excluded.includes(entry.name) || entry.name === "secret.md") continue;
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) visit(path);
+      else if (entry.isFile()) files.push(relative(root, path));
+    }
+  };
+  visit(root);
+} else {
+  if (result.error || (result.status !== 0 && result.status !== 1))
+    throw result.error ?? new Error(result.stderr);
+  files = result.stdout.split("\0").filter(Boolean);
+}
 const findings = [],
   exceptions = [];
 for (const file of files) {
@@ -79,7 +99,7 @@ console.log(
       findings,
       exceptions,
       excluded,
-      respectsGitIgnore: true
+      respectsGitIgnore: !result.error
     },
     null,
     2

@@ -30,7 +30,7 @@ supersedes: []
 | Claude Code | low | medium | high | xhigh |
 | Antigravity | low | medium | high | xhigh |
 | OpenClaw Gateway | low | medium | high | high |
-| OpenCode CLI（full_access） | low | medium | high | high |
+| OpenCode V2 CLI（full_access，显式 model） | low | medium | high | high |
 | ACP（含 OpenCode ask）、CodeBuddy、ZCode | 原生默认 | 原生默认 | 原生默认 | 原生默认 |
 
 OpenClaw、OpenCode 使用保守的三挡默认基线；这不声明所有底层模型只有三挡。其高级档位依赖底层模型，当前不动态发现、探测或重试切换档位。本机 Claude Code 帮助已列出 `xhigh`，因此保留四挡映射。
@@ -40,7 +40,7 @@ ACP 路径包含 Hermes、Kimi Code、MiniMax Code、Qoder 与 Qoder CN。目前
 ## 数据与执行边界
 
 - UI 和 Context 继续保留统一档位。转换不改写 InvokeRequest 或执行快照。
-- 各 adapter 在现有原生载体处调用共同 mapper：Codex `turn/start.effort`，Claude / Antigravity `--effort`，OpenCode `--variant`，OpenClaw `sessions.create.thinkingLevel` 和 `agent.thinking`。
+- 各 adapter 在现有原生载体处调用共同 mapper：Codex `turn/start.effort`，Claude / Antigravity `--effort`，OpenCode V2 `--model provider/model#variant`，OpenClaw `sessions.create.thinkingLevel` 和 `agent.thinking`。OpenCode CLI 未显式 model 时不替宿主猜模型，使用原生默认并提示未应用；ACP 暂无 effort setter。
 - 缺少 effort 时不传参数，不产生额外提示。非法已知值（包括 `max`、拼错的 `xhight`、空字符串）在 adapter 边界拒绝，不当作“无接口”。公共 Context 类型暂仍使用 string，四挡检查在 Adapter SDK 执行边界完成。
 - 无 setter 时，按用户授权保留选择、使用原生默认执行，不注入虚构 CLI 参数，不向提示词追加“请多思考”。
 - 无 setter 时额外产生现有 `run.notice/config_warning`，`warningCode=REASONING_EFFORT_NOT_APPLIED`。降档时使用 `REASONING_EFFORT_DOWNGRADED`。Work App 展示具体说明；默认执行不冒充强度已应用。

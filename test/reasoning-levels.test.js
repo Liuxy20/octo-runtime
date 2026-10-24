@@ -60,9 +60,12 @@ test("native carriers receive mapped effort while the input request keeps xhigh"
   } finally {
     await claude.cleanup();
   }
-  const opencode = await buildOpenCodeCommand(request);
+  const opencode = await buildOpenCodeCommand({
+    ...request,
+    agentConfig: { ...request.agentConfig, model: "provider/model" }
+  });
   try {
-    assert.equal(opencode.args[opencode.args.indexOf("--variant") + 1], "high");
+    assert.equal(opencode.args[opencode.args.indexOf("--model") + 1], "provider/model#high");
   } finally {
     await opencode.cleanup();
   }

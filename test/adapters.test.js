@@ -879,8 +879,7 @@ test("OpenCode preserves model rounds and associates their reasoning, tools, and
         protocolVersion: 2,
         type: "usage.update",
         payload: { output: 4, cost: undefined, stepId: "message-2" }
-      },
-      { protocolVersion: 2, type: "run.completed", payload: {} }
+      }
     ]
   );
 });
@@ -928,14 +927,13 @@ test("OpenCode full_access uses native auto approval, maps effort to variant, an
     "json",
     "--thinking",
     "--auto",
+    "--standalone",
     "--session",
     "ses-existing",
     "--model",
-    "provider/model",
-    "--variant",
-    "high",
-    "work"
+    "provider/model#high"
   ]);
+  assert.equal(opencode.input, "work");
   assert.equal(opencode.providerSessionId, "ses-existing");
   await opencode.cleanup();
 });
@@ -1109,7 +1107,7 @@ test("text adapters prefer the exact modelInput over the display prompt", async 
   await claude.cleanup();
 
   const opencode = await buildOpenCodeCommand(modelRequest);
-  assert.equal(opencode.args.at(-1), "MODEL_INPUT_OK");
+  assert.equal(opencode.input, "MODEL_INPUT_OK");
   await opencode.cleanup();
 
   const openclaw = buildOpenClawGatewayInvocation({
