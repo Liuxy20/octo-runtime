@@ -167,13 +167,13 @@ test("merge ignores collisions before resolution and keeps Adapter/Extra keys se
 test("Home extension is optional, strict, follows selected Home and override fully replaces defaults", async (t) => {
   const home = await fixture(t);
   const builtin = await loadCliManifest(home);
-  assert.equal(builtin.adapters.length, 13);
+  assert.equal(builtin.adapters.length, 14);
   assert.deepEqual(
     builtin.extras.map((x) => x.name),
     ["channel-gateway", "channel-wecom", "webui"]
   );
   await json(join(home, "manifest.json"), manifest([declaration("./user.mjs", "user")]));
-  assert.equal((await loadCliManifest(home)).adapters.length, 14);
+  assert.equal((await loadCliManifest(home)).adapters.length, 15);
   const override = join(home, "explicit.json");
   await json(override, { version: 1, adapters: [] });
   assert.deepEqual(await loadCliManifest(home, override), manifest());

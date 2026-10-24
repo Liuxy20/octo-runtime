@@ -23,6 +23,8 @@ Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、�
 | `zcode-gui`   | ZCode Desktop 内置客户端                                                  | 安装 [ZCode Desktop](https://zcode.z.ai/cn/docs/install)，在应用中配置模型账号。Adapter 依次检查 `ZCODE_BIN`、`PATH` 和桌面安装目录，未能自动识别客户端时可设置 `ZCODE_BIN`。                                                                        |
 | `antigravity` | `agy` 的 stream-json 无头模式                                             | 按 [Antigravity 官方指南](https://antigravity.google/docs/getting-started?tab=cli)安装 CLI，先交互运行一次 `agy` 完成认证。确保 Runtime 的 `PATH` 能找到该可执行文件，所需 CLI 能力见[无头模式文档](https://antigravity.google/docs/cli/headless/)。 |
 
+`dsh` 使用已安装 DeepSeek Harness 0.2.1-rc.3 的 `dsh --profile sdk` 或 macOS Desktop 内嵌 CLI。先在 Desktop 登录，再以同一系统账号启动 Runtime；默认账户 provider 为 deepseek-account，只接受显式 full_access。发现、SDK 注册与配置见 [DSH Adapter](../../../packages/octo-runtime-adapter-dsh/README.md)。
+
 通用 `acp` 是接入其他 ACP Harness 的 Adapter 工厂，不是需要另外安装的 Harness。通过 `createAcpAdapter` 配置命令和参数，并将返回的 Adapter 注册到 worker 或 manifest；默认 CLI manifest 未注册这个通用类型，见[工厂实现](../../../packages/octo-runtime-adapter-acp/src/index.ts)和 [ACP 文档](https://agentclientprotocol.com/get-started/introduction)。
 
 安装完成后，按 [CLI 安装与调用](../getting-started/cli.md)检查所选 Adapter，并发送一个小任务。worker 不能直接执行 shell alias；后台服务也需要正确的 `PATH`、用户目录和账号配置，修改服务环境后需重启服务。

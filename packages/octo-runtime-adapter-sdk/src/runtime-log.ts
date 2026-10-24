@@ -24,12 +24,21 @@ const strings = new Set([
   "model",
   "status",
   "code",
+  "reason_code",
+  "native_code",
+  "primary_code",
+  "cleanup_code",
+  "signal",
   "endpoint_id",
   "state",
   "protocol_mode"
 ]);
 const numbers = new Set([
   "duration_ms",
+  "request_id",
+  "pid",
+  "exit_code",
+  "native_code",
   "input_count",
   "text_input_count",
   "image_input_count",
@@ -141,7 +150,12 @@ export class RuntimeLogging {
       }
       for (const key of numbers) {
         const value = data?.[key];
-        if (typeof value === "number" && Number.isFinite(value) && value >= 0) safe[key] = value;
+        if (
+          typeof value === "number" &&
+          Number.isFinite(value) &&
+          (value >= 0 || (key === "native_code" && Number.isSafeInteger(value)))
+        )
+          safe[key] = value;
       }
       const record = {
         time: new Date().toISOString(),

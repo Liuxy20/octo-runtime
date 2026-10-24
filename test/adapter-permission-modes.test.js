@@ -27,10 +27,10 @@ test("default adapters reject unsupported approval modes at their execution boun
   const manifest = JSON.parse(
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
-  assert.equal(manifest.adapters.length, 13);
+  assert.equal(manifest.adapters.length, 14);
   for (const entry of manifest.adapters) {
     const adapter = (await import(entry.module))[entry.export];
-    if (entry.type === "antigravity") {
+    if (["antigravity", "dsh"].includes(entry.type)) {
       assert.equal(adapter.respondInteraction, undefined);
       for (const approvalMode of ["ask", "assisted"])
         await assert.rejects(async () => {

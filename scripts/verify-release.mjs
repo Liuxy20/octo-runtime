@@ -107,7 +107,12 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const moduleManifest = JSON.parse(
       await readFile(join(installed, "apps/cli/dist/manifest.json"), "utf8")
     );
-    assert.equal(moduleManifest.adapters.length, 13);
+    assert.equal(moduleManifest.adapters.length, 14);
+    const dshEntry = moduleManifest.adapters.find((entry) => entry.type === "dsh");
+    assert.equal(dshEntry?.module, "@mininglamp-oss/octo-runtime-adapter-dsh");
+    const dshModule = await import(`${pathToFileURL(installed).href}/dist/public/dsh.js`);
+    assert.equal(dshModule[dshEntry.export].metadata.type, "dsh");
+    assert.deepEqual(dshModule[dshEntry.export].metadata.protocolSupport.modes, ["canonical"]);
     const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
     assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");
     const grokModule = await import(
@@ -126,7 +131,8 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const run = (args) =>
       execute(process.execPath, [cli, ...args, "--home", home], {
         cwd: consumer,
-        timeout: 10_000,
+        // Windows service inspection can issue two sequential 30-second native queries.
+        timeout: process.platform === "win32" ? 75_000 : 10_000,
         label: `CLI ${args.join(" ") || "help"}`
       });
     const version = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;

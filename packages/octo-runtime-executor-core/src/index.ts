@@ -434,6 +434,7 @@ export class AgentExecutor {
     };
     let state: (HostControl & { type: "state" }) | undefined;
     let failureCode: string | undefined;
+    let failureReasonCode: string | undefined;
     const pendingInteractions = new Set<string | number>();
     const source =
       receipt.protocol_mode === "canonical"
@@ -447,8 +448,10 @@ export class AgentExecutor {
         const next = await pending;
         if (next.done) break;
         const output = next.value;
-        if (!("kind" in output) && output.type === "run.failed")
+        if (!("kind" in output) && output.type === "run.failed") {
           failureCode = output.payload.failure?.code;
+          failureReasonCode = output.payload.failure?.reasonCode;
+        }
         if ("kind" in output && output.kind === "control" && output.control.type === "error")
           failureCode = output.control.code;
         if (
@@ -566,7 +569,8 @@ export class AgentExecutor {
         if (state?.state === "failed")
           this.#log("error", "invoke.failed", {
             ...identity,
-            code: failureCode ?? "EXECUTION_FAILED"
+            code: failureCode ?? "EXECUTION_FAILED",
+            reason_code: failureReasonCode
           });
         this.#log(state?.state === "failed" ? "error" : "info", "invoke.finished", {
           ...identity,
@@ -706,6 +710,7 @@ export class AgentExecutor {
     const context: AdapterInvocationContext = {
       protocolMode,
       streamLimits,
+      log: this.#log,
       reportConversion: () => {
         if (protocolMode === "native")
           throw protocolError(

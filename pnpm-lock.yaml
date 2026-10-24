@@ -23,6 +23,9 @@ importers:
       '@mininglamp-oss/octo-runtime-adapter-codex':
         specifier: workspace:*
         version: link:packages/octo-runtime-adapter-codex
+      '@mininglamp-oss/octo-runtime-adapter-dsh':
+        specifier: workspace:*
+        version: link:packages/octo-runtime-adapter-dsh
       '@mininglamp-oss/octo-runtime-adapter-grok-build':
         specifier: workspace:*
         version: link:packages/octo-runtime-adapter-grok-build
@@ -117,6 +120,9 @@ importers:
       '@mininglamp-oss/octo-runtime-adapter-codex':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-adapter-codex
+      '@mininglamp-oss/octo-runtime-adapter-dsh':
+        specifier: workspace:*
+        version: link:../../packages/octo-runtime-adapter-dsh
       '@mininglamp-oss/octo-runtime-adapter-grok-build':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-adapter-grok-build
@@ -227,6 +233,15 @@ importers:
         version: link:../octo-runtime-protocol
 
   packages/octo-runtime-adapter-codex:
+    dependencies:
+      '@mininglamp-oss/octo-runtime-adapter-sdk':
+        specifier: workspace:*
+        version: link:../octo-runtime-adapter-sdk
+      '@mininglamp-oss/octo-runtime-protocol':
+        specifier: workspace:*
+        version: link:../octo-runtime-protocol
+
+  packages/octo-runtime-adapter-dsh:
     dependencies:
       '@mininglamp-oss/octo-runtime-adapter-sdk':
         specifier: workspace:*
