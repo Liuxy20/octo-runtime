@@ -6,6 +6,11 @@
 
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ProtocolMode".
+ */
+export type ProtocolMode = "native" | "canonical";
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "HostFrame".
  */
 export type HostFrame = NativeHostFrame | CanonicalHostFrame | ControlHostFrame;
@@ -23,11 +28,6 @@ export type MessageChannel = "analysis" | "commentary" | "final";
  * via the `definition` "MessageExposure".
  */
 export type MessageExposure = "public_reasoning" | "public_summary" | "public_plan" | "private_reasoning" | "unknown";
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ProtocolMode".
- */
-export type ProtocolMode = "native" | "canonical";
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "HostControl".
@@ -328,6 +328,14 @@ export type ContextReferenceEntry = {
   authorization_ref?: string;
   revision?: string;
 };
+/**
+ * @minItems 1
+ * @maxItems 128
+ *
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ModelInputParts".
+ */
+export type ModelInputParts = [ModelInputPart, ...ModelInputPart[]];
 
 /**
  * Serializable data shapes for the Octo Runtime NDJSON protocol. Runtime behavior remains hand-written in src/index.ts, and this schema is the source of truth for generated TypeScript types. The x-octo-unicode-scalar-strings semantic keyword requires every JSON string value and object member name to contain Unicode scalar values only: unpaired UTF-16 surrogates are rejected, not repaired or normalized. Consumers must enforce this protocol-wide rule even when validating a definition directly.
@@ -342,7 +350,7 @@ export interface KernelLookupKey {
   invocation_id: string;
   agent_session_id: string;
   session_generation: number;
-  protocol_mode: "canonical" | "native";
+  protocol_mode: ProtocolMode;
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -355,7 +363,7 @@ export interface KernelRunRef {
   stream_id: string;
   agent_session_id: string;
   session_generation: number;
-  protocol_mode: "canonical" | "native";
+  protocol_mode: ProtocolMode;
   protocol: string;
 }
 /**
@@ -2925,4 +2933,65 @@ export interface IssuedToolAuthorization {
   octo_space_id: string;
   namespace: string;
   expires_at: string;
+}
+export interface InvokeInputWire {
+  sessionId?: string;
+  invocationId?: string;
+  runId?: string;
+  prompt?: string;
+  modelInput?: string;
+  freshFallbackModelInput?: string;
+  workdir?: string;
+  controlInstructions?: string;
+  inputs: ModelInputParts;
+  contexts: ContextEnvelope;
+  protocol_mode?: ProtocolMode;
+  agentSource?: AgentSource;
+  approvalMode?: ApprovalMode;
+  agentConfig?: AgentConfig;
+  runtimeLimits?: RuntimeLimits;
+  providerSession?: ProviderSession;
+  sessionGeneration?: number;
+  providerEpoch?: number;
+  runMetadata?: {
+    [k: string]: unknown;
+  };
+  continuityMode?: "fresh" | "continue";
+  freshFallbackModelInputParts?: ModelInputParts;
+  freshFallbackImagesUnavailable?: boolean;
+  [k: string]: unknown;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "KernelInvokeEnvironmentWire".
+ */
+export interface KernelInvokeEnvironmentWire {
+  executionEnvOverrides?: ContextEnvsPayload;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "InteractionResponseWire".
+ */
+export interface InteractionResponseWire {
+  interactionId: string;
+  outcome: "accepted" | "declined" | "answered" | "cancelled";
+  value?: unknown;
+  [k: string]: unknown;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "HostedAdapterMetadataWire".
+ */
+export interface HostedAdapterMetadataWire {
+  type: string;
+  agentSources: AgentSource[];
+  workspace?: boolean;
+  protocolSupport?: AdapterProtocolSupport;
+  processModel?: string;
+  transport?: string;
+  providerVersion?: string | null;
+  providerPath?: string | null;
+  available?: boolean;
+  unavailableReason?: string | null;
+  [k: string]: unknown;
 }

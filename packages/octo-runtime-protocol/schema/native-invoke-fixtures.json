@@ -1,0 +1,116 @@
+[
+  {
+    "name": "positive fractional timeout",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "agentConfig": {
+        "timeoutSeconds": 0.5
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "zero timeout",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "agentConfig": {
+        "timeoutSeconds": 0
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "negative timeout",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "agentConfig": {
+        "timeoutSeconds": -1
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "nonempty opaque provider session",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "providerSession": {
+        "sessionId": " abc "
+      }
+    },
+    "valid": true
+  },
+  {
+    "name": "empty provider session",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "providerSession": {
+        "sessionId": ""
+      }
+    },
+    "valid": false
+  },
+  {
+    "name": "whitespace provider session",
+    "value": {
+      "inputs": [
+        {
+          "type": "text",
+          "text": "test"
+        }
+      ],
+      "contexts": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
+      },
+      "providerSession": {
+        "sessionId": "\t \n ﻿"
+      }
+    },
+    "valid": false
+  }
+]

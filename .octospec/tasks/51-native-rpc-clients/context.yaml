@@ -1,0 +1,154 @@
+task: 51-native-rpc-clients
+phase: implementation
+current_scope: Complete Go and Python SDKs only; Rust removed by user on 2026-10-24.
+demos:
+  go: native/go/examples/demo_playboard.go
+  python: native/python/demo_playboard.py
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/51
+read_at: 2026-10-24
+baseline: 445d2bb24f6ffc27bb4414c835e6a0b365f9f25b
+branch: codex/51-native-rpc-clients
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-51-native-rpc
+workflow:
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+loaded_rules:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/adapter-metadata.md
+loaded_context:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/manifest.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/69-kernel-client-invoke/assessment.md
+  - .octospec/tasks/69-kernel-client-invoke/context.yaml
+  - .octospec/tasks/93-sleep-wake-recovery/plan.md
+  - .octospec/scripts/lint.py
+source_evidence:
+  - packages/octo-runtime-protocol/schema/kernel-ipc.schema.json
+  - packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json
+  - packages/octo-runtime-protocol/schema/protocol.schema.json
+  - packages/octo-runtime-protocol/scripts/gen-types.mjs
+  - packages/octo-runtime-protocol/src/invoke-input.ts
+  - packages/octo-runtime-protocol/src/index.ts
+  - packages/octo-runtime-protocol/src/context.ts
+  - packages/octo-runtime-protocol/src/run-protocol.ts
+  - packages/octo-runtime-protocol/src/stream-limits.ts
+  - packages/octo-runtime-protocol/src/invoke-size.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - test/kernel-ipc-contract.test.js
+  - test/kernel-fixture.js
+  - test/kernel-relay.js
+  - package.json
+  - .github/workflows/ci.yml
+source_read_scope:
+  protocol_schema: Parsed definitions, Kernel/ref/receipt/native-response definitions, all keyword inventory; not a line-by-line audit of every unrelated definition.
+  protocol_index_and_context: InteractionResponse, validation, JSON numeric and Unicode behavior sections.
+  kernel: Full client/server/types; lifecycle and replay/identity/bounds sections; worker RPC boundary.
+  tests: Contract/fixture/relay read; invocation/recovery/host-service test names searched to locate reusable coverage.
+external_sources:
+  - url: https://github.com/Mininglamp-OSS/octo-runtime/issues/51
+    method: gh issue view --json title,body,comments,state,url
+    result: OPEN; includes Go/Rust/Python schema-generated SDK expansion; no comments.
+  - url: https://github.com/microsoft/go-winio/blob/main/pipe.go
+    result: DialPipeContext supports context-bound Windows named-pipe connection.
+  - url: https://docs.rs/tokio/latest/tokio/net/windows/named_pipe/struct.ClientOptions.html
+    result: Windows client API and ERROR_PIPE_BUSY behavior checked; exact dependency/MSRV pin is M0 work.
+  - url: https://github.com/mhammond/pywin32/blob/main/win32/src/win32file.i
+    result: Overlapped file I/O source checked; Windows transport spike and exact wheel pin remain M0 work.
+  - url: https://learn.microsoft.com/en-us/windows/win32/api/ioapiset/nf-ioapiset-cancelioex
+    result: CancelIoEx requests cancellation but does not await completion; buffers/OVERLAPPED must remain alive until completion.
+decisions:
+  - User explicitly authorized implementation after the planning review.
+  - Two complete native SDK clients (Go/Python) under native; Rust SDK, emitter, demos, lockfiles and toolchain requirements removed at the user's request.
+  - Generate protocol models, validation rules, behavior constants and RPC methods only; maintain one handwritten client/lifecycle implementation per language.
+  - User requires all native GitHub CI jobs and gate integration removed; validation is local and optional for the core Runtime.
+  - Preserve IPC 1, Run 7, Context v3, default worker isolation and TS Runtime installation dependencies.
+  - Match TS identity/acceptance/stream/cancel semantics; never implicitly resubmit or own Kernel.
+  - M0-M7 implementation plan and A01-A40 evidence assertions; 96/100 is a planning self-assessment only.
+  - Client-side numeric fidelity does not promise arbitrary precision through the existing TS JSON.parse service.
+  - User corrected demo location to this worktree's native directory; Go/Python have package-local demo_playboard source files.
+  - Python models use TypedDict; Windows overlapped completion uses bounded event polling rather than an executor thread.
+  - Latest user scope is one generated source and one handwritten source including transport per language. Generated files are named octo_runtime_generated.go and octo_runtime_generated.py. Python implementation lives in client.py; __init__.py only re-exports public API. Go uses client.go plus an 8-line pipe_windows.go API binding selected by the compiler. The same complete SDK source works on all platforms without consumer-selected or copied platform variants.
+  - Consolidate Go unit tests into client_test.go to keep the package directory small; preserve all codec, lifecycle and transport regressions. The compiler-selected Windows API binding remains unchanged.
+  - Fix the four reproduced verified-review defects and add local regressions. Latest user instruction requires English comments throughout native SDK, demo and related code, superseding the earlier Chinese-comment request; retain ownership/cancellation/codec explanations and do not add native CI.
+  - Fix all four rereview findings; preserve in-flight OVERLAPPED resources even if cancellation fails, detach observer waiting from cancel ACK, reject malformed Extra Unicode, and validate URL ports/hostname.
+  - macOS minimum/current and real Codex text smoke passed; Linux/Windows and full boundary/stress acceptance remain open.
+authorization:
+  new_worktree: true
+  planning: true
+  sdk_implementation_this_turn: true
+  commits: true
+  push_pr_merge_publish: PR creation/push/merge explicitly authorized; package publishing remains unauthorized.
+  external_messages: false
+  attribution: Preserve configured author; if later authorized use English OSS messages and one Codex co-author trailer.
+worktree_creation:
+  app_tool: Failed because the chat cwd is the repository parent, not a Git repository.
+  fallback: git worktree add -b codex/51-native-rpc-clients /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-51-native-rpc origin/main
+tools_observed:
+  node: v24.19.0
+  pnpm: 11.19.0
+  go: go1.26.1 darwin/arm64
+  system_python: 3.9.6; below proposed Python SDK minimum 3.11
+  uv: 0.12.13
+  native_minimum: Go 1.25.0; Python 3.11.16
+  native_current: Go 1.26.1; Python 3.14.7
+historical_validation:
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: Untouched baseline before any edit
+    result: FAIL; three pre-existing systemd-directive-paths Markdown files lack YAML frontmatter.
+  - command: uv run --with pyyaml python .octospec/scripts/lint.py
+    scope: Completed planning documents and index/log
+    result: FAIL only on the same three baseline files; no additional errors.
+  - scope: Targeted new-document validation
+    result: PASS; 6 OKF Markdown files, context YAML, 13 local task/journal links, A01-A40, M0-M7, score sum 96, new-file whitespace.
+  - command: git diff --check
+    result: PASS.
+  - command: node native/tests/run.mjs --language <go|rust|python>
+    scope: macOS arm64; minimum/current toolchains; protocol, real IPC, faults, playboard and archive consumption.
+    result: PASS in all six combinations; 39 tests each, 339 protocol fixtures, zero failures or skips.
+  - command: node native/tests/live-demo.mjs --endpoint <existing kernel socket>
+    scope: Existing Kernel; Codex 0.154.0; each language native and canonical text completion.
+    result: PASS 6/6; original receipts queried; real approvals and cancellation not covered.
+  - command: pnpm typecheck && pnpm test:suites
+    result: PASS; Node 1702 tests, 1662 passed, 40 existing skips, zero failures; WebUI suite also passed.
+  - command: pnpm lint; pnpm lint:names; pnpm docs:check; pnpm format:check
+    result: PASS.
+  - command: go test -race ./...; cargo clippy --locked --all-targets -- -D warnings; cargo fmt -- --check
+    result: PASS on macOS; Go race tests also passed on 1.25.0.
+  - command: node native/codegen/generate.mjs --check; node --test native/tests/codegen.test.mjs
+    result: PASS; reproducibility, drift and unsupported assertions. Previous native CI gate tests were removed at the user's request.
+  - scope: Required cross-platform, stress, full field parity and typed binding acceptance
+    result: INCOMPLETE; see implementation.md and contract-diff.md. Native has no GitHub CI matrix; additional platform validation must be run explicitly.
+
+current_validation:
+  - command: pnpm test:suites
+    result: PASS; 1706 Node tests passed, 40 existing skips, zero failures; 35 UI tests passed.
+  - scope: Go/Python only; macOS arm64; real Kernel with isolated fake Provider
+    result: PASS; 45 tests and 354 protocol fixtures each; includes package-local demos and outside-repository installation.
+  - scope: Naming fixture isolation; empty PATH/Path; default temporary directory and TMPDIR/TMP/TEMP inside the worktree
+    result: PASS; 9 tests in each environment; production Git ignore guard retained.
+  - scope: Source provenance and generation
+    result: PASS; 2 generated sources (1959 lines) carry octo-runtime schema commit and schema/generator SHA-256; deterministic regeneration, custom-input provenance, empty-PATH check and drift detection passed.
+  - scope: Compact SDK layout; each language has 2 implementation sources plus 1 package export or OS binding source; English comments
+    result: PASS; both languages reran all 45 integration tests after consolidation; Go race, Python 7 unit tests and Linux/Windows amd64 cross-compilation passed. Cross-compilation and API stubs are not real OS IPC acceptance.

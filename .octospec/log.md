@@ -2,6 +2,14 @@
 
 ## 2026-10-24
 
+- Issue 51 按用户最新决定仅保留完整 Go/Python SDK，移除 Rust SDK、emitter、生成产物、工具链与测试入口；两套包内示例统一命名 `demo_playboard.py` / `demo_playboard.go`，本地验证不接入 native CI，见[当前规划](tasks/51-native-rpc-clients/plan.md)。
+
+- Issue 51 修复复审四项问题，并按用户要求删除 Python 独立 Windows 模块，将平台异步传输合入 `transport.py` 自动分支。SDK 保持同一安装包/导入入口；增加 Windows 取消错误回收、Go 取消等待关闭、Extra Unicode 与 URL 一致性回归，见[修复记录](tasks/51-native-rpc-clients/review-fixes.md#复审修复与-python-单入口)。
+
+- Issue 51 按用户授权修复六项代码审查问题：接纳期间关闭观察、保留显式取消、整数绑定、大帧增量扫描、Windows 最终回收和 Go 错误后迭代。维护模板并重新生成，新增三语言 ACK barrier 与语言单测，见[修复记录](tasks/51-native-rpc-clients/review-fixes.md)。
+
+- Issue 51 按用户修正将 Go、Rust、Python playboard 全部放入 `native/`：共享 Schema/模板生成客户端、三语言 CLI、原回执与人工交互、故障联调、仓外无 Node 包消费均已落地。本机六工具链组合各 39 项通过，真实 Codex 六次完成；三平台 CI 配置已加入，未有平台不冒充通过。见[实施记录](tasks/51-native-rpc-clients/implementation.md)与[本轮 journal](journal/shared/2026-10-24-51-native-rpc-implementation.md)。
+
 - [PR #116](tasks/103-opencode-v2/review.md#a5f5cac-审查与再次同步-main) rebase 到 main@c01c0c9，8 个重放提交内容一致；修复 Windows PATH／PATHEXT 大小写别名及普通 ACP 错误子类分类。Node 1705 通过/40 跳过、UI 35 项、16 个真实 OpenCode 场景通过，双轴审查无问题；新 head 托管检查待执行，见[验证](tasks/103-opencode-v2/validation.md#最新-main-与环境别名复核)。
 
 - 继续处理 [PR #116 P2](tasks/103-opencode-v2/review.md#最新-p2-与测试可移植性)：POSIX fixture 不再搬迁动态链接 Node，Windows 原生路径验证保留；非 Git 命名测试缺少 rg 时采用明确的文件遍历回退，Git 真实祖先仍要求实际 rg。补工具终态白名单回归及 PATH/UNC 文档，独立审查发现的外部链接边界已修复。上一 head 的 Windows 完整 job 均通过，macOS 首次清理超时在一次重跑后通过，细节见[记录](tasks/103-opencode-v2/validation.md#最新-p2-与托管重验)。
@@ -9,6 +17,8 @@
 - 修复 [PR #116 最新审查](tasks/103-opencode-v2/review.md#yujiawei-最新审查逐项处理)：缺失最终输出返回唯一失败终态，修正空文本及 step 状态，补全 Windows 根相对／盘符相对命令解析和原生 CI 测试。逐项澄清 PATH 与 rg 意见并纠正 MCP 证据措辞；本机 OpenCode 23 项、Node 1702 通过/40 跳过、UI 35 项和 16 个真实 OpenCode 场景通过，双轴复核无待修复问题，见[验证](tasks/103-opencode-v2/validation.md#yujiawei-最新审查修复)。Windows/Linux 托管结果待当前提交执行。
 
 ## 2026-10-23
+
+- 从最新 `origin/main@445d2bb` 新建 Issue 51 worktree，完成 [Go、Rust、Python 原生 RPC Client 规划](tasks/51-native-rpc-clients/brief.md)：共享 Schema/行为合同及语言模板生成全部高层流程，M0-M7、A01-A40、九格平台互操作与无 Node 客户端包外验收均明确。可执行性自评 96/100，仅规划、未实现 SDK 或提交；基线三个旧文件缺少 frontmatter，见[检查记录](journal/shared/2026-10-23-51-native-rpc-plan.md)。
 
 - 按用户要求将 [PR #116](https://github.com/Mininglamp-OSS/octo-runtime/pull/116) rebase 到最新 main@cc49c8b；知识目录冲突保留双方条目，OpenCode 实现、测试和真实验收脚本不变，历史扫描指纹及命名摘要同步新提交。更新后 Node 1691 通过/40 跳过、UI 35 通过，构建、类型、lint、格式、文档与 PR 范围扫描通过，见[验证](tasks/103-opencode-v2/validation.md#rebase-到最新-main)。
 
@@ -330,3 +340,4 @@
 - 验证记录见 [接入与架构迁移](journal/shared/2026-10-15-okf-onboarding.md)。
 - 按当前源码与 Git 演进审查全部 31 份旧材料，整理为规则、指南和历史摘要，移除根与协议包的 docs 目录。
 - 修正过时接口与未实现拓扑，补充规则索引和本仓知识/链接校验；结果见 [全量整理验收](journal/shared/2026-10-15-knowledge-consolidation.md)。
+- Issue 51 按用户要求保留完整 SDK 并精简：删除客户端模板复制、只生成公共根及类型依赖、Rust 改用通用规则表校验；删除 native GitHub CI job/Gate 接入，仅本地验证。同步修复 Python 非读端关闭阻塞和 Rust union 字段丢失；三语言本地完整套件各 44 项通过，见[最新实施记录](tasks/51-native-rpc-clients/implementation.md)。

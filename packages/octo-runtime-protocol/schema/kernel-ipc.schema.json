@@ -9,8 +9,15 @@
       "additionalProperties": false,
       "required": ["jsonrpc", "id", "method", "params"],
       "properties": {
-        "jsonrpc": { "const": "2.0" },
-        "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-octo-max-utf8-bytes": 128
+        },
         "method": {
           "enum": [
             "status",
@@ -23,80 +30,23 @@
             "agent_run.native.respond"
           ]
         },
-        "params": { "type": "object" }
+        "params": {
+          "type": "object"
+        }
       },
       "allOf": [
         {
-          "if": { "properties": { "method": { "enum": ["status", "adapter.list"] } } },
-          "then": { "properties": { "params": { "maxProperties": 0 } } }
-        },
-        {
-          "if": { "properties": { "method": { "const": "agent_run.invoke" } } },
-          "then": {
+          "if": {
             "properties": {
-              "params": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["input"],
-                "properties": {
-                  "input": { "type": "object" },
-                  "executionEnvOverrides": { "type": "object" },
-                  "kernel_instance_id": { "type": "string", "minLength": 1 }
-                }
+              "method": {
+                "const": "status"
               }
             }
-          }
-        },
-        {
-          "if": { "properties": { "method": { "const": "agent_run.get" } } },
+          },
           "then": {
             "properties": {
               "params": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["key"],
-                "properties": {
-                  "key": {
-                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelLookupKey"
-                  },
-                  "kernel_instance_id": { "type": "string", "minLength": 1 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "method": { "const": "agent_run.subscribe" } } },
-          "then": {
-            "properties": {
-              "params": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["ref", "after_seq"],
-                "properties": {
-                  "ref": {
-                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
-                  },
-                  "after_seq": { "type": "integer", "minimum": 0 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "method": { "const": "agent_run.cancel" } } },
-          "then": {
-            "properties": {
-              "params": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["ref"],
-                "properties": {
-                  "ref": {
-                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
-                  },
-                  "reason": { "type": "string" }
-                }
+                "$ref": "#/definitions/EmptyParams"
               }
             }
           }
@@ -104,28 +54,359 @@
         {
           "if": {
             "properties": {
-              "method": { "enum": ["agent_run.respond", "agent_run.native.respond"] }
+              "method": {
+                "const": "adapter.list"
+              }
             }
           },
           "then": {
             "properties": {
               "params": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": ["ref", "response"],
-                "properties": {
-                  "ref": {
-                    "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
-                  },
-                  "response": { "type": "object" }
-                }
+                "$ref": "#/definitions/EmptyParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.invoke"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/InvokeParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.get"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/GetParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.subscribe"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/SubscribeParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.cancel"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/CancelParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.respond"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/RespondParams"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "agent_run.native.respond"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "params": {
+                "$ref": "#/definitions/RespondNativeParams"
               }
             }
           }
         }
       ]
     },
-    "BusinessErrorCode": {
+    "EmptyParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "EmptyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {}
+    },
+    "InvokeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input"],
+      "properties": {
+        "input": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/InvokeInputWire"
+        },
+        "executionEnvOverrides": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/ContextEnvsPayload"
+        },
+        "kernel_instance_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "GetParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelLookupKey"
+        },
+        "kernel_instance_id": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "SubscribeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "after_seq"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+        },
+        "after_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      }
+    },
+    "CancelParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "RespondParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "response"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+        },
+        "response": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/InteractionResponseWire"
+        }
+      }
+    },
+    "RespondNativeParams": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ref", "response"],
+      "properties": {
+        "ref": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunRef"
+        },
+        "response": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/NativeInteractionResponse"
+        }
+      }
+    },
+    "InvokeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kernel_instance_id", "receipt"],
+      "properties": {
+        "kernel_instance_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "receipt": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/HostRunReceipt"
+        }
+      }
+    },
+    "CancelResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["accepted"],
+      "properties": {
+        "accepted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "SuccessResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "result": {}
+      }
+    },
+    "ErrorResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "id", "error"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "id": {
+          "type": ["string", "null"]
+        },
+        "error": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["code", "message", "data"],
+          "properties": {
+            "code": {
+              "type": "integer"
+            },
+            "message": {
+              "type": "string"
+            },
+            "data": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["code"],
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "EventNotification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "agent_run.event"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kernel_instance_id", "run_id", "stream_id", "seq", "event"],
+          "properties": {
+            "kernel_instance_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "run_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stream_id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "event": {
+              "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/HostFrame"
+            }
+          }
+        }
+      }
+    },
+    "StreamErrorNotification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["jsonrpc", "method", "params"],
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
+          "const": "agent_run.stream_error"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["code", "kernel_instance_id"],
+          "properties": {
+            "code": {
+              "type": "string",
+              "minLength": 1
+            },
+            "kernel_instance_id": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "KnownBusinessErrorCode": {
       "enum": [
         "KERNEL_UNAVAILABLE",
         "KERNEL_INSTANCE_CHANGED",
@@ -145,7 +426,113 @@
         "INVOKE_REQUEST_TOO_LARGE",
         "HOST_FRAME_TOO_LARGE"
       ]
+    },
+    "BusinessErrorCode": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Open error namespace; preserve unknown codes and data."
     }
   },
-  "$ref": "#/definitions/Request"
+  "$ref": "#/definitions/Request",
+  "x-octo-methods": [
+    {
+      "method": "status",
+      "name": "Status",
+      "params": {
+        "$ref": "#/definitions/EmptyParams"
+      },
+      "result": {
+        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelStatus"
+      },
+      "stream": false,
+      "sideEffect": false
+    },
+    {
+      "method": "adapter.list",
+      "name": "List",
+      "params": {
+        "$ref": "#/definitions/EmptyParams"
+      },
+      "result": {
+        "type": "array",
+        "items": {
+          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/HostedAdapterMetadataWire"
+        }
+      },
+      "stream": false,
+      "sideEffect": false
+    },
+    {
+      "method": "agent_run.invoke",
+      "name": "Submit",
+      "params": {
+        "$ref": "#/definitions/InvokeParams"
+      },
+      "result": {
+        "$ref": "#/definitions/InvokeResult"
+      },
+      "stream": false,
+      "sideEffect": true
+    },
+    {
+      "method": "agent_run.get",
+      "name": "Get",
+      "params": {
+        "$ref": "#/definitions/GetParams"
+      },
+      "result": {
+        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunSnapshot"
+      },
+      "stream": false,
+      "sideEffect": false
+    },
+    {
+      "method": "agent_run.subscribe",
+      "name": "Subscribe",
+      "params": {
+        "$ref": "#/definitions/SubscribeParams"
+      },
+      "result": {
+        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunSnapshot"
+      },
+      "stream": true,
+      "sideEffect": false
+    },
+    {
+      "method": "agent_run.cancel",
+      "name": "Cancel",
+      "params": {
+        "$ref": "#/definitions/CancelParams"
+      },
+      "result": {
+        "$ref": "#/definitions/CancelResult"
+      },
+      "stream": false,
+      "sideEffect": true
+    },
+    {
+      "method": "agent_run.respond",
+      "name": "Respond",
+      "params": {
+        "$ref": "#/definitions/RespondParams"
+      },
+      "result": {
+        "$ref": "#/definitions/EmptyResult"
+      },
+      "stream": false,
+      "sideEffect": true
+    },
+    {
+      "method": "agent_run.native.respond",
+      "name": "RespondNative",
+      "params": {
+        "$ref": "#/definitions/RespondNativeParams"
+      },
+      "result": {
+        "$ref": "#/definitions/EmptyResult"
+      },
+      "stream": false,
+      "sideEffect": true
+    }
+  ]
 }

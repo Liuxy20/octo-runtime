@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "octo-runtime-client"
+version = "0.0.0"
+description = "Native attached Kernel IPC client for Octo Runtime"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pywin32==311; sys_platform == 'win32'"]
+license = "Apache-2.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/octo_runtime"]

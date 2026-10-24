@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-24T10:30:40.231Z",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.19.0",
+  "baseline": "445d2bb24f6ffc27bb4414c835e6a0b365f9f25b",
+  "scope": "Four rereview fixes and one Python transport module with automatic Unix/Windows branches; not full Issue 51 acceptance",
+  "provider": "isolated fake Provider; real Kernel IPC",
+  "command": "CARGO_NET_OFFLINE=true node native/tests/run.mjs --language all --evidence .tmp/native-rereview-fixes.json",
+  "sourceHash": "e87aaad925b8d6b43906ed7f2508440f3f619534757f1865c5db5b531f88727f",
+  "generatorHash": "2f63fceaecf33f3fecd1fafe3c31a220eae0f265531a80f576ca50e2249dd961",
+  "results": [
+    {
+      "language": "go",
+      "toolchain": "1.26.1",
+      "suites": ["protocol", "interop", "faults", "lifecycle", "playboard-demo", "package"],
+      "status": 0,
+      "durationMs": 38236,
+      "tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "protocolFixtures": 347
+    },
+    {
+      "language": "rust",
+      "toolchain": "1.98.1",
+      "suites": ["protocol", "interop", "faults", "lifecycle", "playboard-demo", "package"],
+      "status": 0,
+      "durationMs": 31298,
+      "tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "protocolFixtures": 347
+    },
+    {
+      "language": "python",
+      "toolchain": "3.11.16",
+      "suites": ["protocol", "interop", "faults", "lifecycle", "playboard-demo", "package"],
+      "status": 0,
+      "durationMs": 7907,
+      "tests": 44,
+      "passed": 44,
+      "failed": 0,
+      "skipped": 0,
+      "protocolFixtures": 347
+    }
+  ],
+  "additionalChecks": {
+    "goRace": ["1.25.0", "1.26.1"],
+    "pythonTransportUnitTests": {
+      "versions": ["3.11.16", "3.14.7"],
+      "testsPerVersion": 5,
+      "result": "PASS; includes read/write cancellation failure, repeated cancellation, completion lifetime, and unified platform branches"
+    },
+    "generation": "14 outputs match; reproducibility/drift and CI Gate tests 2 passed",
+    "pythonStaticChecks": "Ruff format and F checks passed",
+    "repository": ["lint", "lint:names", "docs:check", "format:check", "git diff --check"],
+    "octospecLint": "Only three pre-existing systemd-directive-paths frontmatter errors; no new errors",
+    "pythonPackage": "sdist to wheel, install into a new environment, assert no transport_windows.py, run isolated demo with empty PATH and PYTHONPATH"
+  },
+  "limitations": [
+    "Windows API stubs on macOS validate control flow and release order; Windows native IO has not been tested in this remediation.",
+    "Linux/Windows platform acceptance and the remaining Issue 51 stress matrix remain open.",
+    "No real Provider calls or external service changes were made."
+  ]
+}

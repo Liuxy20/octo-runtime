@@ -1,0 +1,95 @@
+{
+  "date": "2026-10-24T07:09:26.305Z",
+  "platform": "darwin",
+  "arch": "arm64",
+  "node": "v24.19.0",
+  "provider": "isolated fake Provider; real Kernel IPC",
+  "results": [
+    {
+      "language": "go",
+      "suites": [
+        "protocol",
+        "interop",
+        "faults",
+        "lifecycle",
+        "playboard-demo",
+        "package"
+      ],
+      "status": 0,
+      "durationMs": 38711
+    },
+    {
+      "language": "rust",
+      "suites": [
+        "protocol",
+        "interop",
+        "faults",
+        "lifecycle",
+        "playboard-demo",
+        "package"
+      ],
+      "status": 0,
+      "durationMs": 25738
+    },
+    {
+      "language": "python",
+      "suites": [
+        "protocol",
+        "interop",
+        "faults",
+        "lifecycle",
+        "playboard-demo",
+        "package"
+      ],
+      "status": 0,
+      "durationMs": 9027
+    }
+  ],
+  "scope": "Six review findings and equivalent Rust cancellation watcher path; not full Issue 51 acceptance",
+  "baseline": "445d2bb24f6ffc27bb4414c835e6a0b365f9f25b",
+  "sourceHash": "e87aaad925b8d6b43906ed7f2508440f3f619534757f1865c5db5b531f88727f",
+  "generatorHash": "59499000f6b31cfc9de9065d11534e2a7ced1c455b655bf42a777280098e3839",
+  "testCountsPerLanguage": {
+    "tests": 44,
+    "passed": 44,
+    "failed": 0,
+    "skipped": 0,
+    "protocolFixtures": 339
+  },
+  "integrationToolchains": {
+    "go": "1.26.1",
+    "rust": "1.98.1",
+    "python": "3.11.16"
+  },
+  "additionalChecks": {
+    "goRace": [
+      "1.25.0",
+      "1.26.1"
+    ],
+    "rustUnitTests": [
+      "1.85.0",
+      "1.98.1"
+    ],
+    "rustClippy": "1.98.1 --all-targets -D warnings",
+    "pythonUnitTests": [
+      "3.11.16",
+      "3.14.7"
+    ],
+    "generation": "regenerated, drift check and generator regression passed",
+    "ciGate": "negative cases passed",
+    "repository": [
+      "lint",
+      "lint:names",
+      "docs:check",
+      "format:check",
+      "git diff --check"
+    ],
+    "octospecLint": "Only the same three pre-existing systemd-directive-paths frontmatter errors remain; remediation documents introduce none."
+  },
+  "packageNetwork": "First Rust packaging attempt hit crates.io index timeout; final integration used CARGO_NET_OFFLINE=true with cached dependencies and still rebuilt/runs outside the repository.",
+  "limitations": [
+    "Windows close cancellation tested with Win32 API stubs on macOS, not Windows runtime evidence.",
+    "Linux/Windows native platform validation and remaining Issue 51 stress matrix remain open.",
+    "No real Provider calls were made during this remediation."
+  ]
+}

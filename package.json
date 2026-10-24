@@ -68,6 +68,10 @@
     "url": "https://github.com/Mininglamp-OSS/octo-runtime/issues"
   },
   "scripts": {
+    "native:gen": "node native/codegen/generate.mjs",
+    "native:check": "node native/codegen/generate.mjs --check",
+    "native:test": "node native/tests/run.mjs",
+    "native:demo:test": "node native/tests/run.mjs --suite playboard-demo",
     "pack:release": "pnpm build && node scripts/pack-release.mjs",
     "prepack": "node scripts/require-release-pack.mjs",
     "clean": "node scripts/clean-dist.mjs",

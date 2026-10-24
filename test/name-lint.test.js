@@ -1,15 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, readFile, writeFile, rm, symlink } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile, rm, symlink, realpath } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
 const script = fileURLToPath(new URL("../scripts/lint-names.mjs", import.meta.url));
 const previous = ["octo", "harness"].join("-");
-async function fixture(t) {
-  const root = await mkdtemp(join(tmpdir(), "runtime-names-"));
+async function fixture(t, temporaryDirectory = tmpdir()) {
+  // TMPDIR/TEMP 可能位于 checkout 内，真实路径也可能穿过 junction；非 Git 用例必须移出所有 Git 祖先。
+  let base = await realpath(temporaryDirectory);
+  for (let directory = base; ; directory = dirname(directory)) {
+    if (existsSync(join(directory, ".git"))) base = dirname(directory);
+    if (dirname(directory) === directory) break;
+  }
+  const root = await mkdtemp(join(base, "runtime-names-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   return {
     root,
@@ -25,6 +32,21 @@ async function fixture(t) {
     }
   };
 }
+
+test("non-Git naming fixtures stay isolated when the temporary directory is inside a Git worktree", async (t) => {
+  const outer = await fixture(t);
+  const checkout = join(outer.root, "checkout");
+  const temporaryDirectory = join(checkout, "nested", "tmp");
+  await mkdir(temporaryDirectory, { recursive: true });
+  // worktree 的 .git 是文件；隔离逻辑同时兼容普通仓库的 .git 目录。
+  await writeFile(join(checkout, ".git"), "gitdir: ../metadata\n");
+  const { root, run } = await fixture(t, temporaryDirectory);
+  assert.equal(dirname(root), outer.root);
+  await writeFile(join(root, "source.ts"), 'const name = "octo-runtime";');
+  const result = run();
+  assert.equal(result.code, 0);
+  assert.equal(result.report.respectsGitIgnore, false);
+});
 
 test("name lint requires executable ripgrep inside a Git worktree instead of ignoring ignore rules", async (t) => {
   const { root } = await fixture(t);

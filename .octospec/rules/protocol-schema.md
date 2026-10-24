@@ -3,8 +3,8 @@ type: Rule
 title: 协议 Schema 与生成合同
 description: Schema、生成类型及运行时校验的职责和更新流程。
 tags: ["protocol","schema"]
-timestamp: 2026-10-15T00:00:00Z
-implementation_baseline: df63c8f
+timestamp: 2026-10-24T00:00:00Z
+implementation_baseline: 445d2bb
 id: runtime-protocol-schema
 tier: repo
 priority: 90
@@ -30,7 +30,11 @@ Schema 定义 ProviderSession、AgentConfig、Context、执行计划、Host 帧�
 
 运行时常量、泛型 CanonicalEvent 以及带 `AbortSignal` 的 InvokeRequest 组合留在 [src/index.ts](../../packages/octo-runtime-protocol/src/index.ts)。函数、活对象及 AbortSignal 不通过 JSON wire 传输。
 
-当前 Kernel、worker 入口及 Host SDK 是 TypeScript 实现。跨仓库 Go 消费者使用同一公开 Kernel IPC Schema/fixture，其生成流程由消费者维护。原生 binary 启停合同不表示本仓已实现 Go Loop 服务或生产 Go client。
+当前 Kernel、worker 入口及 Host SDK 是 TypeScript 实现。`native/` 提供 Go、Python 附着客户端及各自的 playboard demo；模型、校验规则、行为常量和 RPC 方法从 Schema 及 `kernel-client.behavior.json` 生成，客户端/生命周期在各语言包内单份维护。原生客户端只连接已有服务，不代启 Node/CLI，不拥有 Kernel。
+
+Native SDK 按一份生成源码和一份手写源码组织：Python 为 `octo_runtime_generated.py` / `client.py`，`__init__.py` 仅作公开 API 导出；Go 为 `octo_runtime_generated.go` / `client.go`，Go 另有极薄的 `pipe_windows.go` 绑定 Windows 专用 API。Transport 和 codec 属于手写实现内部，不再单独拆文件；平台选择由 SDK 完成。按用户最新要求，native SDK、demo 及相关代码注释使用英文；核心入口仍须解释所有权、取消和失败边界。
+
+生成入口为 `node native/codegen/generate.mjs`，`--check` 校验完整产物及输入/生成器 hash。Native 不接入 GitHub CI；生成器与 native 测试按需本地运行，SDK 安装和根 Runtime `build`/`prepare` 不调用 native 工具链。平台实测范围见 [Issue 51 实施记录](../tasks/51-native-rpc-clients/implementation.md)，目录中存在 Windows transport 不等于已通过实机验证。
 
 ## 修改流程
 

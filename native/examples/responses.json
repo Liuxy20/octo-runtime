@@ -1,0 +1,7 @@
+[
+  { "kind": "canonical", "response": { "interactionId": "approval", "outcome": "accepted" } },
+  {
+    "kind": "native",
+    "response": { "requestId": 42, "payload": { "id": 42, "result": "approved" } }
+  }
+]

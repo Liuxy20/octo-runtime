@@ -1,0 +1,56 @@
+{
+  "revision": 1,
+  "ipcVersion": 1,
+  "limits": {
+    "connections": 32,
+    "invocations": 128,
+    "controlConcurrency": 4,
+    "lookupConcurrency": 4,
+    "requestBytes": 33554432,
+    "lineBytes": 42008576,
+    "readChunkBytes": 65536
+  },
+  "timeoutsMs": {
+    "connect": 5000,
+    "unary": 5000,
+    "invokeAck": 30000,
+    "recovery": 10000
+  },
+  "repairDelaysMs": [100, 250, 500],
+  "terminalStates": ["completed", "failed", "cancelled", "lost"],
+  "retryableErrors": ["CONNECTION_CLOSED", "KERNEL_UNAVAILABLE", "KERNEL_TIMEOUT"],
+  "lookupFields": [
+    "run_id",
+    "invocation_id",
+    "agent_session_id",
+    "session_generation",
+    "protocol_mode"
+  ],
+  "receiptFields": [
+    "run_id",
+    "invocation_id",
+    "stream_id",
+    "agent_session_id",
+    "session_generation",
+    "protocol_mode",
+    "protocol"
+  ],
+  "identityInputFields": {
+    "run_id": "runId",
+    "invocation_id": "invocationId",
+    "agent_session_id": "sessionId",
+    "session_generation": "sessionGeneration",
+    "protocol_mode": "protocol_mode"
+  },
+  "defaults": {
+    "session_generation": 0,
+    "protocol_mode": "native"
+  },
+  "lifecycle": {
+    "admission": ["admitting", "accepted", "acceptance_unknown", "unobserved"],
+    "cancellation": ["none", "requested", "acknowledged", "unknown"]
+  },
+  "ownership": "attached",
+  "closeCancelsRun": false,
+  "replayInvoke": false
+}

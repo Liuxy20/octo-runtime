@@ -19,11 +19,29 @@
         "protocol_mode"
       ],
       "properties": {
-        "run_id": { "type": "string", "minLength": 1 },
-        "invocation_id": { "type": "string", "minLength": 1 },
-        "agent_session_id": { "type": "string", "minLength": 1 },
-        "session_generation": { "type": "integer", "minimum": 0 },
-        "protocol_mode": { "enum": ["canonical", "native"] }
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "agent_session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "session_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "protocol_mode": {
+          "$ref": "#/definitions/ProtocolMode"
+        }
       }
     },
     "KernelRunRef": {
@@ -41,14 +59,43 @@
         "protocol"
       ],
       "properties": {
-        "kernel_instance_id": { "type": "string", "minLength": 1 },
-        "run_id": { "type": "string", "minLength": 1 },
-        "invocation_id": { "type": "string", "minLength": 1 },
-        "stream_id": { "type": "string", "minLength": 1 },
-        "agent_session_id": { "type": "string", "minLength": 1 },
-        "session_generation": { "type": "integer", "minimum": 0 },
-        "protocol_mode": { "enum": ["canonical", "native"] },
-        "protocol": { "type": "string", "minLength": 1 }
+        "kernel_instance_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "invocation_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "stream_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "agent_session_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "session_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "protocol_mode": {
+          "$ref": "#/definitions/ProtocolMode"
+        },
+        "protocol": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
       }
     },
     "KernelRunSnapshot": {
@@ -57,10 +104,22 @@
       "additionalProperties": false,
       "required": ["ref", "oldest_seq", "latest_seq"],
       "properties": {
-        "ref": { "$ref": "#/definitions/KernelRunRef" },
-        "oldest_seq": { "type": "integer", "minimum": 1 },
-        "latest_seq": { "type": "integer", "minimum": 0 },
-        "terminal": { "$ref": "#/definitions/HostFrame" }
+        "ref": {
+          "$ref": "#/definitions/KernelRunRef"
+        },
+        "oldest_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "latest_seq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "terminal": {
+          "$ref": "#/definitions/HostFrame"
+        }
       }
     },
     "KernelStatus": {
@@ -69,19 +128,40 @@
       "additionalProperties": false,
       "required": ["ipc_version", "kernel_instance_id", "pid", "worker", "execution_ready"],
       "properties": {
-        "ipc_version": { "const": 1 },
-        "kernel_instance_id": { "type": "string", "minLength": 1 },
-        "pid": { "type": "integer", "minimum": 1 },
-        "execution_ready": { "type": "boolean" },
+        "ipc_version": {
+          "const": 1
+        },
+        "kernel_instance_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "execution_ready": {
+          "type": "boolean"
+        },
         "worker": {
           "type": "object",
           "additionalProperties": false,
           "required": ["generation", "state", "restart_attempt"],
           "properties": {
-            "pid": { "type": "integer", "minimum": 1 },
-            "generation": { "type": "integer", "minimum": 0 },
-            "restart_attempt": { "type": "integer", "minimum": 0 },
-            "state": { "enum": ["starting", "ready", "recovering", "stopped", "exhausted"] }
+            "pid": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "generation": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "restart_attempt": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "state": {
+              "enum": ["starting", "ready", "recovering", "stopped", "exhausted"]
+            }
           }
         }
       }
@@ -305,9 +385,15 @@
           "additionalProperties": false,
           "required": ["type", "name", "payload"],
           "properties": {
-            "type": { "const": "evidence" },
-            "name": { "const": "execution" },
-            "payload": { "$ref": "#/definitions/ExecutionEvidence" }
+            "type": {
+              "const": "evidence"
+            },
+            "name": {
+              "const": "execution"
+            },
+            "payload": {
+              "$ref": "#/definitions/ExecutionEvidence"
+            }
           }
         },
         {
@@ -904,12 +990,20 @@
         {
           "if": {
             "properties": {
-              "namespace": { "const": "octo.execution" },
-              "name": { "const": "adapter" }
+              "namespace": {
+                "const": "octo.execution"
+              },
+              "name": {
+                "const": "adapter"
+              }
             }
           },
           "then": {
-            "properties": { "payload": { "$ref": "#/definitions/ContextAdapterPayload" } }
+            "properties": {
+              "payload": {
+                "$ref": "#/definitions/ContextAdapterPayload"
+              }
+            }
           }
         },
         {
@@ -1548,7 +1642,9 @@
       "additionalProperties": false,
       "required": ["mode"],
       "properties": {
-        "mode": { "enum": ["default", "plan"] }
+        "mode": {
+          "enum": ["default", "plan"]
+        }
       }
     },
     "ExecutionEvidence": {
@@ -1561,10 +1657,19 @@
           "additionalProperties": false,
           "required": ["requested", "effective", "status"],
           "properties": {
-            "requested": { "enum": ["default", "plan"] },
-            "effective": { "enum": ["default", "plan", null] },
-            "status": { "enum": ["applied", "fallback", "unknown"] },
-            "nativeMode": { "type": "string", "minLength": 1 },
+            "requested": {
+              "enum": ["default", "plan"]
+            },
+            "effective": {
+              "enum": ["default", "plan", null]
+            },
+            "status": {
+              "enum": ["applied", "fallback", "unknown"]
+            },
+            "nativeMode": {
+              "type": "string",
+              "minLength": 1
+            },
             "reason": {
               "enum": ["provider_unsupported", "adapter_unmapped", "provider_unconfirmed"]
             }
@@ -2027,7 +2132,9 @@
       "additionalProperties": false,
       "required": ["agent_source", "adapter_type", "workdir", "approval_mode"],
       "properties": {
-        "actmode": { "enum": ["default", "plan"] },
+        "actmode": {
+          "enum": ["default", "plan"]
+        },
         "adapter_type": {
           "type": "string",
           "minLength": 1
@@ -3984,6 +4091,219 @@
       "properties": {
         "mcpServers": {
           "$ref": "#/definitions/McpServers"
+        }
+      }
+    },
+    "ModelInputParts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 128,
+      "items": {
+        "$ref": "#/definitions/ModelInputPart"
+      }
+    },
+    "InvokeInputWire": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["inputs", "contexts"],
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "invocationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "prompt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "modelInput": {
+          "type": "string",
+          "minLength": 1
+        },
+        "freshFallbackModelInput": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workdir": {
+          "type": "string"
+        },
+        "controlInstructions": {
+          "type": "string"
+        },
+        "inputs": {
+          "$ref": "#/definitions/ModelInputParts"
+        },
+        "contexts": {
+          "$ref": "#/definitions/ContextEnvelope"
+        },
+        "protocol_mode": {
+          "$ref": "#/definitions/ProtocolMode"
+        },
+        "agentSource": {
+          "$ref": "#/definitions/AgentSource"
+        },
+        "approvalMode": {
+          "$ref": "#/definitions/ApprovalMode"
+        },
+        "agentConfig": {
+          "$ref": "#/definitions/AgentConfig"
+        },
+        "runtimeLimits": {
+          "$ref": "#/definitions/RuntimeLimits"
+        },
+        "providerSession": {
+          "$ref": "#/definitions/ProviderSession"
+        },
+        "sessionGeneration": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "providerEpoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "runMetadata": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "continuityMode": {
+          "enum": ["fresh", "continue"]
+        },
+        "freshFallbackModelInputParts": {
+          "$ref": "#/definitions/ModelInputParts"
+        },
+        "freshFallbackImagesUnavailable": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": ["protocolMode"]
+          }
+        },
+        {
+          "not": {
+            "required": ["adapterType"]
+          }
+        },
+        {
+          "not": {
+            "required": ["request"]
+          }
+        },
+        {
+          "not": {
+            "required": ["options"]
+          }
+        },
+        {
+          "not": {
+            "required": ["signal"]
+          }
+        },
+        {
+          "not": {
+            "required": ["executionEnvOverrides"]
+          }
+        },
+        {
+          "properties": {
+            "agentConfig": {
+              "properties": {
+                "timeoutSeconds": {
+                  "not": {
+                    "maximum": 0
+                  }
+                }
+              }
+            },
+            "providerSession": {
+              "properties": {
+                "sessionId": {
+                  "pattern": "[^\\t\\n\\r\\f\\v    -     　﻿]"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "x-octo-unicode-scalar-strings": true,
+      "x-octo-max-json-depth": 32,
+      "x-octo-max-json-bytes": 33554432
+    },
+    "KernelInvokeEnvironmentWire": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "executionEnvOverrides": {
+          "$ref": "#/definitions/ContextEnvsPayload"
+        }
+      }
+    },
+    "InteractionResponseWire": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["interactionId", "outcome"],
+      "properties": {
+        "interactionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 191
+        },
+        "outcome": {
+          "enum": ["accepted", "declined", "answered", "cancelled"]
+        },
+        "value": {}
+      }
+    },
+    "HostedAdapterMetadataWire": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["type", "agentSources"],
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "agentSources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentSource"
+          }
+        },
+        "workspace": {
+          "type": "boolean"
+        },
+        "protocolSupport": {
+          "$ref": "#/definitions/AdapterProtocolSupport"
+        },
+        "processModel": {
+          "type": "string"
+        },
+        "transport": {
+          "type": "string"
+        },
+        "providerVersion": {
+          "type": ["string", "null"]
+        },
+        "providerPath": {
+          "type": ["string", "null"]
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "unavailableReason": {
+          "type": ["string", "null"]
         }
       }
     }
