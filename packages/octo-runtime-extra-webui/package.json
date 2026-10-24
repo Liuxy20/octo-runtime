@@ -39,7 +39,7 @@
     "@types/react-dom": "^19.1.9",
     "@types/shell-quote": "^1.7.5",
     "vite": "^8.0.0",
-    "sass": "^1.104.1",
+    "sass": "^1.106.1",
     "vitest": "^4.1.12",
     "happy-dom": "^21.0.3"
   }
