@@ -593,25 +593,6 @@ function classify(
     CODEX_FINALIZATION_TIMEOUT: "OH-ADP-3013"
   };
   if (explicit && timeouts[explicit]) return result(timeouts[explicit], explicit);
-  // DSH 的公开分类复用共同目录，原生阶段仍由稳定 reasonCode 保留。
-  const dshCodes: Record<string, PublicFailureCode> = {
-    DSH_EXECUTABLE_NOT_FOUND: "OH-ADP-3002",
-    DSH_VERSION_UNSUPPORTED: "OH-ADP-3005",
-    DSH_START_FAILED: "OH-ADP-3004",
-    DSH_INITIALIZE_TIMEOUT: "OH-ADP-3007",
-    DSH_RPC_ERROR: "OH-ADP-3004",
-    DSH_REQUEST_TIMEOUT: "OH-ADP-3013",
-    DSH_TRANSPORT_CLOSED: "OH-ADP-3005",
-    DSH_PROTOCOL_ERROR: "OH-ADP-3005",
-    DSH_TRAJECTORY_INVALID: "OH-ADP-3005",
-    DSH_SESSION_RESUME_FAILED: "OH-ADP-3004",
-    DSH_SESSION_BUSY: "OH-ADP-3004",
-    DSH_EXECUTION_FAILED: "OH-PRV-4099",
-    DSH_NO_FINAL_OUTPUT: "OH-ADP-3005",
-    DSH_CANCEL_FAILED: "OH-ADP-3012",
-    DSH_CLEANUP_FAILED: "OH-ADP-3012"
-  };
-  if (explicit && dshCodes[explicit]) return result(dshCodes[explicit], explicit);
   if (explicit === "PROVIDER_MESSAGE_TOO_LARGE")
     return result("OH-PRV-4009", "PROVIDER_MESSAGE_TOO_LARGE");
   if (explicit === "HOST_FRAME_TOO_LARGE") return result("OH-ADP-3014", "HOST_FRAME_TOO_LARGE");

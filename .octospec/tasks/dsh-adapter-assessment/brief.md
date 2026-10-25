@@ -1,7 +1,7 @@
 ---
 type: Task
 title: DSH 独立 Adapter 接入整体评估
-description: F28 历史评估；2026-10-24 已获授权实施独立 DSH Adapter，当前证据与剩余验收见 Issue 17 专项。
+description: F28 遗留 P1 专项，在架构与内核稳定后评估 DSH 原生接入及统一执行合同，当前不实施。
 tags: [adapter, dsh, architecture, assessment, backlog]
 timestamp: 2026-10-16T00:00:00Z
 ---
@@ -9,10 +9,6 @@ timestamp: 2026-10-16T00:00:00Z
 # DSH 独立 Adapter 接入整体评估
 
 ## 状态与优先级
-
-2026-10-24：用户已授权按最新 main 建立独立 worktree 实施、审查、端到端测试及 PR 合并。现已完成固定 0.2.1-rc.3 的独立 Adapter、本机 Desktop 和 SDK/CLI 群聊验证；DM 因测试 Bot 尚非好友被服务端拒绝，原生 Windows 未验证，均未计为通过。当前方案、95/100 实施准备度口径和验收证据见 [Issue 17 专项](../17-dsh-adapter/brief.md)及[验收记录](../17-dsh-adapter/acceptance.md)。Issue 17 的全部验收尚未闭合。
-
-## 2026-10-16 历史状态
 
 **遗留 TODO，P1，尚未开展整体评估，当前不实施。** 来源为 [F28 逐项评审](../gateway-august-feature-assessment/assessment.md#逐项-reviewf28-dsh-独立-adapter-遗留专项)。用户对旧 Gateway 接入方案有异议，要求按当前 Runtime 架构重新整体评估，不能沿用旧接法直接进入开发。
 

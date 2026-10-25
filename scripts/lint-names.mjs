@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { readFileSync, readdirSync, realpathSync } from "node:fs";
 import { dirname, join, resolve, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { hasGitMetadata } from "./git-worktree.mjs";
 
 const rootArg = process.argv.indexOf("--root");
 if (rootArg >= 0 && !process.argv[rootArg + 1]) throw new Error("--root requires a directory");
@@ -45,7 +46,7 @@ let files;
 if (result.error?.code === "ENOENT") {
   // 非 Git fixture 不依赖宿主工具；Git 工作树仍由 rg 保留完整忽略规则。
   for (let directory = realpathSync(root); ; directory = dirname(directory)) {
-    if (existsSync(join(directory, ".git")))
+    if (hasGitMetadata(directory))
       throw new Error("RIPGREP_REQUIRED: install an executable rg on PATH to scan a Git worktree");
     if (dirname(directory) === directory) break;
   }

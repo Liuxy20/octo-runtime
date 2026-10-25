@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { invokeRequest } from "./runtime-fixture.js";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "octo-metadata-log-"));
@@ -137,4 +139,78 @@ test("F31 log queue is bounded and filesystem failure does not reach callers", a
   const failed = new RuntimeLogging({ directory: blocked });
   failed.kernel("error", "fixture.failure", { code: "DISK_FAILED" });
   await failed.close();
+});
+
+test("shared runtime diagnostics retain safe process facts and reject provider bodies", async (t) => {
+  const directory = await fixture(t);
+  const logging = new RuntimeLogging({ directory });
+  logging.kernel("error", "fixture.native", {
+    reason_code: "PROVIDER_MESSAGE_TOO_LARGE",
+    native_code: -32000,
+    primary_code: "EPIPE",
+    cleanup_code: "EPERM",
+    signal: "SIGTERM",
+    request_id: 7,
+    pid: 123,
+    exit_code: 23,
+    message: "SECRET_PROVIDER_BODY",
+    stderr: "SECRET_PROVIDER_STDERR"
+  });
+  logging.kernel("error", "fixture.invalid", {
+    native_code: -0.5,
+    pid: -1,
+    exit_code: Infinity,
+    reason_code: "Bearer-secret"
+  });
+  await logging.close();
+  const rows = await records(directory);
+  assert.deepEqual(rows[0].data, {
+    reason_code: "PROVIDER_MESSAGE_TOO_LARGE",
+    native_code: -32000,
+    primary_code: "EPIPE",
+    cleanup_code: "EPERM",
+    signal: "SIGTERM",
+    request_id: 7,
+    pid: 123,
+    exit_code: 23
+  });
+  assert.deepEqual(rows[1].data, {});
+  assert.doesNotMatch(JSON.stringify(rows), /SECRET|Bearer/);
+});
+
+test("Core provides the shared adapter log sink and records the canonical failure reason", async () => {
+  const logs = [];
+  const core = new AgentExecutor({ log: (...entry) => logs.push(entry) });
+  core.register({
+    metadata: {
+      type: "fixture",
+      agentSources: ["provisioned"],
+      protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
+    },
+    async *invoke(_request, context) {
+      context.log("error", "fixture.native", { native_code: -32000 });
+      yield {
+        protocolVersion: 2,
+        type: "run.failed",
+        payload: { code: "PROVIDER_MESSAGE_TOO_LARGE", message: "fixture capacity" }
+      };
+    }
+  });
+  try {
+    const events = await Array.fromAsync(
+      core.invoke(
+        invocationInput(invokeRequest({ approvalMode: "full_access" }), "canonical", "fixture")
+      )
+    );
+    const failure = events.at(-1).payload.failure;
+    assert.equal(events.at(-1).type, "run.failed");
+    assert.equal(failure.reasonCode, "PROVIDER_MESSAGE_TOO_LARGE");
+    assert.equal(logs.find((entry) => entry[1] === "fixture.native")[2].native_code, -32000);
+    assert.equal(
+      logs.find((entry) => entry[1] === "invoke.failed")[2].reason_code,
+      failure.reasonCode
+    );
+  } finally {
+    await core.shutdown();
+  }
 });

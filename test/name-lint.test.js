@@ -1,21 +1,42 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mkdtemp, mkdir, readFile, writeFile, rm, symlink, realpath } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import {
+  access,
+  mkdtemp,
+  mkdir,
+  readFile,
+  writeFile,
+  rm,
+  symlink,
+  realpath
+} from "node:fs/promises";
+import { constants } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { hasGitMetadata } from "../scripts/git-worktree.mjs";
 
 const script = fileURLToPath(new URL("../scripts/lint-names.mjs", import.meta.url));
 const previous = ["octo", "harness"].join("-");
 async function fixture(t, temporaryDirectory = tmpdir()) {
   // TMPDIR/TEMP 可能位于 checkout 内，真实路径也可能穿过 junction；非 Git 用例必须移出所有 Git 祖先。
-  let base = await realpath(temporaryDirectory);
-  for (let directory = base; ; directory = dirname(directory)) {
-    if (existsSync(join(directory, ".git"))) base = dirname(directory);
-    if (dirname(directory) === directory) break;
+  let base;
+  for (const candidate of [temporaryDirectory, homedir(), process.cwd()]) {
+    let outside = await realpath(candidate);
+    for (let directory = outside; ; directory = dirname(directory)) {
+      if (hasGitMetadata(directory)) outside = dirname(directory);
+      if (dirname(directory) === directory) break;
+    }
+    try {
+      await access(outside, constants.W_OK);
+      base = outside;
+      break;
+    } catch (error) {
+      if (error.code !== "EACCES" && error.code !== "EPERM") throw error;
+    }
   }
+  assert.ok(base, "No writable fixture directory outside Git worktrees");
   const root = await mkdtemp(join(base, "runtime-names-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   return {
@@ -51,6 +72,7 @@ test("non-Git naming fixtures stay isolated when the temporary directory is insi
 test("name lint requires executable ripgrep inside a Git worktree instead of ignoring ignore rules", async (t) => {
   const { root } = await fixture(t);
   await mkdir(join(root, ".git"));
+  await writeFile(join(root, ".git", "HEAD"), "ref: refs/heads/test\n");
   const child = join(root, "nested");
   await mkdir(child);
   const outside = await fixture(t);
@@ -65,6 +87,16 @@ test("name lint requires executable ripgrep inside a Git worktree instead of ign
     assert.equal(result.stdout, "");
     assert.match(result.stderr, /RIPGREP_REQUIRED:.*Git/);
   }
+});
+
+test("an empty .git directory in a temporary ancestor does not force fixtures into filesystem root", async (t) => {
+  const outer = await fixture(t);
+  await mkdir(join(outer.root, ".git"));
+  const temporaryDirectory = join(outer.root, "tmp");
+  await mkdir(temporaryDirectory);
+  const { root, run } = await fixture(t, temporaryDirectory);
+  assert.equal(dirname(root), temporaryDirectory);
+  assert.equal(run().code, 0);
 });
 
 test("name lint accepts current names and rejects case variants without echoing source contents", async (t) => {
