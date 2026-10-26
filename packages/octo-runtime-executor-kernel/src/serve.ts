@@ -77,8 +77,14 @@ export function serveWorker(
       }
     );
   };
-  process.once("SIGINT", () => stop());
-  process.once("SIGTERM", () => stop());
+  const onSignal = (): void => {
+    // Windows 控制台事件也会送达 worker；父 Kernel 须先经 RPC 取消并消费终态，再以 EOF 关闭。
+    // 抢先退出会丢失终态及树回收所需的 leader。父 IPC 已断开或独立运行时仍自行收尾。
+    if (process.platform !== "win32" || !process.connected) stop();
+  };
+  // 保持监听到父进程关闭，避免重复控制台事件恢复默认的立即退出行为。
+  process.on("SIGINT", onSignal);
+  process.on("SIGTERM", onSignal);
   process.once("SIGHUP", () => stop());
   process.stdin.once("end", () => stop(process.platform === "win32"));
   process.stdin.once("close", () => stop(process.platform === "win32"));

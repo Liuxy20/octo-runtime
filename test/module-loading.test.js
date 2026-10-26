@@ -19,6 +19,7 @@ import { Readable } from "node:stream";
 import { waitFor } from "./runtime-fixture.js";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { createWindowsConsole, consoleProcessId } from "../test-support/windows-console.mjs";
 
 const runner = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const adapterFixture = resolve("test/fixtures/test-adapter.js");
@@ -350,22 +351,24 @@ test(
       "disabled",
       Readable.from([JSON.stringify({ enabled: false, config: {} })])
     );
+    const consoleControl = await createWindowsConsole();
     for (const component of ["executor-kernel", "disabled"]) {
-      const child = spawn(
-        process.execPath,
-        [
-          resolve("apps/cli/dist/index.js"),
-          component,
-          "run",
-          "--json",
-          "--home",
-          home,
-          "--manifest",
-          file
-        ],
-        { stdio: ["ignore", "pipe", "pipe"] }
-      );
-      const exited = once(child, "exit");
+      const args = [
+        resolve("apps/cli/dist/index.js"),
+        component,
+        "run",
+        "--json",
+        "--home",
+        home,
+        "--manifest",
+        file
+      ];
+      const options = { stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
+      const child = consoleControl
+        ? consoleControl.spawn(args, options)
+        : spawn(process.execPath, args, options);
+      const exited = once(child, "close");
+      let pid = consoleControl ? undefined : child.pid;
       let output = "",
         errors = "";
       child.stdout.on("data", (chunk) => {
@@ -373,16 +376,69 @@ test(
       });
       child.stderr.on("data", (chunk) => {
         errors += chunk;
+        if (consoleControl) pid ??= consoleProcessId(errors);
       });
       try {
-        await waitFor(() => {
-          if (child.exitCode !== null) throw new Error(output + errors);
-          return output.includes('"state": "ready"');
+        // 就绪由真实输出与 PID 共同确认，启动仍受本测试原有 15 秒总预算约束。
+        // 不把通用轮询的 2 秒上限混入控制台 fixture；超时/提前退出必须进入所属树清理。
+        await new Promise((resolve, reject) => {
+          const cleanup = () => {
+            child.stdout.removeListener("data", ready);
+            child.stderr.removeListener("data", ready);
+            child.removeListener("close", exitedEarly);
+            child.removeListener("error", failed);
+            t.signal.removeEventListener("abort", aborted);
+          };
+          const failed = (error) => {
+            cleanup();
+            reject(error);
+          };
+          const exitedEarly = () => failed(new Error(output + errors));
+          const aborted = () => failed(t.signal.reason);
+          const ready = () => {
+            if (output.includes('"state": "ready"') && pid) {
+              cleanup();
+              resolve();
+            }
+          };
+          child.stdout.on("data", ready);
+          child.stderr.on("data", ready);
+          child.once("close", exitedEarly);
+          child.once("error", failed);
+          t.signal.addEventListener("abort", aborted, { once: true });
+          if (t.signal.aborted) aborted();
+          else if (child.exitCode !== null || child.signalCode !== null) exitedEarly();
+          else ready();
         });
-        child.kill("SIGTERM");
-        assert.equal((await exited)[0], 0);
+        assert.ok(pid, "the fixture must observe the actual CLI PID");
+        const started = Date.now();
+        if (consoleControl) await consoleControl.interrupt(pid);
+        else child.kill("SIGTERM");
+        let timer;
+        try {
+          const [code, signal] = await Promise.race([
+            exited,
+            new Promise((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error(`CLI did not close: ${output}${errors}`)),
+                7000
+              );
+            })
+          ]);
+          assert.deepEqual({ code, signal }, { code: 0, signal: null }, output + errors);
+          assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+          t.diagnostic(
+            `${component}: ${consoleControl ? "CTRL_C_EVENT" : "SIGTERM"}, code=${code}, signal=${signal}, close=${Date.now() - started}ms`
+          );
+        } finally {
+          clearTimeout(timer);
+        }
       } finally {
-        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+        if (child.exitCode === null && child.signalCode === null) {
+          // 兜底只清理本 fixture 拥有的树；不能先杀 leader 再尝试找后代。
+          if (consoleControl && pid) await consoleControl.terminate(pid);
+          else child.kill("SIGKILL");
+        }
         await exited;
       }
     }

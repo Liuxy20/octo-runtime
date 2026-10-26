@@ -90,4 +90,6 @@ Windows worker 正常 close 在 launcher 内部先结束 stdin，复用既有 sh
 
 CLI playboard 通过同一原生工厂在本进程创建临时 Kernel 服务，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。退出只回收本次资源，保留 Home/profile，不复用常驻服务。#71 已删除旧 owned launcher 路径。
 
+Windows 共享控制台事件可同时到达 Kernel 与 worker。父 IPC 仍连接时，worker 不因 SIGINT/SIGTERM 抢先关闭，由 Kernel 经 RPC 取消并消费源终态，再以 EOF 进入既有排空与树回收；独立运行或父 IPC 断开时仍自行 shutdown。测试必须使用所属独立控制台验证真实 Ctrl+C，child.kill 的强制终止另行记录，不能作为优雅关闭成功。见 [#58 最新基线任务](../tasks/58-windows-cli-signals/brief.md)。
+
 实现：[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Core](../../packages/octo-runtime-executor-core/README.md)。测试：[clients](../../test/kernel-clients.test.js)、[worker](../../test/kernel-worker-supervision.test.js)、[所有权](../../test/host-sdk-lifecycle.test.js)。实际平台与线上证据见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
