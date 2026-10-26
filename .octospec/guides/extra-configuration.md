@@ -3,8 +3,8 @@ type: Guide
 title: Extra 配置与调用
 description: 当前 CLI 路径、SDK 声明及本地 WebUI。
 tags: ["extra"]
-timestamp: 2026-10-15T00:00:00Z
-implementation_baseline: df63c8f
+timestamp: 2026-10-27T00:00:00Z
+implementation_baseline: a7c33b6
 ---
 
 # Extra 配置与仓库外开发
@@ -17,7 +17,13 @@ Gateway 的可选 createSessionStore 也属于它自己的 dependencies，同步
 
 ```bash
 octo-runtime extraset channel-gateway < gateway.json
-octo-runtime channel-gateway restart
+octo-runtime channel-gateway start
 ```
 
-extraset 保存完整声明，重启只影响对应组件。首次使用先 install；start/restart 不隐式安装。旧 daemon 接口和服务命令不再提供。
+`extraset` 保存完整声明，不启动或重启组件。上述示例适用于已保存且启用的 Gateway 声明；`start` 在服务未安装时自动安装本组件并开启自启，已安装时保留服务设置。修改配置后，对已安装且启用的服务执行 `octo-runtime channel-gateway restart`。`restart` 不自动安装，未安装时返回退出码 3。
+
+`install` 首次和重复执行均默认开启自启；只有显式 `--autostart=false` 才禁用，再次普通 `install` 会恢复自启。服务禁用后，`start` 和 `restart` 返回 `SERVICE_DISABLED`；先执行 `octo-runtime channel-gateway install --autostart=true`，再启动。只需前台调试时使用 `octo-runtime channel-gateway run`，无需注册系统服务。
+
+WebUI 使用 `extraset webui` 保存声明，再执行 `octo-runtime webui start`；WeCom 使用 `extraset channel-wecom` 保存声明，再执行 `octo-runtime channel-wecom start`。各组件的 `run/start/restart` 都使用自己的名称，不能用 `channel-gateway` 代替。所有命令选择同一个 Home；自定义 Home 时每次使用相同的 `--home`。启停只影响所选组件，不会启动或停止 Kernel 或其他 Extra。
+
+精确的安装、自启和禁用行为见[CLI 生命周期合同](../rules/runtime-lifecycle.md#cli)。SDK 宿主继续使用上文的 `createExtraService`，不要求注册 CLI 系统服务。旧 daemon 接口和服务命令不再提供。

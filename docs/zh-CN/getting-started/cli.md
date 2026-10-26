@@ -62,6 +62,8 @@ octo-runtime executor-kernel start
 
 `install` 注册所选服务，首次和重复安装均默认开启自启，只有显式 `--autostart=false` 才禁用。`start` 在未安装时自动安装本组件并向 stderr 输出进度；已安装时保留设置。`start` 和 `restart` 成功后包含组件状态。状态默认易读文本，`--json` 输出格式化机器数据。macOS 使用 launchd，Linux 使用 systemd 用户服务，Windows 使用任务计划程序。Kernel 与各 Extra 独立自启，不要求启动顺序。
 
+`restart` 不自动安装服务；未安装时返回退出码 3。服务被显式禁用后，`start` 和 `restart` 返回 `SERVICE_DISABLED`。先执行 `octo-runtime executor-kernel install --autostart=true` 恢复启用，再执行 `start`。再次普通 `install` 也会恢复自启。只需前台运行时使用 `run`，无需注册系统服务。
+
 使用以下命令管理已注册的服务：
 
 ```sh

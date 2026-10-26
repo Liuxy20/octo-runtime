@@ -62,6 +62,8 @@ octo-runtime executor-kernel start
 
 `install` registers the selected service and enables autostart by default on first and repeated installs. Use `--autostart=false` to disable it explicitly. `start` automatically installs a missing component with progress on stderr; existing services keep their settings. Successful `start` and `restart` include component status. Status is readable text by default; use `--json` for formatted machine output. Service management uses launchd on macOS, systemd user services on Linux, and Task Scheduler on Windows. Kernel and Extras have independent autostart and can start in either order.
 
+`restart` does not install a missing service; it returns exit code 3. An explicitly disabled service rejects both `start` and `restart` with `SERVICE_DISABLED`. Run `octo-runtime executor-kernel install --autostart=true` to enable it, then run `start`. A plain `install` also enables autostart again. For foreground execution, use `run` without registering a system service.
+
 Manage the registered service with:
 
 ```sh

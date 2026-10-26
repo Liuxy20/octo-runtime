@@ -1,0 +1,24 @@
+task: 156-cli-docs
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/156
+baseline: a7c33b64064b8a54f59f70178873983ba143c1b3
+branch: codex/156-cli-docs
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/extras.md
+sources:
+  - apps/cli/src/main.ts
+  - apps/cli/src/help.ts
+  - apps/cli/src/output.ts
+  - packages/octo-runtime-cross-service/src/
+  - packages/octo-runtime-extra-webui/README.md
+  - packages/octo-runtime-extra-webui/README.zh.md
+  - packages/octo-runtime-extra-channel-wecom/README.md
+  - packages/octo-runtime-extra-channel-wecom/README.zh.md
+  - DEPLOYMENTS.md
+  - apps/cli/README.md
+skills:
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md

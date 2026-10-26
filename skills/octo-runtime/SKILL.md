@@ -46,14 +46,14 @@ CLI 不提供 login。显式 --home 优先于 OCTO_RUNTIME_HOME，再使用平�
 Use the native user-service commands for an installed Runtime:
 
 ```bash
-octo-runtime executor-kernel install --autostart=false
+octo-runtime executor-kernel install
 octo-runtime executor-kernel start
 octo-runtime executor-kernel restart
 octo-runtime executor-kernel stop
 octo-runtime executor-kernel uninstall
 octo-runtime executor-kernel run
 
-octo-runtime channel-gateway install --autostart=false
+octo-runtime channel-gateway install
 octo-runtime channel-gateway start
 octo-runtime channel-gateway restart
 octo-runtime channel-gateway stop
@@ -61,7 +61,11 @@ octo-runtime channel-gateway uninstall
 octo-runtime channel-gateway run
 ```
 
-Each command acts on its named component only. First install defaults to autostart false; later install without an option preserves the installed value. start/restart require an installed definition and never install implicitly. uninstall preserves Home data. There is no --force option. Never delete identity or configuration as an automatic recovery step.
+Each command acts on its named component only. First and repeated `install` enable autostart by default; only explicit `--autostart=false` disables it. A later plain `install` enables it again. `start` automatically installs a missing service with autostart enabled, reports installation progress on stderr, then starts it and waits for readiness. Existing services keep their settings. `restart` requires an installed service and returns exit code 3 when it is missing.
+
+An explicitly disabled service rejects both `start` and `restart` with `SERVICE_DISABLED`. Run `<component> install --autostart=true` before starting it again. For foreground use without registering a system service, use `<component> run`. `stop` preserves the autostart setting; `uninstall` preserves Home data. There is no `--force` option. Never delete identity or configuration as an automatic recovery step.
+
+Save an enabled declaration with `extraset <extra-name>` before starting that Extra. Use its own component name: `octo-runtime webui start` for WebUI and `octo-runtime channel-wecom start` for WeCom; use the same names for `run` and `restart`. These commands do not start Kernel or another Extra. SDK hosts can instead use `createExtraService` with parsed configuration and own its lifecycle without CLI service registration.
 
 Use run for foreground debugging. Gateway may start before Kernel and report kernel_available=false; it must never start or maintain Kernel. A component restart does not restart its siblings.
 

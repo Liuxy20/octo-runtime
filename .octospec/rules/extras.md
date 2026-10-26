@@ -47,6 +47,8 @@ Adapter/Extra 的装配方式统一遵守[基础架构中的 CLI 与 SDK 约束]
 
 CLI extraset 整份替换 <home>/extras/<name>/config.json，POSIX 0600；extraget 显式返回完整配置。配置属于 Home，不能以 profile 分区。应用使用 SDK 时无需这个文件。CLI 以注册名称独立管理各 Extra 服务；例如 channel-gateway/channel-wecom/webui，各自 install/start/restart/stop/status/run，自启也按组件设置。重启只影响对应 Extra，Kernel 和其他 Extra 不变。全局 status 逐个查询已配置 Extra 自身公开状态，不只查询进程或 Kernel。
 
+CLI 安装、自启、未安装与显式禁用的行为统一遵循[本地生命周期合同](runtime-lifecycle.md#cli)；Extra 操作指南和仓库 Skill 的示例须与该合同一致。SDK 原生装配不继承 CLI 的系统服务安装要求。
+
 ## 动态函数与实际在途
 
 loadContexts: (jsonConfig,{signal}) => readonly ContextItem[] | Promise<readonly ContextItem[]> 保持同步/异步合同。每轮任务准备时调用同一函数，读取当前数据；数据变化无需重载连接。原生服务直接注入函数，函数留在服务所在的调用进程，不进入配置或 Kernel。
