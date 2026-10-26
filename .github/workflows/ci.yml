@@ -149,6 +149,8 @@ jobs:
         run: node --unhandled-rejections=strict --test test/opencode-v2.test.js
       - name: Verify naming fixtures without external ripgrep on Windows
         run: node --unhandled-rejections=strict --test test/name-lint.test.js
+      - name: Verify Playboard temporary IPC with long Unicode paths on Windows
+        run: node --unhandled-rejections=strict --test --test-name-pattern="Playboard temporary IPC ignores" test/playboard.test.js
       - name: Verify file security boundaries on Windows
         run: node --unhandled-rejections=strict --test test/security-remediation.test.js test/hourly-log.test.js test/channel-tool-environment.test.js
       - name: Verify release process ownership and failure diagnostics on Windows

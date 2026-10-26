@@ -54,6 +54,12 @@ environment.streamLimits 在现有 Kernel wire 不支持，显式传入拒绝 KE
 
 本地 IPC 同一 OS 账号互信；不增加 APP 注册、共享 Token 或逐应用授权。POSIX socket 权限为 0600；Windows Pipe 的访问机制独立，不能由 POSIX 结果推断。远程入口的授权归 Extra 和业务系统。
 
+### Playboard 临时端点与常驻 Home
+
+常驻 POSIX socket 保留在宿主配置的 Runtime Home 内；SDK 自配 Home，Unix CLI 默认 `~/.octo-runtime`，既有覆盖方式不变。一次性 Playboard 的 POSIX socket 则在固定短根 `/tmp` 下以 `mkdtemp` 创建本次独占的私有目录，使用短文件名；不能把受 TMPDIR/TMP/TEMP 影响的长或多字节路径继续拼进 Unix socket。Windows Playboard 保留系统临时目录与既有哈希命名管道。
+
+Playboard 直接构造临时 Kernel，只有真实 close 完成才删除所属目录；incomplete 时保留资源事实，不删除其他实例或用户 Home。创建临时目录失败时尚未注册进程级监听，不能留下 signal/stdout handler。此修复不迁移常驻端点、不改变公共 SDK、不新增 Home 限制。验证与范围见 [Issue 184](../tasks/184-ci-ipc-reliability/brief.md)。
+
 ## worker 监督
 
 worker 加载 Adapter，并使用同一 AgentExecutor。独立 Node IPC 心跳由主循环响应，1 秒检查，单个带序号 probe 5 秒未响应判失联；不能用执行输出静默程度判断存活。检测到 wall/monotonic 长间隔或回拨时废弃旧 probe，发新 probe 并给予完整 5 秒，不因休眠直接丢失 Run；旧 pong 不能刷新新期限。就绪预算 15 秒。失败先回收本次进程，再按 250/1000/4000 ms 退避，60 秒活跃观测时间最多三次快速替换；快速额度耗尽后保持 recovering，每次等待 15 秒再单次尝试，普通启动失败回收完成后继续冷却，不永久停止。启动成功不立即退出低频模式；连续健康观测 60 秒才重置策略，休眠时间不洗掉预算。仅清理或所有权确认失败进入 exhausted，阻止冲突替换并保留 close 失败。冷却/启动串行，close 取消等待，status/invoke 不触发额外重试。整个恢复保留 Kernel instance、进程和监听端点；本地监听不依赖网络或 Provider 在线。

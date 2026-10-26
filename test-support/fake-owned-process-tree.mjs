@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 import { spawn } from "node:child_process";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 
 const [
   readyPath = process.env.OCTO_REVIEW_READY,
@@ -39,6 +39,7 @@ if (mode === "zcode")
   });
 if (mode === "tool") {
   process.on("SIGTERM", () => {});
+  appendFileSync(tickPath, ".");
   process.send("ready");
   setInterval(() => appendFileSync(tickPath, "."), 20);
 } else {
@@ -52,7 +53,10 @@ if (mode === "tool") {
   );
   tool.once("message", () => {
     const identity = { parentPid: process.pid, childPid: tool.pid };
-    writeFileSync(readyPath, JSON.stringify(identity));
+    // 文件存在即表示完整就绪；同目录 rename 避免读者看到 create 与 write 之间的空文件。
+    const pendingPath = `${readyPath}.${process.pid}.tmp`;
+    writeFileSync(pendingPath, JSON.stringify(identity));
+    renameSync(pendingPath, readyPath);
     markReady();
     process.stdout.write(JSON.stringify(identity) + "\n");
     if (mode === "parent-exits") process.exit(0);

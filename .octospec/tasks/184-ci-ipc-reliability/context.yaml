@@ -1,0 +1,19 @@
+task: 184-ci-ipc-reliability
+baseline: 81284c9ed92066ce7cf34c1b84b608b9336279bf
+synchronized_main: 79b11aadfb77ab1955d5f361d49d9615beb73414
+workflow: .claude/skills/octospec-workflow/SKILL.md
+issue: 184
+read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/environment.md

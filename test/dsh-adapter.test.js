@@ -18,6 +18,7 @@ import {
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
+import { terminateFixtureProcess } from "../test-support/fixture-process.mjs";
 
 const adapterRequire = createRequire(
   new URL("../packages/octo-runtime-adapter-dsh/package.json", import.meta.url)
@@ -36,7 +37,12 @@ const text = (events) =>
     .join("");
 async function fixture(t, mode = "success") {
   const directory = await mkdtemp(join(tmpdir(), "octo-dsh-test-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
+  const ownedPids = new Set();
+  t.after(async () => {
+    // 同一个 disposer 确保后代退出先于目录删除，不依赖多个 after hook 的注册顺序。
+    await Promise.all([...ownedPids].map(terminateFixtureProcess));
+    await rm(directory, { recursive: true, force: true });
+  });
   const trace = join(directory, "trace.jsonl");
   const canary = randomUUID();
   const request = invokeRequest({
@@ -65,6 +71,10 @@ async function fixture(t, mode = "success") {
     request,
     directory,
     canary,
+    ownPid(pid) {
+      assert.ok(Number.isSafeInteger(pid) && pid > 1, "fixture must publish a valid child PID");
+      ownedPids.add(pid);
+    },
     trace: async () => (await readFile(trace, "utf8")).trim().split("\n").map(JSON.parse)
   };
 }
@@ -707,8 +717,11 @@ test("DSH a later caller abort cannot hide an already observed execution failure
 async function untilFile(path) {
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
-      return await readFile(path, "utf8");
-    } catch {}
+      const value = await readFile(path, "utf8");
+      if (value.trim()) return value;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   throw new Error("fixture pid was not written");
@@ -780,12 +793,7 @@ test(
     const controller = new AbortController();
     f.request.signal = controller.signal;
     const pending = collect(f.request);
-    const pid = Number(await untilFile(pidFile));
-    t.after(() => {
-      try {
-        process.kill(pid, "SIGKILL");
-      } catch {}
-    });
+    f.ownPid(Number(await untilFile(pidFile)));
     controller.abort();
     assert.equal(terminals(await pending)[0].type, "run.cancelled");
     const parentPid = (await f.trace())[0].pid;
@@ -806,12 +814,7 @@ test(
       value: pidFile
     });
     const pending = collect(f.request);
-    const pid = Number(await untilFile(pidFile));
-    t.after(() => {
-      try {
-        process.kill(pid, "SIGKILL");
-      } catch {}
-    });
+    f.ownPid(Number(await untilFile(pidFile)));
     assert.equal(terminals(await pending)[0].payload.code, "DSH_TRANSPORT_CLOSED");
     const parentPid = (await f.trace())[0].pid;
     assert.throws(() => process.kill(parentPid, 0), /ESRCH/);

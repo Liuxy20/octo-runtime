@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { spawnJsonLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { spawnAcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
+import { terminateFixtureProcess } from "../test-support/fixture-process.mjs";
 
 function alive(pid) {
   try {
@@ -86,9 +87,7 @@ for (const transport of ["ACP", "NDJSON", "Host"])
           assert.equal((await readFile(tickPath)).length, bytes);
           if (stream) await stream.return();
         } finally {
-          if (pids)
-            for (const pid of [pids.parentPid, pids.childPid])
-              if (alive(pid)) process.kill(pid, "SIGKILL");
+          if (pids) await Promise.all([pids.parentPid, pids.childPid].map(terminateFixtureProcess));
           if (client) await client.close().catch(() => {});
           await rm(directory, { recursive: true, force: true });
         }
@@ -144,9 +143,7 @@ test(
       assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
     } finally {
       pids ??= await ready(readyPath).catch(() => undefined);
-      if (pids)
-        for (const pid of [pids.parentPid, pids.childPid])
-          if (alive(pid)) process.kill(pid, "SIGKILL");
+      if (pids) await Promise.all([pids.parentPid, pids.childPid].map(terminateFixtureProcess));
       await rm(directory, { recursive: true, force: true });
     }
   }

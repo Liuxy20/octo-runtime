@@ -132,7 +132,8 @@ function terminal(result, state) {
   assert.equal(
     result.frames.filter((frame) => ("kind" in frame ? isHostTerminal(frame) : isTerminal(frame)))
       .length,
-    1
+    1,
+    result.stderr
   );
   const last = result.frames.at(-1);
   assert.equal(
@@ -260,6 +261,25 @@ test("temporary daemon renders ordered context and leaves no identity or process
 });
 
 for (const protocolMode of ["native", "canonical"]) {
+  test(`Playboard temporary IPC ignores long Unicode temp roots in ${protocolMode} mode`, async (t) => {
+    const settings = await fixture(t);
+    const temporary = join(settings.directory, "nested-".repeat(6), "中文-".repeat(8));
+    await mkdir(temporary, { recursive: true });
+    assert.ok(Buffer.byteLength(join(temporary, "octo-playboard-XXXXXX/k.sock")) > 107);
+    const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
+    const request =
+      protocolMode === "native" ? input("normal", { protocol_mode: "native" }) : echoInput();
+    const results = await Promise.all([
+      execute(settings, request, { env }),
+      execute(settings, request, { env })
+    ]);
+    for (const result of results) {
+      assert.equal(result.code, 0, result.stderr);
+      terminal(result, "completed");
+    }
+    assert.deepEqual(await readdir(temporary), []);
+  });
+
   test(`real Codex adapter emits ${protocolMode} frames through temporary daemon IPC`, async (t) => {
     const settings = await fixture(t);
     const result = await execute(settings, input("normal", { protocol_mode: protocolMode }));
@@ -314,7 +334,10 @@ test("provider failure and deadline exit nonzero with terminal frames", async (t
 
 test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (t) => {
   const settings = await fixture(t);
-  const result = await execute(settings, echoInput("hang"), { signalOnFrame: true });
+  const temporary = join(settings.directory, "cancellation-".repeat(5));
+  await mkdir(temporary);
+  const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
+  const result = await execute(settings, echoInput("hang"), { signalOnFrame: true, env });
   assert.equal(result.code, 130, result.stderr);
   const frame = result.frames.find((frame) => frame.type === "message.delta");
   if (frame) {
@@ -325,6 +348,10 @@ test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (
       code: "ESRCH"
     });
   }
+  terminal(result, "cancelled");
+  assert.deepEqual(await readdir(temporary), []);
+  const next = await execute(settings, echoInput("after cancellation"), { env });
+  assert.equal(next.code, 0, next.stderr);
 });
 
 test("malformed stdin, unknown arguments and unsupported native mode fail clearly", async (t) => {

@@ -34,6 +34,7 @@ export interface PlayboardOptions {
   profile?: string;
 }
 
+/** 单次 stdin 执行拥有临时 Kernel 和 worker；消费源帧并完成关闭后才删除所属临时目录。 */
 export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   if ((options.input as NodeJS.ReadStream).isTTY) {
     throw new Error(
@@ -73,6 +74,9 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     throw new Error("RUNTIME_CONFIGURATION_NOT_FOUND: request profile differs from --profile");
   input.runMetadata = { ...input.runMetadata, profile };
   const output = options.output ?? writeLine;
+  // Unix socket 的路径预算小于普通文件路径；固定短根，避免 TMPDIR 嵌套或中文路径超限。
+  // mkdtemp 创建本次独占的 0700 目录；常驻服务仍使用 Runtime Home，Windows 保留命名管道。
+  const temporary = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "op-"));
   const controller = new AbortController();
   let interrupted = 0;
   const onInterrupt = (): void => {
@@ -90,7 +94,6 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
   let kernel: KernelService | undefined;
-  const temporary = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   try {
     const paths = runtimePaths(home, profile);
     const manifest = await loadCliManifest(home, options.manifest);

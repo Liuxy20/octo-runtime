@@ -2,6 +2,8 @@
 
 ## 2026-10-26
 
+- [Issue 184](tasks/184-ci-ipc-reliability/brief.md)：保持常驻 Home/端点不变，固定 Playboard 短临时 Unix socket；修复进程 fixture ready 发布与后代/目录清理顺序。规划准备度 97/100，原实现回归 3 项失败、修复后 focused 87 与全量 Node1833/UI35 通过；verified-review 无 medium 及以上发现，既有 OKF 与托管平台边界见[验证](tasks/184-ci-ipc-reliability/validation.md)及[journal](journal/shared/2026-10-26-184-ci-ipc-reliability.md)。
+
 - PR181复核Jerry-Xin的CLI账号库意见并用真实v0.18.0复现，QA工具使用trial独占空目录；用户明确ACP/Codex/CC注入身份优先，普通Gateway补齐规范token，OpenClaw实例例外保持。先处理6bbbd91的索引/日志冲突，再同步81284c9无新增冲突；新基线Node 1843通过/52 skip、WebUI 35通过，旧基线DSH清理失败保留，见[整改](tasks/93-42-recovery-closure/review-remediation.md)。每15分钟review跟进已启用，不自行批准或合并。
 - 处理PR181的yujiawei审查：统一status探针完成路径、按条件等待、仅重试明确暂态、控制文件描述符校验和异常退避，并落实三项P2输入/环境建议。验证工具11项及恢复集合57项通过；最终`2634d28`的CLI/SDK各九项真实恢复断言、UK及网页DM再次通过，保留中间失败和提示词澄清，见[审查整改](tasks/93-42-recovery-closure/review-remediation.md)。修复提交更新同一PR，正式复审仍待确认。
 - 恢复规划分支已提交并合入`main@78bb88a`；合并后48项恢复测试及CLI/SDK真实E2E重跑均通过，两个模式各仅一条实际socket drop，Low不再复现。完整build/类型、lint、格式、命名及开发文档检查通过；知识lint现为7个已核对的主线既有错误，交付证据见[live记录](tasks/93-42-recovery-closure/live-verification.md)。
