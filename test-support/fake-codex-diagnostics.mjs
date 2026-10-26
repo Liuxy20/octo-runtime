@@ -28,7 +28,11 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   if (["thread/start", "thread/resume"].includes(message.method))
     send({ id: message.id, result: { thread: { id: "thread-diagnostic" } } });
   if (message.method === "turn/start") {
-    const mode = message.params.input[0].text.match(/DIAGNOSTIC_QA:(\w+)/)?.[1] ?? "silent";
+    const mode =
+      message.params.input
+        .map((part) => part.text ?? "")
+        .join("\n")
+        .match(/DIAGNOSTIC_QA:(\w+)/)?.[1] ?? "silent";
     send({ id: message.id, result: { turn: { id: "turn-diagnostic" } } });
     emit("turn/started", { turn: { id: "turn-diagnostic" } });
     if (mode !== "normal") {

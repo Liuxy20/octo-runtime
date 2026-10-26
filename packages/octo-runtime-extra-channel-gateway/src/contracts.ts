@@ -14,6 +14,7 @@ import type {
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { RunPresentation } from "./presentation/run-projector.js";
 import type { ImGapPlan, ImGapTurnToken } from "./application/context-gap.js";
+import type { ImArtifactPolicy } from "./delivery/artifact-policy.js";
 
 export interface ImPositionObservation {
   conversationId: string;
@@ -61,6 +62,23 @@ export interface OctoBotConfig extends ImCommonConfig {
   group_ids?: string[] | null;
   cards?: boolean;
   typing?: boolean;
+  /** 渠道固定产物交付；由宿主配置，模型 Context 不能扩大文件访问范围。 */
+  artifact_delivery?: {
+    mode?: "channel" | "tools";
+    allowed_roots?: string[];
+    allowed_mime_types?: string[];
+    max_file_bytes?: number;
+    max_total_bytes?: number;
+    max_files?: number;
+    timeout_ms?: number;
+  };
+}
+
+/** 成功 final 的冻结投递合同；signal 归当前交付所有，不能复用已终态的模型 signal。 */
+export interface ImFinalReplyOptions {
+  artifacts: ImArtifactPolicy;
+  signal: AbortSignal;
+  obsolete(): boolean;
 }
 
 export type ImBotConfig = OctoBotConfig;
@@ -81,7 +99,7 @@ export interface ImInboundMessage {
   text: string;
   buildInputs?(signal: AbortSignal): Promise<ModelInputPart[]>;
   reply(text: string, effectKey?: string): Promise<void>;
-  replyFinal?(text: string, effectKey: string): Promise<void>;
+  replyFinal?(text: string, effectKey: string, options?: ImFinalReplyOptions): Promise<void>;
   replyFailure?(event: CanonicalEvent, effectKey: string): Promise<void>;
   replyDeliveryUnknown?(
     event: CanonicalEvent,

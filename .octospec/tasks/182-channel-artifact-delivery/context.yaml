@@ -1,0 +1,71 @@
+status: pr_open_review_pending
+recorded_on: 2026-10-26
+baseline: 78bb88a
+synchronized_main: 167205c
+branch: feat/182-channel-artifact-delivery
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/182
+pull_request: https://github.com/Mininglamp-OSS/octo-runtime/pull/187
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-channel
+  - runtime-context-input
+  - runtime-invoke-input
+  - runtime-extras
+  - runtime-session-reset
+  - runtime-stateless
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/mentions.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/api/files.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+external_sources:
+  - ../octo-cli/internal/registry/specs/file.json
+  - ../octo-cli/cmd/service/service_test.go
+  - ../octo-server/modules/file/api.go
+  - ../octo-server/modules/bot_api/file.go
+  - ../octo-server/modules/file/service_minio.go
+authorization:
+  implement: true
+  commit_push_pr: true
+  review_fix_commit_push: true
+  review_target: own_issue_182_pr
+product_decision:
+  local_file: im_attachment_native_file_card_and_retained_markdown_link
+  local_image: im_attachment_inline_markdown_image
+  online_collaboration: explicit_llm_toolcall_only
+  enterprise_service_routing: removed
+  post_terminal_stop: cancel_remaining_delivery_preserve_confirmed_execution_terminal
+validation:
+  p2_review_baseline: ede73df23b68d8b720876e0de5e7b833d195a014
+  p2_delayed_finish_before: 3_passed_2_failed_stop_started_upload
+  p2_delayed_finish_after: 5_passed_0_failed
+  p2_node_suite: 1868_passed_54_skipped_0_failed
+  p2_typecheck_lint_names_docs_format: passed
+  p2_verified_review: 7_files_reviewed_no_unresolved_medium_or_above_findings
+  main_sync_node_suite: 1863_passed_54_skipped_0_failed
+  main_sync_typecheck_lint_names_docs_format: passed
+  main_sync_review: log_conflict_preserves_both_sides_no_product_code_conflicts
+  native_card_suite: 25_passed_0_failed
+  node_suite: 1846_passed_50_skipped_0_failed
+  typecheck_lint_names_docs_format: passed
+  octospec_lint: 7_baseline_frontmatter_errors_no_new_errors
+  live_native_file_cards: 2_confirmed_in_test_group_history
+  live_markdown_links: 2_retained_alongside_file_cards
+  live_inline_image_syntax: passed
+  live_anonymous_download: 3_files_sha256_matched
+  live_explicit_tool_upload: no_gateway_reupload_or_duplicate_final
+  live_client_rendering: not_completed_isolated_browser_requires_web_login
+  prior_node_suite: 1856_passed_50_skipped_before_native_cards
+  prior_webui_suite: 35_passed
+  prior_live_upload_and_anonymous_download: passed_html_and_png
+  prior_browser: passed_640x360_inline_image
+  initial_verified_review: 31_files_reviewed_before_external_p2_cancellation_window_finding

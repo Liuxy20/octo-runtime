@@ -27,6 +27,7 @@ import type {
   ImRunControls,
   ImPresentation
 } from "../contracts.js";
+import type { ImFinalReplyOptions } from "../contracts.js";
 import type { ImModuleDependencies } from "../ports.js";
 import { imBotIdentity, validateImConfig } from "../lifecycle/configuration.js";
 import { GatewayTransport } from "../transport/channel.js";
@@ -50,6 +51,7 @@ import {
 export class ImRuntime {
   readonly #processEpoch = randomUUID();
   readonly #preparing = new Map<string, AbortController>();
+  readonly #finalDeliveries = new Map<string, AbortController>();
   readonly config: ImBotConfig;
   #connector?: GatewayTransport;
   #delivery?: ImDeliveryDispatcher;
@@ -445,6 +447,7 @@ export class ImRuntime {
       if (command === "/reset" || command === "/new") {
         try {
           const binding = this.#sessionStore.reset(key, message.messageId);
+          this.#finalDeliveries.get(key)?.abort();
           this.#tasks.get(key)?.task.stopRetries();
           session.id = binding.id;
           session.generation = binding.generation;
@@ -471,17 +474,20 @@ export class ImRuntime {
         // 控制命令绕过普通消息队列，否则 stop 会排在待取消的长任务之后。
         const preparation = this.#preparing.get(key);
         preparation?.abort();
+        const delivery = this.#finalDeliveries.get(key);
+        delivery?.abort();
         const invocationId = session.activeInvocationId;
         void (async () => {
           const task = this.#tasks.get(key)?.task;
-          const cancelled = preparation
-            ? true
-            : task
-              ? await task.cancel()
-              : invocationId
-                ? (await this.dependencies.kernel.cancelInvocation(invocationId, "IM user stop"))
-                    .accepted
-                : false;
+          const cancelled =
+            preparation || delivery
+              ? true
+              : task
+                ? await task.cancel()
+                : invocationId
+                  ? (await this.dependencies.kernel.cancelInvocation(invocationId, "IM user stop"))
+                      .accepted
+                  : false;
           await this.#reply(
             message,
             cancelled ? "已请求停止本轮执行。" : "当前没有可停止的执行。",
@@ -731,14 +737,19 @@ export class ImRuntime {
     effectKey: string,
     requireDelivered = false,
     final = false,
-    allowUnknownNotice = true
+    allowUnknownNotice = true,
+    finalOptions?: ImFinalReplyOptions
   ): Promise<void> {
     if (this.#closed || this.#signal.aborted || !this.#delivery) return;
-    const receipt = await this.#delivery.deliver(effectKey, () =>
-      final && message.replyFinal
-        ? message.replyFinal(text, effectKey)
-        : message.reply(text, effectKey)
+    const receipt = await this.#delivery.deliver(
+      effectKey,
+      () =>
+        final && message.replyFinal
+          ? message.replyFinal(text, effectKey, finalOptions)
+          : message.reply(text, effectKey),
+      { obsolete: finalOptions ? () => finalOptions.obsolete() : undefined }
     );
+    if (finalOptions?.obsolete()) return;
     if (receipt.state !== "delivered") {
       if (this.#draining) this.#drainErrors.push(new Error(receipt.code ?? "IM_DELIVERY_FAILED"));
       this.#diagnostic(receipt.code ?? "IM_DELIVERY_FAILED");
@@ -1077,6 +1088,7 @@ export class ImRuntime {
     let executionStarted = false;
     let presentationFailed = false;
     let localFailure: FailureEnvelope | undefined;
+    const delivery = new AbortController();
     try {
       presentation = message.beginPresentation?.(
         rootRunId,
@@ -1271,6 +1283,8 @@ export class ImRuntime {
         session_id: request.sessionId,
         status: localFailure ? "not_submitted" : (projector.snapshot().terminal ?? "unknown")
       });
+      // 移除执行身份前移交收尾/产物投递的取消权；finish 等待期间的 stop 不能落入空窗。
+      if (!localFailure) this.#finalDeliveries.set(key, delivery);
       this.#tasks.delete(key);
       try {
         // 长任务结束后重新开始终态去重窗口，保留有界尝试身份，避免立即重复执行。
@@ -1307,18 +1321,35 @@ export class ImRuntime {
         this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
       }
     }
-    if (localFailure) return;
-    if (this.#closed || this.#signal.aborted) return;
-    const { text, allowMention } = projector.finalReply;
-    // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
-    await this.#reply(
-      message,
-      text,
-      `final:${rootRunId}`,
-      false,
-      allowMention,
-      projector.snapshot().terminal !== "cancelled"
-    );
+    try {
+      if (localFailure || this.#closed || this.#signal.aborted || delivery.signal.aborted) return;
+      const { text, allowMention } = projector.finalReply;
+      const obsolete = () => {
+        const binding = this.#sessionStore.read(key);
+        return (
+          binding?.id !== request.sessionId || binding.generation !== request.sessionGeneration
+        );
+      };
+      // reset 不取消原模型执行，但旧代次的结果不能启动上传或继续最终消息重试。
+      if (allowMention && obsolete()) return;
+      const deliverySignal = AbortSignal.any([this.#signal, delivery.signal]);
+      // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
+      await this.#reply(
+        message,
+        text,
+        `final:${rootRunId}`,
+        false,
+        allowMention,
+        projector.snapshot().terminal !== "cancelled",
+        {
+          artifacts: prepared.artifacts,
+          signal: deliverySignal,
+          obsolete: () => deliverySignal.aborted || (allowMention && obsolete())
+        }
+      );
+    } finally {
+      if (this.#finalDeliveries.get(key) === delivery) this.#finalDeliveries.delete(key);
+    }
   }
   #saveBinding(key: string, session: ImSession): void {
     if (this.#closed) return;

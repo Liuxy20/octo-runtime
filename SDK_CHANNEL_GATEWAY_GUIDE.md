@@ -154,6 +154,14 @@ node scripts/verify-release.mjs dist/release/mininglamp-oss-octo-runtime-0.0.0.t
 
 ## 配置和业务责任
 
+Gateway 默认通过本轮 `extra.im/artifact-delivery` 建立文件交付约定：Agent 成功 final 中的本地 Markdown 链接/图片由固定 workflow 上传到 IM，再替换目标并计算 mention 后发送同一条 final。普通文件链接额外发送原生文件卡（type=8，带文件名、类型、字节数和下载地址）；final Markdown 中的链接文字及附件地址同时保留，二者不是二选一。图片使用 Markdown 图片语法内嵌展示，仅图片引用不另发文件卡；同图另有下载链接时共用一次上传并发送一张文件卡。
+
+HTML、Markdown 与其他文件采用相同附件合同，不根据企业服务部署状态转成在线文档，不创建文档权限或公开分享。群聊交付沿用 IM 文件访问体验，避免文档 ACL、后加入成员及转发场景引入额外访问障碍。用户明确要求在线协作、发布、上传或网盘保存时，仍由 Agent 普通 ToolCall 完成；已有远程 URL 不重复上传或补发卡片。
+
+Bot 的 `artifact_delivery.mode: "tools"` 可关闭固定交付；省略为 `channel`。默认授权当前本地工作区，宿主可用绝对 `allowed_roots`（空数组拒绝全部）、`allowed_mime_types` 及更小的文件/总量/数量/超时预算收紧。远程 Provider 文件不作为本地可读文件处理，超限、越界、符号链接逃逸或部分上传失败在同条回复明确标注，不重跑模型。发送重试复用上传结果；stop/reset 撤销在途交付和旧代次 final，shutdown 沿既有共享期限。完整字段及限制见下方 Schema。
+
+上传准备按 final 缓存，每张文件卡拥有独立稳定编号和确认回执，沿既有 WS ACK/取消路径发送；最终文本重试不会重新上传或补发卡片。卡片未确认时在同条 final 明确提示，已上传的下载链接仍保留，不把卡片失败当作模型生成失败。原生文件卡不受进度/互动卡片的 `cards` 开关控制。
+
 完整字段见 [Gateway JSON Schema](packages/octo-runtime-extra-channel-gateway/config-schema.json)，业务行为见 [Gateway README](packages/octo-runtime-extra-channel-gateway/README.md)。宿主负责令牌取得、存储、更新与授权流程；Extra 消费实际配置值，不扫描 CLI Home 或其他凭据文件。Electron/Tauri 使用 SDK，不调用 Runtime CLI。
 
 真实 IM 验收只使用 im-test.deepminer.com.cn，具体宿主和 Provider 的结果另记，不能由本地 fixture 推断。

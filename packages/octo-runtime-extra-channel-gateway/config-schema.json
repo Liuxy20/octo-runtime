@@ -231,6 +231,62 @@
                   "description": "允许的群范围 ID（groupNo）。"
                 }
               },
+              "artifact_delivery": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "workflow 固定产物交付，执行前通过 Context 明示。省略为 channel：成功 final 显式引用的本地文件上传为 IM 附件，普通链接同时保留正文下载链接并发送原生文件卡，图片内嵌展示；tools 保留 Agent 主动工具交付。不扫描目录或自动发布在线文档。",
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": ["channel", "tools"],
+                    "default": "channel",
+                    "description": "省略启用渠道固定交付；tools 关闭 Gateway 自动上传，保留普通工具调用。"
+                  },
+                  "allowed_roots": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "description": "宿主授权的绝对产物目录；省略使用当前本地 Agent 工作区，空列表拒绝全部文件。realpath 后检查包含关系，拒绝 symlink 逃逸；远程 Provider 路径始终不可读。",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/]+[\\\\/][^\\\\/]+)"
+                    }
+                  },
+                  "allowed_mime_types": {
+                    "type": "array",
+                    "maxItems": 32,
+                    "description": "可选精确 MIME 类型列表；省略不增加类型限制，空列表拒绝所有类型。服务端实际策略仍可拒绝；未知扩展使用 application/octet-stream。",
+                    "items": { "type": "string", "pattern": "^[\\w.+-]+/[\\w.+-]+$" }
+                  },
+                  "max_file_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20971520,
+                    "default": 20971520,
+                    "description": "单个文件上限（字节），宿主可收紧。"
+                  },
+                  "max_total_bytes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 52428800,
+                    "default": 52428800,
+                    "description": "一次最终回复的文件总字节预算，失败上传也占预算。"
+                  },
+                  "max_files": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 16,
+                    "default": 16,
+                    "description": "一次最终回复最多尝试的不同 realpath 文件数量。"
+                  },
+                  "timeout_ms": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 30000,
+                    "default": 30000,
+                    "description": "整次产物准备的上传时间预算；取消、reset 和关闭可提前结束。"
+                  }
+                }
+              },
               "cards": {
                 "type": "boolean",
                 "default": true,

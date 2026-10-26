@@ -28,6 +28,16 @@
 
 类型从主包 `/extras/channel-gateway` 导入，不放进通用 `/extra`；store 通过 dependencies 注入 Gateway，无需另行注册 Extra，也不进入 config/Kernel/worker。完整方法语义、scope/reset/patch 原子性、初始化错误、关闭次序及可执行样例见 [SDK 存储接入](../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)。停止超时或保存/释放失败返回 incomplete，不能直接替换同名实例或关闭仍被其他业务使用的数据库。
 
+## 生成文件的聊天附件交付
+
+Gateway 默认在执行前通过 `extra.im/artifact-delivery` 明示固定交付约定：成功 final 中显式引用的本地文件作为 IM 附件上传，链接及图片地址替换后再发送同一条 final。普通文件链接同时交付原生 type=8 文件卡（文件名、类型、字节数和下载地址），最终 Markdown 的链接文字和附件地址保留，不以卡片替代正文。图片以 Markdown 图片内嵌展示，保留 alt/title；仅图片引用不另发文件卡。代码、引用示例和未引用文件不会上传。
+
+HTML、Markdown 与其他文件采用同一附件合同；不会自动发布在线文档、探测企业服务或额外授予文档权限。群里发文件不应变成接收者还需申请访问的在线文档。在线协作、发布或文档分享卡属于用户明确要求后的普通 ToolCall 业务，与后处理无关。
+
+用户主动要求“上传文件”或“保存到网盘”仍由 Agent 工具调用；工具已返回的云 URL 保留，不重复上传或发送。Bot `artifact_delivery.mode: "tools"` 可关闭固定上传。默认授权本地 Agent 工作区；`allowed_roots` 可指定绝对目录，空数组拒绝全部文件，`allowed_mime_types` 可收紧类型。没有扩展名白名单；实际服务端上传策略仍可能拒绝。每张文件卡复用原 WS ACK 和独立稳定编号，发送重试不重复上传、卡片或 final；未确认的卡片在最终文本明确提示，保留成功的附件链接。原生文件卡独立于 `cards` 进度/互动卡开关。
+
+默认预算为每文件 20 MiB、合计 50 MiB、16 个不同 realpath 文件、30 秒整次准备，只能收紧。远程 Provider 的本地路径不能直接从 Gateway 读取。realpath 检查和文件描述符核验拒绝越界、symlink 逃逸、目录及超限文件；部分失败保留成功云链接，并在同条回复标明未交付文件。stop/reset 取消过期交付，发送重试复用准备结果，不重新调用模型。配置字段见 [Schema](config-schema.json)，设计与真实验证边界见 [Issue 182](../../.octospec/tasks/182-channel-artifact-delivery/brief.md)。
+
 ## 群和话题规则
 
 GROUP.md/话题规则更新通知只标记规则需要刷新，不触发模型、排队、执行卡或回复。下一条满足准入条件的请求仍读取规则 API；首次会话、`/reset`/`/new` 后或版本变化时携带规则，同一可续接 Provider 会话成功执行过相同版本后省略自动规则正文。规则失效与已提供版本存于现有 binding 的 `rulesContext` 字段；每轮 API 核验覆盖漏通知，失败后下次重带。同轮 Provider 恢复使用冻结的完整规则及原输入。详见[Channel 合同](../../.octospec/rules/channel-integration.md)。

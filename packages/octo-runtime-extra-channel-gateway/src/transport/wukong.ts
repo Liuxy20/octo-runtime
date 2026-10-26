@@ -437,22 +437,55 @@ export class WukongConnection {
     signal?: AbortSignal,
     onPosition?: (sequence: number) => void
   ): Promise<string> {
+    return this.#sendPayload(
+      channelId,
+      channelType,
+      { type: 1, content: text, ...(mention ? { mention } : {}) },
+      clientMsgNo,
+      spaceId,
+      signal,
+      onPosition
+    );
+  }
+  /** 原生文件消息复用文本的加密、稳定编号、ACK/迟到确认和取消窗口；不使用互动卡服务。 */
+  sendFile(
+    channelId: string,
+    channelType: number,
+    file: { url: string; name: string; size: number; extension: string },
+    clientMsgNo: string,
+    spaceId?: string,
+    signal?: AbortSignal,
+    onPosition?: (sequence: number) => void
+  ): Promise<string> {
+    return this.#sendPayload(
+      channelId,
+      channelType,
+      { type: 8, url: file.url, name: file.name, size: file.size, extension: file.extension },
+      clientMsgNo,
+      spaceId,
+      signal,
+      onPosition
+    );
+  }
+  #sendPayload(
+    channelId: string,
+    channelType: number,
+    payload: Record<string, unknown>,
+    clientMsgNo: string,
+    spaceId?: string,
+    signal?: AbortSignal,
+    onPosition?: (sequence: number) => void
+  ): Promise<string> {
     if (this.#socket?.readyState !== WebSocket.OPEN || !this.#key)
       return Promise.reject(new ImSendError("IM_NOT_READY", "failed"));
+    const serialized = JSON.stringify({ ...payload, ...(spaceId ? { space_id: spaceId } : {}) });
     if (
-      Buffer.byteLength(text) > 256 * 1024 ||
+      Buffer.byteLength(serialized) > 256 * 1024 ||
       this.#active.size >= 64 ||
       this.#socket.bufferedAmount > LIMIT
     )
       return Promise.reject(new ImSendError("IM_SEND_CAPACITY_EXHAUSTED", "failed"));
-    const encrypted = this.#encrypt(
-      JSON.stringify({
-        type: 1,
-        content: text,
-        ...(spaceId ? { space_id: spaceId } : {}),
-        ...(mention ? { mention } : {})
-      })
-    );
+    const encrypted = this.#encrypt(serialized);
     const operation = new ImTextSend(
       () => {
         if (!this.connected) throw new ImSendError("IM_NOT_READY", "failed");

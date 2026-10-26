@@ -310,7 +310,7 @@ for (const conversationKind of ["group", "thread"]) {
             {
               namespace: "extra.business",
               name: "required",
-              payload: { text: "x".repeat(62000) }
+              payload: { text: "x".repeat(60000) }
             }
           ]
         };

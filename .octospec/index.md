@@ -60,6 +60,8 @@
 
 - [Issue 117/118：准确反馈本轮执行是否已提交](tasks/117-118-turn-failure/brief.md)：基于 `origin/main@8af8360` 实现双渠道会话读取、展示初始化及可信接纳拒绝反馈，注册 `OH-RUN-2010` / `2011` / `2012`，统一投影与普通日志关联。实现合同、审查修复与测试边界见[验证记录](tasks/117-118-turn-failure/validation.md)；Gateway 真实 IM 缺 QA 账号路径，WeCom 真实验收按用户要求跳过。
 
+- [Issue 182：渠道本地产物交付](tasks/182-channel-artifact-delivery/brief.md)：同步 main@81284c9，区分工具主动上传与固定 workflow；用户复核后撤销自动企业文档路由。普通文件使用 IM 原生文件卡，最终 Markdown 同时保留链接文字及附件地址；图片内嵌。目录约束、去重、取消和投递确认由 Gateway 持有，在线协作与文档授权走明确的 ToolCall。[设计与可执行性 96/100](tasks/182-channel-artifact-delivery/design.md)，实际证据及收敛后的验证见[实施记录](journal/shared/2026-10-26-182-channel-artifact-delivery.md)。
+
 - [DSH 改用未修改的官方 SDK](tasks/dsh-upstream-sdk/brief.md)：用户要求移除两个下游依赖补丁，保留实验性 DSH 接入并接受上游当前稳定性、内存与后代回收限制；[上游反馈 #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031) 已附完整历史 diff 与回归参考。当前验证见本任务记录。
 
 - [Windows 运行可靠性专项](tasks/windows-runtime-reliability/brief.md)：独立 worktree 实施 #131、#135、#134、#146，正式 [PR #179](https://github.com/Mininglamp-OSS/octo-runtime/pull/179)；方案准备度 [97/100](tasks/windows-runtime-reliability/assessment.md)。已完成[评审修复](tasks/windows-runtime-reliability/review-fixes.md)并 rebase 至 main@78bb88a，原生进程树、共享 worker、环境和四组 SDK/CLI 任务矩阵通过。最新全量与交付门禁见[验收与边界](tasks/windows-runtime-reliability/validation.md)及[journal](journal/shared/2026-10-26-windows-runtime-reliability.md)。

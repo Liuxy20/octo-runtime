@@ -32,6 +32,8 @@ import { deliveryNoticeCard } from "../presentation/delivery-notice.js";
 import { ImSendError } from "../delivery/text-send.js";
 import type { ImGapTurnToken } from "../application/context-gap.js";
 import { observesImScope } from "./normalize.js";
+import { prepareArtifacts } from "../delivery/artifacts.js";
+import { uploadChatAttachment } from "./api/files.js";
 
 /** Octo IM 平台连接器：WuKong 与 Octo REST 适配；不是 MCP 连接器。 */
 export class GatewayTransport {
@@ -249,31 +251,87 @@ export class GatewayTransport {
               outputObserver()
             );
           },
-          replyFinal: async (text, effectKey) => {
+          replyFinal: async (text, effectKey, options) => {
             if (this.#closed || signal.aborted) throw new Error("IM_CONNECTION_REPLACED");
+            const finalSignal = options ? AbortSignal.any([signal, options.signal]) : signal;
+            finalSignal.throwIfAborted();
+            if (options?.obsolete()) throw new ImSendError("IM_DELIVERY_CANCELLED", "failed");
             if (finalReply?.key !== effectKey)
               finalReply = {
                 key: effectKey,
-                value: prepareFinalMention(text, async () => {
-                  if ([2, 5].includes(message.channelType))
-                    return getGroupMembers({
-                      apiUrl: this.config.api_url,
-                      botToken: token,
-                      groupNo: groupScope(message.channelId).groupNo,
-                      signal
-                    });
-                  const peer = await getJson<GroupMember>(
-                    this.config.api_url,
-                    token,
-                    `/v1/bot/user/info?uid=${encodeURIComponent(message.fromUid)}`,
-                    AbortSignal.any([signal, AbortSignal.timeout(5000)]),
-                    { maxResponseBytes: 64 << 10, logRateLimit: false }
-                  );
-                  return peer?.uid === message.fromUid ? [peer] : [];
-                })
+                // 整个准备按 effect 缓存，发送重试不再次上传；链接变化必须先于 mention 偏移计算。
+                value: (async () => {
+                  const delivered = options
+                    ? await prepareArtifacts(
+                        text,
+                        options.artifacts,
+                        finalSignal,
+                        (bytes, name, mime, uploadSignal) =>
+                          uploadChatAttachment(
+                            this.config.api_url,
+                            token,
+                            bytes,
+                            name,
+                            mime,
+                            uploadSignal
+                          )
+                      )
+                    : { text, files: [] };
+                  const failures: string[] = [];
+                  // 每张文件卡有独立回执；整段准备只执行一次，文本重试不重复卡片或上传。
+                  for (const [index, file] of delivered.files.entries()) {
+                    finalSignal.throwIfAborted();
+                    if (options?.obsolete())
+                      throw new ImSendError("IM_DELIVERY_CANCELLED", "failed");
+                    const key = stableEffectKey(this.identity, message, effectKey, `file:${index}`);
+                    const receipt = await this.#delivery!.deliver(
+                      key,
+                      () =>
+                        connection.sendFile(
+                          message.channelId,
+                          message.channelType,
+                          file,
+                          key,
+                          this.#spaceId,
+                          finalSignal,
+                          outputObserver()
+                        ),
+                      { obsolete: () => finalSignal.aborted || Boolean(options?.obsolete()) }
+                    );
+                    if (receipt.state !== "delivered")
+                      failures.push(
+                        `${file.name.replace(/[\r\n\x60[\]<>]/g, "_").slice(0, 120)} (${receipt.state}: ${receipt.code ?? "IM_DELIVERY_UNKNOWN"})`
+                      );
+                  }
+                  const finalText =
+                    delivered.text +
+                    (failures.length
+                      ? `\n\nFile card delivery unconfirmed: ${failures.join("; ")}. The attachment download links above remain available; generation was not rerun.`
+                      : "");
+                  finalSignal.throwIfAborted();
+                  return prepareFinalMention(finalText, async () => {
+                    if ([2, 5].includes(message.channelType))
+                      return getGroupMembers({
+                        apiUrl: this.config.api_url,
+                        botToken: token,
+                        groupNo: groupScope(message.channelId).groupNo,
+                        signal: finalSignal
+                      });
+                    const peer = await getJson<GroupMember>(
+                      this.config.api_url,
+                      token,
+                      `/v1/bot/user/info?uid=${encodeURIComponent(message.fromUid)}`,
+                      AbortSignal.any([finalSignal, AbortSignal.timeout(5000)]),
+                      { maxResponseBytes: 64 << 10, logRateLimit: false }
+                    );
+                    return peer?.uid === message.fromUid ? [peer] : [];
+                  });
+                })()
               };
             const result = await finalReply.value;
             if (this.#closed || signal.aborted) throw new Error("IM_CONNECTION_REPLACED");
+            finalSignal.throwIfAborted();
+            if (options?.obsolete()) throw new ImSendError("IM_DELIVERY_CANCELLED", "failed");
             await connection.sendText(
               message.channelId,
               message.channelType,
@@ -281,7 +339,7 @@ export class GatewayTransport {
               stableEffectKey(this.identity, message, effectKey, "text"),
               this.#spaceId,
               result.mention,
-              undefined,
+              finalSignal,
               outputObserver()
             );
           },

@@ -24,7 +24,7 @@ supersedes: []
 
 `conversation_id` 表示业务会话，reset 前后不变。逻辑执行 session 在普通续聊中复用，reset 后换新；Provider 返回的 `sessionId` 是另一层原生恢复标识，存在该值不保证恢复成功。
 
-业务入口拦截 `/reset`，成功回复“会话已经重置”。命令自身不调用模型，不创建执行 Run，不删除历史、产物、工作目录或 Provider 长期记忆。reset 不等于取消；取消使用独立执行入口。
+业务入口拦截 `/reset`，成功回复“会话已经重置”。命令自身不调用模型，不创建执行 Run，不删除历史、产物、工作目录或 Provider 长期记忆。reset 不取消原模型执行；取消使用独立执行入口。Issue #182 的最终文件交付独立受代次约束：reset 撤销旧代次的上传和 final 发送，不能把旧结果发回新会话。
 
 Octo Gateway 的 `/new` 为同一 reset 分支的别名。reset 同时清除 binding 中的 `rulesContext`，下一条普通请求重新携带当前群/话题规则；规则更新本身不 reset，也不修改历史 gap。规则状态仅在成功终态且 session/generation/revision 匹配时确认，见[Channel 合同](channel-integration.md)。此别名不扩大至其他渠道。
 

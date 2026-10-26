@@ -8,6 +8,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig } from "../contracts.js";
 import { trimTrailingSlashes } from "../transport/api/url.js";
+import { ARTIFACT_LIMITS } from "../delivery/artifact-policy.js";
 
 export const IM_MAX_BOTS = 64;
 export const IM_MAX_CONFIG_OPERATIONS = 64;
@@ -76,6 +77,36 @@ export function validateImConfig(config: ImBotConfig): void {
       throw new Error("IM_PROVIDER_AGENT_ID_UNSUPPORTED");
   }
   if (config.context !== undefined) assertContextEnvelope(config.context);
+  const delivery = config.artifact_delivery;
+  if (delivery !== undefined) {
+    if (!delivery || typeof delivery !== "object" || Array.isArray(delivery))
+      throw new Error("IM_ARTIFACT_CONFIG_INVALID");
+    if (delivery.mode !== undefined && !["channel", "tools"].includes(delivery.mode))
+      throw new Error("IM_ARTIFACT_CONFIG_INVALID");
+    for (const field of ["allowed_roots", "allowed_mime_types"] as const) {
+      const values = delivery[field];
+      if (
+        values !== undefined &&
+        (!Array.isArray(values) ||
+          values.length > 32 ||
+          values.some(
+            (value) =>
+              typeof value !== "string" ||
+              !value.trim() ||
+              (field === "allowed_roots" ? !isAbsolute(value) : !/^[\w.+-]+\/[\w.+-]+$/.test(value))
+          ))
+      )
+        throw new Error("IM_ARTIFACT_CONFIG_INVALID");
+    }
+    for (const field of Object.keys(ARTIFACT_LIMITS) as (keyof typeof ARTIFACT_LIMITS)[]) {
+      const value = delivery[field];
+      if (
+        value !== undefined &&
+        (!Number.isInteger(value) || value < 1 || value > ARTIFACT_LIMITS[field])
+      )
+        throw new Error("IM_ARTIFACT_CONFIG_INVALID");
+    }
+  }
   assertApprovalMode(config.approval_mode ?? "full_access");
   if (
     config.allowed_sender_ids !== undefined &&

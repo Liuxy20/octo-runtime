@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   createHash,
   createCipheriv,
+  createDecipheriv,
   createPublicKey,
   diffieHellman,
   generateKeyPairSync
@@ -43,6 +44,7 @@ function reader(data) {
   while (data[offset++] & 128) {}
   return {
     byte: () => data[offset++],
+    rest: () => data.subarray(offset),
     skip: (count) => {
       offset += count;
     },
@@ -413,6 +415,7 @@ test("wire positions distinguish SENDACK client/message sequences, observe own R
   await new Promise((resolve) => server.once("listening", resolve));
   let socket;
   let key;
+  const payloads = [];
   const iv = Buffer.from("0123456789abcdef");
   const encrypt = (value) => {
     const cipher = createCipheriv("aes-128-cbc", key, iv);
@@ -465,6 +468,19 @@ test("wire positions distinguish SENDACK client/message sequences, observe own R
         incoming.byte();
         const clientSequence = incoming.uint();
         const clientNo = incoming.text();
+        incoming.text();
+        incoming.byte();
+        incoming.skip(4);
+        incoming.text();
+        const decipher = createDecipheriv("aes-128-cbc", key, iv);
+        payloads.push(
+          JSON.parse(
+            Buffer.concat([
+              decipher.update(Buffer.from(incoming.rest().toString(), "base64")),
+              decipher.final()
+            ]).toString()
+          )
+        );
         const reason = clientNo === "rejected" ? 2 : 1;
         connection.send(
           packet(
@@ -526,6 +542,34 @@ test("wire positions distinguish SENDACK client/message sequences, observe own R
     )
   );
   assert.deepEqual(acknowledgements, [701]);
+  const file = {
+    url: "https://cdn.example.com/game.html",
+    name: "game.html",
+    size: 42,
+    extension: "html"
+  };
+  assert.equal(
+    await connection.sendFile(
+      "group____topic",
+      5,
+      file,
+      "file-accepted",
+      "space",
+      undefined,
+      (sequence) => acknowledgements.push(sequence)
+    ),
+    "903"
+  );
+  assert.deepEqual(payloads.at(-1), { type: 8, ...file, space_id: "space" });
+  assert.deepEqual(acknowledgements, [701, 703]);
+  assert.equal(connection.isDelivered("file-accepted"), true);
+  const cancelled = new AbortController();
+  cancelled.abort();
+  await assert.rejects(
+    connection.sendFile("group____topic", 5, file, "file-cancelled", "space", cancelled.signal),
+    /IM_DELIVERY_CANCELLED/
+  );
+  assert.equal(payloads.length, 3);
   for (const [fromUid, sequence] of [
     ["bot", 702],
     ["peer", 703],

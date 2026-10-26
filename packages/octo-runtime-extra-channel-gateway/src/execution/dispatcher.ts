@@ -18,6 +18,8 @@ import type { ImBotConfig, ImInboundMessage, ImSession } from "../contracts.js";
 import { validateImConfig } from "../lifecycle/configuration.js";
 import { compactHistoryGap, historyGapContext } from "../application/context-gap.js";
 import { MENTION_GUIDANCE } from "../transport/mentions.js";
+import { artifactContext, artifactPolicy } from "../delivery/artifact-policy.js";
+import type { ImArtifactPolicy } from "../delivery/artifact-policy.js";
 
 export type ImInvocationInput = InvokeInput & {
   runId: string;
@@ -33,7 +35,7 @@ export function createImInvocation(
   session: ImSession,
   _signal: AbortSignal,
   occurrenceId = message.messageId
-): { request: ImInvocationInput; adapterType: string } {
+): { request: ImInvocationInput; adapterType: string; artifacts: ImArtifactPolicy } {
   validateImConfig(config);
   assertContextEnvelope(context);
   if (!session.id) throw new Error("IM_SESSION_NOT_ALLOCATED");
@@ -140,6 +142,17 @@ export function createImInvocation(
   ]) {
     try {
       snapshot = mergeContext(defaults, submitted);
+      // 固定交付约定也计入 Context 预算；沿原策略只移除自动辅助材料。
+      snapshot = {
+        ...snapshot,
+        items: [
+          ...snapshot.items.filter(
+            (item) => !(item.namespace === "extra.im" && item.name === "artifact-delivery")
+          ),
+          artifactContext(artifactPolicy(config, snapshot, agentSource === "provisioned"))
+        ]
+      };
+      assertContextEnvelope(snapshot);
       break;
     } catch (error) {
       if (!(error instanceof Error) || error.message !== "CONTEXT_BUDGET_EXCEEDED" || !optional)
@@ -255,5 +268,9 @@ export function createImInvocation(
     mkdirSync(defaultWorkdir, { recursive: true, mode: 0o700 });
   session.lastEventId = eventId;
   session.lastRunId = runId;
-  return { request, adapterType: selectedAdapter };
+  return {
+    request,
+    adapterType: selectedAdapter,
+    artifacts: artifactPolicy(config, snapshot, agentSource === "provisioned")
+  };
 }

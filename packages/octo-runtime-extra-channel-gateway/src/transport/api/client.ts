@@ -100,7 +100,7 @@ interface JsonRequestOptions {
   maxResponseBytes?: number;
 }
 
-async function readResponseText(response: Response, maxBytes?: number): Promise<string> {
+export async function readResponseText(response: Response, maxBytes?: number): Promise<string> {
   if (maxBytes === undefined) return response.text();
   const reader = response.body?.getReader();
   if (!reader) return "";

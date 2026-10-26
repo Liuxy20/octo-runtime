@@ -1,11 +1,135 @@
 /**
- * 文件辅助能力：保留类型与图片尺寸识别，支持原生图片输入。
- * 上传 API 按 R02a/R02b 决策移除；不得因清理上传而删除输入解析。
- * 决策：.octospec/tasks/pr1-yujiawei-review/brief.md
+ * 文件输入辅助与渠道固定产物交付；显式业务上传仍由 Agent 工具负责。
+ * 合同：.octospec/tasks/182-channel-artifact-delivery/brief.md
  */
 // Adapted from Mininglamp-OSS/openclaw-channel-octo/src/api-fetch.ts.
 import path from "node:path";
 import { open } from "node:fs/promises";
+import { readResponseText } from "./client.js";
+import { trimTrailingSlashes } from "./url.js";
+
+/** 校验服务端返回的长期下载地址；不把 PUT 地址、签名有效期或 Bot 鉴权路由冒充附件。 */
+export function attachmentUrl(raw: unknown, apiUrl: string): string {
+  if (typeof raw !== "string" || !raw.trim() || raw.length > 8192)
+    throw new Error("invalid-download-url");
+  let url: URL;
+  try {
+    url = new URL(raw, `${trimTrailingSlashes(apiUrl)}/`);
+  } catch {
+    throw new Error("invalid-download-url");
+  }
+  const api = new URL(apiUrl);
+  if (
+    url.username ||
+    url.password ||
+    (url.protocol !== "https:" &&
+      !(
+        url.protocol === "http:" &&
+        url.origin === api.origin &&
+        ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+      )) ||
+    /\/(?:v1\/)?(?:bot\/)?file\/(?:preview|download|upload)(?:\/|$)/i.test(url.pathname) ||
+    /\/(?:v1\/)?botfile(?:\/|$)/i.test(url.pathname) ||
+    [...url.searchParams.keys()].some((key) =>
+      /^(?:x-amz-|x-goog-|q-sign-|signature$|sig$|expires$|expiry$|expire$|token$|access_token$|ossaccesskeyid$)/i.test(
+        key
+      )
+    )
+  )
+    throw new Error("unstable-download-url");
+  return url.href;
+}
+
+/** 当前 Bot 获取聊天上传凭据后直传；只交付独立 downloadUrl，绝不转发 Bot Token。 */
+export async function uploadChatAttachment(
+  apiUrl: string,
+  token: string,
+  bytes: Uint8Array,
+  filename: string,
+  mime: string,
+  signal: AbortSignal
+): Promise<string> {
+  signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
+  signal.throwIfAborted();
+  const query = new URLSearchParams({ filename, fileSize: String(bytes.byteLength) });
+  const response = await fetch(
+    `${trimTrailingSlashes(apiUrl)}/v1/bot/upload/presigned?${query.toString()}`,
+    {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+      redirect: "error"
+    }
+  );
+  const body = await readResponseText(response, 64 << 10);
+  if (!response.ok) throw new Error("upload-rejected");
+  let result: {
+    method?: unknown;
+    uploadUrl?: unknown;
+    downloadUrl?: unknown;
+    contentType?: unknown;
+    contentDisposition?: unknown;
+    maxFileSize?: unknown;
+    expiredTime?: unknown;
+  };
+  try {
+    result = JSON.parse(body) as typeof result;
+  } catch {
+    throw new Error("invalid-upload-response");
+  }
+  if (!result || typeof result !== "object") throw new Error("invalid-upload-response");
+  const download = attachmentUrl(result.downloadUrl, apiUrl);
+  if (
+    result.method !== "PUT" ||
+    typeof result.uploadUrl !== "string" ||
+    result.uploadUrl.length > 16_384 ||
+    (result.maxFileSize !== undefined && result.maxFileSize !== bytes.byteLength) ||
+    (result.expiredTime !== undefined &&
+      (typeof result.expiredTime !== "number" || result.expiredTime * 1000 <= Date.now()))
+  )
+    throw new Error("invalid-upload-response");
+  let upload: URL;
+  try {
+    upload = new URL(result.uploadUrl);
+  } catch {
+    throw new Error("invalid-upload-response");
+  }
+  const api = new URL(apiUrl);
+  if (
+    upload.username ||
+    upload.password ||
+    (upload.protocol !== "https:" &&
+      !(
+        upload.protocol === "http:" &&
+        upload.origin === api.origin &&
+        ["localhost", "127.0.0.1", "[::1]"].includes(upload.hostname)
+      ))
+  )
+    throw new Error("invalid-upload-response");
+  const headers: Record<string, string> = {};
+  const contentType = result.contentType ?? ensureTextCharset(mime);
+  for (const [name, value] of [
+    ["Content-Type", contentType],
+    ["Content-Disposition", result.contentDisposition]
+  ] as const) {
+    if (value === undefined) continue;
+    if (typeof value !== "string" || value.length > 8192 || /[\r\n]/.test(value))
+      throw new Error("invalid-upload-response");
+    headers[name] = value;
+  }
+  signal.throwIfAborted();
+  // PUT 必须原样回显签名的类型/文件名；临时上传地址仅在此使用，网络未知不自动重放。
+  const stored = await fetch(upload.href, {
+    method: "PUT",
+    headers,
+    body: new Uint8Array(bytes),
+    redirect: "error",
+    signal
+  });
+  await stored.body?.cancel();
+  if (!stored.ok) throw new Error("upload-rejected");
+  return download;
+}
 
 /**
  * Infer MIME type from filename extension. Returns a sensible default if unknown.
@@ -21,6 +145,8 @@ export function inferContentType(filename: string): string {
     ".svg": "image/svg+xml",
     ".bmp": "image/bmp",
     ".ico": "image/x-icon",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff",
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mov": "video/quicktime",
@@ -31,6 +157,8 @@ export function inferContentType(filename: string): string {
     ".zip": "application/zip",
     ".doc": "application/msword",
     ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".ppt": "application/vnd.ms-powerpoint",
+    ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".xls": "application/vnd.ms-excel",
     ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ".txt": "text/plain",
