@@ -499,7 +499,8 @@ for (const mode of ["native", "canonical"])
     // Admission is the deterministic barrier before terminating the actual worker.
     const { waitFor } = await import("./runtime-fixture.js");
     await waitFor(() => relay.client.invocations.snapshot()[0]?.ref !== undefined);
-    process.kill((await f.client.status()).worker.pid, "SIGKILL");
+    const previous = await f.client.status();
+    process.kill(previous.worker.pid, "SIGKILL");
     await outcome;
     if (mode === "native") assert.equal(values.at(-1).control.state, "lost");
     else
@@ -509,4 +510,9 @@ for (const mode of ["native", "canonical"])
       );
     assert.equal(relay.count("agent_run.invoke"), 1);
     assert.equal(relay.client.invocations.snapshot()[0].observationError, "RUN_OUTCOME_UNKNOWN");
+    // 流断开可能先于进程退出通知；等监督器完成恢复后再清理测试资源。
+    await waitFor(async () => {
+      const status = await f.client.status();
+      return status.execution_ready && status.worker.generation > previous.worker.generation;
+    }, 10_000);
   });
