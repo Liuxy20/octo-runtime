@@ -24,6 +24,3 @@ linkWorkspacePackages: true
 preferWorkspacePackages: true
 saveWorkspaceProtocol: true
 sharedWorkspaceLockfile: true
-patchedDependencies:
-  "@deepseek-ai/dsh-sdk-client@0.2.1-rc.3": patches/@deepseek-ai__dsh-sdk-client@0.2.1-rc.3.patch
-  "@deepseek-ai/dsh-sdk-protocol@0.2.1-rc.3": patches/@deepseek-ai__dsh-sdk-protocol@0.2.1-rc.3.patch

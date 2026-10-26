@@ -1,0 +1,15 @@
+baseline: 8af836068780ebb76581225254ad7bef18cc8170
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+decisions:
+  - 用户明确接受未修改官方 SDK 的实验性 DSH 接入，不在 Runtime 补足上游缺失保证。
+  - 不修改共享执行层或其他 Provider 的保证。

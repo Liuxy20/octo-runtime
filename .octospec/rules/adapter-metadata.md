@@ -88,3 +88,5 @@ manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点�
 - [context-mcp.test.js](../../test/context-mcp.test.js)、[native-host.test.js](../../test/native-host.test.js)。
 
 真实 Provider 与线上测试环境的验收范围以对应验证记录为准，支持声明和 fixture 测试不等于真实调用成功。
+
+2026-10-26 用户明确：DSH 继续接入未修改的官方 SDK，Runtime 不长期维护 SDK 内部的生命周期及输入预算补丁。该 Adapter 为实验性支持，不保证稳定性；Client.close 的确认范围仅为官方 SDK 直接子进程，不能推导全部工具后代已退出；Runtime 投影/队列预算不证明 SDK 解析前输入、stderr 或 lineage 已有内存上界。已观察到的失败仍如实返回，其他 Adapter 与共享 Core 的资源合同不变。上游反馈及历史补丁见 [DSH #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031)。

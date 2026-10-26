@@ -52,7 +52,9 @@
 
 ## 当前任务
 
-- [Issue 17：撤回后使用官方 DSH Client 重新接入](tasks/17-dsh-official-reviewed/brief.md)：依赖 #175 回滚，以官方 Client 加版本锁定的生命周期/字节预算补丁修复 #174 审查；当前验收单独记录。
+- [DSH 改用未修改的官方 SDK](tasks/dsh-upstream-sdk/brief.md)：用户要求移除两个下游依赖补丁，保留实验性 DSH 接入并接受上游当前稳定性、内存与后代回收限制；[上游反馈 #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031) 已附完整历史 diff 与回归参考。当前验证见本任务记录。
+
+- [Issue 17：撤回后使用官方 DSH Client 重新接入](tasks/17-dsh-official-reviewed/brief.md)：#176 的历史交付使用两个版本锁定补丁；补丁移除及当前支持边界以新的 DSH 官方 SDK 任务为准。
 
 - [Issue 17：官方 DSH TypeScript Client](tasks/17-dsh-official-client/brief.md)：以 `main@982a2fe` 替换 #173 的自实现 Client，锁定 npm 当前最高版本 `0.2.1-rc.3`；官方 SDK、Desktop、真实群聊及离线发行验证见[验收记录](tasks/17-dsh-official-client/acceptance.md)。浏览器已进入测试站统一登录页，指定账号文件只有 Bot Token，缺少网页登录凭据，消息 UI 与已有好友 DM 未验收；孤儿工具回收、解析前字节上限及原生 Windows 仍有明确限制。
 

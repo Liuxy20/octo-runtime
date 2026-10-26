@@ -53,16 +53,9 @@ export async function bundleDshClient(source, target) {
       `${protocolName}@${protocolManifest.version}\n` +
       `License: ${clientManifest.license}\n` +
       `Upstream: https://github.com/deepseek-ai/deepseek-harness\n` +
-      `Official npm JavaScript is bundled by esbuild with version-pinned downstream safety patches.\n` +
-      `Patches add owned-process cleanup hooks and inbound line byte limits; wire methods and event mapping are unchanged.\n`
+      `Unmodified official npm JavaScript is bundled by esbuild.\n` +
+      `DSH integration is experimental; SDK process-tree cleanup and pre-parse resource limits are not guaranteed.\n`
   );
-  for (const name of ["client", "protocol"]) {
-    const patchName = `@deepseek-ai__dsh-sdk-${name}@${clientManifest.version}.patch`;
-    await writeFile(
-      join(target, "dist", patchName),
-      await readFile(resolve(source, "../..", "patches", patchName))
-    );
-  }
   for (const [name, manifest] of [
     ["client", require.resolve(`${dshClientName}/package.json`)],
     ["protocol", protocolManifestPath]

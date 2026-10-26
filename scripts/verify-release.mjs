@@ -125,6 +125,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     );
     assert.equal(metadata.dependencies["@deepseek-ai/dsh"], undefined);
     assert.equal(metadata.dependencies["@deepseek-ai/dsh-sdk-client"], undefined);
+    assert.ok(dshNotice.includes("Unmodified official npm JavaScript"));
+    assert.equal(
+      (await readdir(join(dshDirectory, "dist"))).some((name) => name.endsWith(".patch")),
+      false
+    );
     for (const name of ["client", "protocol"]) {
       const license = await readFile(
         join(dshDirectory, "dist", `dsh-sdk-${name}-LICENSE.txt`),
@@ -132,11 +137,6 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       );
       assert.ok(license.includes("Copyright (c) 2026 DeepSeek"));
       assert.ok(license.includes("Permission is hereby granted"));
-      const patch = `@deepseek-ai__dsh-sdk-${name}@${dshSource.dependencies["@deepseek-ai/dsh-sdk-client"]}.patch`;
-      assert.equal(
-        await readFile(join(dshDirectory, "dist", patch), "utf8"),
-        await readFile(join(root, "patches", patch), "utf8")
-      );
     }
     // 在隔离的离线安装目录中执行真实发行 Adapter，证明官方 Client 已随包收集且无需安装 Provider。
     const dshFixture = join(consumer, "dsh-runtime.mjs");
@@ -220,32 +220,14 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       })
     );
     assert.equal(numericEvents.at(-1)?.type, "run.completed", "raw-budget numeric notification");
-    for (const mode of ["oversized-initialize", "oversized-fragmented", "raw-no-newline"]) {
+    // 官方 SDK 无解析前字节预算；发行物应保留其行为，不再暗中携带下游补丁。
+    for (const mode of ["oversized-initialize", "oversized-fragmented"]) {
       const events = await Array.fromAsync(
         dshModule.createDshAdapter().invoke(dshRequest(mode), {
           streamLimits: { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 }
         })
       );
-      assert.equal(events.at(-1)?.payload.code, "PROVIDER_MESSAGE_TOO_LARGE", mode);
-    }
-    if (process.platform !== "win32") {
-      const pidFile = join(directory, "dsh-child.pid");
-      try {
-        const events = await Array.fromAsync(
-          dshModule
-            .createDshAdapter()
-            .invoke(dshRequest("tree-exit", [{ key: "OCTO_DSH_CHILD_PID", value: pidFile }]))
-        );
-        assert.equal(events.at(-1)?.payload.code, "DSH_TRANSPORT_CLOSED");
-        const pid = Number(await readFile(pidFile, "utf8"));
-        assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
-      } finally {
-        try {
-          process.kill(Number(await readFile(pidFile, "utf8")), "SIGKILL");
-        } catch (error) {
-          if (error.code !== "ESRCH" && error.code !== "ENOENT") throw error;
-        }
-      }
+      assert.equal(events.at(-1)?.type, "run.completed", mode);
     }
     const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
     assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");

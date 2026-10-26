@@ -13,14 +13,13 @@ import {
   type AdapterInvocationContext
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { contextActmode, DEFAULT_STREAM_LIMIT_POLICY } from "@mininglamp-oss/octo-runtime-protocol";
-import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
 import {
   HarnessClient,
   type NotificationSubscription,
   type SdkPromptContentBlock
 } from "@deepseek-ai/dsh-sdk-client";
 import { DshError, dshError, record, DSH_VERSION } from "./errors.js";
-import { resolveDshLaunch, timeoutOption, stringOption, DSH_PROCESS_GRACE_MS } from "./launch.js";
+import { resolveDshLaunch, timeoutOption, stringOption } from "./launch.js";
 import { DshTrajectory } from "./trajectory.js";
 
 export { DshError, DSH_VERSION } from "./errors.js";
@@ -48,7 +47,8 @@ function failureEvent(
 }
 
 /**
- * SDK/CLI 共用的独立 Adapter。每 invoke 拥有一个 Provider 子进程；资源回收后才发唯一终态。
+ * SDK/CLI 共用的实验性 Adapter。每 invoke 使用独立官方 Client，等待其 close 后发唯一终态。
+ * SDK 只确认直接子进程退出；不承诺完整后代回收或解析前内存上界。
  * providerSession 来自调用方，跨调用显式 resume；不缓存业务上下文或安装/修改 Provider。
  */
 export function createDshAdapter(options: DshAdapterOptions = {}) {
@@ -188,23 +188,12 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
               profile: stringOption(config, "profile", "sdk"),
               processCwd: request.workdir,
               env: launch.env,
-              // 版本锁定的 pnpm 补丁仅增加生命周期与读取预算接线；RPC/订阅仍由官方实现。
-              detached: process.platform !== "win32",
-              createProcessCleanup: (child) =>
-                createProcessCleanup(child, {
-                  processGroup: process.platform !== "win32",
-                  processTree: true,
-                  termGraceMs: DSH_PROCESS_GRACE_MS,
-                  killGraceMs: DSH_PROCESS_GRACE_MS
-                }),
-              rawMessageMaxBytes: limits.rawMessageMaxBytes,
-              maxSessionRelationships: 128,
               initializeTimeoutMs,
               requestTimeoutMs,
               shutdownTimeoutMs
             });
             // 在官方订阅过滤回调中同步投影，返回 false 避免再积累一份无界通知队列。
-            // 原始行预算由 Protocol 在解码前检查；重新序列化会改变数字表示，不能复用原始字节预算。
+            // 官方 SDK 无解析前行预算；这里只限制 Runtime 的投影和队列，不宣称限制 SDK 内部缓存。
             subscription = client.subscribe((notification) => {
               if (phase !== "prompt" && phase !== "wait") return false;
               try {

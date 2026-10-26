@@ -169,7 +169,14 @@ createInterface({ input: process.stdin }).on("line", (line) => {
       return;
     }
     if (mode === "oversized-fragmented") {
-      const bytes = JSON.stringify({ jsonrpc: "2.0", id, result: { padding: "界".repeat(8192) } });
+      const bytes = JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          serverInfo: { name: "deepseek-harness-sdk-runtime", version: "0.0.1" },
+          padding: "界".repeat(8192)
+        }
+      });
       for (let offset = 0; offset < bytes.length; offset += 127)
         process.stdout.write(bytes.slice(offset, offset + 127));
       process.stdout.write("\n");

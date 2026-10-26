@@ -23,6 +23,8 @@ The table describes the checked-in Adapters. Confirm that your actual Provider v
 
 Grok Build uses the shared ACP client and starts a CLI process per invocation. Version 1.0.67 has been checked for text streaming and cross-process session continuation on macOS arm64. See the [Grok adapter](../../../packages/octo-runtime-adapter-grok-build/README.md) for authentication, configuration, and validation limits.
 
+DSH is an experimental integration using the unmodified official SDK 0.2.1-rc.3 and requires explicit full_access. Stability, SDK-internal memory bounds, and complete tool-descendant cleanup are not guaranteed. Text deltas arrive after native message commit. See the [DSH adapter](../../../packages/octo-runtime-adapter-dsh/README.md) for installation, Desktop discovery, resume, and cancellation limits, and [DSH #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031) for upstream feedback and the historical reference patches.
+
 The MCP column describes connections configured through `octo.execution/mcp` on each invocation. A Provider's own MCP configuration is a separate source of settings. See the [MCP guide](../guides/mcp.md) for optional fields and restrictions.
 
 ## Native Interaction Support

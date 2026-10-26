@@ -2,6 +2,8 @@
 
 `dsh` 是独立的 canonical Adapter。KernelClient 经 Kernel worker 调用本机已安装的 DeepSeek Harness；不控制 Desktop 窗口，不安装 Provider，不修改用户 profile 或认证文件。
 
+DSH 接入为实验性支持，直接使用未修改的官方 SDK，不保证稳定性。SDK 内部的解析前输入、stderr 与会话关系表没有本项目补充的内存上界；`close()` 只确认直接子进程退出，不保证全部工具后代回收。调用、续聊及取消继续提供，已观察到的失败仍如实返回。上游能力反馈及历史补丁参考见 [DSH #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031)。
+
 ## 支持版本和入口
 
 运行已安装的 Runtime CLI 或 SDK 需要 **Node.js 24.x 或 26.x**，精确范围为 `^24.0.0 || ^26.0.0`；这也是用户运行环境要求，不只是开发或编译环境要求。Node.js 22 不在支持范围内，请先升级到 Node.js 24；“24+”不代表支持任意更高主版本。
@@ -68,15 +70,15 @@ serveWorker([dshAdapter]);
 | `requestTimeoutMs` | 30000 | 普通 RPC 期限，毫秒 |
 | `shutdownTimeoutMs` | 1000 | shutdown 回执期限，毫秒；随后仍确认拥有进程退出 |
 
-`session/wait` 使用本轮 runTimeoutMs，未指定时为 120000 毫秒。版本探针有独立 10000 毫秒期限，也观察取消并回收进程树。原始通知大小由 Protocol 在解码前检查，Adapter 在官方通知回调中同步投影；投影后的 canonical 事件和队列沿 Runtime StreamLimitPolicy 的独立预算。
+`session/wait` 使用本轮 runTimeoutMs，未指定时为 120000 毫秒。版本探针有独立 10000 毫秒期限，也观察取消并回收其拥有的进程组。正式调用的进程由官方 SDK 管理，Adapter 在通知回调中同步投影；投影后的 canonical 事件和队列沿 Runtime StreamLimitPolicy 的独立预算。这些预算不限制 SDK 解码、JSON 解析、诊断及关系表的内部占用。
 
-补丁还限制 SDK 自身的诊断与关系表：未换行 stderr 后缀最多 16384 个 UTF-16 code unit，保留尾部总量最多 65536 UTF-8 bytes；SDK lineage 最多 128 项，身份最长 191 字符。无关会话通知同样消耗 SDK 的关系预算，超量以 STREAM_QUEUE_ITEMS_EXCEEDED 失败；不会用 filter 丢弃来掩盖内存增长。
+官方 SDK 未提供可配置的解析前行字节预算、stderr 总字节预算和 lineage 表上界。超大响应、无换行数据、诊断输出及无关会话通知可能增加 SDK 内部内存占用；Runtime 不再通过依赖补丁补足这些能力。
 
-上游原版 SDK 0.2.1-rc.3 没有解析前行字节上限。本项目通过 `pnpm patchedDependencies` 固定两个可审查补丁：Client 接收本轮字节预算和受管进程清理函数；官方 Protocol 在 StringDecoder、字符串拼接和 JSON.parse 之前逐段计数字节，覆盖响应、通知以及尚无换行的数据。超限以 PROVIDER_MESSAGE_TOO_LARGE 失败并关闭本轮传输。CRLF 中的 CR 计入行预算，LF 分隔符不计入；恰好等于上限仍可接收。补丁随源码及发行包保留，不声称这些扩展已经上游发布。非 JSON 行仍按上游行为忽略，无有效初始化响应最终超时失败。订阅过滤回调返回 false，避免在 SDK 内额外积累通知队列；pending next 只监听订阅失败，不因首条通知完成，关闭会拒绝该等待。
+订阅过滤回调返回 false，避免在 SDK 的订阅队列额外积累通知；这不限制 SDK 自己的会话关系表。pending next 只监听订阅失败，不因首条通知完成，关闭会拒绝该等待。非 JSON 行按上游行为忽略，无有效初始化响应最终超时失败；不得将超时解释为已实施解析前内存保护。
 
 ## 输出和限制
 
-原生 prompt 回执只表示入队。成功还需关联 receipt、root turn/end=completed、非空 committed answer、session/wait 成功，以及拥有进程清理完成。只收到 idle、空回答、EOF 或 enqueue ACK 都不会报成功。
+原生 prompt 回执只表示入队。成功还需关联 receipt、root turn/end=completed、非空 committed answer、session/wait 成功，以及官方 Client.close 成功。close 成功只反映 SDK 的直接子进程观测范围，不证明工具后代全部退出。只收到 idle、空回答、EOF 或 enqueue ACK 都不会报成功。
 
 DSH 原生事件 seq 用于按会话去重，允许非零起点和向前跳号；相同序号的完全相同事件去重，冲突重复仍报错。执行是否成功由上述完成证据判定，不因原生序号不连续而失败。Runtime HostFrame 的 seq 由 Core 独立生成，与 DSH 原生序号无关。
 
@@ -90,14 +92,14 @@ Provider 兼容原则：Adapter 的强制校验限于正确映射结果、确认
 
 恢复后的工作目录须与本轮请求经 realpath 解析为同一目录，符号链接别名可接受；仅返回请求根下的其他子目录仍报 DSH_SESSION_RESUME_FAILED，避免在错误目录执行。大小写别名在支持的文件系统上通过真实目录回归验证，不把字符串统一转小写当成跨平台等价规则。
 
-每轮独占一个官方 HarnessClient；取消调用其 close，不终止 Desktop GUI 或兄弟调用。Client 补丁在 spawn 时建立独立 POSIX 进程组并捕获 Adapter SDK 现有 createProcessCleanup；shutdown 后由同一函数完成 TERM、KILL 和退出确认，父进程已退出也继续回收所属组。只有确认后才输出唯一终态；回收失败保留执行和清理两种原因。Windows 使用现有 taskkill /T 路径，真实 Windows DSH 与父进程先退出后的工具回收尚未验收，不将 POSIX 结果推广到 Windows。Session 文件由 DSH 原生管理，Adapter 不另存业务历史。
+每轮独占一个官方 HarnessClient；取消调用其 close，不终止 Desktop GUI 或兄弟调用。SDK 先请求 shutdown，再通过 stdin EOF、TERM/KILL 及直接子进程退出确认完成自身清理；Runtime 不读取 SDK 私有进程字段，不注入额外进程清理实现。父进程先退出或工具忽略退出请求时可能留下后代，这一限制适用于当前实验性 DSH 接入，不能宣称已由 Kernel 隔离解决。已观察到的 close 失败保留执行和清理两种原因。真实 Windows DSH 未验收。Session 文件由 DSH 原生管理，Adapter 不另存业务历史。
 
 失败沿共同 FailureEnvelope：公共 OH 分类码在 `payload.failure.code`，DSH 稳定原因在 `payload.failure.reasonCode` 和顶层兼容 `code`。例如 DSH_SESSION_RESUME_FAILED、DSH_INITIALIZE_TIMEOUT、DSH_REQUEST_TIMEOUT、DSH_TRANSPORT_CLOSED、DSH_TRAJECTORY_INVALID、DSH_EXECUTION_FAILED、DSH_NO_FINAL_OUTPUT、DSH_CANCEL_FAILED、DSH_CLEANUP_FAILED。容量超限保留共同 PROVIDER_MESSAGE_TOO_LARGE / STREAM_QUEUE_* 原因码。Core 日志保留公共码与 reason_code；Adapter 经 invocation context 复用同一日志入口，记录有界阶段、时间、原生安全 code，不记录 prompt、凭据、原生 error.message 或 stderr。官方公共 API 不暴露 PID/request ID，故不读取私有字段或解析其错误文本。独立调用可用 `createDshAdapter({log})` 提供同一受控 RuntimeLog；错误不自动重发模型或工具。
 
-源码声明官方 Client 精确生产依赖。构建发行包时，esbuild 按实际 import 收集应用补丁后的官方 Client 和官方 SDK Protocol 的 JavaScript，保留 workspace 依赖为外部包并记录上游版本、补丁和 MIT 许可。Adapter 始终传入显式 dshBin，因此不使用官方 SDK 自动解析 npm Provider 的默认路径；发行包不携带整套 Provider 或平台原生模块，不在消费者安装时下载 Provider。离线包验证覆盖这条路径。
+源码声明官方 Client 精确生产依赖。构建发行包时，esbuild 按实际 import 收集未修改的官方 Client 和 SDK Protocol JavaScript，保留 workspace 依赖为外部包并记录上游版本和 MIT 许可，不再复制或应用下游补丁。Adapter 始终传入显式 dshBin，因此不使用官方 SDK 自动解析 npm Provider 的默认路径；发行包不携带整套 Provider 或平台原生模块，不在消费者安装时下载 Provider。离线包验证覆盖这条路径。
 
 测试沿仓库的构建产物约定：运行 pnpm test 会先清理并构建当前源码，再执行测试；CI 的 pnpm typecheck 同样先构建，随后运行 pnpm test:suites。内部 trajectory 测试读取本轮构建产物，不作为公共 API 导出；官方 Client 测试通过包名解析其公开入口，不依赖 node_modules 内部布局。单独执行 node --test 前需先运行 pnpm build。
 
-解析前预算依赖上述两个下游补丁，不对解析后的通知重复 JSON.stringify 再套用原始预算：科学计数法等表示在重新序列化后可能变长，但不代表原始帧超量。源码安装使用 pnpm install --frozen-lockfile 应用锁定补丁；Protocol 边界测试检查超量数据在 JSON.parse 调用前被拒绝。发行验证对离线安装后的公共 Adapter 再执行超大响应、分段帧、无换行数据和合法数字表示展开测试，并核对随包补丁与仓库字节一致；macOS、Linux 和 Windows CI 都执行该发行验证。
+源码安装使用 `pnpm install --frozen-lockfile` 获取未修改的锁定 SDK。Protocol 测试保留 UTF-8、CRLF 和订阅语义；Adapter 测试及离线发行验证确认普通调用、续聊、取消、错误映射和 Runtime 自身预算仍可用。超大初始化响应不再按 Runtime 原始预算拒绝，无换行输入沿官方初始化超时处理；后代清理由测试宿主自行收尾，不再把它记为 Adapter 保证。历史补丁及其回归证据保存在上游反馈中。
 
 源码依赖图包含官方 Client 声明的同版 Provider 依赖，因此 lockfile 明显增大。默认 CLI 内置 DSH，暂不改成可选 Adapter 安装；消费者发行包只收集实际使用的 Client/Protocol JavaScript，不携带该 Provider 依赖图。构建脚本禁止误收集 Provider，离线验证检查发行主包不声明官方 Provider/Client npm 依赖；不能通过手工裁剪 lockfile 减少这部分源码依赖。

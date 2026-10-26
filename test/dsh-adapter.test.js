@@ -180,7 +180,6 @@ for (const path of ["Adapter", "Core"])
   });
 
 for (const [mode, code] of [
-  ["foreign-lineage", "STREAM_QUEUE_ITEMS_EXCEEDED"],
   ["provider-error", "DSH_EXECUTION_FAILED"],
   ["no-receipt", "DSH_TRAJECTORY_INVALID"],
   ["no-terminal", "DSH_TRAJECTORY_INVALID"],
@@ -301,27 +300,17 @@ test("DSH text deltas reconcile with a committed snapshot exactly once", async (
   assert.equal(text(await collect(f.request)), "hello 世界");
 });
 
-test("DSH startup/request timeouts and raw notification limits close owned processes", async (t) => {
+test("DSH startup/request timeouts close the official SDK runtime", async (t) => {
   const f = await fixture(t, "startup-timeout");
   f.request.agentConfig.providerOptions.initializeTimeoutMs = 40;
   assert.equal(terminals(await collect(f.request))[0].payload.code, "DSH_INITIALIZE_TIMEOUT");
   const waiting = await fixture(t, "cancel");
   waiting.request.runtimeLimits = { runTimeoutMs: 40 };
   assert.equal(terminals(await collect(waiting.request))[0].payload.code, "DSH_REQUEST_TIMEOUT");
-  const raw = await fixture(t, "oversized");
-  const events = await Array.fromAsync(
-    createDshAdapter().invoke(raw.request, {
-      streamLimits: {
-        ...(await import("@mininglamp-oss/octo-runtime-protocol")).DEFAULT_STREAM_LIMIT_POLICY,
-        rawMessageMaxBytes: 1024
-      }
-    })
-  );
-  assert.equal(terminals(events)[0].payload.code, "PROVIDER_MESSAGE_TOO_LARGE");
 });
 
-for (const mode of ["oversized-initialize", "oversized-fragmented", "raw-no-newline"])
-  test(`DSH bounds ${mode} before parsing through Adapter and public Core`, async (t) => {
+for (const mode of ["oversized-initialize", "oversized-fragmented"])
+  test(`DSH unmodified SDK accepts ${mode} independently of Runtime projection budgets`, async (t) => {
     const { DEFAULT_STREAM_LIMIT_POLICY, invocationInput } =
       await import("@mininglamp-oss/octo-runtime-protocol");
     const limits = { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 };
@@ -329,7 +318,8 @@ for (const mode of ["oversized-initialize", "oversized-fragmented", "raw-no-newl
     const events = await Array.fromAsync(
       createDshAdapter().invoke(f.request, { streamLimits: limits })
     );
-    assert.equal(terminals(events)[0].payload.code, "PROVIDER_MESSAGE_TOO_LARGE");
+    assert.equal(terminals(events)[0].type, "run.completed");
+    assert.equal(text(events), "hello 世界");
     const core = new AgentExecutor();
     core.register(createDshAdapter());
     try {
@@ -339,12 +329,23 @@ for (const mode of ["oversized-initialize", "oversized-fragmented", "raw-no-newl
           streamLimits: limits
         })
       );
-      assert.equal(terminals(values)[0].payload.failure.reasonCode, "PROVIDER_MESSAGE_TOO_LARGE");
+      assert.equal(terminals(values)[0].type, "run.completed");
     } finally {
       assert.notEqual((await core.shutdown()).cleanup, "incomplete");
     }
     for (const entry of await f.trace()) assert.throws(() => process.kill(entry.pid, 0), /ESRCH/);
   });
+
+test("DSH unterminated SDK input reaches the official initialize timeout", async (t) => {
+  const f = await fixture(t, "raw-no-newline");
+  f.request.agentConfig.providerOptions.initializeTimeoutMs = 100;
+  const events = await Array.fromAsync(
+    createDshAdapter().invoke(f.request, {
+      streamLimits: { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 }
+    })
+  );
+  assert.equal(terminals(events)[0].payload.code, "DSH_INITIALIZE_TIMEOUT");
+});
 
 test("DSH cancellation reclaims its process while an independent sibling completes", async (t) => {
   const f = await fixture(t, "cancel");
@@ -765,7 +766,7 @@ test(
 );
 
 test(
-  "DSH cancellation reclaims a live native descendant after its parent exits",
+  "DSH cancellation closes the SDK runtime while the test owns descendant cleanup",
   {
     skip: process.platform === "win32" ? "POSIX process-group ownership regression" : false
   },
@@ -787,12 +788,13 @@ test(
     });
     controller.abort();
     assert.equal(terminals(await pending)[0].type, "run.cancelled");
-    assert.throws(() => process.kill(pid, 0), /ESRCH/);
+    const parentPid = (await f.trace())[0].pid;
+    assert.throws(() => process.kill(parentPid, 0), /ESRCH/);
   }
 );
 
 test(
-  "DSH unexpected parent exit reclaims an orphan that ignores SIGTERM before reporting failure",
+  "DSH unexpected SDK runtime exit reports failure while the test owns orphan cleanup",
   {
     skip: process.platform === "win32" ? "POSIX process-group ownership regression" : false
   },
@@ -811,10 +813,8 @@ test(
       } catch {}
     });
     assert.equal(terminals(await pending)[0].payload.code, "DSH_TRANSPORT_CLOSED");
-    assert.throws(() => process.kill(pid, 0), /ESRCH/);
-    const before = await readFile(pidFile + ".ticks", "utf8");
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    assert.equal(await readFile(pidFile + ".ticks", "utf8"), before);
+    const parentPid = (await f.trace())[0].pid;
+    assert.throws(() => process.kill(parentPid, 0), /ESRCH/);
   }
 );
 

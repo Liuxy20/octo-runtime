@@ -23,7 +23,7 @@ Provider 是实际执行 Agent 任务的程序，例如 Codex 或 Claude Code。
 
 Grok Build 使用共享 ACP client，每次调用启动一个 CLI 进程。已在 macOS arm64 验证 1.0.67 的文本流和跨进程会话续聊。认证、配置和验证限制见 [Grok adapter](../../../packages/octo-runtime-adapter-grok-build/README.md)。
 
-DSH 固定支持 0.2.1-rc.3，只接受显式 full_access。文本增量在原生消息提交后提供；安装、Desktop 发现、恢复与取消边界见 [DSH adapter](../../../packages/octo-runtime-adapter-dsh/README.md)。
+DSH 为实验性接入，固定使用未修改的官方 SDK 0.2.1-rc.3，只接受显式 full_access，不保证稳定性、SDK 内部内存上界或完整工具后代回收。文本增量在原生消息提交后提供；安装、Desktop 发现、恢复与取消边界见 [DSH adapter](../../../packages/octo-runtime-adapter-dsh/README.md)。上游反馈及历史补丁参考见 [DSH #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031)。
 
 表中的 MCP 列表示通过本轮 `octo.execution/mcp` 配置连接的能力。Provider 自己已有的 MCP 配置是另一种配置来源。可选字段和使用限制见 [MCP 指南](../guides/mcp.md)。
 
