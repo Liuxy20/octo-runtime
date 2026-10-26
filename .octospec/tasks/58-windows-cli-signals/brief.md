@@ -26,3 +26,5 @@ CLI 直接构造临时 Kernel，Kernel 监督 worker，Extra 独立管理。控�
 - 按范围完成构建、类型、lint、format、命名检查并审查公共接口 diff。
 
 用户已授权提交、通过现有 SSH 身份推送分支，并创建关联 #58 的 PR；不自动合并。
+
+PR #183 评审修复：仅缩短本次新增的两处 Playboard 测试临时根目录。macOS 在 `/tmp` 下独占分配短目录并注册清理，避免嵌套 TMPDIR 超出 Unix socket 长度限制；保留全部取消、终态及资源断言，不改 SDK 或产品逻辑，不扩展到非阻塞的 CI 建议。

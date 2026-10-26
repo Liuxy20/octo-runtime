@@ -394,8 +394,11 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
   test(`Playboard retains primary outcomes when cleanup is ${cleanupFailure}`, async (t) => {
     const settings = await fixture(t);
     // 故障结果会让产品保留临时状态；实际进程已由注入 fixture 关闭，目录仍归本测试回收。
-    const temporary = join(settings.directory, "cleanup-tmp");
-    await mkdir(temporary);
+    // macOS socket 路径预算有限，临时根不叠加 fixture 与系统 TMPDIR 的长度。
+    const temporary = await mkdtemp(
+      join(process.platform === "darwin" ? "/tmp" : settings.directory, "ocp-")
+    );
+    t.after(() => rm(temporary, { recursive: true, force: true }));
     const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
     const cleanupCode =
       cleanupFailure === "reject" ? "TEST_CLEANUP_REJECTED" : "COMPONENT_CLEANUP_INCOMPLETE";

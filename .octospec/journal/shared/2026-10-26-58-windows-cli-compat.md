@@ -16,3 +16,5 @@ Playboard 清理失败须保留执行错误和非零结果，清理后的成功�
 范围、兼容边界及 Windows 验证见 [任务简报](../../tasks/58-windows-cli-signals/brief.md) 与 [实施记录](../../tasks/58-windows-cli-signals/implementation.md)。
 
 最新 `main@81284c9` 上构建、类型、lint、命名及格式检查通过；三份完整文件为 33 通过、2 项原有跳过、0 失败。module-loading 改为等待真实 ready 与 PID，保留原有总预算。默认全仓并发中的 foreground 耗时 11.22 秒通过，真实 Ctrl+C、兄弟组件、重启及最终状态断言均执行。
+
+PR #183 评审发现本次新增的两处 Playboard fixture 嵌套 TMPDIR 触及 macOS socket 长度限制。仅将 macOS 临时根改为 `/tmp` 下独占短目录并登记清理，保留全部执行与回收断言。Windows 三文件复验 33 通过、2 项原有跳过，产品与 SDK 未修改；macOS 托管 CI 结果独立核对。

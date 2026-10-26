@@ -36,3 +36,9 @@ upstream: https://github.com/Mininglamp-OSS/octo-runtime/issues/58
 - `pnpm test:suites` 默认全仓并发中的 foreground 通过，耗时 11.22 秒，低于原有 20 秒总预算；三次 CTRL_C_EVENT 为 0/null，关闭 340/1456/305 ms，最终状态及兄弟组件断言均执行。
 
 仅执行 Windows 本地验证；macOS/Linux 未在本机运行。
+
+## PR #183 评审修复
+
+Jerry-Xin 指出本次新增的嵌套 TMPDIR 会让 macOS Unix socket 路径超长。仅修改两处 Playboard fixture：macOS 使用 `/tmp/ocp-*` 独占短目录，其余平台仍在测试 fixture 下分配；均注册清理，保留取消、终态、所属进程和空目录断言。SDK、产品代码和 CI 配置未修改。
+
+Windows 三份完整相关文件复验为 33 通过、2 项原有跳过、0 失败（42.89 秒），Playboard 真实 CTRL_C_EVENT 返回 130/null，关闭 707 ms，后续调用成功。修改文件的 Prettier 与 `git diff --check` 通过；macOS 由更新后的 PR CI 验证，不以本机结果代替。
