@@ -1,11 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
-import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { isHostTerminal } from "@mininglamp-oss/octo-runtime-protocol";
 import { kernelFixture, kernelInput, frames } from "./kernel-fixture.js";
+import { kernelRelay } from "./kernel-relay.js";
 
 test("independent clients observe one accepted source and terminal without owning its lifetime", async (t) => {
   const { client, endpoint } = await kernelFixture(t);
@@ -54,53 +53,18 @@ test("every control and subscription validates full identity and Kernel generati
 });
 
 test("lost invoke ACK is recovered by original identity without a second invoke", async (t) => {
-  const { endpoint, directory, client } = await kernelFixture(t);
-  const relay =
-    process.platform === "win32"
-      ? `\\\\.\\pipe\\octo-test-${randomUUID()}`
-      : join(directory, "p.sock");
-  let invocations = 0;
-  const connections = new Set();
-  const server = net.createServer((downstream) => {
-    const upstream = net.createConnection(endpoint);
-    connections.add(downstream);
-    connections.add(upstream);
-    downstream.once("close", () => {
-      connections.delete(downstream);
-      upstream.destroy();
-    });
-    upstream.once("close", () => connections.delete(upstream));
-    downstream.on("error", () => {});
-    upstream.on("error", () => downstream.destroy());
-    let pending = "",
-      drop = false;
-    downstream.on("data", (chunk) => {
-      pending += chunk;
-      if (pending.includes("\n")) {
-        const request = JSON.parse(pending);
-        drop = request.method === "agent_run.invoke";
-        if (drop) invocations++;
+  const fixture = await kernelFixture(t);
+  const relay = await kernelRelay(t, fixture, {
+    response(_value, connection) {
+      if (connection.request.method === "agent_run.invoke") {
+        connection.disconnect();
+        return false;
       }
-      upstream.write(chunk);
-    });
-    upstream.on("data", (chunk) => {
-      if (drop) {
-        downstream.destroy();
-        upstream.destroy();
-      } else downstream.write(chunk);
-    });
-    upstream.once("end", () => downstream.end());
+    }
   });
-  await new Promise((resolve) => server.listen(relay, resolve));
-  t.after(async () => {
-    for (const socket of connections) socket.destroy();
-    await new Promise((resolve) => server.close(resolve));
-  });
-  const submitter = attachKernel({ endpoint: relay });
-  t.after(() => submitter.close());
-  const { ref } = await submitter.submit(kernelInput());
-  assert.equal(invocations, 1);
-  const events = await frames(client, ref);
+  const { ref } = await relay.client.submit(kernelInput());
+  assert.equal(relay.count("agent_run.invoke"), 1);
+  const events = await frames(fixture.client, ref);
   assert.equal(events.filter(isHostTerminal).length, 1);
   assert.equal(events.at(-1).control.state, "completed");
 });

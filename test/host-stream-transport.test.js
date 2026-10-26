@@ -1,10 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createServer } from "node:net";
 import { PassThrough } from "node:stream";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { WorkerRpcClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   HOST_RPC_MAX_LINE_BYTES,
@@ -12,25 +8,6 @@ import {
   invocationInput
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest } from "./runtime-fixture.js";
-
-async function socketFixture(context, handler) {
-  const root = await mkdtemp(join(tmpdir(), "octo-large-stream-"));
-  const path = join(root, "host.sock");
-  const sockets = new Set();
-  const server = createServer((socket) => {
-    sockets.add(socket);
-    socket.on("error", () => socket.destroy());
-    socket.once("close", () => sockets.delete(socket));
-    socket.once("data", (chunk) => handler(JSON.parse(chunk.toString()), socket));
-  });
-  await new Promise((resolve) => server.listen(path, resolve));
-  context.after(async () => {
-    for (const socket of sockets) socket.destroy();
-    await new Promise((resolve) => server.close(resolve));
-    await rm(root, { recursive: true, force: true });
-  });
-  return path;
-}
 
 function receipt(input) {
   return {
@@ -76,6 +53,31 @@ test("Host RPC accepts a hard-maximum HostFrame plus its envelope without failin
     input.write(JSON.stringify({ jsonrpc: "2.0", id: sent[1].id, result: "ready" }) + "\n");
     assert.equal((await large).event.payload.text.length, frame.event.payload.text.length);
     assert.equal(await sibling, "ready");
+  } finally {
+    client.close();
+    input.destroy();
+    output.destroy();
+  }
+});
+
+test("Worker RPC rejects an unterminated UTF-8 line by bytes with precise capacity evidence", async () => {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const client = new WorkerRpcClient({ input, output });
+  const text = "大".repeat(Math.floor(HOST_RPC_MAX_LINE_BYTES / 3) + 1);
+  const measuredBytes = Buffer.byteLength(text);
+  assert.ok(text.length < HOST_RPC_MAX_LINE_BYTES);
+  assert.ok(measuredBytes > HOST_RPC_MAX_LINE_BYTES);
+  try {
+    const rejected = assert.rejects(client.request("fixture.too-large"), (error) => {
+      assert.equal(error.code, "HOST_FRAME_TOO_LARGE");
+      assert.equal(error.boundary, "host.rpc_transport");
+      assert.equal(error.limitBytes, HOST_RPC_MAX_LINE_BYTES);
+      assert.equal(error.measuredBytes, measuredBytes);
+      return true;
+    });
+    input.write(Buffer.from(text));
+    await rejected;
   } finally {
     client.close();
     input.destroy();

@@ -30,6 +30,8 @@ export async function kernelRelay(t, fixture, hooks = {}) {
     const forward = (source, destination, hook) => {
       let pending = "",
         chain = Promise.resolve();
+      // pipe/socket 的 chunk 可截断多字节字符；decoder 必须跨 chunk 保留未完整的 UTF-8。
+      source.setEncoding("utf8");
       source.on("data", (chunk) => {
         pending += chunk;
         let end;
@@ -57,13 +59,44 @@ export async function kernelRelay(t, fixture, hooks = {}) {
       void responses().then(() => downstream.end());
     });
   });
-  await new Promise((resolve) => server.listen(endpoint, resolve));
-  const client = attachKernel({ endpoint });
-  t.after(async () => {
-    client.close();
-    for (const socket of sockets) socket.destroy();
-    await new Promise((resolve) => server.close(resolve));
-  });
+  let client, cleanup;
+  const close = () =>
+    (cleanup ??= (async () => {
+      client?.close();
+      const closed = [...sockets].map(
+        (socket) => new Promise((resolve) => socket.once("close", resolve))
+      );
+      for (const socket of sockets) socket.destroy();
+      if (server.listening)
+        await new Promise((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve()))
+        );
+      await Promise.all(closed);
+    })());
+  t.after(close);
+  try {
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(endpoint, () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+    client = attachKernel({ endpoint });
+  } catch (error) {
+    try {
+      await close();
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        "Kernel relay initialization cleanup failed",
+        {
+          cause: error
+        }
+      );
+    }
+    throw error;
+  }
   return {
     endpoint,
     client,

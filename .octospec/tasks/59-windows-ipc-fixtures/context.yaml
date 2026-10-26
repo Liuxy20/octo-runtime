@@ -1,0 +1,19 @@
+brief: .octospec/tasks/59-windows-ipc-fixtures/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 保持 SDK、原生服务拓扑与产品归属不变
+  - id: runtime-local-execution
+    source: repo
+    reason: IPC、身份恢复、取消和字节容量边界
+  - id: runtime-engineering
+    source: repo
+    reason: 测试资源所有权、失败清理与原生 Windows 证据
+files_expected:
+  - test/kernel-fixture.js
+  - test/kernel-relay.js
+  - test/kernel-clients.test.js
+  - test/host-stream-transport.test.js
+  - test/kernel-fixture-failure.test.js
+  - test/kernel-stream-transport.test.js
+  - test/kernel-invoke.test.js
