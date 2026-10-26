@@ -52,6 +52,10 @@
 
 ## 当前任务
 
+- [Issue 17：撤回后使用官方 DSH Client 重新接入](tasks/17-dsh-official-reviewed/brief.md)：依赖 #175 回滚，以官方 Client 加版本锁定的生命周期/字节预算补丁修复 #174 审查；当前验收单独记录。
+
+- [Issue 17：官方 DSH TypeScript Client](tasks/17-dsh-official-client/brief.md)：以 `main@982a2fe` 替换 #173 的自实现 Client，锁定 npm 当前最高版本 `0.2.1-rc.3`；官方 SDK、Desktop、真实群聊及离线发行验证见[验收记录](tasks/17-dsh-official-client/acceptance.md)。浏览器已进入测试站统一登录页，指定账号文件只有 Bot Token，缺少网页登录凭据，消息 UI 与已有好友 DM 未验收；孤儿工具回收、解析前字节上限及原生 Windows 仍有明确限制。
+
 - [Issue 81 与 Dependabot 安全整改](tasks/81-security-remediation/brief.md)：基于 `main@445d2bb`，原 35 条及新增 7 条均有[逐条处置](tasks/81-security-remediation/disposition.md)；修复项在分支扫描不再命中，其余按证据分别登记误报，Vitest 升至 4.1.12，六平台 CI 通过。用户已授权合并 [PR #115](https://github.com/Mininglamp-OSS/octo-runtime/pull/115)，仍需满足 GitHub 至少一位 reviewer 批准及 CI Gate；最终 main 重扫和 Dependabot 状态待合并后核对，见[验证记录](journal/shared/2026-10-23-81-security-remediation.md)。
 
 - [Issue 103：OpenCode 2 与原生 ACP 兼容](tasks/103-opencode-v2/brief.md)：最低支持 2.1.3，V1 在 probe 与直接 invoke 明确报错；完成 CLI/ACP 原生参数、环境、MCP 和清理适配。OpenCode 2.1.3 / DeepSeek 的 16 个真实场景及独立 worker 测试 IM 往返通过；[验收记录](tasks/103-opencode-v2/validation.md)与[双轴审查](tasks/103-opencode-v2/review.md)记录回归及未覆盖边界。

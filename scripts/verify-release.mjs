@@ -107,7 +107,146 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const moduleManifest = JSON.parse(
       await readFile(join(installed, "apps/cli/dist/manifest.json"), "utf8")
     );
-    assert.equal(moduleManifest.adapters.length, 13);
+    assert.equal(moduleManifest.adapters.length, 14);
+    const dshEntry = moduleManifest.adapters.find((entry) => entry.type === "dsh");
+    assert.equal(dshEntry?.module, "@mininglamp-oss/octo-runtime-adapter-dsh");
+    const dshModule = await import(`${pathToFileURL(installed).href}/dist/public/dsh.js`);
+    assert.equal(dshModule[dshEntry.export].metadata.type, "dsh");
+    assert.deepEqual(dshModule[dshEntry.export].metadata.protocolSupport.modes, ["canonical"]);
+    const dshDirectory = join(installed, "node_modules", dshEntry.module);
+    const dshNotice = await readFile(join(dshDirectory, "dist/dsh-sdk-NOTICE.txt"), "utf8");
+    const dshSource = JSON.parse(
+      await readFile(join(root, "packages/octo-runtime-adapter-dsh/package.json"), "utf8")
+    );
+    assert.ok(
+      dshNotice.includes(
+        `@deepseek-ai/dsh-sdk-client@${dshSource.dependencies["@deepseek-ai/dsh-sdk-client"]}`
+      )
+    );
+    assert.equal(metadata.dependencies["@deepseek-ai/dsh"], undefined);
+    assert.equal(metadata.dependencies["@deepseek-ai/dsh-sdk-client"], undefined);
+    for (const name of ["client", "protocol"]) {
+      const license = await readFile(
+        join(dshDirectory, "dist", `dsh-sdk-${name}-LICENSE.txt`),
+        "utf8"
+      );
+      assert.ok(license.includes("Copyright (c) 2026 DeepSeek"));
+      assert.ok(license.includes("Permission is hereby granted"));
+      const patch = `@deepseek-ai__dsh-sdk-${name}@${dshSource.dependencies["@deepseek-ai/dsh-sdk-client"]}.patch`;
+      assert.equal(
+        await readFile(join(dshDirectory, "dist", patch), "utf8"),
+        await readFile(join(root, "patches", patch), "utf8")
+      );
+    }
+    // 在隔离的离线安装目录中执行真实发行 Adapter，证明官方 Client 已随包收集且无需安装 Provider。
+    const dshFixture = join(consumer, "dsh-runtime.mjs");
+    await cp(join(root, "test/fixtures/dsh-runtime.mjs"), dshFixture);
+    const { invokeRequest } = await import(
+      pathToFileURL(join(root, "test/runtime-fixture.js")).href
+    );
+    const dshEvents = await Array.fromAsync(
+      dshModule.createDshAdapter().invoke(
+        invokeRequest({
+          workdir: directory,
+          approvalMode: "full_access",
+          agentConfig: { providerOptions: { dshBin: dshFixture } }
+        })
+      )
+    );
+    assert.equal(dshEvents.at(-1)?.type, "run.completed", JSON.stringify(dshEvents.at(-1)));
+    assert.equal(
+      dshEvents
+        .filter((event) => event.type === "message.delta" && event.payload.channel === "final")
+        .map((event) => event.payload.text)
+        .join(""),
+      "hello 世界"
+    );
+    const { DEFAULT_STREAM_LIMIT_POLICY } = await import(
+      `${pathToFileURL(installed).href}/dist/public/protocol.js`
+    );
+    const dshRequest = (mode, extraEnv = []) =>
+      invokeRequest({
+        workdir: directory,
+        approvalMode: "full_access",
+        agentConfig: { providerOptions: { dshBin: dshFixture } },
+        executionEnvOverrides: {
+          env_variables: [{ key: "OCTO_DSH_FIXTURE", value: mode }, ...extraEnv]
+        }
+      });
+    for (const [change, expected] of [
+      [
+        (request) => {
+          request.agentConfig.sandbox = "read-only";
+        },
+        "DSH_CONFIG_INVALID"
+      ],
+      [
+        (request) => {
+          request.context.items.push({
+            namespace: "octo.execution",
+            name: "actmode",
+            payload: { mode: "plan" }
+          });
+        },
+        "DSH_ACTMODE_UNSUPPORTED"
+      ],
+      [
+        (request) => {
+          request.agentConfig.providerOptions.requestTimeoutMs = 0;
+        },
+        "DSH_CONFIG_INVALID"
+      ],
+      [
+        (request) => {
+          request.agentConfig.providerOptions.args = ["界".repeat(1366)];
+        },
+        "DSH_CONFIG_INVALID"
+      ]
+    ]) {
+      const request = dshRequest("success");
+      change(request);
+      const events = await Array.fromAsync(dshModule.createDshAdapter().invoke(request));
+      assert.equal(events.length, 1);
+      assert.equal(events[0].type, "run.failed");
+      assert.equal(events[0].payload.code, expected);
+    }
+    const jumpedEvents = await Array.fromAsync(
+      dshModule.createDshAdapter().invoke(dshRequest("sequence-jump"))
+    );
+    assert.equal(jumpedEvents.at(-1)?.type, "run.completed", "native sequence jump");
+    const numericEvents = await Array.fromAsync(
+      dshModule.createDshAdapter().invoke(dshRequest("numeric-notification"), {
+        streamLimits: { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 }
+      })
+    );
+    assert.equal(numericEvents.at(-1)?.type, "run.completed", "raw-budget numeric notification");
+    for (const mode of ["oversized-initialize", "oversized-fragmented", "raw-no-newline"]) {
+      const events = await Array.fromAsync(
+        dshModule.createDshAdapter().invoke(dshRequest(mode), {
+          streamLimits: { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 }
+        })
+      );
+      assert.equal(events.at(-1)?.payload.code, "PROVIDER_MESSAGE_TOO_LARGE", mode);
+    }
+    if (process.platform !== "win32") {
+      const pidFile = join(directory, "dsh-child.pid");
+      try {
+        const events = await Array.fromAsync(
+          dshModule
+            .createDshAdapter()
+            .invoke(dshRequest("tree-exit", [{ key: "OCTO_DSH_CHILD_PID", value: pidFile }]))
+        );
+        assert.equal(events.at(-1)?.payload.code, "DSH_TRANSPORT_CLOSED");
+        const pid = Number(await readFile(pidFile, "utf8"));
+        assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+      } finally {
+        try {
+          process.kill(Number(await readFile(pidFile, "utf8")), "SIGKILL");
+        } catch (error) {
+          if (error.code !== "ESRCH" && error.code !== "ENOENT") throw error;
+        }
+      }
+    }
     const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
     assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");
     const grokModule = await import(

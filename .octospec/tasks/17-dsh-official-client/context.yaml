@@ -1,0 +1,20 @@
+task: 17-dsh-official-client
+baseline: 982a2fe7b976071f76b9626af4cb65c9d2e50d08
+read:
+  - AGENTS.md
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/tasks/17-dsh-adapter/brief.md
+  - .octospec/tasks/17-dsh-adapter/design.md
+  - .octospec/tasks/17-dsh-adapter/acceptance.md
+notes:
+  - 用户要求直接用最新版官方 Client，覆盖旧设计中的自实现决定。
+  - npm 发布包 README、类型与 JS 作为固定版本 API 依据；已实际调用 Desktop。
+  - 原孤儿进程组和原始行解析前上限证据不适用于官方 SDK，必须明确标记。
+  - OSS commit/PR 使用英文，保持实际 Git 作者与 Codex trailer。

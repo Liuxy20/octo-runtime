@@ -1,0 +1,125 @@
+diff --git a/lib/index.js b/lib/index.js
+index 76a77b2381f5ddfb2201abc01d1d9f537c1a0797..e1885d62e5e7ce77bb51b853e0bc3a7bc79a4f69 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -36,16 +36,22 @@ var JsonRpcLineTransport = class {
+ 	buffer = "";
+ 	decoder = new StringDecoder("utf8");
+ 	started = false;
++	options;
++	lineBytes = 0;
++	failure;
+ 	requestHandler;
+ 	notificationHandler;
+ 	pending = /* @__PURE__ */ new Map();
+-	constructor(input, output) {
++	constructor(input, output, options = {}) {
+ 		this.input = input;
+ 		this.output = output;
++		this.options = options;
++		if (options.maxLineBytes !== void 0 && (!Number.isSafeInteger(options.maxLineBytes) || options.maxLineBytes < 1))
++			throw new RangeError("maxLineBytes must be a positive safe integer");
+ 	}
+ 	/** Attach the input listeners and begin reading frames. Idempotent. */
+ 	start() {
+-		if (this.started) return;
++		if (this.started || this.failure) return;
+ 		this.started = true;
+ 		this.input.on("data", this.onData);
+ 		this.input.on("error", this.onInputError);
+@@ -54,11 +60,15 @@ var JsonRpcLineTransport = class {
+ 	/**
+ 	* Detach listeners and reject pending requests. Safe before {@link start}.
+ 	*/
+-	close() {
++	close(error = new Error("JSON-RPC transport closed")) {
++		this.failure ??= error;
+ 		this.input.off("data", this.onData);
+ 		this.input.off("error", this.onInputError);
+ 		this.input.off("end", this.onInputEnd);
+-		this.failPending(/* @__PURE__ */ new Error("JSON-RPC transport closed"));
++		this.buffer = "";
++		this.decoder = new StringDecoder("utf8");
++		this.lineBytes = 0;
++		this.failPending(this.failure);
+ 	}
+ 	/**
+ 	* Install the request handler, replacing any prior handler.
+@@ -86,6 +96,7 @@ var JsonRpcLineTransport = class {
+ 	* @returns the result; rejects per {@link JsonRpcTransportPeer.request}.
+ 	*/
+ 	request(method, params, signal) {
++		if (this.failure) return Promise.reject(this.failure);
+ 		const id = `req_${randomUUID().replaceAll("-", "")}`;
+ 		const message = {
+ 			jsonrpc: "2.0",
+@@ -151,8 +162,28 @@ var JsonRpcLineTransport = class {
+ 		});
+ 	}
+ 	onData = (chunk) => {
+-		this.buffer += typeof chunk === "string" ? chunk : this.decoder.write(chunk);
+-		this.drainLines();
++		if (this.failure) return;
++		const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
++		for (let offset = 0; offset < bytes.length && !this.failure;) {
++			const newline = bytes.indexOf(10, offset);
++			const end = newline < 0 ? bytes.length : newline;
++			this.lineBytes += end - offset;
++			// Count raw bytes before StringDecoder, concatenation or JSON.parse, including partial lines.
++			if (this.lineBytes > (this.options.maxLineBytes ?? Infinity)) {
++				const error = Object.assign(new Error("PROVIDER_MESSAGE_TOO_LARGE"), { code: "PROVIDER_MESSAGE_TOO_LARGE" });
++				this.close(error);
++				this.options.onError?.(error);
++				return;
++			}
++			this.buffer += this.decoder.write(bytes.subarray(offset, end));
++			if (newline >= 0) {
++				this.buffer += this.decoder.end() + "\n";
++				this.decoder = new StringDecoder("utf8");
++				this.lineBytes = 0;
++				this.drainLines();
++			}
++			offset = end + 1;
++		}
+ 	};
+ 	drainLines() {
+ 		for (;;) {
+@@ -165,12 +196,13 @@ var JsonRpcLineTransport = class {
+ 		}
+ 	}
+ 	onInputError = (error) => {
+-		this.failPending(error);
++		this.close(error);
++		this.options.onError?.(error);
+ 	};
+ 	onInputEnd = () => {
+ 		this.buffer += this.decoder.end();
+ 		this.drainLines();
+-		this.failPending(/* @__PURE__ */ new Error("JSON-RPC input closed"));
++		this.close(new Error("JSON-RPC input closed"));
+ 	};
+ 	async handleLine(line) {
+ 		let message;
+diff --git a/lib/types/transport.d.ts b/lib/types/transport.d.ts
+index f4800e0dcedfbd5edbf82d14de7ad11e4786b7b8..d87aecc5aac9000d1f618c09db9748a869297a0f 100644
+--- a/lib/types/transport.d.ts
++++ b/lib/types/transport.d.ts
+@@ -54,13 +54,16 @@ export declare class JsonRpcLineTransport implements JsonRpcTransportPeer {
+     private requestHandler;
+     private notificationHandler;
+     private readonly pending;
+-    constructor(input: Readable, output: Writable);
++    constructor(input: Readable, output: Writable, options?: {
++        maxLineBytes?: number;
++        onError?: (error: Error) => void;
++    });
+     /** Attach the input listeners and begin reading frames. Idempotent. */
+     start(): void;
+     /**
+      * Detach listeners and reject pending requests. Safe before {@link start}.
+      */
+-    close(): void;
++    close(error?: Error): void;
+     /**
+      * Install the request handler, replacing any prior handler.
+      * @param handler - resolves to the response `result`; a rejection becomes a

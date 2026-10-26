@@ -14,6 +14,7 @@
 | [octo-runtime-adapter-claude-code](octo-runtime-adapter-claude-code/README.md) | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
 | [octo-runtime-adapter-codebuddy](octo-runtime-adapter-codebuddy/README.md)     | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
 | [octo-runtime-adapter-codex](octo-runtime-adapter-codex/README.md)             | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
+| [octo-runtime-adapter-dsh](octo-runtime-adapter-dsh/README.md) | DeepSeek Harness 原生 SDK stdio 适配，复用已安装 Desktop/CLI，由 Kernel worker 调用 |
 | [octo-runtime-adapter-hermes](octo-runtime-adapter-hermes/README.md)           | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
 | [octo-runtime-adapter-grok-build](octo-runtime-adapter-grok-build/README.md)   | Grok CLI ACP 适配，共享通用 ACP client，由 Kernel worker 调用 |
 | [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.md)               | 通过 Kernel IPC 统一 invoke、cancel、probe 和交互响应，管理适配器与事件生命周期                                                                                  |

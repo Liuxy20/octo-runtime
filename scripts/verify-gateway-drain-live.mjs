@@ -23,12 +23,14 @@ const execute = promisify(execFile);
 const absolute = (path) => fileURLToPath(new URL(path, import.meta.url));
 const report = { endpoint: "https://im-test.deepminer.com.cn", platform: process.platform };
 const cliMode = process.argv.includes("--cli");
+const adapterType = process.argv.includes("--dsh") ? "dsh" : "codex";
 const failDelivery = process.argv.includes("--fail-delivery");
 const failCard = process.argv.includes("--fail-card");
 const cards = failCard || process.argv.includes("--cards");
 const instrumented = failDelivery || cards;
 let kernel, gateway;
 let stage = "accounts";
+let dshFault = false;
 const ensure = (condition, code) => {
   if (!condition) throw new Error(code);
 };
@@ -134,10 +136,10 @@ try {
   }
   ensure(group, "QA_SHARED_TEST_GROUP_REQUIRED");
   report.groupFingerprint = createHash("sha256").update(group.group_no).digest("hex").slice(0, 12);
-  const history = async () => {
+  const history = async (channelId = group.group_no, channelType = 2) => {
     const data = await cli(receiver, ["message", "sync"], {
-      channel_id: group.group_no,
-      channel_type: 2,
+      channel_id: channelId,
+      channel_type: channelType,
       limit: 100
     });
     return (data.messages ?? []).map((message) => ({
@@ -152,11 +154,11 @@ try {
   if (process.argv.includes("--inspect")) {
     report.ready = true;
   } else {
-    const send = (content) =>
+    const send = (content, channelId = group.group_no, channelType = 2, mentioned = true) =>
       cli(sender, ["message", "send"], {
-        channel_id: group.group_no,
-        channel_type: 2,
-        payload: { type: 1, content, mention: { uids: [receiver.id] } }
+        channel_id: channelId,
+        channel_type: channelType,
+        payload: { type: 1, content, ...(mentioned ? { mention: { uids: [receiver.id] } } : {}) }
       });
     stage = "kernel";
     const manifest = join(directory, "adapters.json");
@@ -165,6 +167,11 @@ try {
       JSON.stringify({
         version: 1,
         adapters: [
+          {
+            type: "dsh",
+            module: absolute("../packages/octo-runtime-adapter-dsh/dist/index.js"),
+            export: "dshAdapter"
+          },
           {
             type: "codex",
             module: absolute("../packages/octo-runtime-adapter-codex/dist/index.js"),
@@ -184,6 +191,8 @@ try {
     kernel = createKernelService({
       endpoint,
       manifest,
+      configurations: () =>
+        dshFault ? { dsh: { providerOptions: { command: join(directory, "absent-dsh") } } } : {},
       workerEntrypoint: absolute("../packages/octo-runtime-executor-kernel/dist/runner.js")
     });
     await kernel.initialize();
@@ -238,7 +247,7 @@ OctoConnector.prototype.card = async function (...args) {
                 typing: false,
                 approval_mode: "full_access",
                 codex_retry: { enabled: false },
-                adapter: { adapter_type: "codex", workdir: directory }
+                adapter: { adapter_type: adapterType, workdir: directory }
               }
             ]
           }
@@ -382,6 +391,112 @@ OctoConnector.prototype.card = async function (...args) {
       async () => (await gateway.status()).bots?.[0]?.state === "online",
       "QA_GATEWAY_OFFLINE"
     );
+    if (adapterType === "dsh") {
+      stage = "admission";
+      const previousMessages = new Set((await history()).map((message) => message.message_id));
+      const previousContexts = contexts;
+      const groupMarker = `GROUP_${randomUUID().replaceAll("-", "")}`;
+      await send("Reply DENIED_MISSING_MENTION", group.group_no, 2, false);
+      await send(`Remember ${groupMarker}. Reply with exactly ${groupMarker}. Do not use tools.`);
+      await waitFor(
+        async () =>
+          (await history()).some(
+            (message) =>
+              message.from_uid === receiver.id && message.payload?.content?.includes(groupMarker)
+          ),
+        "QA_GROUP_REPLY_MISSING",
+        90000
+      );
+      await waitFor(
+        async () => (await gateway.status()).bots[0].workingTasks === 0,
+        "QA_GROUP_STILL_ACTIVE"
+      );
+      const replies = (await history()).filter(
+        (message) =>
+          !previousMessages.has(message.message_id) &&
+          message.from_uid === receiver.id &&
+          message.payload?.type === 1
+      );
+      ensure(
+        replies.length === 1 && (cliMode || contexts === previousContexts + 1),
+        "QA_MISSING_MENTION_INVOKED"
+      );
+      const followupMarker = `FOLLOWUP_${randomUUID().replaceAll("-", "")}`;
+      await send(
+        `Reply with exactly ${followupMarker} followed by the marker I asked you to remember in my previous message.`
+      );
+      await waitFor(
+        async () =>
+          (await history()).some(
+            (message) =>
+              message.from_uid === receiver.id &&
+              message.payload?.content?.includes(followupMarker) &&
+              message.payload.content.includes(groupMarker)
+          ),
+        "QA_GROUP_RESUME_MISSING",
+        90000
+      );
+      await waitFor(
+        async () => (await gateway.status()).bots[0].workingTasks === 0,
+        "QA_GROUP_FOLLOWUP_ACTIVE"
+      );
+      const dmMarker = `DM_${randomUUID().replaceAll("-", "")}`;
+      if (!process.argv.includes("--skip-dm")) {
+        await send(`Reply with exactly ${dmMarker}. Do not use tools.`, receiver.id, 1, false);
+        await waitFor(
+          async () =>
+            (await history(sender.id, 1)).some(
+              (message) =>
+                message.from_uid === receiver.id && message.payload?.content?.includes(dmMarker)
+            ),
+          "QA_DM_REPLY_MISSING",
+          90000
+        );
+        await waitFor(
+          async () => (await gateway.status()).bots[0].workingTasks === 0,
+          "QA_DM_STILL_ACTIVE"
+        );
+      }
+      report.admission = {
+        dm: process.argv.includes("--skip-dm") ? "BLOCKED: QA peers are not friends" : true,
+        groupMention: true,
+        missingMentionDenied: true,
+        groupSessionResumed: true
+      };
+      stage = "provider-failure";
+      const failureBefore = new Set((await history()).map((message) => message.message_id));
+      dshFault = true;
+      try {
+        await send("Reply SHOULD_NOT_EXECUTE. Do not use tools.");
+        await waitFor(
+          async () =>
+            (await history()).some(
+              (message) =>
+                !failureBefore.has(message.message_id) &&
+                message.from_uid === receiver.id &&
+                message.payload?.content?.includes("OH-ADP-3002")
+            ),
+          "QA_COMMON_FAILURE_REPLY_MISSING"
+        );
+        await waitFor(
+          async () => (await gateway.status()).bots[0].workingTasks === 0,
+          "QA_FAILED_TASK_ACTIVE"
+        );
+        if (cards) {
+          ensure(
+            (await readFile(cardAcks, "utf8"))
+              .trim()
+              .split("\n")
+              .map(JSON.parse)
+              .some((frame) => frame.state === "error"),
+            "QA_FAILURE_CARD_MISSING"
+          );
+        }
+      } finally {
+        dshFault = false;
+      }
+      report.providerFailure = { commonCode: "OH-ADP-3002", ...(cards ? { errorCard: true } : {}) };
+    }
     const before = new Set((await history()).map((message) => message.message_id));
     const marker = `DRAIN_QA_${randomUUID().replaceAll("-", "")}`;
     stage = "invoke";
@@ -494,7 +609,7 @@ OctoConnector.prototype.card = async function (...args) {
         : 0;
     if (failDelivery || failCard) ensure(sendAttempts === 1, "QA_FAULT_SEND_REPEATED");
     const result = {
-      realCodexTool: true,
+      [adapterType === "dsh" ? "realDshTool" : "realCodexTool"]: true,
       terminal: true,
       ...(cards && !failCard
         ? { terminalCardAcknowledgedAtStop: true, sameCardMessage: true }

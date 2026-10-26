@@ -35,7 +35,7 @@ The Executor Kernel provides local execution. Channel Gateway and Loop Daemon ar
 
 ## Get Started
 
-You need **Node.js 24.x or 26.x (LTS)** and an installed, authenticated Provider. Runtime does not install Provider software or sign in for you.
+You need **Node.js 24.x or 26.x** and an installed, authenticated Provider. This requirement applies to end users running the installed CLI or SDK, not only to the development/build environment. Node.js 22 is unsupported; upgrade to Node.js 24 before installing Runtime. Runtime does not install Provider software or sign in for you.
 
 The supported range is `^24.0.0 || ^26.0.0`. Node.js 25 and future majors are outside this range. CI checks installation, build, types, automated tests, and packed CLI/SDK consumption on both supported majors. New LTS majors are added after the same checks pass; support is reviewed at each LTS transition and before a supported major reaches end of life. Removal is announced in release notes before changing the engine range.
 

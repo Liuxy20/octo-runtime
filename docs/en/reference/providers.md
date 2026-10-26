@@ -12,6 +12,7 @@ The table describes the checked-in Adapters. Confirm that your actual Provider v
 | --------------------------------------------------------------- | ------------------ | ------------------- | ---------------------------------------------- |
 | `codex`                                                         | app-server         | native + canonical  | stdio + HTTP                                   |
 | `claude-code`                                                   | stream-json        | native + canonical  | stdio + HTTP                                   |
+| `dsh` | DeepSeek Harness SDK JSON-RPC stdio | canonical | no per-invocation configuration |
 | `acp`, `hermes`, `kimi-code`, `mcode`, `qodercli`, `qoderclicn` | ACP                | canonical           | stdio; HTTP when native capability is declared |
 | `opencode`                                                      | OpenCode CLI       | canonical           | local stdio + remote HTTP                      |
 | `codebuddy`                                                     | Provider CLI       | canonical           | Unsupported                                    |

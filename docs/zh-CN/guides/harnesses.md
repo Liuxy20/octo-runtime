@@ -4,6 +4,8 @@
 
 Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、工具执行和会话管理。请使用运行 Runtime 的操作系统账号安装并登录 Harness；Adapter 本身已包含在 Runtime 中，无需另外全局安装。
 
+运行已安装的 Runtime CLI 或 SDK 需要 Node.js **24.x 或 26.x**（`^24.0.0 || ^26.0.0`），这不是仅针对源码编译的要求。Node.js 22 不在支持范围内，请先升级到 Node.js 24。
+
 ## 选择 Harness
 
 每项简述安装配置方式，并附官网链接。“Runtime 启动方式”记录当前源码默认使用的命令，协议参数和任务内容由 Runtime 提供。
@@ -22,6 +24,8 @@ Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、�
 | `openclaw`    | 连接已运行的 Gateway                                                      | 按 [OpenClaw 官方入门指南](https://docs.openclaw.ai/start/getting-started)安装、完成初始化并启动 Gateway。配置 Runtime 连接并指定 `provider_agent_id`，例如 `main`；启动 Executor Kernel 不会同时启动该 Gateway。                                    |
 | `zcode-gui`   | ZCode Desktop 内置客户端                                                  | 安装 [ZCode Desktop](https://zcode.z.ai/cn/docs/install)，在应用中配置模型账号。Adapter 依次检查 `ZCODE_BIN`、`PATH` 和桌面安装目录，未能自动识别客户端时可设置 `ZCODE_BIN`。                                                                        |
 | `antigravity` | `agy` 的 stream-json 无头模式                                             | 按 [Antigravity 官方指南](https://antigravity.google/docs/getting-started?tab=cli)安装 CLI，先交互运行一次 `agy` 完成认证。确保 Runtime 的 `PATH` 能找到该可执行文件，所需 CLI 能力见[无头模式文档](https://antigravity.google/docs/cli/headless/)。 |
+
+`dsh` 使用已安装 DeepSeek Harness 0.2.1-rc.3 的 `dsh --profile sdk` 或 macOS Desktop 内嵌 CLI。先在 Desktop 登录，再以同一系统账号启动 Runtime；默认账户 provider 为 deepseek-account，只接受显式 full_access。发现、SDK 注册与配置见 [DSH Adapter](../../../packages/octo-runtime-adapter-dsh/README.md)。
 
 通用 `acp` 是接入其他 ACP Harness 的 Adapter 工厂，不是需要另外安装的 Harness。通过 `createAcpAdapter` 配置命令和参数，并将返回的 Adapter 注册到 worker 或 manifest；默认 CLI manifest 未注册这个通用类型，见[工厂实现](../../../packages/octo-runtime-adapter-acp/src/index.ts)和 [ACP 文档](https://agentclientprotocol.com/get-started/introduction)。
 

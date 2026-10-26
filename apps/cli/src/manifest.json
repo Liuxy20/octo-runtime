@@ -2,6 +2,11 @@
   "version": 1,
   "adapters": [
     {
+      "type": "dsh",
+      "module": "@mininglamp-oss/octo-runtime-adapter-dsh",
+      "export": "dshAdapter"
+    },
+    {
       "type": "codex",
       "module": "@mininglamp-oss/octo-runtime-adapter-codex",
       "export": "codexAdapter"

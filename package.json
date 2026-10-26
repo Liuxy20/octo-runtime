@@ -6,6 +6,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
+    "./adapters/dsh": {
+      "types": "./dist/public/dsh.d.ts",
+      "import": "./dist/public/dsh.js"
+    },
     "./executor-kernel/ipc-fixtures.json": "./packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json",
     "./protocol/schema.json": "./packages/octo-runtime-protocol/schema/protocol.schema.json",
     "./executor-kernel/ipc-schema.json": "./packages/octo-runtime-protocol/schema/kernel-ipc.schema.json",
@@ -90,6 +94,7 @@
     "format:check": "prettier --check \"{apps,packages,public,scripts,test,test-support}/**/*.{js,mjs,cjs,ts,mts,cts,tsx,json,yml,yaml}\" \".github/**/*.{yml,yaml,md}\" \"*.{json,yml,yaml}\" CONTRIBUTING.md"
   },
   "dependencies": {
+    "@mininglamp-oss/octo-runtime-adapter-dsh": "workspace:*",
     "@mininglamp-oss/octo-runtime-extra-webui": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-acp": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-antigravity": "workspace:*",
@@ -119,6 +124,7 @@
     "@eslint/js": "^10.0.1",
     "@mininglamp-oss/octo-runtime-acp-client": "workspace:*",
     "@types/node": "^24.0.0",
+    "esbuild": "0.28.2",
     "eslint": "^10.12.0",
     "prettier": "3.9.10",
     "typescript": "^6.0.3",

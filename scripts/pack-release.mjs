@@ -3,6 +3,7 @@ import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
+import { bundleDshClient, dshAdapterName, dshClientName } from "./bundle-dsh-client.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const readManifest = async (directory) =>
@@ -56,7 +57,11 @@ async function collect(name, from) {
     return;
   }
   packages.set(name, { path, source });
-  for (const dependency of Object.keys(source.dependencies ?? {})) await collect(dependency, path);
+  for (const dependency of Object.keys(source.dependencies ?? {})) {
+    // 官方 Client 的实际 JS 在 Adapter 内用标准 bundler 收集；不遍历其自动安装 Provider 的依赖。
+    if (name === dshAdapterName && dependency === dshClientName) continue;
+    await collect(dependency, path);
+  }
   if (Object.keys(source.optionalDependencies ?? {}).length) {
     throw new Error(`发行依赖 ${name} 包含可选依赖，需要核对目标平台后再发布`);
   }
@@ -72,15 +77,18 @@ try {
     await mkdir(target, { recursive: true });
     if (workspaces.has(source.name)) {
       await cp(join(path, "dist"), join(target, "dist"), { recursive: true });
+      if (source.name === dshAdapterName) await bundleDshClient(path, target);
       if (source.exports?.["./config-schema.json"]) {
         await cp(join(path, "config-schema.json"), join(target, "config-schema.json"));
       }
       const { scripts, devDependencies, packageManager, ...metadata } = source;
       const dependencies = Object.fromEntries(
-        Object.keys(source.dependencies ?? {}).map((name) => [
-          name,
-          workspaces.has(name) ? releaseVersion : packages.get(name).source.version
-        ])
+        Object.keys(source.dependencies ?? {})
+          .filter((name) => source.name !== dshAdapterName || name !== dshClientName)
+          .map((name) => [
+            name,
+            workspaces.has(name) ? releaseVersion : packages.get(name).source.version
+          ])
       );
       await writeFile(
         join(target, "package.json"),

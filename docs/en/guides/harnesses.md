@@ -4,6 +4,8 @@
 
 A Harness is the Agent program behind an Adapter: it manages model calls, tools, and sessions. Install and authenticate the Harness under the operating-system account that runs Runtime; the Adapter itself is bundled with Runtime and needs no separate global installation.
 
+Running the installed Runtime CLI or SDK requires Node.js **24.x or 26.x** (`^24.0.0 || ^26.0.0`), not just when compiling from source. Node.js 22 is unsupported; upgrade to Node.js 24 first.
+
 ## Choose a Harness
 
 Each row gives a short setup summary and the official documentation. The launch column records this source revision's default command; Runtime supplies the protocol flags and task content.
@@ -22,6 +24,8 @@ Each row gives a short setup summary and the official documentation. The launch 
 | `openclaw`    | Connects to an existing Gateway                                           | Install OpenClaw, complete onboarding, and start its Gateway using the [official getting-started guide](https://docs.openclaw.ai/start/getting-started). Configure the Runtime connection and specify `provider_agent_id`, such as `main`; starting Executor Kernel does not start that Gateway.               |
 | `zcode-gui`   | ZCode Desktop's embedded client                                           | Install [ZCode Desktop](https://zcode.z.ai/cn/docs/install) and configure the model account in the application. The Adapter checks `ZCODE_BIN`, then `PATH`, then desktop installation locations; use `ZCODE_BIN` if the client is not detected.                                                               |
 | `antigravity` | `agy` in stream-json headless mode                                        | Install Antigravity CLI using the [official setup guide](https://antigravity.google/docs/getting-started?tab=cli), then run interactive `agy` once to authenticate. Keep the executable on Runtime's `PATH`; see the [headless guide](https://antigravity.google/docs/cli/headless/) for required CLI support. |
+
+`dsh` runs an installed DeepSeek Harness 0.2.1-rc.3 through `dsh --profile sdk` or the macOS Desktop embedded CLI. Sign in to Desktop under the same OS account. It defaults to deepseek-account and requires explicit full_access. See the [DSH Adapter](../../../packages/octo-runtime-adapter-dsh/README.md) for discovery, SDK registration and configuration boundaries.
 
 Generic `acp` is a reusable Adapter factory for another ACP-compatible Harness, not a separate Harness to install. Configure its command and arguments through `createAcpAdapter` and register the resulting Adapter in your worker or manifest; it is not an entry in the default CLI manifest. See the [factory implementation](../../../packages/octo-runtime-adapter-acp/src/index.ts) and [ACP documentation](https://agentclientprotocol.com/get-started/introduction).
 

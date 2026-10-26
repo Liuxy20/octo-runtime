@@ -94,7 +94,13 @@ export interface ProbeResult {
 export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
   metadata: AdapterMetadata;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
-  /** Execute one provider turn, optionally reporting watchdog progress. */
+  /**
+   * Execute one provider turn, optionally reporting watchdog progress.
+   * Iteration may throw on contract rejection (including defineAdapter's protocol/MCP checks).
+   * Core rejects unsupported approval/protocol before admission; after admission it converts
+   * iteration errors to failure events and independently verifies cleanup. Canonical adapters
+   * should yield a failure terminal after confirmed cleanup for expected execution failures.
+   */
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<TOutput>;
 }
 

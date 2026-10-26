@@ -1,0 +1,18 @@
+task: 17-dsh-official-reviewed
+withdrawal: 175
+baseline: a35aeae3a3b5708449bb6ebd77a9094cff705e33
+read:
+  - AGENTS.md
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/reasoning.md
+  - .octospec/tasks/17-dsh-official-client/brief.md
+notes:
+  - 官方 npm 源码及类型为固定版本边界依据。
+  - OSS commit 和 PR 使用英文，保持配置作者和 Codex trailer。
+  - 补丁属于下游变更，不声称已经上游发布。

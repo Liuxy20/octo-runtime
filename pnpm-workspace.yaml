@@ -2,12 +2,28 @@ packages:
   - "apps/*"
   - "packages/*"
 
+# Security fixes for the official DSH package's transitive Provider graph.
+overrides:
+  "undici@8.11.2": "8.12.2"
+  "zod@4.4.3": "4.6.6"
+  "@modelcontextprotocol/client@2.2.0": "2.3.0"
+  "fflate@0.8.2": "0.8.3"
+
 allowBuilds:
   esbuild: true
   # Reviewed native watcher install hook; retain strict checks for other packages.
   "@parcel/watcher@2.6.0": true
+  # Runtime uses the installed Desktop, not npm Provider native helpers.
+  "@deepseek-ai/dsh-subprocess-local@0.2.1-rc.3": false
+  "@google/genai@2.21.0": false
+  "koffi@3.1.1": false
+  "node-pty@1.2.0-beta.15": false
+  "protobufjs@7.6.6": false
 
 linkWorkspacePackages: true
 preferWorkspacePackages: true
 saveWorkspaceProtocol: true
 sharedWorkspaceLockfile: true
+patchedDependencies:
+  "@deepseek-ai/dsh-sdk-client@0.2.1-rc.3": patches/@deepseek-ai__dsh-sdk-client@0.2.1-rc.3.patch
+  "@deepseek-ai/dsh-sdk-protocol@0.2.1-rc.3": patches/@deepseek-ai__dsh-sdk-protocol@0.2.1-rc.3.patch
