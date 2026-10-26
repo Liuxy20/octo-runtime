@@ -52,6 +52,8 @@
 
 ## 当前任务
 
+- [Issue 58：Windows CLI 兼容修复](tasks/58-windows-cli-signals/brief.md)：修复 foreground/module-loading/Playboard 的真实控制台测试、worker 关闭竞态及 Playboard 清理覆盖主结果；SDK 公共接口保持。验证结果见[实施记录](tasks/58-windows-cli-signals/implementation.md)。
+
 - [Issue 184：Playboard 短临时 IPC 与测试竞态](tasks/184-ci-ipc-reliability/brief.md)：常驻 Home 和端点保持现状；Unix Playboard 使用固定短 `/tmp` 私有目录，并修复 ready JSON 发布与 DSH 后代清理时序。实施准备度见 [97/100 评估](tasks/184-ci-ipc-reliability/assessment.md)。
 
 - [Issue 93/42：恢复缺口收敛](tasks/93-42-recovery-closure/brief.md)：交付已同步`main@81284c9`。PR96已合入，新增规划及真实恢复入口；PR181审查后隔离QA CLI账号库，并按用户设计补齐普通执行的规范token注入，OpenClaw保持例外。主线更新后Node 1843项与WebUI 35项通过，真实恢复及审查事实边界见[整改记录](tasks/93-42-recovery-closure/review-remediation.md)。[M0-M6](tasks/93-42-recovery-closure/plan.md)、[G01-G12门槛](tasks/93-42-recovery-closure/acceptance.md)与[首轮审查](tasks/93-42-recovery-closure/verification.md)保留；95/100是准备度，部署reason12、原事故和完整现场矩阵未关闭。

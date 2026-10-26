@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { prepareInvokeInput as preparePlayboard } from "@mininglamp-oss/octo-runtime-executor-core";
 import { once } from "node:events";
+import { createWindowsConsole, consoleProcessId } from "../test-support/windows-console.mjs";
 import { WebSocketServer } from "ws";
 import {
   assertHostFrame,
@@ -74,13 +75,28 @@ async function fixture(t, { legacyOpenClaw = false } = {}) {
   return { directory, manifest };
 }
 
-function execute(
+async function execute(
   { directory, manifest },
   value,
-  { args = [], signalOnFrame = false, env = {} } = {}
+  { args = [], signalOnFrame = false, env = {}, cleanupFailure } = {}
 ) {
+  const consoleControl = signalOnFrame ? await createWindowsConsole() : undefined;
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [cli, "playboard", "--manifest", manifest, ...args], {
+    const childArgs = [
+      ...(cleanupFailure
+        ? [
+            "--experimental-test-module-mocks",
+            "--import",
+            pathToFileURL(join(root, "test/fixtures/playboard-cleanup-failure.mjs")).href
+          ]
+        : []),
+      cli,
+      "playboard",
+      "--manifest",
+      manifest,
+      ...args
+    ];
+    const childOptions = {
       cwd: directory,
       env: {
         ...process.env,
@@ -89,37 +105,79 @@ function execute(
         OPENCLAW_HOME: join(directory, "absent-openclaw"),
         OCTO_RUNTIME_HOME: join(directory, "unconfigured-home"),
         OCTO_RUNTIME_DEBUG: "0",
+        ...(cleanupFailure ? { TEST_PLAYBOARD_CLEANUP: cleanupFailure } : {}),
         ...env
       },
-      stdio: ["pipe", "pipe", "pipe"]
-    });
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true
+    };
+    const child = consoleControl
+      ? consoleControl.spawn(childArgs, childOptions)
+      : spawn(process.execPath, childArgs, childOptions);
     let stdout = "",
       stderr = "",
       signalled = false;
-    const deadline = setTimeout(() => {
-      child.kill("SIGKILL");
+    let targetPid = consoleControl ? undefined : child.pid;
+    let shutdownStarted;
+    let interruption = Promise.resolve();
+    let timedOut = false;
+    const deadline = setTimeout(async () => {
+      timedOut = true;
+      if (consoleControl && targetPid) {
+        try {
+          await consoleControl.terminate(targetPid);
+        } catch (error) {
+          return reject(new AggregateError([new Error("playboard did not exit"), error]));
+        }
+      } else child.kill("SIGKILL");
       reject(new Error("playboard did not exit"));
     }, 15_000);
     child.on("error", reject);
+    const interruptWhenReady = () => {
+      if (signalOnFrame && !signalled && targetPid && stdout.includes('"type":"message.delta"')) {
+        signalled = true;
+        shutdownStarted = Date.now();
+        if (consoleControl) {
+          interruption = consoleControl.interrupt(targetPid);
+          void interruption.catch(reject);
+        } else child.kill("SIGINT");
+      }
+    };
     child.stdout.on("data", (chunk) => {
       stdout += chunk;
-      if (signalOnFrame && !signalled && stdout.includes('"type":"message.delta"')) {
-        signalled = true;
-        child.kill("SIGINT");
-      }
+      interruptWhenReady();
     });
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
+      if (consoleControl) targetPid ??= consoleProcessId(stderr);
+      interruptWhenReady();
     });
-    child.on("close", (code, signal) => {
+    child.on("close", async (code, signal) => {
       clearTimeout(deadline);
+      if (timedOut) return;
+      // CLI 与 launch bridge 退出不代表另一个事件投递进程已经结束。
+      // 返回结果、清理 fixture 及进入后续调用前，也须等待该所属进程退出。
+      try {
+        await interruption;
+      } catch (error) {
+        reject(error);
+        return;
+      }
       const frames = stdout.trim()
         ? stdout
             .trim()
             .split("\n")
             .map((line) => JSON.parse(line))
         : [];
-      resolve({ code, signal, stdout, stderr, frames });
+      resolve({
+        code,
+        signal,
+        stdout,
+        stderr,
+        frames,
+        pid: targetPid,
+        shutdownMs: shutdownStarted === undefined ? undefined : Date.now() - shutdownStarted
+      });
     });
     child.stdin.end(typeof value === "string" ? value : JSON.stringify(value));
   });
@@ -332,6 +390,44 @@ test("provider failure and deadline exit nonzero with terminal frames", async (t
   }
 });
 
+for (const cleanupFailure of ["incomplete", "reject"]) {
+  test(`Playboard retains primary outcomes when cleanup is ${cleanupFailure}`, async (t) => {
+    const settings = await fixture(t);
+    // 故障结果会让产品保留临时状态；实际进程已由注入 fixture 关闭，目录仍归本测试回收。
+    // macOS socket 路径预算有限，临时根不叠加 fixture 与系统 TMPDIR 的长度。
+    const temporary = await mkdtemp(
+      join(process.platform === "darwin" ? "/tmp" : settings.directory, "ocp-")
+    );
+    t.after(() => rm(temporary, { recursive: true, force: true }));
+    const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
+    const cleanupCode =
+      cleanupFailure === "reject" ? "TEST_CLEANUP_REJECTED" : "COMPONENT_CLEANUP_INCOMPLETE";
+    for (const [request, expected] of [
+      [echoInput("normal"), "completed"],
+      [echoInput("fail"), "failed"],
+      [input("approval", { protocol_mode: "canonical" }), "pending"]
+    ]) {
+      const result = await execute(settings, request, { cleanupFailure, env });
+      assert.notEqual(result.code, 0, result.stderr);
+      assert.equal(result.signal, null);
+      assert.match(result.stderr, new RegExp(cleanupCode));
+      if (expected === "pending") assert.match(result.stderr, /PLAYBOARD_INTERACTION_REQUIRED/);
+      else terminal(result, expected);
+      if (expected === "failed") assert.match(result.stderr, /Playboard exited with code 1/);
+    }
+    const cancelled = await execute(settings, echoInput("hang"), {
+      signalOnFrame: true,
+      cleanupFailure,
+      env
+    });
+    assert.notEqual(cancelled.code, 0, cancelled.stderr);
+    assert.equal(cancelled.signal, null);
+    terminal(cancelled, "cancelled");
+    assert.match(cancelled.stderr, /Playboard exited with code 130/);
+    assert.match(cancelled.stderr, new RegExp(cleanupCode));
+  });
+}
+
 test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (t) => {
   const settings = await fixture(t);
   const temporary = join(settings.directory, "cancellation-".repeat(5));
@@ -339,19 +435,26 @@ test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (
   const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
   const result = await execute(settings, echoInput("hang"), { signalOnFrame: true, env });
   assert.equal(result.code, 130, result.stderr);
+  assert.equal(result.signal, null);
+  assert.ok(result.shutdownMs < 7_000, `close took ${result.shutdownMs}ms`);
   const frame = result.frames.find((frame) => frame.type === "message.delta");
-  if (frame) {
-    assert.throws(() => process.kill(JSON.parse(frame.payload.text).hostPid, 0), {
-      code: "ESRCH"
-    });
-    assert.throws(() => process.kill(JSON.parse(frame.payload.text).daemonPid, 0), {
-      code: "ESRCH"
-    });
-  }
-  terminal(result, "cancelled");
+  assert.ok(frame, "cancellation must start after execution reports its owned PIDs");
+  assert.throws(() => process.kill(JSON.parse(frame.payload.text).hostPid, 0), {
+    code: "ESRCH"
+  });
+  assert.throws(() => process.kill(JSON.parse(frame.payload.text).daemonPid, 0), {
+    code: "ESRCH"
+  });
+  assert.throws(() => process.kill(result.pid, 0), { code: "ESRCH" });
   assert.deepEqual(await readdir(temporary), []);
   const next = await execute(settings, echoInput("after cancellation"), { env });
   assert.equal(next.code, 0, next.stderr);
+  terminal(next, "completed");
+  t.diagnostic(
+    `${process.platform === "win32" ? "CTRL_C_EVENT" : "SIGINT"}: code=${result.code}, signal=${result.signal}, close=${result.shutdownMs}ms; owned PIDs gone; next invocation completed`
+  );
+  // 在资源与后续调用断言之后检查源终态，区分控制台处理成功与执行结果可见性。
+  terminal(result, "cancelled");
 });
 
 test("malformed stdin, unknown arguments and unsupported native mode fail clearly", async (t) => {

@@ -1,0 +1,25 @@
+brief: .octospec/tasks/58-windows-cli-signals/brief.md
+code_baseline: a3be719cb189dffedf615fd34a7851e703f5038d
+phase: finish
+scope: issue-58-windows-cli-shutdown
+injected:
+  - { id: runtime-architecture, source: repo, reason: "服务拓扑与 SDK 公共接口保持" }
+  - { id: runtime-protocol-design, source: repo, reason: "取消请求与执行终态" }
+  - { id: runtime-local-execution, source: repo, reason: "worker 所有权、IPC 与 EOF 排空" }
+  - { id: runtime-lifecycle, source: repo, reason: "关闭预算与所属资源回收" }
+  - { id: runtime-context-extensions, source: repo, reason: "Kernel 路径规则匹配" }
+  - { id: runtime-invoke-input, source: repo, reason: "公共执行输入保持" }
+  - { id: runtime-output-protocol, source: repo, reason: "保留原始帧和唯一终态" }
+  - { id: runtime-stateless, source: repo, reason: "不改变执行状态存储" }
+  - { id: runtime-engineering, source: repo, reason: "中文就近注释与隔离 fake Provider 验证" }
+  - { id: commit, source: repo, reason: "任务记录与提交范围" }
+files_expected:
+  - apps/cli/src/playboard.ts
+  - packages/octo-runtime-executor-kernel/src/serve.ts
+  - test/cli-foreground.test.js
+  - test/module-loading.test.js
+  - test/playboard.test.js
+  - test-support/windows-console.mjs
+  - test-support/windows-console-control.cs
+  - test/fixtures/playboard-cleanup-failure.mjs
+updated_at: 2026-10-26T07:11:54.744Z
