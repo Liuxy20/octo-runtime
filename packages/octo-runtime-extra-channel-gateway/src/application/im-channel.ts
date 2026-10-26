@@ -5,12 +5,17 @@ import { shutdownDeadline, withinShutdown } from "@mininglamp-oss/octo-runtime-h
  * 管理会话、排队、取消和交互归属；平台协议交给 connector，领域业务交给发起方。
  */
 import { randomUUID } from "node:crypto";
-import { assertModelInputParts, failurePayload } from "@mininglamp-oss/octo-runtime-protocol";
+import {
+  assertModelInputParts,
+  failurePayload,
+  failureMessage
+} from "@mininglamp-oss/octo-runtime-protocol";
 import { ImImageInputError } from "../transport/image-input.js";
 import { performance } from "node:perf_hooks";
 import type {
   InteractionRequestedPayload,
   InteractionResponse,
+  FailureEnvelope,
   InvokeEnvironment
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type {
@@ -68,6 +73,7 @@ export class ImRuntime {
   #draining = false;
   #ownerStopped?: () => void;
   readonly #drainErrors: unknown[] = [];
+  #finishIncomplete?: Error;
   #state: ImConnectionState = "stopped";
   #reconnect?: NodeJS.Timeout;
   #connecting?: Promise<void>;
@@ -78,6 +84,7 @@ export class ImRuntime {
   #error?: string;
   #working = 0;
   readonly #busyNotifications = new Map<string, Promise<void>>();
+  readonly #failureNotifications = new Map<string, Promise<void>>();
   readonly #busyNotifiedAt = new Map<string, number>();
   #retry = 0;
   #disconnecting?: Promise<void>;
@@ -280,10 +287,11 @@ export class ImRuntime {
     this.#reconnect = setTimeout(wake, Math.min(delayMs, 2_147_483_647));
     this.#reconnect.unref();
   }
-  #diagnostic(code: string, runId?: string): void {
+  #diagnostic(code: string, runId?: string, data: Record<string, unknown> = {}): void {
     try {
       this.dependencies.log?.("warn", "channel.diagnostic", {
         code,
+        ...data,
         endpoint_id: imBotIdentity(this.config),
         ...(runId ? { run_id: runId } : {})
       });
@@ -419,8 +427,21 @@ export class ImRuntime {
       return;
     }
     let session: ImSession | undefined;
+    // 只有 read 的同步失败属于执行前存储故障，排队、控制及后续保存不进入此分类。
     try {
       session = this.#session(key);
+    } catch {
+      const failure = failurePayload(
+        { code: "IM_SESSION_STORE_FAILED" },
+        {
+          stage: "channel_session_read",
+          defaultDomain: "runtime"
+        }
+      ).failure;
+      void this.#notifyFailure(message, failure).finally(() => this.#seen.delete(dedupe));
+      return;
+    }
+    try {
       if (command === "/reset" || command === "/new") {
         try {
           const binding = this.#sessionStore.reset(key, message.messageId);
@@ -472,7 +493,7 @@ export class ImRuntime {
       this.#enqueue(message, key);
     } catch {
       this.#seen.delete(dedupe);
-      this.#diagnostic("IM_SESSION_STORE_FAILED");
+      this.#diagnostic("IM_INBOUND_PROCESSING_FAILED");
     } finally {
       if (session) this.#releaseSession(key, session);
     }
@@ -548,7 +569,9 @@ export class ImRuntime {
       void this.#reply(
         message,
         previous.text === message.text
-          ? "该消息已经提交，请查看原执行结果。"
+          ? previous.notSubmittedFailure
+            ? `原消息尚未提交，请修复故障后重新发送。\n错误码：${previous.notSubmittedFailure.code}\n诊断编号：${previous.notSubmittedFailure.diagnosticId}`
+            : "该消息已经提交，请查看原执行结果。"
           : "消息身份冲突，请重新发送。",
         `duplicate:${id}`
       );
@@ -644,6 +667,63 @@ export class ImRuntime {
         this.#busyNotifications.delete(key);
       });
     this.#busyNotifications.set(key, notification);
+  }
+  /** 独立错误展示不复用已坏的 presentation；共享有界投递，迟到失败不触发再次执行或递归通知。 */
+  #notifyFailure(
+    message: ImInboundMessage,
+    failure: FailureEnvelope,
+    identity?: { runId: string; invocationId: string; sessionId: string },
+    retry = false
+  ): Promise<void> {
+    const data = {
+      code: failure.code,
+      reason_code: failure.reasonCode,
+      diagnostic_id: failure.diagnosticId,
+      stage: failure.stage,
+      failure_component: failure.source.component,
+      occurred_at: failure.occurredAt,
+      ...(failure.source.adapter ? { adapter_type: failure.source.adapter } : {}),
+      ...(identity ? { invocation_id: identity.invocationId, session_id: identity.sessionId } : {})
+    };
+    this.#diagnostic(failure.reasonCode, identity?.runId, data);
+    if (this.#failureNotifications.size >= 64 || this.#closed || !this.#delivery)
+      return Promise.resolve();
+    const until = shutdownDeadline(this.dependencies.signal);
+    const effect = `failure:${message.messageId}:${failure.diagnosticId}`;
+    const text = `${retry ? "本次重试未提交，之前的执行记录仍须核查。" : failureMessage(failure.code)}\n错误码：${failure.code}\n诊断编号：${failure.diagnosticId}`;
+    const event = {
+      protocolVersion: 2 as const,
+      type: "run.failed" as const,
+      payload: { code: failure.reasonCode, message: text, failure }
+    };
+    const delivery = this.#delivery;
+    const options = { transient: true, obsolete: () => this.#closed || performance.now() >= until };
+    const secondary = (code: string): void => {
+      this.#diagnostic(code, identity?.runId, {
+        ...data,
+        code,
+        reason_code: code,
+        primary_code: failure.code
+      });
+      if (this.#draining) this.#drainErrors.push(new Error(code));
+    };
+    const send = async (operation: () => Promise<void>, key: string): Promise<void> => {
+      const receipt = await delivery.deliver(key, operation, options);
+      if (receipt.state !== "delivered") secondary(receipt.code ?? "IM_DELIVERY_FAILED");
+    };
+    const notification = withinShutdown(
+      Promise.allSettled([
+        ...(message.replyFailure ? [send(() => message.replyFailure!(event, effect), effect)] : []),
+        send(() => message.reply(text, `${effect}:text`), `${effect}:text`)
+      ]),
+      until,
+      "IM_DELIVERY_UNKNOWN"
+    )
+      .then(() => undefined)
+      .catch(() => secondary("IM_DELIVERY_UNKNOWN"))
+      .finally(() => this.#failureNotifications.delete(failure.diagnosticId));
+    this.#failureNotifications.set(failure.diagnosticId, notification);
+    return notification;
   }
   async #reply(
     message: ImInboundMessage,
@@ -994,6 +1074,9 @@ export class ImRuntime {
     });
     const controls = this.#runControls(message, key, request.invocationId);
     let presentation: ImPresentation | undefined;
+    let executionStarted = false;
+    let presentationFailed = false;
+    let localFailure: FailureEnvelope | undefined;
     try {
       presentation = message.beginPresentation?.(
         rootRunId,
@@ -1002,6 +1085,7 @@ export class ImRuntime {
       );
       presentation?.update(snapshot());
       session.activeInvocationId = request.invocationId;
+      executionStarted = true;
       for await (const event of task.events()) {
         if (this.#closed || this.#signal.aborted) break;
         if (event.type === "session.update" && session.id === request.sessionId) {
@@ -1069,7 +1153,8 @@ export class ImRuntime {
           const interaction = event.payload;
           let cardShown = false;
           try {
-            cardShown = (await presentation?.interaction?.(interaction)) ?? false;
+            cardShown =
+              !presentationFailed && ((await presentation?.interaction?.(interaction)) ?? false);
           } catch {
             this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
           }
@@ -1087,35 +1172,71 @@ export class ImRuntime {
             await this.#reply(
               message,
               `${summary?.slice(0, 1000) ?? "执行需要你的确认或输入。"}\n${Array.isArray(interaction.request.questions) ? JSON.stringify(interaction.request.questions).slice(0, 8000) + "\n请按问题 ID 提交 JSON 答案。\n" : ""}${instruction}`,
-              `interaction:${interaction.interactionId}`
+              `interaction:${interaction.interactionId}`,
+              true
             );
         }
         if (event.type === "interaction.resolved") {
           this.#interactions.delete(event.payload.interactionId);
           try {
-            await presentation?.resolveInteraction?.(
-              event.payload.interactionId,
-              event.payload.status
-            );
+            if (!presentationFailed)
+              await presentation?.resolveInteraction?.(
+                event.payload.interactionId,
+                event.payload.status
+              );
           } catch {
             this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
           }
         }
         projector.accept(event);
         controls.failed = projector.snapshot().terminal === "failed";
-        presentation?.update(snapshot());
+        if (!presentationFailed) {
+          try {
+            presentation?.update(snapshot());
+          } catch {
+            presentationFailed = true;
+            this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
+            // 展示故障不关闭原迭代器；请求停止后仍由同一消费者确认真实终态。
+            if (!projector.snapshot().terminal)
+              void task
+                .cancelExecution("IM presentation failed")
+                .catch(() => this.#diagnostic("IM_CANCEL_FAILED", request.runId));
+          }
+        }
       }
       if (!projector.snapshot().terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
     } catch {
-      if (!projector.snapshot().terminal) {
+      if (!executionStarted || task.notSubmittedFailure) {
+        localFailure =
+          task.notSubmittedFailure ??
+          failurePayload(
+            { code: "IM_PRESENTATION_INITIALIZATION_FAILED" },
+            {
+              stage: "channel_presentation_initialize",
+              defaultDomain: "runtime",
+              runId: request.runId
+            }
+          ).failure;
+        controls.failed = false;
+        await this.#notifyFailure(message, localFailure, request, task.attempts.length > 1);
+      } else {
         if (this.#draining) this.#drainErrors.push(new Error("IM_EXECUTION_RESULT_UNKNOWN"));
         // 流断开无法证明执行失败；尽力取消并提示核查，不自动重跑潜在的业务副作用。
         await this.dependencies.kernel
           .cancelInvocation(request.invocationId, "IM execution stream failed")
           .catch(() => undefined);
         this.#diagnostic("IM_EXECUTION_RESULT_UNKNOWN", request.runId);
-        presentation?.update({ ...snapshot(), resultUnknown: true });
-      } else if (this.#draining) this.#drainErrors.push(new Error("IM_RUN_FINALIZATION_FAILED"));
+        // 原源流即使在终态后失败，也不能被展示层的终态掩盖。
+        controls.failed = false;
+        projector = new ImRunProjector(rootRunId, message.conversationKind === "direct");
+        if (!presentationFailed) {
+          try {
+            presentation?.update({ ...snapshot(), resultUnknown: true });
+          } catch {
+            this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
+          }
+        }
+      }
     } finally {
       if (rulesEnabled)
         this.#finishRules(
@@ -1148,7 +1269,7 @@ export class ImRuntime {
         run_id: rootRunId,
         invocation_id: request.invocationId,
         session_id: request.sessionId,
-        status: projector.snapshot().terminal ?? "unknown"
+        status: localFailure ? "not_submitted" : (projector.snapshot().terminal ?? "unknown")
       });
       this.#tasks.delete(key);
       try {
@@ -1160,7 +1281,11 @@ export class ImRuntime {
             sessionId: request.sessionId,
             runId: rootRunId,
             snapshot: saved,
-            attempts: task.attempts.map((attempt) => ({ ...attempt }))
+            attempts: task.attempts.map((attempt) => ({ ...attempt })),
+            ...(localFailure &&
+            task.attempts.every((attempt) => attempt.outcome === "not_submitted")
+              ? { notSubmittedFailure: localFailure }
+              : {})
           });
       } catch {
         this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
@@ -1169,11 +1294,20 @@ export class ImRuntime {
       for (const [id, entry] of this.#interactions)
         if (entry.invocationId === request.invocationId) this.#interactions.delete(id);
       try {
-        if (!this.#closed) await presentation?.finish();
-      } catch {
+        if (!this.#closed)
+          await withinShutdown(
+            Promise.resolve().then(() => presentation?.finish()),
+            shutdownDeadline(this.dependencies.signal),
+            "IM_PRESENTATION_FINISH_INCOMPLETE"
+          );
+      } catch (error) {
+        // 截止只结束等待，不能证明尚未完成的展示资源已经释放。
+        if (error instanceof Error && error.message === "IM_PRESENTATION_FINISH_INCOMPLETE")
+          this.#finishIncomplete ??= error;
         this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
       }
     }
+    if (localFailure) return;
     if (this.#closed || this.#signal.aborted) return;
     const { text, allowMention } = projector.finalReply;
     // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
@@ -1253,10 +1387,14 @@ export class ImRuntime {
         attempt(() => this.#connector?.close()),
         attempt(() => this.#connecting),
         attempt(() => this.#disconnecting),
+        ...[...this.#failureNotifications.values()].map((notification) =>
+          attempt(() => notification)
+        ),
         ...[...this.#busyNotifications.values()].map((notification) => attempt(() => notification))
       ]);
       if (!this.dependencies.sessions) await attempt(() => this.#sessionStore.close?.());
       errors.push(...this.#drainErrors);
+      if (this.#finishIncomplete) errors.push(this.#finishIncomplete);
       if (errors.length) throw new AggregateError(errors, "IM_DISPOSE_FAILED");
       this.#sessions.clear();
       this.#seen.clear();

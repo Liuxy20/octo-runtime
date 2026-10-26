@@ -1,5 +1,5 @@
 import type { ImInvocationInput } from "../execution/dispatcher.js";
-import type { ProviderSession } from "@mininglamp-oss/octo-runtime-protocol";
+import type { FailureEnvelope, ProviderSession } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImTaskAttempt } from "../contracts.js";
 import type { ImGapMetadata, ImGapTurnToken } from "./context-gap.js";
 import type { ImRulesContext } from "./rules-context.js";
@@ -10,6 +10,8 @@ export interface ImSessionOccurrence {
   runId: string;
   snapshot?: ImInvocationInput;
   attempts?: ImTaskAttempt[];
+  /** 仅整轮没有已执行或未知尝试时保存；旧记录缺省不推测执行事实。 */
+  notSubmittedFailure?: FailureEnvelope;
 }
 export interface ImSessionBinding {
   id?: string;

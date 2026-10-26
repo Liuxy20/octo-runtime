@@ -214,3 +214,32 @@ test("Core provides the shared adapter log sink and records the canonical failur
     await core.shutdown();
   }
 });
+
+test("channel failure metadata survives the real log worker and never reaches component status", async (t) => {
+  const directory = await fixture(t);
+  const status = [];
+  const logging = new RuntimeLogging({ directory, statusOutput: (record) => status.push(record) });
+  const data = {
+    code: "OH-RUN-2010",
+    reason_code: "IM_SESSION_STORE_FAILED",
+    diagnostic_id: `diag_${"a".repeat(32)}`,
+    stage: "channel_session_read",
+    failure_component: "octo-runtime",
+    occurred_at: new Date().toISOString()
+  };
+  logging.extra("channel-gateway")("warn", "channel.diagnostic", data);
+  logging.extra("channel-gateway")("warn", "channel.diagnostic", {
+    diagnostic_id: "private",
+    stage: "private",
+    failure_component: "private",
+    occurred_at: "2026-02-30T00:00:00.000Z",
+    failure: { secret: "PRIVATE_BODY" }
+  });
+  await logging.close();
+  const rows = await records(directory, "extras");
+  assert.deepEqual(rows[0].data, data);
+  assert.deepEqual(rows[1].data, {});
+  assert.equal(rows[0].source, "extra");
+  assert.deepEqual(status, []);
+  assert.ok(!(await readdir(join(directory, "extras"))).some((name) => name.includes("-status-")));
+});

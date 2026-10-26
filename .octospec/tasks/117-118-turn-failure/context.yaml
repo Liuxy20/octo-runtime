@@ -1,0 +1,68 @@
+task: 117-118-turn-failure
+status: implemented-local-verification-passed-pending-remote-delivery
+date: 2026-10-26
+baseline: 8af836068780ebb76581225254ad7bef18cc8170
+branch: codex/117-118-turn-failure-analysis
+main_sync:
+  base: 78bb88a154700bdd9cd0eda8c3624a8db2a89c1b
+  method: merge-preserve-existing-history
+  conflict: .octospec/index.md
+issues:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/117
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/118
+workflow: .octospec/.claude/skills/octospec-workflow/SKILL.md
+phase: verify
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/collaboration.md
+user_confirmed_requirements:
+  - shared-failure-envelope-and-standard-error-projection
+  - existing-structured-log-chain-with-correlated-diagnostic-id
+  - new-public-error-codes-for-the-three-pre-execution-failures
+  - complete-log-field-admission-evidence-and-presentation-policy-details
+implementation_plan: .octospec/tasks/117-118-turn-failure/implementation-plan.md
+planning_readiness:
+  score: 98
+  previous_score: 92
+  basis: engineering-judgment-not-test-or-implementation-completion
+source_review_added:
+  - packages/octo-runtime-adapter-sdk/src/runtime-log.ts
+  - packages/octo-runtime-adapter-sdk/src/service-status.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/task.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts
+planned_public_codes:
+  OH-RUN-2010: IM_SESSION_STORE_FAILED
+  OH-RUN-2011: IM_PRESENTATION_INITIALIZATION_FAILED
+  OH-RUN-2012: CLIENT_INVOCATION_ADMISSION_CLOSED
+code_registration: implemented-allocation-rechecked-against-origin-main
+evidence:
+  current_source: reviewed
+  issue_bodies_and_comments: read-via-gh
+  current_baseline_dynamic_reproduction: three-review-defects-reproduced-and-fixed
+  product_tests: followup-focused-72-passed-node-1807-passed-40-skipped-webui-35-passed
+  real_gateway: blocked-missing-qa-account-path
+  real_wecom: skipped-user-instruction
+  review: verified-review-serial-source-and-runtime
+  implementation_record: .octospec/tasks/117-118-turn-failure/validation.md
+  followup_review_baseline: 7e0355104569c01652cead113b1450377ef5d75f
+  followup_review_fix: retain-observation-signal-during-display-cancellation
+validation:
+  octospec_baseline: four-existing-frontmatter-errors
+  octospec_after: same-four-baseline-errors-no-new-errors
+  diff_check: passed
+authorization:
+  scope: implementation-verification-fix-and-delivery
+  product_implementation: explicitly-authorized
+  commit_push_pr: explicitly-authorized
+  merge: explicitly-authorized-normal-merge-no-auto-merge

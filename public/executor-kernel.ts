@@ -1,6 +1,7 @@
 export {
   attachKernel,
   KernelError,
+  isInvocationNotSubmitted,
   createKernelService,
   ServiceInitializationError
 } from "@mininglamp-oss/octo-runtime-executor-kernel";

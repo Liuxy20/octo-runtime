@@ -3,10 +3,18 @@ import assert from "node:assert/strict";
 import { ImTask } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/task.js";
 import { createImInvocation } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/dispatcher.js";
 import { validateImConfig } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
-import { assertInvokeInput, failurePayload } from "@mininglamp-oss/octo-runtime-protocol";
+import {
+  assertInvokeInput,
+  failurePayload,
+  invocationInput
+} from "@mininglamp-oss/octo-runtime-protocol";
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvocationWatchdog } from "../packages/octo-runtime-executor-core/dist/watchdog.js";
-import { KernelError } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import {
+  KernelError,
+  attachKernel,
+  isInvocationNotSubmitted
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 const config = {
   bot_id: "retry-fixture",
@@ -116,6 +124,41 @@ function fixture(invoke, options = {}) {
     request: prepareInvokeInput(request).request
   };
 }
+
+test("trusted local rejection stops retries and remains safe under later drain and deadline", async () => {
+  const client = attachKernel({
+    endpoint:
+      process.platform === "win32"
+        ? "\\\\.\\pipe\\octo-not-submitted-unused"
+        : "/unused-octo-not-submitted.sock"
+  });
+  client.invocations.stopAdmission();
+  const f = fixture(async function* ({ request }) {
+    yield* client.invoke(invocationInput(request, "canonical", "codex"));
+  });
+  try {
+    await assert.rejects(f.collect(), isInvocationNotSubmitted);
+    assert.equal(f.task.attempts[0].outcome, "not_submitted");
+    assert.equal(f.task.attempts[0].failureCode, "OH-RUN-2012");
+    assert.equal(f.task.attempts[0].diagnosticId, f.task.notSubmittedFailure.diagnosticId);
+    f.time.tick(86_400_000);
+    await f.task.drain();
+    assert.equal(await f.task.cancel(), true);
+    assert.deepEqual(f.cancellations, []);
+    assert.equal(f.calls.length, 1);
+    assert.equal(f.timers.size, 0);
+  } finally {
+    client.close();
+  }
+});
+
+test("an exhausted stream without a terminal records unknown rather than running", async () => {
+  const f = fixture(async function* () {});
+  await assert.rejects(f.collect(), /IM_RUN_WITHOUT_TERMINAL/);
+  assert.equal(f.task.attempts[0].outcome, "unknown");
+  assert.equal(f.task.notSubmittedFailure, undefined);
+  assert.equal(f.calls.length, 1);
+});
 
 test("IM defaults to one day, accepts explicit long and short limits, validates retry options", () => {
   const f = fixture(async function* () {});
@@ -305,6 +348,33 @@ test("retry policy excludes credentials, unknown failure, cancellation and unsaf
     await f.collect();
     assert.equal(f.calls.length, 1);
   }
+});
+
+test("display cancellation preserves observation and suppresses transient-failure retries", async () => {
+  let observer;
+  const f = fixture(async function* ({ signal }) {
+    observer = signal;
+    yield progress();
+    yield failed();
+    signal.throwIfAborted();
+  });
+  const iterator = f.task.events();
+  await iterator.next();
+  assert.deepEqual(
+    await Promise.all([
+      f.task.cancelExecution("display failed"),
+      f.task.cancelExecution("display failed again")
+    ]),
+    [true, true]
+  );
+  assert.equal(observer.aborted, false);
+  assert.equal((await iterator.next()).value.type, "run.failed");
+  assert.equal((await iterator.next()).done, true);
+  assert.equal(f.task.attempts[0].outcome, "run.failed");
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.cancellations.length, 1);
+  assert.deepEqual(f.waits, []);
+  assert.equal(f.timers.size, 0);
 });
 
 test("unknown stream result never causes another invocation", async () => {

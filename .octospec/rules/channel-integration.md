@@ -82,6 +82,10 @@ Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，
 
 读取 adapter 选择以执行渠道业务策略，不等于解析执行计划。Extra 组装公开 InvokeInput 后直接调用 Host，`resolveLocalContext()` 仅在 Host 的共享准备路径使用。2026-10-17 已删除双渠道 dispatcher 的重复执行解析，text-only instructions 可通过该边界，见[交付记录](../journal/shared/2026-10-17-extra-initializer-delivery.md)；故障链见[排查经验](../journal/shared/2026-10-16-im-invoke-preparation-lessons.md)。准备失败必须单独报告尚未发起执行，沿既有标准失败投影展示安全原因；Octo 独立错误卡片和普通文本分别投递。连接在线不代表本轮执行成功，任务错误不得污染连接状态。全面准备失败展示及全 Provider 验收仍待实施，不能由本次核心修复推定完成。
 
+2026-10-26 实现 Issue #117/#118：会话读取失败、执行前展示初始化失败及可信接纳前拒绝，通过共享 `failurePayload` / `FailureEnvelope`、标准错误投影和既有结构化日志链路反馈，公共码依次为 `OH-RUN-2010` / `2011` / `2012`。卡片、独立文本和日志关联同一个公共码及 diagnosticId，保留 reasonCode、stage 与实际 source，不在 Channel 或展示组件复制错误码目录。错误卡片不可用或发送失败不阻断安全文本；WeCom 沿自身回复协议消费同一错误对象。执行前错误不得伪造执行启动、向真实执行源注入失败事件或覆盖既有执行终态；真实未知继续保守处理。Kernel 仅由本地接纳检查产生的私有标记证明未提交，同名远端或手工错误不构成证据。展示故障禁用进度后继续观察原流，原流失败必须清除执行重试入口；finish 超时释放本轮但保留关闭 incomplete，排空期间的展示错误仍计入关闭失败。普通日志字段、状态日志隔离、not_submitted 尝试状态及固定策略见[实施合同](../tasks/117-118-turn-failure/implementation-plan.md)，实际验证边界见[验证记录](../tasks/117-118-turn-failure/validation.md)。
+
+展示故障请求取消执行时，必须保留原 invoke 的观察 signal，并停止后续自动重试。公共 invoke 包装器在正常耗尽后会报告本地 signal 的取消原因；不能由展示层中止该 signal 再将其误判为真正源错误。Gateway 使用 `ImTask.cancelExecution` 请求取消并继续观察真实终态，不用取消 ACK 代替终态；缺终态和终态后源错误仍为 unknown。此边界须用真实 KernelClient/IPC 回归验证，仅 generator stub 不能覆盖公共包装器的尾部检查。
+
 所有执行卡片（状态、工具进度及用户交互）必须由 CanonicalEvent 投影；不得解析助手正文、Provider 原始消息或自定义工具字段来替代统一事件与交互合同。AskUser 的既定接入路径是 interaction.requested → Channel 卡片 → 用户回答 → respondInteraction → 原模型继续执行，interaction.resolved 收敛卡片状态。交互卡片首版支持选项与自定义输入，核心注释引用 [F09 方案](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf09-统一用户交互的-im-呈现与响应)；特殊解析必须标注非标准，不作为默认替代。首版已接通，im-test 创建/收敛通过，真人回调未验；isSecret 不进入普通卡片或聊天回答回退，仅提示不支持安全输入并请求停止，宿主安全产品路径待决。
 
 IM 后台配置对应的 Agent 使用固定目录，不按任务选择或改变 workdir。Octo Channel Gateway 的本地引擎省略 Agent 配置中的 `adapter.workdir` 时，由渠道入口使用并创建 `~/octo-runtime/channels/{bot_id}`，不随配置 Home、任务或会话变化。显式 Agent 目录必须是绝对路径；任务级 workdir 或 workspace Context 不得覆盖该 Agent 的目录。OpenClaw 保留 Provider Agent 自有固定工作区。显式更新 Agent 配置与提交任务是不同操作。

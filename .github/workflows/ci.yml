@@ -163,7 +163,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
       - name: Verify Gateway drain and finalization on Windows
-        run: node --test test/gateway-host-session-store.test.js test/gateway-shutdown-drain.test.js test/gateway-runner-drain.test.js test/im-extra-disposal.test.js test/im-task-retry.test.js test/im-protocol.test.js test/im-context-gap-wire.test.js
+        run: node --test test/gateway-host-session-store.test.js test/gateway-shutdown-drain.test.js test/gateway-runner-drain.test.js test/im-extra-disposal.test.js test/im-task-retry.test.js test/im-protocol.test.js test/im-context-gap-wire.test.js test/im-pre-execution-failure.test.js
       - name: Verify recovery and Extra status logs on Windows
         run: >-
           node --unhandled-rejections=strict --test

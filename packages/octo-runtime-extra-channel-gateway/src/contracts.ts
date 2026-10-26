@@ -125,6 +125,7 @@ export interface ImRunControls {
 export interface ImTaskAttempt {
   runId: string;
   invocationId: string;
+  /** not_submitted 是本次调用事实，不是 Provider 执行终态或整轮未执行的证明。 */
   outcome: string;
   failureCode?: string;
   diagnosticId?: string;

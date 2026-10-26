@@ -1,5 +1,19 @@
 # 工程知识变更记录
 
+## 2026-10-26
+
+- PR #180 处理 Jerry-Xin 与 yujiawei 新审查：真实 Kernel IPC 复现展示取消中止观察 signal、丢弃已确认终态的问题，新增仅取消执行并阻止重试的入口及真实 IPC 对照；显式恢复 occurrence mock。复现、修复及重验见[记录](tasks/117-118-turn-failure/validation.md#jerry-xin-与-yujiawei-后续审查)。用户要求推送后新增评论请求两位重新审查。
+
+- PR #180 按用户要求合入 `main@78bb88a`，解决唯一的 OctoSpec 目录冲突，同时保留 #117/#118 与 main 的 DSH 最新入口；产品代码无冲突。新依赖与全量回归、旧/新 head 的审查和 CI 证据分别记录于[验证记录](tasks/117-118-turn-failure/validation.md#pr-180-同步-main)。
+
+- 实施 [Issue 117/118](tasks/117-118-turn-failure/validation.md)：统一 OH-RUN-2010/2011/2012、可信本地未提交判断、双渠道投影/文本/日志关联、attempt/occurrence 事实及有界收尾。verified-review 复现并修复源流失败残留重试入口、finish 超时关闭遗漏和 drain 展示错误回归；本地与托管测试、线上验收边界以验证记录为准。用户要求普通 PR 合并，禁止 Auto Merge；WeCom 真实平台验收明确跳过。
+
+- 按用户要求补齐 [Issue 117/118 实施合同](tasks/117-118-turn-failure/implementation-plan.md)：固定日志安全字段及普通/状态日志边界、可信本地未提交判断、not_submitted 与 drain 收尾分类、展示三个阶段失败策略，拆分 M1–M5 和 V01–V10。规划准备度自评由 92 提高到 98；仍仅文档，未实施代码或运行产品验收。
+
+- 按用户明确要求补充 [Issue 117/118 统一错误合同](tasks/117-118-turn-failure/brief.md#统一错误投影与日志用户已确认)：规划新增三个专用公共码，复用标准错误投影及既有结构化日志，卡片、文本、attempt 与日志关联同一 FailureEnvelope/diagnosticId；同步 Channel 规则及验收。本轮只更新文档，公共码尚未注册到产品目录。
+
+- 从最新 `origin/main@8af8360` 建立 Issue 117/118 独立分析 worktree，完成[目标与关键合同](tasks/117-118-turn-failure/brief.md)和[合理性分析](tasks/117-118-turn-failure/analysis.md)。双渠道分别核对未提交反馈与 unknown 误判，保留真实 ACK 不明/丢流的保守语义及单次尝试边界；仅规划、未实施，证据边界见[记录](journal/shared/2026-10-26-117-118-turn-failure-analysis.md)。
+
 ## 2026-10-24
 
 - Issue 51 按用户最新决定仅保留完整 Go/Python SDK，移除 Rust SDK、emitter、生成产物、工具链与测试入口；两套包内示例统一命名 `demo_playboard.py` / `demo_playboard.go`，本地验证不接入 native CI，见[当前规划](tasks/51-native-rpc-clients/plan.md)。

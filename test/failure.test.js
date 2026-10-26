@@ -9,6 +9,53 @@ import {
 
 const source = { component: "octo-runtime", adapter: "fixture" };
 
+test("pre-execution channel codes require the matching stage and trusted admission evidence", () => {
+  for (const [reason, stage, code, action] of [
+    ["IM_SESSION_STORE_FAILED", "channel_session_read", "OH-RUN-2010", "check_runtime"],
+    [
+      "IM_PRESENTATION_INITIALIZATION_FAILED",
+      "channel_presentation_initialize",
+      "OH-RUN-2011",
+      "check_runtime"
+    ],
+    ["CLIENT_INVOCATION_ADMISSION_CLOSED", "channel_admission", "OH-RUN-2012", "retry_later"]
+  ]) {
+    const payload = failurePayload(
+      { code: reason, message: "PRIVATE_BODY" },
+      {
+        stage,
+        defaultDomain: "runtime",
+        invocationNotSubmitted: true
+      }
+    );
+    assert.equal(payload.code, reason);
+    assert.equal(payload.failure.code, code);
+    assert.equal(payload.failure.reasonCode, reason);
+    assert.equal(payload.failure.stage, stage);
+    assert.equal(payload.failure.retryable, true);
+    assert.equal(payload.failure.action.type, action);
+    assert.match(payload.failure.diagnosticId, /^diag_[0-9a-f]{32}$/);
+    assert.doesNotMatch(JSON.stringify(payload), /PRIVATE_BODY/);
+    assertFailureEnvelope(payload.failure);
+    assertCanonicalEvent({ protocolVersion: 2, type: "run.failed", payload });
+    assert.notEqual(
+      classifyFailure({ code: reason }, { stage: "provider.invoke", defaultDomain: "runtime" })
+        .code,
+      code
+    );
+  }
+  assert.notEqual(
+    classifyFailure(
+      { code: "CLIENT_INVOCATION_ADMISSION_CLOSED" },
+      {
+        stage: "channel_admission",
+        defaultDomain: "runtime"
+      }
+    ).code,
+    "OH-RUN-2012"
+  );
+});
+
 function classify(input, defaultDomain = "provider", stage = "provider.invoke") {
   return classifyFailure(input, {
     defaultDomain,

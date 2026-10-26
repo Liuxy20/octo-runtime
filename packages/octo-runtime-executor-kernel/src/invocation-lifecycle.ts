@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { admissionClosedError } from "./submission-error.js";
 import { isHostTerminal, type HostFrame } from "@mininglamp-oss/octo-runtime-protocol";
 import {
   KernelError,
@@ -78,7 +79,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
   }
 
   assertSubmission(): void {
-    if (this.#stopped) throw new KernelError("CLIENT_INVOCATION_ADMISSION_CLOSED");
+    if (this.#stopped) throw admissionClosedError();
   }
 
   accepted(record: TrackedInvocation, ref: RunRef, terminal?: HostFrame): void {

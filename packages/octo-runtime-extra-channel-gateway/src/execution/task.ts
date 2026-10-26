@@ -4,8 +4,16 @@ import type { ImInvocationInput } from "./dispatcher.js";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
-import { KernelError } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { type CanonicalEvent, type InvokeEnvironment } from "@mininglamp-oss/octo-runtime-protocol";
+import {
+  KernelError,
+  isInvocationNotSubmitted
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+import {
+  failurePayload,
+  type FailureEnvelope,
+  type CanonicalEvent,
+  type InvokeEnvironment
+} from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig, ImTaskAttempt } from "../contracts.js";
 
 export const DEFAULT_CODEX_RETRY = Object.freeze({
@@ -36,14 +44,23 @@ const clock: ImTaskClock = {
   random: Math.random
 };
 
+type AttemptCompletion = "terminal_confirmed" | "not_submitted" | "unresolved";
+interface ActiveAttempt {
+  invocationId: string;
+  completion?: AttemptCompletion;
+  finished: Promise<AttemptCompletion>;
+}
+
 /** 预算内最多 101 次尝试；只保留身份和终态，不在此缓存模型历史。 */
 export class ImTask {
   readonly attempts: ImTaskAttempt[] = [];
+  /** 与 Channel 展示、诊断共用的本次未提交事实；不注入执行源事件。 */
+  notSubmittedFailure?: FailureEnvelope;
   readonly #policy;
   readonly #abort = new AbortController();
   readonly #retryStop = new AbortController();
   readonly #signal: AbortSignal;
-  #active?: { invocationId: string; finished: Promise<boolean> };
+  #active?: ActiveAttempt;
   #cancelPending?: Promise<{ accepted: boolean }>;
   #total = 0;
   #consecutive = 0;
@@ -77,25 +94,36 @@ export class ImTask {
     this.#draining = true;
     this.stopRetries();
     const active = this.#active;
-    if (!active) return;
+    if (!active || active.completion === "not_submitted") return;
     try {
       this.#cancelPending ??= this.kernel.cancelInvocation(active.invocationId, reason);
       await this.#cancelPending;
     } catch (error) {
       // Kernel 可在订阅 ACK 时先确认终态并释放登记，业务迭代器此时仍可能等待交互展示。
-      // 登记缺失本身不是完成证据；只接受同次原流正常耗尽且包含真实终态，仍受 owner 共享期限约束。
+      // 登记缺失本身不是完成证据；只接受同次原流确认终态或可信未提交，仍受 owner 共享期限约束。
       if (
-        !(error instanceof KernelError && error.code === "INVOCATION_NOT_TRACKED") ||
-        !(await active.finished)
+        !isInvocationNotSubmitted(error) &&
+        (!(error instanceof KernelError && error.code === "INVOCATION_NOT_TRACKED") ||
+          (await active.finished) === "unresolved")
       )
         throw error;
     }
   }
   async cancel(reason = "IM user stop"): Promise<boolean> {
     this.#abort.abort(reason);
-    if (!this.#active) return true; // 退避阶段也属于可停止的业务任务。
+    return this.cancelExecution(reason);
+  }
+  /** 展示故障只请求停止执行及重试，保留观察 signal；返回取消受理结果，不代表执行终态。 */
+  async cancelExecution(reason: string): Promise<boolean> {
+    this.stopRetries();
+    if (!this.#active || this.#active.completion === "not_submitted") return true;
     this.#cancelPending ??= this.kernel.cancelInvocation(this.#active.invocationId, reason);
-    return (await this.#cancelPending).accepted;
+    try {
+      return (await this.#cancelPending).accepted;
+    } catch (error) {
+      if (isInvocationNotSubmitted(error)) return true;
+      throw error;
+    }
   }
   #stop(reason: string): void {
     this.stopReason ??= reason;
@@ -202,13 +230,14 @@ export class ImTask {
           if (item.namespace === "octo.execution" && item.name === "limits")
             item.payload.run_timeout_ms = remaining;
         this.onAttempt(request);
-        let finish!: (confirmed: boolean) => void;
-        this.#active = {
+        let finish!: (completion: AttemptCompletion) => void;
+        const active: ActiveAttempt = {
           invocationId: request.invocationId,
-          finished: new Promise<boolean>((resolve) => {
+          finished: new Promise<AttemptCompletion>((resolve) => {
             finish = resolve;
           })
         };
+        this.#active = active;
         this.#cancelPending = undefined;
         const attempt: ImTask["attempts"][number] = {
           runId: request.runId,
@@ -217,7 +246,7 @@ export class ImTask {
         };
         this.attempts.push(attempt);
         let terminal: CanonicalEvent | undefined;
-        let confirmed = false;
+        let completion: AttemptCompletion = "unresolved";
         try {
           for await (const event of this.kernel.invoke(request, {
             ...this.environment,
@@ -235,16 +264,31 @@ export class ImTask {
             else yield event;
           }
           // 看到终态后仍须正常耗尽：终态后的传输/控制错误不能被 drain 当成成功。
-          confirmed = terminal !== undefined;
+          if (!terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
+          completion = "terminal_confirmed";
         } catch (error) {
-          attempt.outcome = "unknown";
+          if (isInvocationNotSubmitted(error)) {
+            completion = "not_submitted";
+            active.completion = completion;
+            this.stopRetries();
+            this.notSubmittedFailure = failurePayload(error, {
+              stage: "channel_admission",
+              defaultDomain: "runtime",
+              invocationNotSubmitted: true,
+              source: { component: "octo-runtime", adapter: this.adapterType },
+              runId: request.runId
+            }).failure;
+            attempt.outcome = "not_submitted";
+            attempt.failureCode = this.notSubmittedFailure.code;
+            attempt.diagnosticId = this.notSubmittedFailure.diagnosticId;
+          } else attempt.outcome = "unknown";
           throw error;
         } finally {
           // 必须等待消费结束及取消回执；未知结果不会进入下一次 invoke。
           await this.#settleCancellation();
           this.#active = undefined;
           // #cancelPending 只保存原始取消回执，不能反过来等待 finished，否则这里会循环等待。
-          finish(confirmed);
+          finish(completion);
         }
         if (!terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
         attempt.outcome = terminal.type;

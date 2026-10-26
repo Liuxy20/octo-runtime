@@ -16,6 +16,7 @@ export {
 } from "./service.js";
 export * from "./lifecycle.js";
 export { attachKernel } from "./client.js";
+export { isInvocationNotSubmitted } from "./submission-error.js";
 export * from "./types.js";
 export {
   InvocationManifest,

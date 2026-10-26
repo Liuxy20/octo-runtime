@@ -157,6 +157,29 @@ export class RuntimeLogging {
         )
           safe[key] = value;
       }
+      // 任务诊断只进入普通日志；逐字段校验，保持组件状态输出的独立隐私边界。
+      const diagnosticId = data?.diagnostic_id;
+      if (typeof diagnosticId === "string" && /^diag_[0-9a-f]{32}$/.test(diagnosticId))
+        safe.diagnostic_id = diagnosticId;
+      const stage = data?.stage;
+      if (
+        typeof stage === "string" &&
+        ["channel_session_read", "channel_presentation_initialize", "channel_admission"].includes(
+          stage
+        )
+      )
+        safe.stage = stage;
+      const component = data?.failure_component;
+      if (component === "octo-runtime" || component === "octo-agent-worker")
+        safe.failure_component = component;
+      const occurredAt = data?.occurred_at;
+      if (
+        typeof occurredAt === "string" &&
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(occurredAt) &&
+        Number.isFinite(Date.parse(occurredAt)) &&
+        new Date(occurredAt).toISOString() === occurredAt
+      )
+        safe.occurred_at = occurredAt;
       const record = {
         time: new Date().toISOString(),
         level,

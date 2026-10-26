@@ -52,6 +52,8 @@
 
 ## 当前任务
 
+- [Issue 117/118：准确反馈本轮执行是否已提交](tasks/117-118-turn-failure/brief.md)：基于 `origin/main@8af8360` 实现双渠道会话读取、展示初始化及可信接纳拒绝反馈，注册 `OH-RUN-2010` / `2011` / `2012`，统一投影与普通日志关联。实现合同、审查修复与测试边界见[验证记录](tasks/117-118-turn-failure/validation.md)；Gateway 真实 IM 缺 QA 账号路径，WeCom 真实验收按用户要求跳过。
+
 - [DSH 改用未修改的官方 SDK](tasks/dsh-upstream-sdk/brief.md)：用户要求移除两个下游依赖补丁，保留实验性 DSH 接入并接受上游当前稳定性、内存与后代回收限制；[上游反馈 #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031) 已附完整历史 diff 与回归参考。当前验证见本任务记录。
 
 - [Issue 17：撤回后使用官方 DSH Client 重新接入](tasks/17-dsh-official-reviewed/brief.md)：#176 的历史交付使用两个版本锁定补丁；补丁移除及当前支持边界以新的 DSH 官方 SDK 任务为准。

@@ -13,6 +13,8 @@ export interface FailureClassificationContext {
   occurredAt?: string;
   /** Only trusted downstream boundaries may retain a previously validated envelope. */
   preserveExisting?: boolean;
+  /** 仅可信调用边界在确认 Kernel 本地写出前拒绝后设置；错误字符串不能提供此证据。 */
+  invocationNotSubmitted?: boolean;
 }
 
 interface CatalogEntry {
@@ -105,6 +107,27 @@ export const FAILURE_CATALOG = Object.freeze({
     "error.runtime.stream_queue_capacity",
     false,
     "check_runtime"
+  ),
+  "OH-RUN-2010": entry(
+    "channel_session_store",
+    "会话读取失败，尚未发起执行，请检查运行设备或稍后重试。",
+    "error.channel.session_store",
+    true,
+    "check_runtime"
+  ),
+  "OH-RUN-2011": entry(
+    "channel_presentation_initialization",
+    "状态展示初始化失败，尚未发起执行，请检查运行设备或稍后重试。",
+    "error.channel.presentation_initialization",
+    true,
+    "check_runtime"
+  ),
+  "OH-RUN-2012": entry(
+    "channel_invocation_admission",
+    "执行服务当前不接收新任务，本次尝试尚未提交，请稍后重试。",
+    "error.channel.invocation_admission",
+    true,
+    "retry_later"
   ),
   "OH-ADP-3002": entry(
     "adapter_dependency",
@@ -286,7 +309,21 @@ export function classifyFailure(
   context: FailureClassificationContext
 ): FailureEnvelope {
   const evidence = failureEvidence(input);
-  const classification = classify(evidence, context.defaultDomain);
+  // 执行前分类同时依赖可信调用阶段；不能由 Provider 的同名原因推断执行从未提交。
+  const channelCode =
+    context.stage === "channel_session_read" && evidence.explicitCode === "IM_SESSION_STORE_FAILED"
+      ? "OH-RUN-2010"
+      : context.stage === "channel_presentation_initialize" &&
+          evidence.explicitCode === "IM_PRESENTATION_INITIALIZATION_FAILED"
+        ? "OH-RUN-2011"
+        : context.stage === "channel_admission" &&
+            context.invocationNotSubmitted === true &&
+            evidence.explicitCode === "CLIENT_INVOCATION_ADMISSION_CLOSED"
+          ? "OH-RUN-2012"
+          : undefined;
+  const classification = channelCode
+    ? result(channelCode, evidence.explicitCode!)
+    : classify(evidence, context.defaultDomain);
   const catalog = FAILURE_CATALOG[classification.code];
   return {
     schemaVersion: 1,
