@@ -1,5 +1,5 @@
 brief: .octospec/tasks/58-windows-cli-signals/brief.md
-code_baseline: 81284c9ed92066ce7cf34c1b84b608b9336279bf
+code_baseline: a3be719cb189dffedf615fd34a7851e703f5038d
 phase: finish
 scope: issue-58-windows-cli-shutdown
 injected:
@@ -22,4 +22,4 @@ files_expected:
   - test-support/windows-console.mjs
   - test-support/windows-console-control.cs
   - test/fixtures/playboard-cleanup-failure.mjs
-updated_at: 2026-10-26T06:03:00Z
+updated_at: 2026-10-26T07:11:54.744Z

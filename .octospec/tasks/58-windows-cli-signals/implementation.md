@@ -42,3 +42,11 @@ upstream: https://github.com/Mininglamp-OSS/octo-runtime/issues/58
 Jerry-Xin 指出本次新增的嵌套 TMPDIR 会让 macOS Unix socket 路径超长。仅修改两处 Playboard fixture：macOS 使用 `/tmp/ocp-*` 独占短目录，其余平台仍在测试 fixture 下分配；均注册清理，保留取消、终态、所属进程和空目录断言。SDK、产品代码和 CI 配置未修改。
 
 Windows 三份完整相关文件复验为 33 通过、2 项原有跳过、0 失败（42.89 秒），Playboard 真实 CTRL_C_EVENT 返回 130/null，关闭 707 ms，后续调用成功。修改文件的 Prettier 与 `git diff --check` 通过；macOS 由更新后的 PR CI 验证，不以本机结果代替。
+
+## 最新主线同步
+
+评审修复提交 `5c2402c` 的[托管 CI](https://github.com/Mininglamp-OSS/octo-runtime/actions/runs/40280771279)六个平台组合与 CI Gate 均通过，包含原先失败的 macOS Node 24/26。
+
+按用户要求 rebase 至 `main@79b11aadfb77ab1955d5f361d49d9615beb73414`，仅合并任务索引冲突并保留双方记录。本次产品与测试文件相对 rebase 前内容完全一致，没有新增 SDK 或产品改动。新基线 `pnpm typecheck`（含构建）通过；Windows 三份完整相关文件 33 通过、2 项原有跳过、0 失败（41.33 秒），`git diff --check` 通过。rebase 后的托管 CI 单独核对。
+
+交付核对期间 main 再次更新，最终同步至 `a3be719cb189dffedf615fd34a7851e703f5038d`。冲突解决保留主线的 IPC 短路径实现、临时目录创建顺序、两项长 Unicode TMPDIR 测试及取消用例的长 TMPDIR；合并 #58 的主结果保留逻辑与严格取消断言，不修改上层 SDK 或主线端点策略。新基线构建与类型检查、冲突涉及文件的 ESLint/Prettier、`git diff --check` 通过；Windows 三份完整文件共 37 项，35 通过、2 项原有跳过、0 失败（48.76 秒），真实 Ctrl+C 返回 130/null、关闭 567 ms，后续调用成功。最终托管 CI 以本次推送重新运行的结果为准。
