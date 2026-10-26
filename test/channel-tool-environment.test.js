@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
 import { PassThrough } from "node:stream";
+import { randomUUID } from "node:crypto";
 import { octoCliEnvironment } from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
 import { configureCliOpenClaw, syncCliOpenClawToolEnvironment } from "../apps/cli/dist/openclaw.js";
 import { spawnWorker, WorkerRpcClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
@@ -18,7 +19,7 @@ import { codexEnvironmentConfig } from "../packages/octo-runtime-adapter-codex/d
 import { sanitizePublicValue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
 
-const token = "bf_tool_fixture";
+const token = `bf_${randomUUID()}`;
 const base = "https://im-test.deepminer.com.cn";
 const context = {
   schema: "octo.context-envelope/v3",
@@ -29,6 +30,7 @@ const context = {
       payload: {
         env_variables: [
           { key: "OCTO_BOT_TOKEN", value: "wrong-context" },
+          { key: "OCTO_TOKEN", value: randomUUID() },
           { key: "OCTO_API_BASE_URL", value: "wrong-context" },
           { key: "EXTRA_TOOL_VALUE", value: "kept" },
           { key: "EXPECTED_TOKEN", value: token }
@@ -125,6 +127,7 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
       OCTO_RUNTIME_HOME: root,
       OCTO_RUNTIME_LOGS_DIRECTORY: join(root, "logs"),
       OCTO_BOT_TOKEN: "wrong-device",
+      OCTO_TOKEN: randomUUID(),
       OCTO_API_BASE_URL: "wrong-device"
     }
   });
@@ -153,10 +156,10 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
       events.push(event);
     assert.deepEqual(
       JSON.parse(events.findLast((event) => event.type === "message.update").payload.text),
-      { tokenMatches: true, baseMatches: true, extraKept: true }
+      { tokenMatches: true, canonicalMatches: true, baseMatches: true, extraKept: true }
     );
   };
-  await Promise.all([execute(token, 1), execute("bf_another_fixture", 2)]);
+  await Promise.all([execute(token, 1), execute(`bf_${randomUUID()}`, 2)]);
   assert.deepEqual(context, original);
   await host.close();
   const log = (await readdir(join(root, "logs"))).find((name) =>
@@ -169,6 +172,10 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
   });
   assert.equal(
     codexEnvironmentConfig(request, {})["shell_environment_policy.set"].OCTO_BOT_TOKEN,
+    token
+  );
+  assert.equal(
+    codexEnvironmentConfig(request, {})["shell_environment_policy.set"].OCTO_TOKEN,
     token
   );
   assert.equal(sanitizePublicValue(request).executionEnvOverrides, "[REDACTED]");
@@ -240,7 +247,7 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
   const file = join(native, ".env");
   await writeFile(
     file,
-    '# Keep this comment\nOTHER="line1\nline2"\nexport OCTO_BOT_TOKEN="old\nvalue"\nOCTO_BOT_TOKEN=duplicate\nOCTO_API_BASE_URL=old\n'
+    '# Keep this comment\nOTHER="line1\nline2"\nexport OCTO_BOT_TOKEN="old\nvalue"\nOCTO_BOT_TOKEN=duplicate\nOCTO_TOKEN=old\nOCTO_API_BASE_URL=old\n'
   );
   const extra = (bots) => [{ name: "channel-gateway", config: { bots }, load: async () => ({}) }];
   const bot = (id, credential) => ({
@@ -250,7 +257,8 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
     adapter: { adapter_type: "openclaw" }
   });
   const credentialFile = join(root, "bot-token");
-  await writeFile(credentialFile, "bf_last_fixture\n", { mode: 0o600 });
+  const lastToken = `bf_${randomUUID()}`;
+  await writeFile(credentialFile, `${lastToken}\n`, { mode: 0o600 });
   // 宿主读取自己的配置来源，SDK 只接收已经取得的凭据值。
   const second = bot("second", await readFile(credentialFile, "utf8"));
   const configs = extra([
@@ -267,12 +275,14 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
     { ...parseEnv(content) },
     {
       OTHER: "line1\nline2",
-      OCTO_BOT_TOKEN: "bf_last_fixture",
+      OCTO_TOKEN: "old",
+      OCTO_BOT_TOKEN: lastToken,
       OCTO_API_BASE_URL: base
     }
   );
   assert.ok(content.startsWith("# Keep this comment\n"));
   assert.equal((content.match(/OCTO_BOT_TOKEN=/g) ?? []).length, 1);
+  assert.equal((content.match(/OCTO_TOKEN=/g) ?? []).length, 1);
   const info = await stat(file);
   assert.ok(info.isFile());
   // Windows 不提供 POSIX 权限位；正文和普通文件断言仍在所有平台执行。

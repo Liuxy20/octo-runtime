@@ -1,7 +1,7 @@
 import type { ContextEnvsPayload } from "@mininglamp-oss/octo-runtime-protocol";
 import { trimTrailingSlashes } from "../transport/api/url.js";
 
-/** Both values belong to the same configured channel, never the inbound message. */
+/** 当前连接拥有工具身份；规范 token 与兼容别名同时覆盖默认环境，不读取消息中的凭据。 */
 export function octoCliEnvironment(apiUrl: string, token: string): ContextEnvsPayload {
   if (!/^bf_[A-Za-z0-9_-]+$/.test(token)) throw new Error("IM_BOT_TOKEN_INVALID");
   let url: URL;
@@ -22,7 +22,8 @@ export function octoCliEnvironment(apiUrl: string, token: string): ContextEnvsPa
   return {
     env_variables: [
       { key: "OCTO_BOT_TOKEN", value: token },
-      { key: "OCTO_API_BASE_URL", value: trimTrailingSlashes(url.href) }
+      { key: "OCTO_API_BASE_URL", value: trimTrailingSlashes(url.href) },
+      { key: "OCTO_TOKEN", value: token }
     ]
   };
 }

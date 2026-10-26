@@ -70,7 +70,7 @@ Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 
 
 ## Channel Gateway 的工具环境
 
-渠道为 octo-cli 提供的两个 OCTO 变量使用独立 `InvokeEnvironment.executionEnvOverrides`，不写入 Context envs。Core 将其复制到内部 InvokeRequest 的同名字段，Host RPC 使用 `invoke.with-environment` 传递；旧 Host 不认识该方法时明确拒绝，不回退普通 invoke。条目格式沿用 env payload，独立限制 128 项和 65,536 字节，已识别值必须校验。
+渠道为 octo-cli 提供的规范 token、兼容 token 别名及 API 地址使用独立 `InvokeEnvironment.executionEnvOverrides`，不写入 Context envs。Core 将其复制到内部 InvokeRequest 的同名字段，Host RPC 使用 `invoke.with-environment` 传递；旧 Host 不认识该方法时明确拒绝，不回退普通 invoke。条目格式沿用 env payload，独立限制 128 项和 65,536 字节，已识别值必须校验。
 
 Adapter SDK 合并顺序为继承环境、Context envs、独立覆盖、Adapter 固定传输设置。Codex 原生 shell 与本地 MCP 白名单使用合并后的本轮值。内部字段不由 `invocationInput` 转为公共 JSON，不进入 Context hash、模型输入或渠道业务快照；带覆盖的 RPC 请求只记录脱敏摘要。该字段不是远程授权机制。
 

@@ -15,6 +15,7 @@ export const adapter = {
         "-e",
         `process.stdout.write(JSON.stringify({
       tokenMatches: process.env.OCTO_BOT_TOKEN === process.env.EXPECTED_TOKEN,
+      canonicalMatches: process.env.OCTO_TOKEN === process.env.EXPECTED_TOKEN,
       baseMatches: process.env.OCTO_API_BASE_URL === 'https://im-test.deepminer.com.cn',
       extraKept: process.env.EXTRA_TOOL_VALUE === 'kept'
     }))`

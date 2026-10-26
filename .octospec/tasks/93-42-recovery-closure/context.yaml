@@ -1,0 +1,130 @@
+task: 93-42-recovery-closure
+phase: awaiting-pr-review
+review_baseline: f16550c4057e3fa62b3434975c3300dcf6a69651
+read_at: '2026-10-26'
+baseline: 2634d28c7eea2bc9531b2ec578cf4af145839132
+post_main_validation_baseline: 0189eabb3d25fc07b3f9eb8b0e463d85a1c8a6d7
+previous_validation_baseline: 8af836068780ebb76581225254ad7bef18cc8170
+upstream_main: 81284c9ed92066ce7cf34c1b84b608b9336279bf
+current_validation_baseline: 70a2252e022e3f9c770d055cd2ba107cb5edbef4
+current_validation_tree: Pending merge of 81284c9 plus final evidence documentation; dirty at validation.
+initial_baseline: a35aeae3a3b5708449bb6ebd77a9094cff705e33
+branch: codex/93-42-recovery-plan
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-93-42-recovery-plan
+issues:
+  - {number: 93, state: OPEN, updated_at: '2026-10-22T04:43:54Z'}
+  - {number: 42, state: OPEN, updated_at: '2026-10-19T11:22:36Z'}
+merged_recovery:
+  pr: 96
+  merge_commit: a7eda0cd73f12313c88d65a05505ba4629b43290
+  merged_at: '2026-10-22T04:41:58Z'
+loaded:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/log.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/scripts/lint.py
+  - .octospec/tasks/93-sleep-wake-recovery/brief.md
+  - .octospec/tasks/93-sleep-wake-recovery/analysis.md
+  - .octospec/tasks/93-sleep-wake-recovery/assessment.md
+  - .octospec/tasks/93-sleep-wake-recovery/plan.md
+  - .octospec/tasks/93-sleep-wake-recovery/acceptance.md
+  - .octospec/tasks/93-sleep-wake-recovery/implementation.md
+  - .octospec/tasks/93-sleep-wake-recovery/context.yaml
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/writing.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/rule-selection.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/rules/default.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/review-checklist.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/verification.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/main_task_system.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/main_task_user.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/plan_task_system.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/plan_task_user.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/review_filter_task_system.md
+  - /Users/lvsijia/.agents/skills/verified-review/references/prompts/review_filter_task_user.md
+  - /Users/lvsijia/.agents/skills/octo-shared/SKILL.md
+  - /Users/lvsijia/.agents/skills/octo-messaging/SKILL.md
+rules:
+  - {id: runtime-architecture, path: .octospec/rules/architecture.md, sha256: 3c8ae0930cd9aa79eb07ed1b7087dfc1ceeb7c59b4cd028648fb219f7e6e689b}
+  - {id: runtime-protocol-design, path: .octospec/rules/protocol-design.md, sha256: 5b2abad6e825bce94701e3378ee33a4b027b6f30a3ca4a4bf4231d8f1351d578}
+  - {id: runtime-local-execution, path: .octospec/rules/local-execution.md, sha256: 96af4e51c123bcdbecc07f7f82aee80540017d0f3abe0848aa5289b3aec9118b}
+  - {id: runtime-lifecycle, path: .octospec/rules/runtime-lifecycle.md, sha256: 6e3ef4ce5af81de675549848a82a783d029902b8711a2d0540b2c0b790378698}
+  - {id: runtime-channel, path: .octospec/rules/channel-integration.md, sha256: f97a4d0b6759770f01c66df9e7c983c0153d7d83019183ac9c45d85e135706d0}
+  - {id: runtime-extras, path: .octospec/rules/extras.md, sha256: c188c835c918e7ed1abff014da9f921538b8119e1bfb62c3552fa13d6c1ba6b2}
+  - {id: runtime-stateless, path: .octospec/rules/stateless-execution.md, sha256: 1bd283b6728c70529ef9680114b46925be15e4399d43f86152c9ff4c59816c1b}
+  - {id: runtime-engineering, path: .octospec/rules/engineering.md, sha256: b69834decca9cf61d6c9094665dac9c00bc5e3304c22552711e33086e41d0fb5}
+  - {id: commit, path: .octospec/rules/collaboration.md, sha256: fe77443e68003d2c93506ee8fa4f2fd376145d57ace4d7e1b6034a4dbb7785f3}
+  - {id: runtime-invoke-input, path: .octospec/rules/invoke-input.md, sha256: 9a3e9300666879256065e6b825aa8705a66e9bf20afce91ad0457d5eafe2dc9d}
+  - {id: runtime-environment, path: .octospec/rules/environment.md, sha256: df3308f74f8be78fccb9f21990b68a3a0eddb303cb5223fef14e3d2425c44bc0}
+source_reads:
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/ports.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/heartbeat.ts
+  - packages/octo-runtime-executor-kernel/src/supervisor.ts
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - public/executor-kernel.ts
+  - test-support/recovery-kernel-probe.mts
+  - test-support/recovery-native-host.mts
+  - test/recovery-dual-mode.test.js
+  - test/im-connection-state-machine.test.js
+  - scripts/verify-channel-connection-live.mjs
+  - scripts/verify-im-diagnostic-live.mjs
+  - package.json
+  - scripts/verify-gateway-drain-live.mjs
+  - scripts/verify-recovery-live.mjs
+  - test-support/recovery-live-faults.mjs
+  - test-support/recovery-live-probes.mjs
+  - test-support/recovery-live-worker.mjs
+  - test/recovery-live-probe.test.js
+  - test/recovery-cli-credentials.test.js
+  - packages/octo-runtime-extra-channel-gateway/src/execution/tool-environment.ts
+  - packages/octo-runtime-adapter-sdk/src/environment.ts
+  - packages/octo-runtime-adapter-claude-code/src/index.ts
+  - packages/octo-runtime-adapter-codex/src/environment.ts
+  - SDK_NATIVE_INTEGRATION_FULL_GUIDE.md
+source_read_scope: Full reads and targeted excerpts/searches; background sources are not a whole-repository code review.
+external_reads:
+  method: gh read-only issue and PR queries
+  full_issue_bodies: [93, 42, 78, 30, 47, 48, 49, 71, 118, 120, 139, 142, 134]
+  metadata_only: [14, 131]
+  pull_requests: [96, 181]
+  reviews:
+    - {pr: 181, id: 5647456719, author: yujiawei, head: b515aa0fe12dae26855f49201daf15659817d44a}
+    - {pr: 181, id: 5647738445, author: Jerry-Xin, head: f16550c4057e3fa62b3434975c3300dcf6a69651}
+    - {pr: 181, id: 5647759703, author: yujiawei, head: f16550c4057e3fa62b3434975c3300dcf6a69651}
+  prior_local_im_source: Historical task reference only; not reread or verified against deployment this turn.
+authorization:
+  worktree: true
+  planning_and_local_verification: true
+  product_changes_this_turn: true
+  verification_tooling: true
+  commits: true
+  push_or_pr: true
+  pr_remediation_comment_and_rerequest_jerry: true
+  merge_or_release: false
+  live_test_messages_and_isolated_services: true
+  deployment_or_shared_service_changes: false
+decisions:
+  - Supplement the merged recovery work with a new task; retain old acceptance identifiers and history.
+  - Use current 5/10/15/15-second backoff; do not copy the obsolete issue/source baseline.
+  - Repair verification entry points before treating their live campaigns as evidence.
+  - Keep ambiguous reason12 terminal until deployed ownership semantics are established.
+  - Score planning prerequisites only as requested; never infer incident closure from the score.
+unresolved:
+  - Actual deployed reason12, presence-expiry and replay/ACK contracts.
+  - Original incident failure boundary and exact deployed artifact.
+  - Dedicated sleep/reboot and cross-platform targets, other incident Provider configurations and assigned deployment maintainers; test accounts are now supplied.
+validation_record: verification.md
+live_validation_record: live-verification.md
+review_remediation_record: review-remediation.md

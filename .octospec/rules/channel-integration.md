@@ -120,14 +120,15 @@ octo-cli 是业务团队共同维护的 Go 二进制程序，提供 Octo 各业�
 
 本节仅约束 `channel-gateway` 发起的执行如何使用 `octo-cli`。已实现独立执行覆盖及 CLI OpenClaw dotenv 同步；改造内容与验收范围见 [任务方案](../tasks/channel-octo-cli-environment/brief.md)，真实验证边界见 [记录](../journal/shared/2026-10-15-channel-octo-cli-design.md)。
 
-- gateway 使用 `OCTO_BOT_TOKEN` 和 `OCTO_API_BASE_URL` 为 octo-cli 提供身份与地址。普通子进程 Adapter 每轮使用接收消息的连接已解析并通过身份校验的 Bot 凭据；OpenClaw 使用下述 CLI 预配置例外。API 地址取对应渠道配置的 `api_url` 并移除末尾 `/api` 和尾部斜杠。不得从 WS 消息、正文或请求 `envs` 获取这两个强制值。
-- 这两个值属于 gateway 为工具调用提供的执行环境，不追加到发起方 Context、控制指令、模型输入、业务快照或运行元数据。Context 的 `envs` 保持额外执行配置的既有语义；gateway 的两个强制值覆盖其中及设备环境中的同名值，其他变量保持原有规则。
+- gateway 使用 `OCTO_TOKEN`、兼容别名 `OCTO_BOT_TOKEN` 和 `OCTO_API_BASE_URL` 为 octo-cli 提供身份与地址。两个 token 变量必须使用同一当前 Bot 凭据。普通子进程 Adapter 每轮使用接收消息的连接已解析并通过身份校验的 Bot 凭据；OpenClaw 使用下述 CLI 预配置例外。API 地址取对应渠道配置的 `api_url` 并移除末尾 `/api` 和尾部斜杠。不得从 WS 消息、正文或请求 `envs` 获取这些强制值。
+- 这些值属于 gateway 为工具调用提供的执行环境，不追加到发起方 Context、控制指令、模型输入、业务快照或运行元数据。Context 的 `envs` 保持额外执行配置的既有语义；gateway 的三个强制变量覆盖其中及设备环境中的同名值，其他变量保持原有规则。
 - 普通子进程 Adapter 的覆盖必须按调用隔离并实际到达 Provider 及其启动的 `octo-cli`，不得修改全局 `process.env` 或把某个 Bot 的凭据设置到共享 worker 进程环境。无法按轮应用时，必须在工具执行前明确失败，不得声称覆盖成功。
 - 普通子进程 Adapter 的 Token、API 地址及连接代次必须绑定同一连接。重连或配置替换后，新执行使用新连接配置；旧连接排队消息不得改用新 Bot 凭据。凭据不写入日志、状态、错误详情或提交。
-- OpenClaw 例外：由 CLI 编排层按当前渠道配置，把这两个变量写入目标 OpenClaw 实际读取的全局 `.env`（通常为 `~/.openclaw/.env` 或 `$OPENCLAW_STATE_DIR/.env`）。复用 CLI 发现来源，必要时调用只读 `openclaw config file --json` 确认实例；不得在 Adapter/probe/invoke 中扫描或写文件。不同目标目录分别写入；同一文件按配置处理顺序后写覆盖前写，不拒绝多个 Bot 使用同一目标。只更新这两个变量，保留其他内容。Gateway 重启由人工处理，写入完成不表示正在运行的 Gateway 已生效。此路径使用实例共享身份，不承诺逐轮或逐 Agent 隔离；不向 OpenClaw 的每轮调用传入那两个内部覆盖项。
+- OpenClaw 例外：由 CLI 编排层按当前渠道配置，把 `OCTO_BOT_TOKEN` 和 `OCTO_API_BASE_URL` 写入目标 OpenClaw 实际读取的全局 `.env`（通常为 `~/.openclaw/.env` 或 `$OPENCLAW_STATE_DIR/.env`）。复用 CLI 发现来源，必要时调用只读 `openclaw config file --json` 确认实例；不得在 Adapter/probe/invoke 中扫描或写文件。不同目标目录分别写入；同一文件按配置处理顺序后写覆盖前写，不拒绝多个 Bot 使用同一目标。只更新这两个变量，保留其他内容。Gateway 重启由人工处理，写入完成不表示正在运行的 Gateway 已生效。此路径使用实例共享身份，不承诺逐轮或逐 Agent 隔离；不向 OpenClaw 的每轮调用传入内部覆盖项。2026-10-26 用户再次明确其特殊性，本次不扩展 OpenClaw dotenv 或改变其加载优先级。
 - Host/Adapter 只承载按调用传递的执行值，不读取 gateway 配置、不理解 OCTO 变量的业务来源。实现所需的内部传递扩展不得改变 Context v3、Run 7 或桌面调用方自行选择身份并使用 `envs` 的合同。
 - F23 已确认：OpenClaw Gateway 按独立 Agent 实例使用固定环境，符合当前需求；CLI executor-kernel 启动编排配置其实例 `.env`，不修改上游 OpenClaw 设计或源码，不增加特殊 `session.create` 注入。Codex/Claude Code 等通用执行路径按原生能力逐轮传递。不得将 OpenClaw 无逐轮环境载体重新列为待补功能；原生加载优先级、人工重启及真实生效验证边界继续保留。
 - F24 用户确认的身份选择：普通调用以当前 Extra Bot 的合法身份及 API 配置为权威，覆盖进程级同名默认值，不能串用其他 Bot。OpenClaw 同一实例只从启用、合法且 `adapter_type=openclaw` 的配置中按顺序取最后一项，用户可通过调整 items 顺序主动选择实例工具身份；其他 Adapter 项不得成为候选，没有 OpenClaw 候选时不借用其他 Bot。此为实例级开放配置能力，不新增身份开关或逐轮注入。候选筛选修正已实施并通过临时目录回归；配置错误明确报告，排序不绕过原生环境优先级或人工重启要求，不声称用户当前运行实例已加载。
+- 2026-10-26 用户进一步明确：Channel Bot token 的优先级高于 CLI 默认 token 和隐式选中的已保存账号。规范变量和兼容别名同时覆盖，CLI 负责在无显式账号选择时优先解析环境凭据；不以测试工具清空账号库的做法替代产品架构。旧 `octo-cli v0.18.0` 的文件优先行为不满足此合同，宿主应使用已支持环境优先的 CLI；验证工具可用 trial 独占空目录兼容旧版，不能据此声称旧版产品优先级已修复。工具显式传入的 `--profile`/`--bot-id` 属于额外身份选择，不是默认配置，本次不改写该命令意图。
 - 两种注入原理分别保持：普通 Adapter 每次调用使用自己所属 Bot 的配置；OpenClaw 启动准备读取配置、写实例共享 `.env`，再由 Gateway 原生加载。只有后者采用同实例最后一个合法 OpenClaw 配置的选择规则，不让其他 Adapter 共用最后一项的身份或统一写共享 `.env`。
 - `octo-cli` 是否安装及版本由 HostApp 决定。gateway 不因收到消息而隐式下载或安装工具。本节不保证 Provider 专用配置或工具显式重新设置环境后仍使用相同身份，也不把 workdir 当作凭据隔离沙箱。
 
