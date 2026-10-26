@@ -1,4 +1,8 @@
-import { invocationEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  invocationEnvironment,
+  mergeProcessEnvironment,
+  processEnvironmentValue
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { codexMcpConfig } from "./mcp.js";
 /**
  * Assembly entry point for the Codex adapter.
@@ -58,12 +62,12 @@ export function buildCodexCommand(
 ): CodexAppServerCommand {
   const runEnv = invocationEnvironment(req, {}, env);
   const mcp = codexMcpConfig(req, runEnv);
-  const realHome = runEnv.CODEX_HOME || join(homedir(), ".codex");
+  const realHome = processEnvironmentValue(runEnv, "CODEX_HOME") || join(homedir(), ".codex");
   return {
     command,
     args: [...appServerArgs, ...nativeCapacityOverrides(req)],
     cwd: req.workdir,
-    env: { ...runEnv, ...mcp.env, CODEX_HOME: realHome },
+    env: mergeProcessEnvironment(runEnv, mcp.env, { CODEX_HOME: realHome }),
     ...(Object.keys(mcp.servers).length ? { mcpServers: mcp.servers } : {}),
     cleanup: () => undefined
   };

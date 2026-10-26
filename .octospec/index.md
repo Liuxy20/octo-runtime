@@ -56,6 +56,8 @@
 
 - [DSH 改用未修改的官方 SDK](tasks/dsh-upstream-sdk/brief.md)：用户要求移除两个下游依赖补丁，保留实验性 DSH 接入并接受上游当前稳定性、内存与后代回收限制；[上游反馈 #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031) 已附完整历史 diff 与回归参考。当前验证见本任务记录。
 
+- [Windows 运行可靠性专项](tasks/windows-runtime-reliability/brief.md)：独立 worktree 实施 #131、#135、#134、#146，正式 [PR #179](https://github.com/Mininglamp-OSS/octo-runtime/pull/179)；方案准备度 [97/100](tasks/windows-runtime-reliability/assessment.md)。已完成[评审修复](tasks/windows-runtime-reliability/review-fixes.md)并 rebase 至 main@78bb88a，原生进程树、共享 worker、环境和四组 SDK/CLI 任务矩阵通过。最新全量与交付门禁见[验收与边界](tasks/windows-runtime-reliability/validation.md)及[journal](journal/shared/2026-10-26-windows-runtime-reliability.md)。
+
 - [Issue 17：撤回后使用官方 DSH Client 重新接入](tasks/17-dsh-official-reviewed/brief.md)：#176 的历史交付使用两个版本锁定补丁；补丁移除及当前支持边界以新的 DSH 官方 SDK 任务为准。
 
 - [Issue 17：官方 DSH TypeScript Client](tasks/17-dsh-official-client/brief.md)：以 `main@982a2fe` 替换 #173 的自实现 Client，锁定 npm 当前最高版本 `0.2.1-rc.3`；官方 SDK、Desktop、真实群聊及离线发行验证见[验收记录](tasks/17-dsh-official-client/acceptance.md)。浏览器已进入测试站统一登录页，指定账号文件只有 Bot Token，缺少网页登录凭据，消息 UI 与已有好友 DM 未验收；孤儿工具回收、解析前字节上限及原生 Windows 仍有明确限制。

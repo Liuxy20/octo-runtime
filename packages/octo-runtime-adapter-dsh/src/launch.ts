@@ -4,6 +4,7 @@ import { access, stat } from "node:fs/promises";
 import { delimiter, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
+import { processEnvironmentValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { DSH_VERSION, DshError, dshError, nativeCode } from "./errors.js";
 
 const VERSION_PROBE_TIMEOUT_MS = 10_000;
@@ -105,7 +106,14 @@ export async function resolveDshLaunch(
     throw new DshError("DSH_CONFIG_INVALID");
   if (!dshBin) {
     if (args.length === 0) dshBin = command;
-    else if (command === process.execPath && args.length === 1) dshBin = resolve(args[0]);
+    // PATHEXT 常返回 .EXE；Windows 同一 Node 路径不能因大小写差异被拒绝为任意 launcher。
+    else if (
+      args.length === 1 &&
+      (process.platform === "win32"
+        ? command.toLowerCase() === process.execPath.toLowerCase()
+        : command === process.execPath)
+    )
+      dshBin = resolve(args[0]);
     else throw new DshError("DSH_CONFIG_INVALID");
   }
   const launch = { command, args, env, dshBin };
@@ -117,10 +125,13 @@ async function executable(command: string, env: NodeJS.ProcessEnv): Promise<stri
   const candidates =
     isAbsolute(command) || /[/\\]/.test(command)
       ? [resolve(command)]
-      : (env.PATH ?? "").split(delimiter).flatMap((directory) => {
+      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter).flatMap((directory) => {
           const extensions =
             process.platform === "win32" && !/\.[^\\/]+$/.test(command)
-              ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")]
+              ? [
+                  "",
+                  ...(processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
+                ]
               : [""];
           return extensions.map((extension) => resolve(directory, command + extension));
         });

@@ -13,6 +13,13 @@
 - 按用户明确要求补充 [Issue 117/118 统一错误合同](tasks/117-118-turn-failure/brief.md#统一错误投影与日志用户已确认)：规划新增三个专用公共码，复用标准错误投影及既有结构化日志，卡片、文本、attempt 与日志关联同一 FailureEnvelope/diagnosticId；同步 Channel 规则及验收。本轮只更新文档，公共码尚未注册到产品目录。
 
 - 从最新 `origin/main@8af8360` 建立 Issue 117/118 独立分析 worktree，完成[目标与关键合同](tasks/117-118-turn-failure/brief.md)和[合理性分析](tasks/117-118-turn-failure/analysis.md)。双渠道分别核对未提交反馈与 unknown 误判，保留真实 ACK 不明/丢流的保守语义及单次尝试边界；仅规划、未实施，证据边界见[记录](journal/shared/2026-10-26-117-118-turn-failure-analysis.md)。
+- [PR #179 后续评审](tasks/windows-runtime-reliability/review-fixes.md#5049add-后续评审)：补齐 OpenCode/ZCode/Codex 环境消费者，清理失效确认 sidecar，澄清模块清单与运行状态路径。新增 9 项及相邻回归 38 项通过；按用户要求每轮统一提交推送和英文评论，验收见本任务记录。
+
+- [PR #179 评审修复](tasks/windows-runtime-reliability/review-fixes.md)：补齐环境消费者及 ACP/Grok spawn、可审计显式孤儿恢复、Windows 专属失败阻塞、SID 未知诊断和 XML 文档。新增 11 项及相邻回归 29 项通过，已 rebase 至 main@78bb88a 并重装上游依赖；最新全量与 CI 以[验收](tasks/windows-runtime-reliability/validation.md)记录为准。
+
+- 用户授权 Windows 专项按英文模板提交正式 PR 并按门禁合入 main；按最新指示先 rebase 当前分支，fetch 后 origin/main 仍为 8af8360，rebase 无冲突，未提交改动完整恢复。交付进度见[journal](journal/shared/2026-10-26-windows-runtime-reliability.md)。
+
+- 完成 [Windows 可靠性专项](tasks/windows-runtime-reliability/brief.md)：#131 身份验证后整树回收、失败留证阻止替代；#135 管道故障局限于调用；#134 UTF-16LE BOM、UTF-8 查询和 SID 漂移比较；#146 Windows 环境键逐层覆盖。真实多代进程、活动 sibling、长 cwd 故障及四组 SDK/CLI 计划任务矩阵通过，新增 14 项全部通过；全量与未修改基线均有相同 95 个失败，未冒充全绿。方案准备度 97/100，未提交或推送，见[实施与验收](tasks/windows-runtime-reliability/validation.md)及[journal](journal/shared/2026-10-26-windows-runtime-reliability.md)。
 
 ## 2026-10-24
 

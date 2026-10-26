@@ -6,11 +6,118 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { once } from "node:events";
+import { fileURLToPath } from "node:url";
 import {
   InvocationManifest,
   processStartIdentity,
   reapOrphanedInvocationManifest
 } from "../packages/octo-runtime-executor-kernel/dist/invocation-manifest.js";
+
+test("failed Windows tree cleanup preserves evidence across a later leader exit and refuses replacement", async (t) => {
+  const platform = Object.getOwnPropertyDescriptor(process, "platform");
+  const directory = await mkdtemp(join(tmpdir(), "oh-incomplete-reap-"));
+  const path = join(directory, "invocations.json");
+  const original = {
+    schemaVersion: 1,
+    kernelPid: 2147483646,
+    worker: { pid: 12345, started: "windows:100", entrypoint: "fixture" },
+    invocations: []
+  };
+  await writeFile(path, JSON.stringify(original));
+  t.after(async () => {
+    t.mock.restoreAll();
+    syncBuiltinESMExports();
+    Object.defineProperty(process, "platform", platform);
+    await rm(directory, { recursive: true, force: true });
+  });
+  Object.defineProperty(process, "platform", { ...platform, value: "win32" });
+  let leaderAlive = true;
+  t.mock.method(process, "kill", (pid, signal) => {
+    assert.equal(signal, 0, "must never signal the leader before tree cleanup");
+    if (pid === 12345 && leaderAlive) return true;
+    throw Object.assign(new Error("gone"), { code: "ESRCH" });
+  });
+  let kills = 0;
+  t.mock.method(childProcess, "execFile", (file, args, options, callback) => {
+    if (file === "powershell.exe") callback(null, "100", "");
+    else {
+      assert.equal(file, "taskkill.exe");
+      assert.deepEqual(args, ["/PID", "12345", "/T", "/F"]);
+      assert.equal(options.timeout, 5000);
+      kills++;
+      callback(Object.assign(new Error("denied"), { code: 1 }), "", "");
+    }
+  });
+  syncBuiltinESMExports();
+  assert.equal((await reapOrphanedInvocationManifest(path)).reason, "cleanup_incomplete");
+  assert.deepEqual(JSON.parse(await readFile(path, "utf8")), {
+    ...original,
+    cleanupIncomplete: true
+  });
+  assert.equal((await reapOrphanedInvocationManifest(path)).reason, "cleanup_incomplete");
+  assert.equal(kills, 2, "a still-identifiable worker is retried on the next recovery attempt");
+  leaderAlive = false;
+  await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
+  assert.equal(kills, 2);
+  assert.equal(JSON.parse(await readFile(path, "utf8")).cleanupIncomplete, true);
+});
+
+test(
+  "Windows orphan recovery reaps live owned descendants and protects an unrelated process",
+  {
+    skip: process.platform !== "win32",
+    timeout: 90_000
+  },
+  async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "oh-native-tree-"));
+    const path = join(directory, "invocations.json");
+    const tree = spawn(
+      process.execPath,
+      [fileURLToPath(new URL("./fixtures/windows-owned-tree.mjs", import.meta.url)), "root"],
+      {
+        stdio: ["ignore", "ignore", "ignore", "ipc"]
+      }
+    );
+    const unrelated = spawn(process.execPath, ["-e", "setInterval(()=>{},1000)"], {
+      stdio: "ignore"
+    });
+    let pids = [];
+    t.after(async () => {
+      for (const pid of [tree.pid, ...pids, unrelated.pid]) {
+        try {
+          process.kill(pid, "SIGKILL");
+        } catch (error) {
+          if (error.code !== "ESRCH") throw error;
+        }
+      }
+      await rm(directory, { recursive: true, force: true });
+    });
+    [pids] = await once(tree, "message");
+    const started = await processStartIdentity(tree.pid);
+    assert.ok(started);
+    const manifest = {
+      schemaVersion: 1,
+      kernelPid: 2147483646,
+      worker: { pid: tree.pid, started: `${started}-mismatch`, entrypoint: "fixture" },
+      invocations: []
+    };
+    await writeFile(path, JSON.stringify(manifest));
+    assert.equal((await reapOrphanedInvocationManifest(path)).reason, "identity_mismatch");
+    assert.doesNotThrow(() => process.kill(tree.pid, 0));
+    manifest.worker.started = started;
+    await writeFile(path, JSON.stringify(manifest));
+    assert.deepEqual(await reapOrphanedInvocationManifest(path), {
+      found: true,
+      reaped: true,
+      pid: tree.pid
+    });
+    for (const pid of [tree.pid, ...pids])
+      assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+    assert.doesNotThrow(() => process.kill(unrelated.pid, 0));
+    await assert.rejects(readFile(path), { code: "ENOENT" });
+  }
+);
 
 test("Windows identity queries stay fresh and preserve registration failures", async (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");

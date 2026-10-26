@@ -138,10 +138,13 @@ export function assertCommandSucceeded(result: CommandResult, backend: ServiceBa
   }
 }
 
-/** Read a UTF-8 service definition; absence is represented as `undefined`. */
+/** 读取服务定义；兼容 Windows UTF-16LE BOM 与既有 UTF-8，缺失返回 undefined。 */
 export async function readDefinition(path: string): Promise<string | undefined> {
   try {
-    return await readFile(path, "utf8");
+    const bytes = await readFile(path);
+    return bytes[0] === 0xff && bytes[1] === 0xfe
+      ? bytes.subarray(2).toString("utf16le")
+      : bytes.toString("utf8");
   } catch (error) {
     if (isNodeError(error, "ENOENT")) return undefined;
     throw error;
@@ -152,14 +155,23 @@ export async function readDefinition(path: string): Promise<string | undefined> 
  * Atomically replace a service definition with mode 0600.
  * Returns `false` when the installed bytes already match the desired content.
  */
-export async function writeDefinition(path: string, content: string): Promise<boolean> {
-  if ((await readDefinition(path)) === content) return false;
+export async function writeDefinition(
+  path: string,
+  content: string,
+  encoding: "utf8" | "utf16le" = "utf8"
+): Promise<boolean> {
+  const bytes = Buffer.from(encoding === "utf16le" ? `\uFEFF${content}` : content, encoding);
+  try {
+    if ((await readFile(path)).equals(bytes)) return false;
+  } catch (error) {
+    if (!isNodeError(error, "ENOENT")) throw error;
+  }
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
   const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
     const file = await open(temporary, "wx", 0o600);
     try {
-      await file.writeFile(content, "utf8");
+      await file.writeFile(bytes);
       await file.sync();
     } finally {
       await file.close();

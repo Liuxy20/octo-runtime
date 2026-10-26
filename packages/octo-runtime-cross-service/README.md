@@ -95,6 +95,18 @@ CLI 是否能在终端中直接执行与 service 如何启动是两个合同：i
 
 ## API
 
+`renderWindowsTaskXml(spec, userId)` 返回带 `encoding="UTF-16"` 声明的字符串。
+自行序列化时必须写入 UTF-16LE BOM；不要使用默认 UTF-8：
+
+```ts
+import { writeFile } from "node:fs/promises";
+import { renderWindowsTaskXml } from "@mininglamp-oss/octo-runtime-cross-service";
+
+await writeFile(path, Buffer.from(`\uFEFF${renderWindowsTaskXml(spec, userId)}`, "utf16le"));
+```
+
+通常直接调用 `backend.install(spec)`，由后端负责编码和原子替换。
+
 ```ts
 interface ServiceBackend {
   probe(): Promise<ServiceProbe>;

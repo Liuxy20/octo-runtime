@@ -74,6 +74,8 @@ Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 
 
 Adapter SDK 合并顺序为继承环境、Context envs、独立覆盖、Adapter 固定传输设置。Codex 原生 shell 与本地 MCP 白名单使用合并后的本轮值。内部字段不由 `invocationInput` 转为公共 JSON，不进入 Context hash、模型输入或渠道业务快照；带覆盖的 RPC 请求只记录脱敏摘要。该字段不是远程授权机制。
 
+Windows 在 Adapter 启动环境合并时按不区分大小写的变量名逐层覆盖，每个名字只保留一个最终拼写；JSON-lines、通用 ACP 和 Grok ACP 最终 spawn 再合并继承值时也遵守同一规则，不能重新引入 PATH/path 别名。MCP 展开、命令发现、OpenCode 内联配置、ZCode 桌面路径与 Codex Home 等进程环境消费者通过 processEnvironmentValue 按相同身份只读自有属性，不能固定读取某种大小写拼写。Adapter 追加固定环境设置时继续使用同一合并规则，不能因固定 CODEX_HOME 再生成别名。POSIX 保持大小写敏感。该转换只针对实际进程环境，不改变协议列表、Context hash 或 mandatory 的跨平台键合同；每次返回独立对象，不修改宿主 process.env。
+
 OpenClaw 使用 CLI dotenv 预配置，保持每轮非空 envs 不支持的现状；共享文件按配置顺序后写覆盖前写，不承诺多 Bot 按轮隔离，详见 [渠道合同](channel-integration.md)。桌面应用的身份选择及 Context envs 用法保留。
 
 F24 合同：前述顺序覆盖只允许启用、合法的 `adapter_type=openclaw` 配置参与，同一实例取最后一项。用户可以调整 items 顺序选择实例工具身份；其他 Adapter 配置不得覆盖，无候选时不借用其他 Provider 身份。CLI 同步循环已实施筛选，混合排序与无候选回归通过；文件写入与运行实例重启加载仍分别判断，见[实施记录](../tasks/gateway-august-feature-assessment/implementation.md)。

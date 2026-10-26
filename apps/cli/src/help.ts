@@ -69,10 +69,12 @@ Commands:
   stop          Stop this service, preserving its autostart setting
   status        Show native service, IPC and component status
   run           Run this component in the foreground
-${component === "executor-kernel" ? "" : "  logs          Tail service status logs (no conversation content)\n"}
+${component === "executor-kernel" ? "  recover       Acknowledge a blocked orphan cleanup after stopping all orphan tools\n" : "  logs          Tail service status logs (no conversation content)\n"}
 
 Flags: --home <path> --profile <name> --manifest <path> --json --help
+--manifest selects Provider/Extra modules; invocation state stays in --home/run.
 Install: --autostart=true|false
+${component === "executor-kernel" ? "Recover: --acknowledge-orphan-cleanup (retains evidence; refuses a live owner)\n" : ""}
 ${component === "executor-kernel" ? "" : "Logs: --lines <1..10000> (default 200) --follow --json (NDJSON)\n"}
 Kernel and Extras have independent services and autostart settings.
 An Extra may start before Kernel and connect when Kernel becomes available.`;
@@ -82,6 +84,7 @@ Manage the local Agent runtime and independent services.
 
 Usage:
 octo-runtime executor-kernel uninstall|install|start|restart|stop|status|run
+octo-runtime executor-kernel recover --acknowledge-orphan-cleanup
 octo-runtime <extra-name> uninstall|install|start|restart|stop|status|run
 octo-runtime <extra-name> logs [--lines 200] [--follow] [--json]
 octo-runtime status [--json]
@@ -93,6 +96,7 @@ octo-runtime extraget <name>
 octo-runtime playboard < request.json
 
 Flags: --home <path> --profile <name> --manifest <path> --json
+--manifest selects Provider/Extra modules; invocation state stays in --home/run.
 Install: --autostart=true|false (defaults to true)
 Extras: channel-gateway, channel-wecom, webui, or a name saved by extraset.
 Components:

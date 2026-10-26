@@ -198,6 +198,21 @@ octo-runtime adapter probe codex
 
 `doctor` 返回服务管理器探测、各组件服务定义及 IPC 状态，应检查返回字段。`adapter list` / `probe` 查询已运行 Kernel 的 Adapter 元数据，不隐式启动 Kernel，也不执行模型任务；实际执行成功仍须通过真实 Provider 验证。
 
+Windows 崩溃回收无法确认整棵工具树已停止时，启动返回 `ORPHAN_CLEANUP_INCOMPLETE`。
+用 `octo-runtime doctor --home <home>` 查看 `recovery` 状态和清单路径。先停止 Kernel，确认遗留工具后代已停止，再显式执行：
+
+```bash
+octo-runtime executor-kernel recover --acknowledge-orphan-cleanup --home <home>
+octo-runtime executor-kernel start --home <home>
+```
+
+恢复命令保留原清单归档，只确认该份记录；不会终止未知进程，也不把人工确认报告为已验证整树回收。
+原 Kernel/worker 仍存活或身份无法验证时拒绝确认。SDK 可用 `inspectOrphanCleanup(path)` 读取诊断，
+在同样的人工核验后调用 `acknowledgeOrphanCleanup(path)`，随后重新创建 Kernel。
+`--manifest` 仅选择 Provider/Extra 模块加载清单，不改变运行状态目录；doctor、recover 和 Kernel
+统一使用所选 `--home/run/kernel-invocations.json`，不以模块清单路径代替恢复记录。确认被消费或清单成功回收后，
+删除已失效的 `.acknowledgement` 辅助文件，保留原始归档；辅助文件清理失败不会将已恢复的启动重新阻塞。
+
 服务操作、status 和 doctor 默认输出紧凑文本；status 展示业务健康、Bot 状态与任务/队列/保留集合计数，不逐项列出会话或投递 ID。`--json` 输出缩进 JSON 并保留完整公开状态，原先解析默认 JSON 的脚本须显式添加此参数。extraget 保留完整紧凑 JSON，adapter 数据查询仍为 JSON，playboard 为 NDJSON。文本错误写 stderr，JSON 错误写 stdout；命令失败时检查非零退出码及稳定错误码、cause_code 和排障提示。组件日志目录为 `<home>/logs`；CLI 启动失败的稳定错误码与 cause 沿统一结构化日志写入 `kernel-<UTC小时>.log` 或 `extras/<组件>-<UTC小时>.log`，事件名为 `cli.initialization_failed` / `cli.initialization_cause`，不捕获任意 stdout/stderr。当前命令不提供旧 `--quiet`、`--verbose` 或 `--logs-dir` 参数。
 
 常规命令返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。错误类别以实际返回为准，`run` 意外退出返回失败；不要在清理未确认时直接替换实例。

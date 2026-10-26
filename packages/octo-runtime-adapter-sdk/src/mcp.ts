@@ -5,15 +5,15 @@ import {
   type InvokeRequest,
   type McpServers
 } from "@mininglamp-oss/octo-runtime-protocol";
-import { invocationEnvironment } from "./environment.js";
+import { invocationEnvironment, processEnvironmentValue } from "./environment.js";
 
 /** Only configuration strings expand. Replacement values are never scanned again. */
 export function expandMcpValue(value: string, env: NodeJS.ProcessEnv, path: string): string {
   return value.replace(/\$\$?\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (match, name: string) => {
     if (match.startsWith("$$")) return match.slice(1);
-    if (!Object.hasOwn(env, name) || env[name] === undefined)
-      throw new Error(`MCP_ENV_MISSING: ${path}: ${name}`);
-    return env[name];
+    const replacement = processEnvironmentValue(env, name);
+    if (replacement === undefined) throw new Error(`MCP_ENV_MISSING: ${path}: ${name}`);
+    return replacement;
   });
 }
 

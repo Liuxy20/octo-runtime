@@ -70,6 +70,12 @@ POSIX 只回收自己创建的独立进程组，leader 退出不表示后代消�
 
 Windows 使用 Node.js 创建进程，并通过系统已有的 `taskkill /PID … /T /F` 处理仍可识别的进程树。ChildProcess、status 和 manifest 保留真实目标身份。父进程先退出后可能失去后代归属；Runtime 被强杀或事件循环无法运行时，退出回调也可能不执行。这些场景不具备 Job Object 级回收保证。现有清理在 leader 已退出时仍可能返回成功，因此 cleanup.complete 不是异常退出后整棵树已清空的证明；对应缺口保留，不以文档修改宣称已经修复。
 
+Windows 崩溃后的 invocation manifest 回收在原 Kernel 已退出、worker 启动身份仍匹配时，先用 taskkill /T /F 回收整棵可识别树，再确认 leader 消失。命令失败或退出未确认返回 cleanup_incomplete，原子保存 cleanupIncomplete 事实并拒绝替代 open；后续 leader 消失或 PID 复用不能自动丢弃记录。同身份仍存活时继续重试。操作者已停止遗留工具后，可以显式 acknowledgeOrphanCleanup / CLI recover 确认：原清单归档、确认绑定原文摘要，仍存活或无法验证的原 owner 拒绝放行，旧确认不能放行新记录。下一次启动消费确认，reaped 仍为 false；doctor 显示路径与状态。持久阻塞仅作用于 Windows，POSIX 维持既有 best-effort orphan 回收合同。不扫描无关应用，也不为原本已经消失且从未登记清理失败的 leader 新增后代归属保证。
+
+JSON-lines Provider 的 stdout、stderr 及 readline 错误归属单次调用，走相同有界清理路径；迟到的管道 error 仍有监听。进程清理后释放所属 stdin/stdout/stderr，失败继续传播；释放句柄不是进程已退出的证明。Windows 原生启动失败保留 ENOENT 等原始 errno，不用全局异常抑制或重启共享 worker 消化本次管道错误。
+
+确认被消费并创建新清单、成功回收删除旧清单或正常 close 后，尽力删除已经失效的 acknowledgement 辅助文件，原始 acknowledged 归档继续保留。辅助文件清理失败不得将已恢复的启动重新阻塞；它已不能匹配新清单。CLI 的 --manifest 选择 Provider/Extra 模块清单，不改变 Home 下的 Kernel 状态位置，doctor、recover 与前台 Kernel 共用该位置。
+
 公共 Runtime 不引入 Go broker、原生扩展或随包辅助二进制，遵守[实现语言与原生依赖边界](architecture.md#实现语言与原生依赖边界)。已观察到的清理失败及协议未确认仍按既有合同报告 incomplete。各 Windows 平台及真实 Provider 的验证证据分别记录，历史原生方案的测试结果不能作为当前 Node.js 方案的回收保证，见[专项实施记录](../tasks/gateway-drain-windows-cleanup/implementation.md)。
 
 ## 临时执行与证据

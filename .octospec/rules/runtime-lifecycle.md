@@ -79,6 +79,10 @@ macOS stop/uninstall 及定义替换不能把 bootout 请求已受理视为卸�
 
 systemd/Windows 的停止或删除失败不得静默视为成功；只有原生明确 not-found 可忽略，管理器不可用和权限失败须传播。systemd 删除 unit 前确认 inactive/failed 且 MainPID=0；Windows /End 后有界确认任务不再 running/queued，再删除或 /Run 替换，未确认前保留定义。Windows 非零 /Query 不能直接推定不存在，通过 Task Scheduler 原生 HRESULT 确认，不能依赖本地化错误文字。
 
+Windows 计划任务 XML 使用 UTF-16 声明及带 BOM 的 UTF-16LE 原子写入，sidecar 读取兼容既有 UTF-8，drift 按解码后的正文比较。PowerShell 查询显式输出 UTF-8，保留中文路径与参数；principal/trigger 账号按系统 SID 核对，不能把同一账号的短名、域名或 SID 表示差异误报为 drift。原生 Create/Query/Delete 验证须使用独占任务名，覆盖 ASCII、Unicode/空格路径和 enabled 两种值，并确认最终删除。
+
+SID 翻译失败为未知；原文账号相同仍可确认，否则服务状态 unknown 并说明身份查询失败，不报告确定的账号漂移，也不伪装身份匹配。公共 XML renderer 返回文本时必须说明 UTF-16LE BOM 序列化要求。
+
 systemd 的 WorkingDirectory 与 StandardOutput/StandardError 的 append 路径不采用 argv 式去引号或 C 反转义：路径原样写入，仅把字面量 `%` 编码为 `%%`；ExecStart/Environment 继续独立使用参数引号。内部空格、引号、反斜杠及 Unicode 保留；奇数个末尾反斜杠附加保护空格，避免续行，原生 strstrip 随后移除保护空格；偶数个原样保留。路径本身不可无损保留的末尾空格或制表符明确返回 UNSUPPORTED_SPEC，未被裁剪的垂直制表符与换页符保留。重新 install 必须替换旧坏定义并先 daemon-reload，再允许 start；幂等 install 不额外 reload 或 restart。回归除字符串断言外，需通过 Linux 原生解析及显式启用的 user manager 验证真实 cwd 与日志落点。
 
 前台 run 的初始化失败、意外关闭和 closed 拒绝共用幂等终态处理：先解除 signal 监听并取消初始化，再确认清理、记录受控诊断及输出一次失败。意外关闭即使发生在 ready 后也不能只返回退出码；清理异常不吞掉原始初始化失败。正常 signal 停止仍等待清理并保留 incomplete 退出码。

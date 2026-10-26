@@ -35,7 +35,13 @@ clock gaps, repeated worker-readiness failures, Gateway connection recovery,
 bounded status output, log following/rotation and the native SDK loopback IM trial.
 The CLI signal-injection variant and POSIX process-group cleanup injection retain
 their platform-specific skips; the SDK recovery trial runs on Windows.
-These checks do not register native user services. Windows cleanup of descendants
+The Windows matrix also verifies invocation-local spawn/pipe failures, mixed-case
+environment overrides and native scheduled-task installation through both SDK and
+CLI. Review regressions cover environment consumers and ACP/Grok spawns, explicit
+orphan-cleanup acknowledgement with preserved evidence, and unknown account identity.
+Task tests use unique names and temporary ASCII or Unicode/space paths, cover
+both autostart values, and remove their registrations after verification.
+Windows cleanup of descendants
 whose process leader has already exited still lacks a Job Object-level guarantee;
 passing package verification does not close that release gap.
 

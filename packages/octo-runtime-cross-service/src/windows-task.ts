@@ -36,8 +36,10 @@ interface WindowsTaskQuery {
   arguments?: string;
   working_directory?: string;
   principal_user_id?: string;
+  principal_user_matches?: boolean | null;
   principal_logon_type?: string;
   trigger_user_id?: string;
+  trigger_user_matches?: boolean | null;
 }
 
 /**
@@ -169,9 +171,20 @@ export class WindowsUserTaskBackend implements ServiceBackend {
         detail: "PowerShell returned an invalid task status payload"
       };
     }
+    const identityUnknown =
+      windowsAccountIdentity(
+        task.principal_user_id,
+        task.principal_user_matches,
+        this.#windowsUserId
+      ) === undefined ||
+      windowsAccountIdentity(
+        task.trigger_user_id,
+        task.trigger_user_matches,
+        this.#windowsUserId
+      ) === undefined;
     return {
       manager: this.kind,
-      state: windowsTaskState(task.state),
+      state: identityUnknown ? "unknown" : windowsTaskState(task.state),
       enabled: task.enabled === true,
       lastExitCode: task.last_exit_code,
       definitionPath,
@@ -179,7 +192,11 @@ export class WindowsUserTaskBackend implements ServiceBackend {
         ...definitionDrift(actual, desired),
         ...windowsManagerDrift(task, normalized, this.#windowsUserId)
       ],
-      detail: task.state ? undefined : "Task Scheduler did not report a state"
+      detail: identityUnknown
+        ? "Task Scheduler account identity could not be resolved"
+        : task.state
+          ? undefined
+          : "Task Scheduler did not report a state"
     };
   }
 
@@ -198,7 +215,9 @@ export class WindowsUserTaskBackend implements ServiceBackend {
     if (previous.state === "running" || previous.state === "starting") await this.stop(spec);
     await writeDefinition(
       definitionPath,
-      renderWindowsTaskXmlNormalized(normalized, taskName, this.#windowsUserId)
+      renderWindowsTaskXmlNormalized(normalized, taskName, this.#windowsUserId),
+      // schtasks 的 XML 导入使用带 BOM 的 UTF-16LE，声明与字节编码必须一致。
+      "utf16le"
     );
     await this.#schtasksCommand(["/Create", "/TN", taskName, "/XML", definitionPath, "/F"]);
     // Restore only a previously running enabled task. A stopped task remains
@@ -337,7 +356,7 @@ export class WindowsUserTaskBackend implements ServiceBackend {
   }
 
   #query(taskName: string): Promise<CommandResult> {
-    const script = windowsTaskQueryScript(taskName);
+    const script = windowsTaskQueryScript(taskName, this.#windowsUserId);
     return runCommand(this.#runner, this.kind, this.#powershell, powershellArguments(script), {
       checked: false,
       env: this.#environment
@@ -379,7 +398,10 @@ export class WindowsUserTaskBackend implements ServiceBackend {
   }
 }
 
-/** Validate and render deterministic Task Scheduler XML for one Windows user. */
+/**
+ * 为一个 Windows 用户校验并返回确定的 XML 文本；声明为 UTF-16。
+ * 调用者写文件时必须使用带 BOM 的 UTF-16LE，不能按默认 UTF-8 序列化。
+ */
 export function renderWindowsTaskXml(spec: ServiceSpec, userId: string): string {
   assertSingleLine(userId, "Windows user id");
   const normalized = normalizeServiceSpec(spec, "win32");
@@ -421,7 +443,7 @@ function renderWindowsTaskXmlNormalized(
     spec.restart.policy === "on-failure"
       ? `    <RestartOnFailure>\n      <Interval>PT${Math.max(TASK_RESTART_MINIMUM_SECONDS, spec.restart.delaySeconds)}S</Interval>\n      <Count>${spec.restart.maxBurst}</Count>\n    </RestartOnFailure>\n`
       : "";
-  return `<?xml version="1.0" encoding="UTF-8"?>
+  return `<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Description>${escapeXml(spec.description)}</Description>
@@ -507,14 +529,22 @@ function assertWindowsSupported(spec: NormalizedServiceSpec): void {
   }
 }
 
-function windowsTaskQueryScript(taskName: string): string {
+function windowsTaskQueryScript(taskName: string, userId: string): string {
   const task = taskName.slice(1);
   const quotedTask = powershellSingleQuote(task);
-  return `$ErrorActionPreference='Stop';$task=Get-ScheduledTask -TaskPath '\\' -TaskName '${quotedTask}';$info=Get-ScheduledTaskInfo -InputObject $task;$action=@($task.Actions)[0];$trigger=@($task.Triggers)[0];[ordered]@{state=[string]$task.State;enabled=([string]$task.State -ne 'Disabled');last_exit_code=[long]$info.LastTaskResult;execute=[string]$action.Execute;arguments=[string]$action.Arguments;working_directory=[string]$action.WorkingDirectory;principal_user_id=[string]$task.Principal.UserId;principal_logon_type=[string]$task.Principal.LogonType;trigger_user_id=[string]$trigger.UserId}|ConvertTo-Json -Compress`;
+  // Scheduler 可把 DOMAIN\\user 规范化为短账号或 SID；比较系统身份，不能把同一账号报成 drift。
+  const identity = `function Get-AccountSid([string]$value){if($value -match '^S-1-'){return $value};return ([System.Security.Principal.NTAccount]$value).Translate([System.Security.Principal.SecurityIdentifier]).Value};function Test-AccountIdentity([string]$value){try{return (Get-AccountSid $value) -eq (Get-AccountSid '${powershellSingleQuote(userId)}')}catch{return $null}};`;
+  return `$ErrorActionPreference='Stop';${identity}$task=Get-ScheduledTask -TaskPath '\\' -TaskName '${quotedTask}';$info=Get-ScheduledTaskInfo -InputObject $task;$action=@($task.Actions)[0];$trigger=@($task.Triggers)[0];[ordered]@{state=[string]$task.State;enabled=([string]$task.State -ne 'Disabled');last_exit_code=[long]$info.LastTaskResult;execute=[string]$action.Execute;arguments=[string]$action.Arguments;working_directory=[string]$action.WorkingDirectory;principal_user_id=[string]$task.Principal.UserId;principal_user_matches=(Test-AccountIdentity ([string]$task.Principal.UserId));principal_logon_type=[string]$task.Principal.LogonType;trigger_user_id=[string]$trigger.UserId;trigger_user_matches=(Test-AccountIdentity ([string]$trigger.UserId))}|ConvertTo-Json -Compress`;
 }
 
 function powershellArguments(script: string): readonly string[] {
-  return ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script];
+  return [
+    "-NoLogo",
+    "-NoProfile",
+    "-NonInteractive",
+    "-Command",
+    `[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false);${script}`
+  ];
 }
 
 function powershellSingleQuote(value: string): string {
@@ -532,7 +562,8 @@ function windowsManagerDrift(
   if ((task.arguments ?? "") !== expectedArguments) drift.push("manager.arguments");
   if (!equalWindowsPath(task.working_directory, spec.workingDirectory))
     drift.push("manager.working_directory");
-  if (!equalWindowsIdentity(task.principal_user_id, userId)) drift.push("manager.principal_user");
+  if (windowsAccountIdentity(task.principal_user_id, task.principal_user_matches, userId) === false)
+    drift.push("manager.principal_user");
   if (
     !["interactivetoken", "interactive", "3"].includes(
       task.principal_logon_type?.toLowerCase() ?? ""
@@ -540,7 +571,8 @@ function windowsManagerDrift(
   ) {
     drift.push("manager.logon_type");
   }
-  if (!equalWindowsIdentity(task.trigger_user_id, userId)) drift.push("manager.trigger_user");
+  if (windowsAccountIdentity(task.trigger_user_id, task.trigger_user_matches, userId) === false)
+    drift.push("manager.trigger_user");
   if (task.enabled !== spec.enabled) drift.push("manager.enabled");
   return drift;
 }
@@ -553,6 +585,16 @@ function equalWindowsPath(actual: string | undefined, expected: string): boolean
 
 function equalWindowsIdentity(actual: string | undefined, expected: string): boolean {
   return actual?.toLowerCase() === expected.toLowerCase();
+}
+
+/** null 表示系统身份查询失败；相同原文可确认，否则保留未知，不能伪造匹配或漂移。 */
+function windowsAccountIdentity(
+  actual: string | undefined,
+  matches: boolean | null | undefined,
+  expected: string
+): boolean | undefined {
+  if (matches === null) return equalWindowsIdentity(actual, expected) ? true : undefined;
+  return matches ?? equalWindowsIdentity(actual, expected);
 }
 
 function windowsTaskState(value: string | undefined): ServiceState {

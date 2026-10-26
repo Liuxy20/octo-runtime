@@ -5,12 +5,21 @@ import { delimiter, isAbsolute, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import type { AdapterInvocationContext } from "./activity.js";
-import { invocationEnvironment } from "./environment.js";
+import {
+  invocationEnvironment,
+  mergeProcessEnvironment,
+  processEnvironmentValue
+} from "./environment.js";
 import { createProcessCleanup } from "./process-cleanup.js";
 import { watchLineLimit } from "./line-limit.js";
 import { mapReasoningEffort, reasoningLevelMap, type ReasoningLevelMap } from "./reasoning.js";
 export type { AdapterInvocationContext, ProviderActivity } from "./activity.js";
-export { invocationEnvironment, invocationEnvs } from "./environment.js";
+export {
+  invocationEnvironment,
+  invocationEnvs,
+  mergeProcessEnvironment,
+  processEnvironmentValue
+} from "./environment.js";
 export { invocationMcpServers, expandMcpValue, assertMcpOptions } from "./mcp.js";
 export { actmodeEvidence } from "./actmode.js";
 
@@ -225,7 +234,7 @@ export async function* spawnJsonLines<TNative>(
   const { command, args = [], cwd, env, input, signal, parseLine, onInputWritten } = options;
   const child = spawn(command, args, {
     cwd,
-    env: { ...process.env, ...env },
+    env: mergeProcessEnvironment(process.env, env ?? {}),
     stdio: ["pipe", "pipe", "pipe"],
     detached: process.platform !== "win32"
   });
@@ -254,6 +263,16 @@ export async function* spawnJsonLines<TNative>(
   // would incorrectly classify a synchronous write failure as dispatched.
   let controlError: Error | undefined;
   const reader = createInterface({ input: child.stdout });
+  // Windows 启动失败可同时产生子进程 ENOENT 与输出管道 ENOTCONN。
+  // 管道及 readline 错误只结束本次调用；监听保留到句柄关闭，防止清理期间迟到 error 逃逸。
+  const outputError = (error: Error): void => {
+    controlError ??= error;
+    reader.close();
+    abort();
+  };
+  child.stdout.on("error", outputError);
+  child.stderr.on("error", outputError);
+  reader.on("error", outputError);
   const removeLineGuard = watchLineLimit(
     child.stdout,
     options.rawMessageMaxBytes ?? DEFAULT_STREAM_LIMIT_POLICY.rawMessageMaxBytes,
@@ -311,7 +330,14 @@ export async function* spawnJsonLines<TNative>(
     removeLineGuard();
     signal?.removeEventListener("abort", abort);
     // 正常 EOF 也要回收继承进程组、但已关闭 stdio 的后台后代。
-    await cleanup();
+    try {
+      await cleanup();
+    } finally {
+      // 释放本次调用的所有管道；destroy 不是进程退出证明，cleanup 失败仍向调用方传播。
+      child.stdin.destroy();
+      child.stdout.destroy();
+      child.stderr.destroy();
+    }
   }
 }
 
@@ -408,10 +434,13 @@ export async function probeCommand(
   const candidates =
     isAbsolute(command) || command.includes("/") || command.includes("\\")
       ? [command]
-      : (env.PATH ?? "").split(delimiter).flatMap((directory) => {
+      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter).flatMap((directory) => {
           const extensions =
             process.platform === "win32" && !/\.[^\\/]+$/.test(command)
-              ? ["", ...(env.PATHEXT ?? ".EXE;.CMD;.BAT;.COM").split(";")]
+              ? [
+                  "",
+                  ...(processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
+                ]
               : [""];
           return extensions.map((extension) => resolve(directory, command + extension));
         });

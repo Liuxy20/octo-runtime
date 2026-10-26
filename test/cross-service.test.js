@@ -84,7 +84,7 @@ test("systemd renderer quotes argv without a shell and applies lifecycle setting
 
 test("Windows renderer uses a least-privilege current-user logon task", () => {
   const xml = renderWindowsTaskXml(windowsSpec, "WORKGROUP\\alice");
-  assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-8"\?>/);
+  assert.match(xml, /^<\?xml version="1\.0" encoding="UTF-16"\?>/);
   assert.match(xml, /<UserId>WORKGROUP\\alice<\/UserId>/);
   assert.match(xml, /<LogonType>InteractiveToken<\/LogonType>/);
   assert.match(xml, /<RunLevel>LeastPrivilege<\/RunLevel>/);
@@ -365,10 +365,9 @@ test("Windows install registers structured XML and inspect detects no drift", as
     runner.calls.some((call) => call.args[0] === "/Run"),
     false
   );
-  assert.match(
-    await readFile(join(definitionDirectory, `${windowsSpec.id}.xml`), "utf8"),
-    /<LogonType>InteractiveToken<\/LogonType>/
-  );
+  const bytes = await readFile(join(definitionDirectory, `${windowsSpec.id}.xml`));
+  assert.deepEqual([...bytes.subarray(0, 2)], [0xff, 0xfe]);
+  assert.match(bytes.subarray(2).toString("utf16le"), /<LogonType>InteractiveToken<\/LogonType>/);
 
   const status = await backend.inspect(windowsSpec);
   assert.equal(status.state, "stopped");

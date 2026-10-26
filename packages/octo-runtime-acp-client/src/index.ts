@@ -1,4 +1,8 @@
-import { DriverQueue, watchLineLimit } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  DriverQueue,
+  watchLineLimit,
+  mergeProcessEnvironment
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   INVOKE_REQUEST_MAX_BYTES,
   resolveStreamLimitPolicy,
@@ -443,7 +447,7 @@ export function spawnAcpClient(options: SpawnAcpClientOptions): AcpClient {
   } = options;
   const child = spawn(command, args, {
     cwd,
-    env: { ...process.env, ...env },
+    env: mergeProcessEnvironment(process.env, env ?? {}),
     stdio: ["pipe", "pipe", "pipe"],
     detached: process.platform !== "win32"
   });

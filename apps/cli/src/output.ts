@@ -113,6 +113,12 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     INVALID_ARGUMENTS: "Use --help to see the available commands and flags.",
     SETUP_IN_PROGRESS:
       "Another component lifecycle operation is in progress. Wait for it to finish, then retry.",
+    ORPHAN_CLEANUP_INCOMPLETE:
+      "Run doctor with the same --home to inspect the manifest. After stopping all orphan tools, run executor-kernel recover --acknowledge-orphan-cleanup, then start again.",
+    ORPHAN_CLEANUP_OWNER_ALIVE:
+      "The original Kernel or worker is still alive or its identity cannot be verified. Stop it safely before acknowledging cleanup.",
+    ORPHAN_CLEANUP_NOT_PENDING:
+      "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home.",
     SERVICE_NOT_INSTALLED: "Run this component's install command, then start it.",
     NOT_INSTALLED: "Run this component's install command, then start it.",
     EXTRA_NOT_REGISTERED: "Save this Extra's declaration with extraset before starting it.",

@@ -1,0 +1,4 @@
+{
+  "version": 1,
+  "adapters": [{ "type": "test", "module": "./pipe-fault-adapter.mjs", "export": "testAdapter" }]
+}

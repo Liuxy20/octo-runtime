@@ -20,6 +20,8 @@ export { isInvocationNotSubmitted } from "./submission-error.js";
 export * from "./types.js";
 export {
   InvocationManifest,
+  acknowledgeOrphanCleanup,
+  inspectOrphanCleanup,
   processStartIdentity,
   reapOrphanedInvocationManifest
 } from "./invocation-manifest.js";

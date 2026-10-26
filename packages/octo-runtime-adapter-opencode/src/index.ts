@@ -3,6 +3,7 @@ import {
   hasImageInput,
   mapReasoningEffort,
   invocationEnvironment,
+  processEnvironmentValue,
   invocationMcpServers,
   assertMcpOptions
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -85,7 +86,10 @@ export async function probeOpenCode(
 }
 
 function inlineConfig(request: InvokeRequest): Record<string, unknown> {
-  const content = invocationEnvironment(request).OPENCODE_CONFIG_CONTENT;
+  const content = processEnvironmentValue(
+    invocationEnvironment(request),
+    "OPENCODE_CONFIG_CONTENT"
+  );
   if (!content) return {};
   let parsed: unknown;
   try {
