@@ -12,6 +12,10 @@ test("service construction cannot regain a top-level process launcher or Extra e
     "startExtra",
     "OwnedExtra",
     "ExtraLaunchOptions",
+    "startNativeComponent",
+    "NativeComponentOptions",
+    "ComponentStartError",
+    "CleanupResult",
     "launchNode",
     "createExtraPort"
   ]);
@@ -30,9 +34,7 @@ test("service construction cannot regain a top-level process launcher or Extra e
         ts.ScriptTarget.Latest,
         true
       );
-      const serviceAssembly =
-        (root.includes("host-sdk") && !["native.ts", "launch.ts"].includes(file)) ||
-        file === "service.ts";
+      const serviceAssembly = root.includes("host-sdk") || file === "service.ts";
       const visit = (node) => {
         if (ts.isIdentifier(node))
           assert.equal(forbidden.has(node.text), false, `${path}: forbidden ${node.text}`);
@@ -62,6 +64,8 @@ test("service construction cannot regain a top-level process launcher or Extra e
     "packages/octo-runtime-host-sdk/dist/kernel.js",
     "packages/octo-runtime-host-sdk/dist/extra-entry.js",
     "packages/octo-runtime-host-sdk/dist/extra-port.js",
+    "packages/octo-runtime-host-sdk/dist/native.js",
+    "packages/octo-runtime-host-sdk/dist/launch.js",
     "packages/octo-runtime-executor-kernel/dist/entry.js"
   ])
     await assert.rejects(access(file), { code: "ENOENT" });

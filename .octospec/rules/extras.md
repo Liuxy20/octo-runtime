@@ -81,4 +81,4 @@ Issue93新增组件状态专用白名单：可选非JSON `logging.statusOutput(r
 
 三个内置插件为 channel-gateway、channel-wecom 和 webui，都从主包 /extras/<name> 公开模块导入，并复用函数式入口。公开配置 Schema 从主包 /extras/<name>/config-schema.json 获取。没有 Extra 也可执行本地请求。
 
-验证：[生命周期](../../test/host-sdk-lifecycle.test.js)、[实际依赖与启动](../../test/extra-startup.test.js)、[插件加载器](../../test/extras.test.js)、[SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。真实 IM 与平台证据单独记录。
+验证：[生命周期](../../test/host-sdk-lifecycle.test.js)、[实际依赖与启动](../../test/extra-startup.test.js)、[插件加载器](../../test/extras.test.js)、[SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。真实 IM 与平台证据单独记录。

@@ -10,7 +10,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 用户确认 CLI 默认包含全部 Adapter、Extra，以及系统管理、开启自启等服务能力；用于云端设备的定制接入与运维。Electron、Tauri 2 桌面程序必须 SDK 接入，严禁把 CLI 作为接入层。
 
-新增 [CLI 使用指南](../../../CLI_USAGE_GUIDE.md)和 [SDK 原生接入指南](../../../SDK_NATIVE_INTEGRATION_GUIDE.md)，各自先说明背景和适用场景。[INTEGRATION.md](../../../INTEGRATION.md)收敛为选型导航，当前 README、开发、部署、包级和工程知识入口同步迁移。历史记录保留原文件引用，用于追溯当时的文档。
+新增 [CLI 使用指南](../../../docs/zh-CN/getting-started/cli.md)和 `SDK_NATIVE_INTEGRATION_GUIDE.md`（已删除），各自先说明背景和适用场景。[INTEGRATION.md](../../../INTEGRATION.md)收敛为选型导航，当前 README、开发、部署、包级和工程知识入口同步迁移。历史记录保留原文件引用，用于追溯当时的文档。
 
 现有命令、JSON 和 TypeScript 示例迁移到各自指南。明确发行物包含、组件启用、系统自启注册及 Provider 准备是不同事项；SDK 宿主仍自行决定配置来源、依赖与装配范围。Tauri 2 需宿主提供 Node.js 辅助进程承接 SDK，不宣称已有 Tauri 插件。
 

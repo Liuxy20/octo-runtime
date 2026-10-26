@@ -8,7 +8,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 # SDK 按宿主操作拆分
 
-按用户反馈新增 [完整原生接入指南](../../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)与 [Channel Gateway 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md)。前者按启动 Runtime、配置特性、可选直接调用 Agent 组织；后者作为 OctoBuddy 推荐入口，覆盖 submodule、宿主 workspace/package.json、Codex/OpenClaw 注册、IM 文件格式、SDK 启动及配置重载。原 SDK 文档只保留选型导航，概念与协议通过源码和规则链接查阅。
+按用户反馈新增 `SDK_NATIVE_INTEGRATION_FULL_GUIDE.md`（已删除）与 [Channel Gateway 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md)。前者按启动 Runtime、配置特性、可选直接调用 Agent 组织；后者作为 OctoBuddy 推荐入口，覆盖 submodule、宿主 workspace/package.json、Codex/OpenClaw 注册、IM 文件格式、SDK 启动及配置重载。原 SDK 文档只保留选型导航，概念与协议通过源码和规则链接查阅。
 
 示例使用当前 SDK：主进程 startAccount 启动 daemon/Host；Gateway 重载明确卸载、保存、加载，并串行处理设置操作。宿主读取文件后传对象，不给插件增加文件取值机制。OpenClaw 按实际账号及租户 profile 配置 URL/Token，保持设备身份；不误用 IM bf_token。当前 daemon/Host 传递依赖仍含其他 Adapter，不把选择加载两个写成依赖自动裁剪。
 

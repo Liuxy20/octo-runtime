@@ -4,12 +4,12 @@
 
 Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、背景资料和执行配置，Runtime 调用 Codex、Claude Code 等 Provider，并将输出以事件流返回。
 
-这套文档面向接入 SDK、提供业务背景和工具、处理执行结果的开发者。
+这套文档面向接入 SDK、提供业务背景和工具、处理执行结果的开发者。宿主专有的装配细节——Electron 初始化、IM 业务接线——留在根目录的 `SDK_*` 指南；本库覆盖通用流程与接口参考。
 
 ## 从这里开始
 
 1. 阅读[核心架构](concepts/architecture.md)，了解各模块的作用和执行流程。
-2. 按 [CLI 安装与调用](getting-started/cli.md)运行，或完成[第一次 SDK 调用](getting-started/sdk.md)。
+2. 按 [CLI 安装与运维](getting-started/cli.md)运行，或完成[第一次 SDK 调用](getting-started/sdk.md)。
 3. 配置所选 [Harness](guides/harnesses.md)，再理解 [Inputs 与 Contexts](concepts/inputs-and-contexts.md)。
 
 ## 操作指南
@@ -34,4 +34,4 @@ Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、
 | 输出模式、取消、审批和追问       | [输出与控制](reference/output-and-control.md) |
 | Adapter 支持范围与实现边界       | [Provider](reference/providers.md)            |
 
-本库依据源码 `d44f5cd` 编写。验证结果和旧文档的对应关系见[维护与验证](maintenance.md)。更多 CLI 运维操作见[完整 CLI 指南](../../CLI_USAGE_GUIDE.md)。
+验证结果和旧文档的对应关系见[维护与验证](maintenance.md)。设备运维见 [CLI 安装与运维](getting-started/cli.md)。

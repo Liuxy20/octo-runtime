@@ -63,6 +63,56 @@ serveWorker([selectedAdapter]);
 
 After creating the service, await `initialize()` before using `kernel.client`. On exit, close the application's Extras and wait for result consumption, delivery, and storage operations to finish before closing its Kernel and database. Check the cleanup result's `complete` field. If it is `false`, handle the reported pending resources.
 
+## Embed the Source as a Submodule
+
+An application may consume the internal workspace packages instead of the published package. Add the submodule from the latest remote `main`:
+
+```sh
+git submodule add --branch main git@github.com:Mininglamp-OSS/octo-runtime.git octo-runtime
+```
+
+To initialize an existing submodule and actively upgrade it, first finish or preserve any local changes, then run:
+
+```sh
+git submodule update --init -- octo-runtime
+git submodule set-branch --branch main -- octo-runtime
+git submodule update --remote --checkout -- octo-runtime
+git -C octo-runtime log -1 --oneline
+```
+
+A detached HEAD after the update is normal. `.gitmodules` tracks the branch used for upgrades; the application's Git commit pins the actual Runtime commit. Validate an upgrade before committing that pointer and the application's lockfile together. CI initializes the pinned submodule and uses `pnpm install --frozen-lockfile`; it does not update to remote `main` on every build.
+
+Add this pattern to the application's `pnpm-workspace.yaml`, preserving its existing packages and required `allowBuilds` settings:
+
+```yaml
+packages:
+  - octo-runtime/packages/*
+```
+
+Declare only packages directly imported by the application. For an application with Codex and Channel Gateway, merge these dependencies into its `package.json`:
+
+```json
+{
+  "dependencies": {
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
+    "@mininglamp-oss/octo-runtime-adapter-codex": "workspace:*",
+    "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*"
+  }
+}
+```
+
+Run installation and dependency-ordered builds from the application root:
+
+```sh
+pnpm install
+pnpm --filter @mininglamp-oss/octo-runtime-host-sdk... --filter @mininglamp-oss/octo-runtime-adapter-codex... --filter @mininglamp-oss/octo-runtime-extra-channel-gateway... run build
+```
+
+Compile the application's own worker and service entry files as part of its existing build. Rebuild the selected Runtime packages after changing their source. Keep the submodule's workspace configuration and lockfile; this integration uses the application's workspace and lockfile. The Runtime root CLI package and `apps/*` need not be included.
+
+Source imports use internal package names: `createKernelService` and `serveWorker` come from `@mininglamp-oss/octo-runtime-executor-kernel`; `createExtraService` comes from `@mininglamp-oss/octo-runtime-host-sdk`; Extra plugin types come from its `/extra` subpath. Import the selected Adapter and Extra from their own packages. The invocation and shutdown order shown above also applies to source integration. See [workspace boundaries](../../../.octospec/guides/workspace.md) and the [Channel Gateway integration guide](../../../SDK_CHANNEL_GATEWAY_GUIDE.md) for further assembly details.
+
 ## Verify Without a Real Provider
 
 From the repository root:

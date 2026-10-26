@@ -1,0 +1,47 @@
+task: 15-core-package-readmes
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/15
+relationship: relates-only
+baseline: 87291ca
+branch: codex/core-package-readmes
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/environment.md
+sources:
+  - package.json
+  - public/
+  - packages/octo-runtime-protocol/src/
+  - packages/octo-runtime-adapter-sdk/src/
+  - packages/octo-runtime-acp-client/src/index.ts
+  - packages/octo-runtime-executor-core/src/
+  - packages/octo-runtime-executor-kernel/src/
+  - packages/octo-runtime-host-sdk/src/
+  - packages/octo-runtime-adapter-*/src/
+  - packages/octo-runtime-extra-*/src/
+  - packages/octo-runtime-extra-*/config-schema.json
+  - packages/octo-runtime-cross-service/src/
+  - docs/en/maintenance.md
+  - scripts/check-developer-docs.mjs
+  - .github/workflows/ci.yml
+  - test/native-service-architecture.test.js
+external_sources:
+  - octo-work-app/src/main/kernel-runtime-service.ts
+skills:
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md

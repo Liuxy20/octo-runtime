@@ -1,134 +1,111 @@
 # Executor Core
 
-Core 的 invoke(input, environment) 与 [KernelClient.invoke](../octo-runtime-executor-kernel/README.md) 使用相同的 inputs/contexts 和 native/canonical 输出概念。Core 在宿主进程执行，关闭执行 iterator 会取消；Kernel 独立拥有已接纳 Run，关闭观察 iterator/client 不取消。Core 支持本地 streamLimits，Kernel 当前 wire 显式拒绝该选项。需要隔离和断线续流时使用 Kernel，owner shutdown/drain 的结果都必须显式检查。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-`AgentExecutor` is the single transport-independent execution implementation. The
-internal workspace package is private. Consumers of the distribution import
-`@mininglamp-oss/octo-runtime/executor-core`.
+`AgentExecutor` is the one place Octo Runtime actually runs an agent. Register the Adapters you ship, hand it an `InvokeInput`, and it prepares the turn, calls the selected Provider, and streams the result back. Kernel runs this same class inside its isolated worker, so in-process embedding and the Kernel path cannot drift into two different execution behaviours.
 
-## Integration Priority
+## When to use it
 
-生产接入默认推荐经 SDK/IPC 使用独立 Executor Kernel，尤其是 Electron 等长期运行宿主。
-Kernel 已提供本地 IPC、源窗口及 worker 监督；worker 通过 stdio NDJSON 调用同一个 Core，
-不再使用旧 adapter-host 包或 daemon 架构。
+- You run execution inside your own process and accept sharing its event loop, memory, and failure domain.
+- You are writing a Kernel worker entrypoint — `serveWorker` builds an `AgentExecutor` for you.
+- You need process isolation, supervision, or stream replay: use [Kernel](../octo-runtime-executor-kernel/README.md) instead.
 
-Direct Core embedding is an explicitly selected, simpler SDK integration option.
-It shares the host process failure domain and requires the host to manage its
-lifecycle. Publishing this entry point does not change the preference for isolated
-execution. Both paths use the same AgentExecutor implementation.
-
-The following example demonstrates the optional in-process integration:
+## Make one call
 
 ```ts
-import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime/executor-core";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
 
-export async function execute(adapter: HostedAdapter) {
-  // 显式进程内接入：与宿主共享事件循环和故障域，Adapter 的选择/配置归宿主。
-  const executor = new AgentExecutor();
-  executor.register(adapter);
-  try {
-    for await (const frame of executor.invokeFrames({
-      inputs: [{ type: "text", text: "Inspect this workspace" }],
-      contexts: {
-        schema: "octo.context-envelope/v3",
-        items: [
-          {
-            namespace: "octo.execution",
-            name: "adapter",
-            payload: { type: adapter.metadata.type }
-          },
-          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
-        ]
-      }
-    })) {
-      console.log(frame);
-    }
-  } finally {
-    // 提前结束 Core 迭代会请求取消；仍需检查清理结果，closed/终态不代表资源已回收。
-    const result = await executor.shutdown();
-    if (result.cleanup === "incomplete") throw new Error("Executor cleanup remains incomplete");
+const executor = new AgentExecutor();
+executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throws
+
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Summarize the last commit." }],
+  approvalMode: "full_access",
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
+});
+
+try {
+  let terminal: string | undefined;
+  for await (const event of executor.invoke({ ...input, protocol_mode: "canonical" })) {
+    if (event.type === "message.delta" && event.payload.channel === "final")
+      process.stdout.write(event.payload.text ?? "");
+    if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
+      terminal = event.type;
+    if (event.type === "run.failed") throw new Error(JSON.stringify(event.payload));
+  }
+  if (terminal !== "run.completed") throw new Error(terminal ?? "RUN_TERMINAL_MISSING");
+} finally {
+  const { cleanup } = await executor.shutdown();
+  if (cleanup !== "complete") throw new Error("EXECUTOR_CLEANUP_INCOMPLETE");
 }
 ```
 
-The host chooses, configures and registers its adapters. Construction and import
-do not open IPC endpoints, install providers, load Extras, read a CLI manifest,
-or register process signal handlers. Context rendering preserves the current
-event's selected items; it does not recover or supplement business history.
-Run version 7, Context v3 and Adapter protocol 2 remain independent.
+Two details that trip people up: the Adapter is chosen by the `octo.execution` / `adapter` Context item, not by a constructor option; and asking for `canonical` gives you `CanonicalEvent` instead of Provider frames.
 
-## Execution API
+## What the executor does with your input
 
-- `register`, `list`, `describe`, `probe`: registration and explicit availability
-  discovery. `list` returns metadata; `describe` performs bounded probes.
-- `invoke`: defaults to native frames; explicit `protocol_mode: "canonical"`
-  produces typed canonical events through the existing protocol view.
-- `invokeFrames`: both modes as validated source `HostFrame`s with stable
-  execution identity and monotonically increasing sequence numbers.
-- `cancel`: requests cancellation by invocation ID; `true` does not confirm
-  provider exit. `InvokeEnvironment.signal` is a local alternative.
-- `respondInteraction` / `respondNative`: route responses to the active owner
-  in the selected mode; provider adapters validate the original pending request,
-  permissions, duplicate responses and transport delivery.
-- `shutdown`: permanently closes admission and attempts bounded cleanup of all
-  owned invocations. The owner must inspect the returned result.
+It validates and freezes the request, renders this turn's model input, resolves the local environment, and admits the run. Admission happens before any Provider starts: identity, capacity, and closed-state checks all run there. Business Context comes from this invocation only — Core never fills a gap from session history.
 
-Input preparation can reject synchronously. Identity, capacity and closed-state
-checks occur at the first `next()`, before the running receipt becomes visible.
-Catch errors around the entire consumption loop. Creating an iterator without
-consuming it neither reserves capacity nor starts a provider. All submitted data
-is snapshotted; signals stay local and trusted environment overrides and stream
-budgets remain separate from model text. Defaults and mandatory constraints are
-resolved once on the execution path.
+`invokeFrames` validates synchronously, so a malformed request throws at the call. `invoke` is an async generator, so everything runs at the first `next()`. Wrap the whole consumption loop, not just one call: an unconsumed iterator reserves no capacity and starts no Provider.
 
-After admission, cancellation owns the invocation even before provider startup.
-An abandoned direct iterator must be closed with `return()` or cancelled; a
-paused consumer does not imply cancellation. Kernel subscription disconnection
-has different semantics and does not cancel its background source consumer.
+`environment` is the second argument and never travels in the JSON:
 
-## Shutdown and failure domain
+- `signal` — cancellation for this run.
+- `executionEnvOverrides` — trusted values the host injects.
+- `streamLimits` — local budgets; Kernel rejects this one (`KERNEL_STREAM_LIMITS_UNSUPPORTED`).
 
-`shutdown(reason?, timeoutMs = 2500)` synchronously blocks new registration and
-admission. Concurrent calls share an attempt. The timeout must be a positive
-safe integer. `ExecutorShutdownResult` is an immutable snapshot:
+## API
 
-- `state: "closed"` means admission is closed.
-- `cleanup: "complete"` means all cleanup observed by this Core has completed.
-- `cleanup: "incomplete"`, `unresolvedInvocationIds` and
-  `failedCleanupInvocationIds` retain unresolved ownership. A later `shutdown`
-  waits again for pending cleanup without reopening execution or replaying any
-  request. Failed or unverified cleanup stays incomplete: another iterator
-  `return()` cannot retry a failed generator finalizer. A late completion of
-  pending cleanup does not alter an earlier result.
+| Call                                  | What it does                                                                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `register(adapter)`                   | Register by `metadata.type`. A second registration of the same type throws.                                                                     |
+| `list()`, `describe(configurations?)` | List registered Adapters; `describe` probes installation and adds `available` plus a reason. Available is not a promise that this run succeeds. |
+| `invoke(input, environment?)`         | The normal entry. `native` frames by default, `CanonicalEvent` with `protocol_mode: "canonical"`.                                               |
+| `invokeFrames(input, environment?)`   | The same execution with the `HostFrame` envelope (run ID, invocation ID, `seq`) kept around each event.                                         |
+| `cancel(invocationId)`                | Request cancellation. `true` means accepted, not that the Provider exited.                                                                      |
+| `respondInteraction`, `respondNative` | Answer an interaction request for the invocation that owns it.                                                                                  |
+| `shutdown(reason?, timeoutMs = 2500)` | Stop accepting work and wait, bounded, for cleanup.                                                                                             |
 
-The iterator contract provides no independent resource-disposal proof. A rejected
-`next()` may originate in a failing finalizer, so Core conservatively retains
-failed ownership even if a later `return()` resolves. A `return()` yielding
-`done: false`, or an early close without `return()`, also cannot confirm cleanup.
-Incomplete means cleanup is unconfirmed, not that a leak is proven. These records
-remain within the 1024-entry bound and can exhaust admission; the owning host or
-isolated worker must handle containment. Core does not retry the Run or scan
-unowned processes to hide this state.
+## What ends a run
 
-Closed admission does not authorize releasing a host's Home lock, nor prove that
-arbitrary JavaScript or unowned descendants stopped. Adapter-owned process
-cleanup stays with the adapter. A successful provider candidate is confirmed
-only after stream and cleanup validation; cleanup failure cannot report success.
+In canonical mode only `run.completed` is success. A final message, an accepted cancellation, and an iterator that simply runs out are not.
 
-Provider terminal draining and iterator closure share one `cancelGraceMs` budget,
-starting at the first accepted terminal, abort or cleanup request. The deadline
-uses a monotonic clock. Catch/finally and resumed consumers use the remaining
-budget; they do not grant another grace period. The explicit `shutdown` timeout
-only bounds that caller's wait for owned cleanup, without resetting this deadline.
+Closing a direct iterator early _requests cancellation_ — unlike Kernel, where stopping observation leaves the run alive. An iterator nobody closes or cancels does not cancel itself: the run keeps going and holds capacity until it ends or the owner shuts down.
 
-直接调用与宿主共享进程及事件循环，Core 不能隔离 `process.exit`、OOM 或同步阻塞。
-默认隔离链路由 Executor Kernel 持有独立 worker，并通过 stdio NDJSON 调用同一个
-AgentExecutor。Kernel 的 IPC 观察、有限源窗口与 worker 监督不改变 Core 的唯一执行职责；
-worker 替换只恢复后续服务能力，不自动重放中断的 Run。
+## Cleanup
 
-Invocation identity metadata is bounded to 1024 entries with lazy 120-second
-eviction of inactive records. Active, paused or incompletely cleaned calls are
-not evicted. There is no business database or replay buffer in Core. Explicit
-`prepareInvokeInput`, `resolveLocalContext`, `localRuntimeLimits` and
-`prepareRunContext` helpers remain available; workspace preparation is not
-automatically added to every invocation.
+`shutdown()` returns an immutable snapshot. `state: "closed"` only means no new runs are accepted; only `cleanup: "complete"` means every owned resource was actually released. When it is `incomplete`, `unresolvedInvocationIds` and `failedCleanupInvocationIds` name what is still holding on.
+
+Admission never reopens and a failed finalizer is never retried — a later `shutdown()` waits again but cannot resurrect the attempt. A rejected `next()`, a `return()` that reports `done: false`, or a generator without a usable finalizer is not proof of disposal.
+
+Provider terminal draining and iterator closure share one monotonic `cancelGraceMs` budget, starting at the first terminal, abort, or cleanup request; the `shutdown` timeout bounds only that caller's wait.
+
+Core keeps at most 1,024 invocation identity records and evicts inactive ones after 120 seconds. Active, paused, and uncleaned invocations are never evicted, so leaked ownership eventually exhausts capacity. These records are correlation state, not history and not an output replay buffer.
+
+## Direct Core or Kernel
+
+| Concern                    | Direct `AgentExecutor`                                                                     | `KernelClient`                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Execution location         | Your process                                                                               | Kernel's isolated worker                            |
+| Failure domain             | Shares your event loop; `process.exit`, OOM, or a synchronous block takes the host with it | Worker failures are contained; the service stays up |
+| Ending the iterator early  | Requests cancellation                                                                      | Stops observation only                              |
+| Replay                     | None                                                                                       | Bounded, by original identity and sequence          |
+| `environment.streamLimits` | Supported                                                                                  | Rejected                                            |
+| Shutdown                   | `shutdown()`, then check `cleanup`                                                         | `close()`, then check `complete`                    |
+
+Kernel is the recommended path for long-lived desktop hosts. Choose direct Core deliberately, when you accept the shared failure domain and own the executor's lifetime yourself. Neither path needs an Extra.
+
+## Import and distribution
+
+Private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-executor-core`. Published consumers use `@mininglamp-oss/octo-runtime/executor-core`.
+
+## Further reading
+
+- [Implementation and exports](src/index.ts), [input preparation](src/invoke-input.ts), [current-turn rendering](src/model-input.ts), [watchdog](src/watchdog.ts).
+- [Kernel](../octo-runtime-executor-kernel/README.md), [input reference](../../docs/en/reference/invoke-input.md), [output and control](../../docs/en/reference/output-and-control.md).
+- [Executor tests](../../test/executor-core.test.js), [cleanup budget tests](../../test/executor-cleanup-budget.test.js).

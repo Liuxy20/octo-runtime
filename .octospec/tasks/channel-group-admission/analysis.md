@@ -39,7 +39,7 @@ if (
 
 group_ids 省略时，可选链求值为 undefined，取反变为 true，触发拒绝。代码还没走到 mentionsBot 就已返回，后续 Context 准备、Host.invoke、typing、卡片和最终回复均不会启动。[channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 在准入失败时直接 return，因此用户只看到 Bot 在线却没有响应。
 
-[配置 Schema](../../../packages/octo-runtime-extra-channel-gateway/config-schema.json) 明确写着“省略不按本项限制，空数组拒绝所有群/话题”。[CLI 示例](../../../CLI_USAGE_GUIDE.md)省略 group_ids，文档和实际执行互相矛盾。当前条件至少在历史提交 `ea1486fe` 中已经存在，早于本轮 SDK 函数装配提交 `28aa061`；不能将这次发现写成 loadContexts 改造引入的新回归。Schema 说明可追溯至 `0b00e4e0`，这里只记录可核对的历史，不以 Git 作者归因个人责任。
+[配置 Schema](../../../packages/octo-runtime-extra-channel-gateway/config-schema.json) 明确写着“省略不按本项限制，空数组拒绝所有群/话题”。[CLI 示例](../../../docs/zh-CN/getting-started/cli.md)省略 group_ids，文档和实际执行互相矛盾。当前条件至少在历史提交 `ea1486fe` 中已经存在，早于本轮 SDK 函数装配提交 `28aa061`；不能将这次发现写成 loadContexts 改造引入的新回归。Schema 说明可追溯至 `0b00e4e0`，这里只记录可核对的历史，不以 Git 作者归因个人责任。
 
 # 为什么此前测试没有发现
 

@@ -21,6 +21,18 @@ test(
   async (t) => {
     const home = await mkdtemp(join(tmpdir(), "octo-systemd-verify-"));
     t.after(() => rm(home, { recursive: true, force: true }));
+    // 只验证生成的 unit；宿主自带服务的弃用警告不属于本测试的输入。
+    // 保留服务的默认依赖，用最小 target 满足解析，不改写待测 unit。
+    for (const name of ["sysinit", "basic", "shutdown", "default", "network-online"])
+      await writeFile(
+        join(home, `${name}.target`),
+        "[Unit]\nDescription=Isolated parser fixture\nDefaultDependencies=no\n"
+      );
+    const verify = (unitPath) =>
+      spawnSync("systemd-analyze", ["verify", "--man=no", unitPath], {
+        encoding: "utf8",
+        env: { ...process.env, SYSTEMD_UNIT_PATH: home }
+      });
     for (const suffix of [
       "ordinary",
       "with spaces",
@@ -40,12 +52,24 @@ test(
       };
       const unitPath = join(home, `${spec.id}.service`);
       await writeFile(unitPath, renderSystemdUnit(spec));
-      const verified = spawnSync("systemd-analyze", ["verify", "--man=no", unitPath], {
-        encoding: "utf8"
-      });
+      const verified = verify(unitPath);
       assert.equal(verified.status, 0, verified.stderr);
       assert.equal(verified.stderr, "");
     }
+    // 隔离不能掩盖生成内容错误：同一解析器仍须拒绝相对工作目录。
+    const invalidPath = join(home, "octo-invalid-verify.service");
+    await writeFile(
+      invalidPath,
+      renderSystemdUnit({
+        id: "octo-invalid-verify",
+        command: process.execPath,
+        args: ["--version"],
+        workingDirectory: home
+      }).replace(/^WorkingDirectory=.*$/m, "WorkingDirectory=relative")
+    );
+    const invalid = verify(invalidPath);
+    assert.notEqual(invalid.status, 0, "invalid unit must fail native verification");
+    assert.match(invalid.stderr, /WorkingDirectory/);
   }
 );
 

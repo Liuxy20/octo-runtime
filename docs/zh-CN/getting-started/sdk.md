@@ -63,6 +63,56 @@ serveWorker([selectedAdapter]);
 
 创建服务后，等待 `initialize()` 成功，再使用 `kernel.client`。退出时，先关闭应用创建的 Extra，等待结果消费、投递和存储操作结束，再关闭应用创建的 Kernel 和数据库。检查清理结果的 `complete` 字段；为 `false` 时，还需要处理返回的待清理资源。
 
+## 以源码 submodule 嵌入
+
+应用可以使用内部 workspace 包，替代已发布的发行包。首次添加 submodule 时使用最新远端 `main`：
+
+```sh
+git submodule add --branch main git@github.com:Mininglamp-OSS/octo-runtime.git octo-runtime
+```
+
+已有子仓初始化并主动升级时，先完成或保留本地修改，再执行：
+
+```sh
+git submodule update --init -- octo-runtime
+git submodule set-branch --branch main -- octo-runtime
+git submodule update --remote --checkout -- octo-runtime
+git -C octo-runtime log -1 --oneline
+```
+
+更新后处于 detached HEAD 是正常状态。`.gitmodules` 指定主动升级跟踪的分支，宿主 Git 提交记录实际使用的 Runtime commit。升级验收后，将子仓指针与宿主 lockfile 一起提交。CI 初始化固定的子仓版本，并使用 `pnpm install --frozen-lockfile`，不在每次构建时更新远端 `main`。
+
+在宿主 `pnpm-workspace.yaml` 中加入以下目录，保留已有 packages 和所需的 `allowBuilds` 配置：
+
+```yaml
+packages:
+  - octo-runtime/packages/*
+```
+
+宿主只直接声明实际 import 的包。例如使用 Codex 和 Channel Gateway 的应用，将以下依赖合并到宿主 `package.json`：
+
+```json
+{
+  "dependencies": {
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
+    "@mininglamp-oss/octo-runtime-adapter-codex": "workspace:*",
+    "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*"
+  }
+}
+```
+
+安装和按依赖顺序构建都从宿主根目录执行：
+
+```sh
+pnpm install
+pnpm --filter @mininglamp-oss/octo-runtime-host-sdk... --filter @mininglamp-oss/octo-runtime-adapter-codex... --filter @mininglamp-oss/octo-runtime-extra-channel-gateway... run build
+```
+
+宿主自身的 worker 和服务入口也需要纳入原有构建流程。修改 Runtime 源码后重新构建所选包。保留子仓原有 workspace 配置和 lockfile；集成时使用宿主的 workspace 配置和 lockfile，无需纳入 Runtime 根 CLI 包及 `apps/*`。
+
+源码 import 使用内部包名：`createKernelService`、`serveWorker` 来自 `@mininglamp-oss/octo-runtime-executor-kernel`；`createExtraService` 来自 `@mininglamp-oss/octo-runtime-host-sdk`；Extra 插件类型来自其 `/extra` 子路径。所选 Adapter、Extra 分别从各自的包导入。上文的调用与关闭顺序同样适用于源码接入，装配细节见 [workspace 边界](../../../.octospec/guides/workspace.md)和 [Channel Gateway 接入指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md)。
+
 ## 不调用真实 Provider 的验证
 
 在仓库根目录执行：

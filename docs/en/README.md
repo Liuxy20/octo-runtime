@@ -4,12 +4,12 @@
 
 Octo Runtime gives applications a common interface for Agent calls. Your application supplies a task, background material, and execution settings. Runtime calls a Provider such as Codex or Claude Code and returns output as an event stream.
 
-This documentation is for developers integrating the SDK, supplying business context and tools, and handling execution results.
+This documentation is for developers integrating the SDK, supplying business context and tools, and handling execution results. Host-specific assembly detail — Electron initialization, IM business wiring — stays in the root `SDK_*` guides; this library covers the shared workflow and the API reference.
 
 ## Start Here
 
 1. Read [Architecture](concepts/architecture.md) for module roles and the execution flow.
-2. Follow [CLI Installation and Invocation](getting-started/cli.md) or [Your First SDK Invocation](getting-started/sdk.md).
+2. Follow [CLI Installation and Operations](getting-started/cli.md) or [Your First SDK Invocation](getting-started/sdk.md).
 3. Set up your selected [Harness](guides/harnesses.md), then learn [Inputs and Contexts](concepts/inputs-and-contexts.md).
 
 For module selection, read [Adapter and Extra Loading](concepts/module-loading.md): SDK native composition and CLI built-in/user manifests.
@@ -34,4 +34,4 @@ For module selection, read [Adapter and Extra Loading](concepts/module-loading.m
 | Output modes, cancellation, approvals, questions       | [Output and Control](reference/output-and-control.md) |
 | Adapter support and implementation boundaries          | [Providers](reference/providers.md)                   |
 
-These pages are based on source revision `d44f5cd`. See [Maintenance and Validation](maintenance.md) for validation results and the relationship to existing documents. Additional CLI operations are covered in the [full CLI guide](../../CLI_USAGE_GUIDE.md).
+See [Maintenance and Validation](maintenance.md) for validation results and the relationship to existing documents. Device operations are covered in [CLI Installation and Operations](getting-started/cli.md).

@@ -1,6 +1,6 @@
 # Octo Runtime：为什么统一「设备」
 
-当前实现的双语模块说明和 Mermaid 图见开发者文档：[English](docs/en/concepts/architecture.md) / [简体中文](docs/zh-CN/concepts/architecture.md)。本文保留设备动机、新旧比较及明确标注的未来目标。
+当前实现的双语模块说明和 Mermaid 图见开发者文档：[English](docs/en/concepts/architecture.md) / [简体中文](docs/zh-CN/concepts/architecture.md)。本文保留设备动机、新旧比较及明确标注的未来目标。文中的 daemon 均指已移除的旧实现，只用于对比，不代表当前存在的组件。
 
 **Adapter 与 Extra 的装配约束：SDK 宿主原生 import 并组装，不要求额外 manifest；CLI 使用一份内置 manifest.json，加上 Runtime Home 下同名扩展清单，两者均有 adapters 和 extras。默认发行继续全量，未选模块不加载，Extra 的目录声明不等于启用。** FDE 的代码复制及依赖由业务方处理。统一清单与依赖解耦已在本工作树实现；完整解析、合并和生命周期要求见[基础架构规则](.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)，双语设计见[English](docs/en/concepts/module-loading.md) / [简体中文](docs/zh-CN/concepts/module-loading.md)。
 
@@ -129,20 +129,20 @@ flowchart TB
 
 **两种方式使用相同的 invoke(input, environment?) 调用契约，但执行和生命周期不同。** 两者共用 InputInvoke 类型：InvokeInput 携带 inputs、contexts 和调用身份；省略 protocol_mode 或指定 native 返回 HostFrame，指定 canonical 返回 CanonicalEvent，均通过异步迭代消费。同一份业务输入可用于两种入口，实际可用能力仍取决于所注册的 Adapter、配置和运行环境。
 
-| 比较项 | KernelClient：产品默认推荐 | AgentExecutor：显式进程内接入 |
-| --- | --- | --- |
-| 公共导入 | @mininglamp-oss/octo-runtime/executor-kernel；Host SDK 返回实际 client | @mininglamp-oss/octo-runtime/executor-core |
-| 调用路径 | App → 本地 IPC → Kernel → worker 内的同一 AgentExecutor | App → 当前进程内的 AgentExecutor；宿主显式注册 Adapter |
-| 传输与故障影响 | macOS/Linux 为 Unix socket，Windows 为 Named Pipe；执行进程故障与宿主分开 | 直接函数调用，无 IPC；执行共享宿主进程和事件循环，不能隔离 process.exit、OOM 或同步阻塞 |
-| 观察中断 | 按原身份查询接纳结果，按原游标有界续流；不重发原执行 | 无 Kernel 源窗口、断线恢复或 worker 监督 |
-| 提前关闭执行/观察 iterator | 只停止观察，已接纳的 Run 继续执行；client.close 也不隐式取消 | 关闭执行 iterator 会请求取消，由 Core 执行有界清理 |
-| 显式取消 | signal 或 cancelInvocation；取消 ACK 不等于执行终态 | signal 或 cancel；返回 true 不等于 Provider 已退出 |
-| 所有者清理 | 对本 client 的高层调用 stopAdmission/drain，并检查 complete/unresolved；拥有 Kernel 的宿主还须按 SDK 生命周期停止 Kernel | 对实例调用 shutdown，并检查 cleanup/unresolvedInvocationIds |
-| 本地 streamLimits 选项 | 当前 wire 不支持，显式传入报 KERNEL_STREAM_LIMITS_UNSUPPORTED | 支持 InvokeEnvironment.streamLimits |
+| 比较项                     | KernelClient：产品默认推荐                                                                                               | AgentExecutor：显式进程内接入                                                           |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| 公共导入                   | @mininglamp-oss/octo-runtime/executor-kernel；Host SDK 返回实际 client                                                   | @mininglamp-oss/octo-runtime/executor-core                                              |
+| 调用路径                   | App → 本地 IPC → Kernel → worker 内的同一 AgentExecutor                                                                  | App → 当前进程内的 AgentExecutor；宿主显式注册 Adapter                                  |
+| 传输与故障影响             | macOS/Linux 为 Unix socket，Windows 为 Named Pipe；执行进程故障与宿主分开                                                | 直接函数调用，无 IPC；执行共享宿主进程和事件循环，不能隔离 process.exit、OOM 或同步阻塞 |
+| 观察中断                   | 按原身份查询接纳结果，按原游标有界续流；不重发原执行                                                                     | 无 Kernel 源窗口、断线恢复或 worker 监督                                                |
+| 提前关闭执行/观察 iterator | 只停止观察，已接纳的 Run 继续执行；client.close 也不隐式取消                                                             | 关闭执行 iterator 会请求取消，由 Core 执行有界清理                                      |
+| 显式取消                   | signal 或 cancelInvocation；取消 ACK 不等于执行终态                                                                      | signal 或 cancel；返回 true 不等于 Provider 已退出                                      |
+| 所有者清理                 | 对本 client 的高层调用 stopAdmission/drain，并检查 complete/unresolved；拥有 Kernel 的宿主还须按 SDK 生命周期停止 Kernel | 对实例调用 shutdown，并检查 cleanup/unresolvedInvocationIds                             |
+| 本地 streamLimits 选项     | 当前 wire 不支持，显式传入报 KERNEL_STREAM_LIMITS_UNSUPPORTED                                                            | 支持 InvokeEnvironment.streamLimits                                                     |
 
 Kernel 的隔离与恢复能力不保证每次执行成功。worker 重启只恢复后续调用的可用性，不恢复或重跑旧 Run；窗口缺失、lost 和结果未知仍需如实返回。直接 Core 也不需要加载 Extra 或连接云端。选型依据是宿主需要的隔离、恢复及生命周期能力，而不是另选一套业务输入协议。
 
-接入步骤见 [SDK 原生指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)，精确合同见[基础架构规则](.octospec/rules/architecture.md#kernelclient-与-agentexecutor-的选型合同)、[本地执行](.octospec/rules/local-execution.md)和 [Core API](packages/octo-runtime-executor-core/README.md)。
+接入步骤见 [SDK 入门](docs/zh-CN/getting-started/sdk.md)，精确合同见[基础架构规则](.octospec/rules/architecture.md#kernelclient-与-agentexecutor-的选型合同)、[本地执行](.octospec/rules/local-execution.md)和 [Core API](packages/octo-runtime-executor-core/README.md)。
 
 ### 远程接入的目标范围
 
@@ -158,11 +158,11 @@ Kernel 的隔离与恢复能力不保证每次执行成功。worker 重启只恢
 
 **设备初始化后就在本地客观存在；云端注册只决定它能否按业务规则被看见、被跨端寻址，不负责让设备本体成立。**
 
-| 情况 | 本地内核与 IPC | 移动端等跨端调用 |
-| --- | --- | --- |
-| 未注册、注册失败或登记失效 | 已就绪的本地执行照常运行 | 缺少有效目标映射时寻址失败 |
-| 已注册，但调用者无权查看或执行 | 本地执行不因此停止 | 按可见范围及权限拒绝 |
-| 已注册、有权限且目标连接可用 | 本地仍直接 IPC | 经云端定位目标连接并下发 AgentRun |
+| 情况                           | 本地内核与 IPC           | 移动端等跨端调用                  |
+| ------------------------------ | ------------------------ | --------------------------------- |
+| 未注册、注册失败或登记失效     | 已就绪的本地执行照常运行 | 缺少有效目标映射时寻址失败        |
+| 已注册，但调用者无权查看或执行 | 本地执行不因此停止       | 按可见范围及权限拒绝              |
+| 已注册、有权限且目标连接可用   | 本地仍直接 IPC           | 经云端定位目标连接并下发 AgentRun |
 
 注册成功也不等于设备当前在线或本次执行必定成功。云端登记失败不能被解释为本地设备不存在，更不能因此停止或重建设备内核。
 
@@ -210,13 +210,13 @@ flowchart TB
 
 移动端 Buddy 有两种入口：**IM 入口经 wukong-im Server 和 IM Channel 收发消息；conversation 入口像桌面本地对话一样，由应用发起 AgentRun，在选定设备上执行并接收结果。** 两者共用执行内核，各自保留入口与会话逻辑。
 
-| 业务场景 | 旧方式与缺口 | 统一设备的目标价值 |
-| --- | --- | --- |
-| 移动端 Buddy · IM 对话 | 经 IM 消息触发，旧执行链与 OpenClaw Channel 耦合 | 移动端继续经 IM 通道对话，Channel 通过 ipc_invoke 复用设备内核及其 Provider |
-| 移动端 Buddy · conversation 跨端对话（可选目标） | 要获得类似桌面本地的对话体验，需额外构建远程接入与设备寻址链路 | 应用在 conversation 中指定设备并发起 AgentRun，经云端和设备接入模块在目标设备执行；具体生产架构待确定 |
-| 本机 App 共用执行能力 | 桌面已有 IPC，但只连自己拉起的 Codex App Server，缺少共用设备发现与寻址 | 发现目标在本地后直接 IPC，同机其他 App 也可使用该设备底座 |
-| 多个场景复用同一底座 | IM 耦合 OpenClaw Channel；复用旧 Loop daemon 又要求将调用转换成 Loop 模型 | IM、Loop、Buddy 各管业务，通过独立 Extra 或本地 IPC 共用 Kernel 和 AgentExecutor，无需先成为 Loop 调用 |
-| 云端接入失败仍可本地执行 | 旧 Loop daemon 启动依赖云端 Device 凭据 | 注册与可见性由 Extra / 云端管理，失败只影响对应跨端寻址和访问，不影响本地内核 |
+| 业务场景                                         | 旧方式与缺口                                                              | 统一设备的目标价值                                                                                     |
+| ------------------------------------------------ | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| 移动端 Buddy · IM 对话                           | 经 IM 消息触发，旧执行链与 OpenClaw Channel 耦合                          | 移动端继续经 IM 通道对话，Channel 通过 ipc_invoke 复用设备内核及其 Provider                            |
+| 移动端 Buddy · conversation 跨端对话（可选目标） | 要获得类似桌面本地的对话体验，需额外构建远程接入与设备寻址链路            | 应用在 conversation 中指定设备并发起 AgentRun，经云端和设备接入模块在目标设备执行；具体生产架构待确定  |
+| 本机 App 共用执行能力                            | 桌面已有 IPC，但只连自己拉起的 Codex App Server，缺少共用设备发现与寻址   | 发现目标在本地后直接 IPC，同机其他 App 也可使用该设备底座                                              |
+| 多个场景复用同一底座                             | IM 耦合 OpenClaw Channel；复用旧 Loop daemon 又要求将调用转换成 Loop 模型 | IM、Loop、Buddy 各管业务，通过独立 Extra 或本地 IPC 共用 Kernel 和 AgentExecutor，无需先成为 Loop 调用 |
+| 云端接入失败仍可本地执行                         | 旧 Loop daemon 启动依赖云端 Device 凭据                                   | 注册与可见性由 Extra / 云端管理，失败只影响对应跨端寻址和访问，不影响本地内核                          |
 
 **价值落在两件事上：任务能准确找到执行实例；找到本地实例就直接 IPC。业务入口可以增加，执行底座保持统一。**
 
@@ -224,7 +224,7 @@ flowchart TB
 
 现有的 `webui-extra` 插件提供类似 OpenClaw 的 WebUI 能力，**仅用于本地服务调试，不用于实际生产环境。**
 
-已有内置 Extra 插件的具体使用方式，请参考 [CLI 使用手册](CLI_USAGE_GUIDE.md)。
+已有内置 Extra 插件的具体使用方式，请参考 [CLI 安装与运维](docs/zh-CN/getting-started/cli.md)。
 
 ## 5. 宿主如何提供持续变化的业务数据
 
@@ -232,15 +232,15 @@ flowchart TB
 
 Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `createExtraService({ endpoint, module, config, dependencies: { loadContexts } })` 后 initialize，在调用进程直接装配业务函数。CLI 的组件 run 与原生应用主进程使用同一服务实现，不经外部 Node 或 Runtime CLI 代替构造。JSON 不携带函数，Kernel 不装配业务依赖。Extra 使用共享 KernelClient.invoke；关闭只清理自己的调用和资源，不停止指定 Kernel。
 
-| 时间点 | 执行内容 | 目的 |
-| --- | --- | --- |
-| 每次加载 Extra | SDK 调用返回的 initializer，绑定宿主函数并初始化插件 | 一次建立依赖和资源，由 SDK 统一管理生命周期 |
-| 每个已接纳任务开始准备 | Channel 调用 loadContexts，取得本轮 ContextItem 数组 | 读取宿主当前数据，形成该轮独立快照 |
-| 宿主更新业务数据 | 下一轮调用同一函数读取新值 | 无需重载连接；更换 JSON 或函数引用时仍整体卸载重载 |
+| 时间点                 | 执行内容                                             | 目的                                               |
+| ---------------------- | ---------------------------------------------------- | -------------------------------------------------- |
+| 每次加载 Extra         | SDK 调用返回的 initializer，绑定宿主函数并初始化插件 | 一次建立依赖和资源，由 SDK 统一管理生命周期        |
+| 每个已接纳任务开始准备 | Channel 调用 loadContexts，取得本轮 ContextItem 数组 | 读取宿主当前数据，形成该轮独立快照                 |
+| 宿主更新业务数据       | 下一轮调用同一函数读取新值                           | 无需重载连接；更换 JSON 或函数引用时仍整体卸载重载 |
 
 loadContexts 既能同步返回 `readonly ContextItem[]`，也能返回 Promise。内存或同步 SQLite 可以直接返回数组；异步 SQLite/HTTP 可以使用 async。同步查询不会因为加了 async 就变为非阻塞，取消查询也取决于底层驱动能力。存储、连接及业务授权归宿主；SDK 管装配、取消和清理；Channel 构造本轮 Context，Host/Adapter 按统一合同执行，不读取宿主业务存储或补齐历史 Context。
 
-本次统一原生 SDK 的证据见[实施记录](.octospec/tasks/unified-native-sdk-services/implementation.md)。完整操作见 [SDK 原生接入手册](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md)。外部应用和真实 IM 的验证分别记录。
+本次统一原生 SDK 的证据见[实施记录](.octospec/tasks/unified-native-sdk-services/implementation.md)。完整操作见 [SDK 入门](docs/zh-CN/getting-started/sdk.md)和 [Gateway 动态 Context 接入](SDK_CHANNEL_GATEWAY_GUIDE.md)。外部应用和真实 IM 的验证分别记录。
 
 ## 6. IM 消息由谁决定是否接纳
 

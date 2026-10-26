@@ -1,27 +1,61 @@
-# @mininglamp-oss/octo-runtime-adapter-mcode
+# MCode Adapter
 
-> 全局 Context 约束：本轮模型上下文由业务方选择，selection 等业务项可不发送，可传空或显式重复。必要执行配置独立校验且不注入 LLM。底层只转发并渲染本轮数据，不按 sessionId 缓存、补齐、合并、去重或省略；reset／新 Provider 会话／resume 失败后由业务方重新提供必要背景。见 [分类矩阵](../../.octospec/rules/context-input.md) 与 [IPD-SE](../../.octospec/rules/context-input.md)。Host 仅按白名单 pattern 保序拼接，不做业务检查或编译。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-MiniMax Code ACP adapter，adapter type 为 `mcode`。每次调用启动 `mcode acp`，通过通用 ACP adapter 完成 session 创建/恢复、prompt 流、model step 重建和 canonical event 转换。
+Binds MiniMax Code (`mcode acp`) to Runtime through the shared ACP Adapter. MiniMax picks the model itself and advertises no per-session model option, so Runtime sends no `session/set_model`; the model configured on the runtime governs.
 
-## 模型配置与环境变量
+## When to use it
 
-MiniMax Code 自行管理模型，不在 `session/new`/`session/load` 响应中发布 per-session 选模选项。因此 adapter 不发送 `session/set_model`，模型由 MCode 自身配置决定（可用 `MULTICA_MCODE_PATH` 之类的运行环境变量指定二进制路径，选模仍归 MCode）。若 Revision 显式配置了 `execution_profile.agent_config.model`，通用 ACP 逻辑会尝试选模；由于 MCode 不发布选项，会在发送 prompt 前失败，不会静默退回。生产使用时建议不为 `mcode` 配置 model，交由 MCode 自管。
+- MiniMax Code is installed and logged in on the machine that runs the executor.
+- You are fine with the model choice coming from MiniMax rather than the invocation.
 
-## 会话恢复
+## Register the Adapter and prepare input
 
-MiniMax Code 当前版本 advertises `loadSession: false`。当某次 run 无法 `session/load` 已保存的 session（返回空结果）时，adapter 通过 `emptyLoadResultMeansMissing` 判定为会话缺失并回退到新建 session（`resumeOutcome: "fresh_fallback"`），run 仍可正常执行。
+This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
-## 使用
+```ts
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { mcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
 
-```bash
-pnpm cli adapter probe mcode
+const executor = new AgentExecutor();
+executor.register(mcodeAdapter);
+
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Say hello." }],
+  protocol_mode: "canonical",
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "mcode" } }]
+  }
+});
 ```
 
-`probe` 只检查可执行文件；登录态、模型凭据和实际推理网络仍需在 Runtime 上配置。
+Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 
-## 模块责任边界
+## What it binds
 
-- 负责：将 mcode 原生执行协议映射为 InvokeRequest / CanonicalEvent，由 adapter-host 调用。
-- 不负责：Worker/IM WS、聊天历史、Event/AgentRun 登记。
-- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。
+| Item         | Value                                                                                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Adapter type | `mcode`                                                                                                                                 |
+| Export       | `mcodeAdapter`                                                                                                                          |
+| Command      | `mcode acp`                                                                                                                             |
+| Output       | canonical events only                                                                                                                   |
+| Session      | MiniMax advertises `loadSession: false`; an empty `session/load` result counts as missing and falls back to the caller's recovery input |
+| Model        | none sent; MiniMax owns selection                                                                                                       |
+
+## Limits
+
+- Canonical-only: pass `protocol_mode: "canonical"`.
+- Because no model setter exists, per-invocation `model` cannot be applied; the runtime's configured model decides.
+- `ask` and `full_access` only; `assisted` is rejected.
+- A probe checks that `mcode` exists, not that it is authenticated.
+
+## Import and distribution
+
+Private workspace package, with no public MCode subpath.
+
+## Further reading
+
+- [Implementation](src/index.ts), [ACP Adapter](../octo-runtime-adapter-acp/README.md), [Provider matrix](../../.octospec/guides/providers.md).
+- [Input reference](../../docs/en/reference/invoke-input.md).

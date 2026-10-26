@@ -1,185 +1,75 @@
 # WeCom Channel
 
-执行直接使用 ctx.kernel.invoke(input, environment)，内部装配依赖名为 kernel。取消用 cancelInvocation 并读取 accepted，交互用 respondInteraction；它们均属于同一个 KernelClient。WeCom 消费执行结果完成自身 delivery，不维护提交/订阅或传输恢复实现。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-`@mininglamp-oss/octo-runtime-extra-channel-wecom` 独立持有企业微信 Bot WebSocket 鉴权、心跳、消息映射、stream 回复、ACK 顺序和连接替换处理。它不依赖 Octo Gateway Channel，不使用 Octo REST、悟空连接或卡片协议。
+The optional `channel-wecom` Extra: connects WeCom bots over their own WebSocket, admits messages, builds this turn's input, calls the existing Kernel through `ctx.kernel`, and replies with WeCom streaming messages. Authentication, heartbeat, ACK order, and delivery stay here — independent of Core, and independent of the Octo Gateway implementation.
 
-目录与 gateway 类似：`transport/`、`application/`、`lifecycle/`、`execution/`、`delivery/`、`presentation/`。每个 channel 独立演进，没有跨平台 connector registry 或按 type 分发的底层工厂。
+## When to use it
 
-## CLI 配置多个 Bot
+- You need WeCom rather than Octo IM; neither channel depends on the other.
+- Your SDK host owns the Extra lifecycle and Kernel endpoint.
+- You want CLI deployment: save a `channel-wecom` declaration, then use `octo-runtime channel-wecom start`; its service is independent of `channel-gateway`.
 
-入口采用 `extra(context, jsonConfig)(dependencies)` 两阶段合同：外层同步返回函数，内层异步启动。CLI 传入空依赖，使用各 Bot 的显式 context；下面的示例带固定人设“我是明略科技的Octo助理”，省略 context 不会自动补齐。instructions.entries 只保留 text，不再接受 source。
+## Host it
 
-宿主通过 `createExtraService({module, config, endpoint, dependencies: {loadContexts}})` 后 initialize，在当前进程注入业务函数。`loadContexts(botConfig, {signal})` 可以同步返回 ContextItem 数组或 Promise；每轮准入后、调用模型前执行一次，同 namespace/name 动态整项覆盖静态配置，保持位置，新增项顺序追加。函数和配置分开传递，不暴露内部连接或 manager。
+```ts
+import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
+import * as wecom from "@mininglamp-oss/octo-runtime/extras/channel-wecom";
+import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-插件级 `context_loading.timeout_ms` 默认 5000，范围 1..30000；`max_in_flight` 默认 8，范围 1..32。超时未结束仍计入在途，满额直接拒绝本轮，不建立回调等待队列或保留历史结果。错误、超时和取消均不调用 Provider；业务 IO 必须响应 signal。`/stop` 和卸载触发取消。任意外部同步代码或业务自有缓存不受这些预算约束。完整合同见[配置指南](../../.octospec/guides/extra-configuration.md)。
-
-完整配置合同见 [config-schema.json](config-schema.json)，包含外层 `module`、`enabled`、`config` 及全部嵌套字段的用途、必填关系、限制和占位示例。模块入口固定为本包名；`provider_agent_id` 仅在选择 OpenClaw 且需要指定已有目标 Agent 时设置，省略为 `main`，不是企业微信 Bot ID。schema 的使用及单一发行包公开入口见 [配置指南](../../.octospec/guides/extra-configuration.md#原始-json-schema-配置合同)。
-
-宿主安装本包后提交完整声明：
-
-```bash
-octo-runtime extraset channel-wecom <<'JSON'
-{
-  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
-  "enabled": true,
-  "config": {
-    "bots": [
-      {
-        "bot_id": "<WECOM_BOT_ID_1>",
-        "bot_name": "本地助理",
-        "app_secret": "<WECOM_APP_SECRET_1>",
-        "adapter": {
-          "adapter_type": "codex",
-          "workdir": "/absolute/workspace/first",
-          "model": "gpt-6.1-sol",
-          "effort": "medium"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      {
-        "bot_id": "<WECOM_BOT_ID_2>",
-        "bot_name": "项目助理",
-        "app_secret": "<WECOM_APP_SECRET_2>",
-        "adapter": {
-          "adapter_type": "codex",
-          "workdir": "/absolute/workspace/second",
-          "model": "gpt-6.1-sol",
-          "effort": "medium"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
+export async function startWeCom(endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ endpoint, module: wecom, config, dependencies: {} });
+  await extra.initialize();
+  return extra;
 }
-JSON
 ```
 
-保存到 `<home>/extras/channel-wecom/config.json`，POSIX 权限为 `0600`。每次 `extraset` 替换完整声明，不追加或合并。多个 Bot 放在同一个 `config.bots` 数组中；修改时必须提交希望保留的全部 Bot，插件名固定为 `channel-wecom`。
+Stable Extra name: `channel-wecom`.
 
-单个 Bot 同样写为 `config.bots: [bot]`，没有单对象格式。上次为 `[botA, botB]`，本次为 `[botB]`，覆盖后只保留 botB；`[]` 表示没有 Bot。省略字段不从旧声明补齐。
+## Configuration
 
-保存后，由 SDK 宿主停止并重新启动 WeCom Extra。channel-gateway CLI 服务不加载 WeCom；插件初始化完成不保证每个 Bot 在线。
-
-宿主自行从 JSON、SQLite、Nacos 等来源取得凭据，通过 `app_secret` 传入实际值；插件不读取凭据文件或配置中心。Bot 内 `enabled` 默认 `true`，控制单个 Bot，外层 `enabled` 控制整个插件。默认 WS 为 `wss://openws.work.weixin.qq.com`。Bot 字段由本插件校验。连接探针为 `scripts/probe-wecom.mjs`。
-
-## 插件字段
-
-下表除 `config.*` 外均为 `config.bots[]` 内的字段。“连接必选”表示允许先保存空凭据配置，但实际建联必须提供。
-
-| 字段 | 必选 / 可选 | 默认值与约束 |
-| --- | --- | --- |
-| `config.bots` | 可选；接入 Bot 时必选 | 省略为 `[]`；最多 16 项，相同 WS 地址与 `bot_id` 不得重复 |
-| `bot_id` | 必选 | 非空企业微信 Bot ID |
-| `bot_name` | 可选，建议填写 | 自定义本地展示名称，便于直接区分 Bot，避免通过 `bot_id` 反查；省略时展示 `bot_id`。填写时必须为非空字符串，不参与身份匹配、不修改企业微信上的名称 |
-| `app_secret` | 连接必选 | 宿主解析配置来源后传入的 Secret 值；插件不读取凭据文件或配置中心 |
-| `ws_url` | 可选 | 默认 `wss://openws.work.weixin.qq.com` |
-| `enabled` | 可选 | 默认 `true`，控制单个 Bot；外层 `enabled` 控制整个插件 |
-| `adapter` | 必选 | 执行设置对象；子字段要求见下表 |
-| `context` | 可选 | 提供时必须符合 `octo.context-envelope/v3`；允许空 `items` |
-| `approval_mode` | 可选 | 默认 `full_access`；支持范围按所选 Adapter 合同 |
-| `allowed_sender_ids` | 可选 | 发送者 ID 白名单；省略不按此项限制，`[]` 不允许任何发送者 |
-| `run_timeout_ms` | 可选 | 默认 `120000`，范围 `1..600000`，单位毫秒 |
-| `config.authorized_space_ids` | 可选 | 当前仅校验列表格式；企业微信连接不解析或核对 Octo Space 身份，不构成企业微信消息的 Space 准入限制。发送者限制使用 `allowed_sender_ids` |
-
-## Adapter 配置与 OpenClaw 示例
-
-`adapter` 与 `channel-gateway` 使用相同的执行字段：
-
-| 字段 | 必选 / 可选 | 默认值与约束 |
-| --- | --- | --- |
-| `adapter_type` | 可选 | 默认 `codex`，可填 `claude-code`、`codebuddy`、`openclaw` 等；宿主须已安装并配置对应 Provider |
-| `workdir` | 本地引擎必选；OpenClaw 禁止 | 本地引擎要求绝对路径，不同于 gateway 可省略目录的默认策略；OpenClaw 工作区由目标 Agent 管理 |
-| `model` | 可选 | 对应 Provider 已配置且可用的模型 ID；省略时使用 Provider 默认值 |
-| `effort` | 可选 | `low / medium / high / xhigh`；省略不传强度参数，实际应用及降档按 Adapter 合同，见[思考强度](../../.octospec/rules/reasoning.md) |
-| `provider_agent_id` | OpenClaw 可选；其他引擎禁止 | 默认 `main`；目标必须已存在，不存在时执行失败，不自动创建或改选 |
-
-以下为单 Bot 使用 OpenClaw 的完整声明。将模型占位符替换为目标 Gateway 可用的模型 ID；也可删除 `model` 使用 Provider 默认值。
-
-```bash
-octo-runtime extraset channel-wecom <<'JSON'
+```json
 {
-  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
-  "enabled": true,
-  "config": {
-    "bots": [
-      {
-        "bot_id": "<WECOM_BOT_ID>",
-        "bot_name": "OpenClaw 助理",
-        "app_secret": "<WECOM_APP_SECRET>",
-        "adapter": {
-          "adapter_type": "openclaw",
-          "provider_agent_id": "main",
-          "model": "<OPENCLAW_MODEL_ID>",
-          "effort": "high"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
+  "bots": [
+    {
+      "bot_id": "<BOT_ID>",
+      "app_secret": "<APP_SECRET>",
+      "adapter": { "adapter_type": "dsh", "workdir": "/absolute/workspace" },
+      "allowed_sender_ids": ["<USER_ID>"]
+    }
+  ]
 }
-JSON
-
-# 保存后由 SDK 宿主重启 channel-wecom Extra。
 ```
 
-此命令整体替换 WeCom 插件配置；同时接入 Codex 和 OpenClaw 时，将两个不同 Bot 的配置放进同一次提交的 `bots` 数组。OpenClaw Gateway 连接由宿主预先准备，不能将 Gateway URL/token 填入 Bot 的 `adapter`；`ws_url` 是企业微信连接地址。连接准备见 [OpenClaw 合同](../../.octospec/rules/openclaw.md)。使用自定义 `--home` 时，保存和重启使用同一个 Home；WeCom 由 SDK 宿主启动。
+| Field                  | Notes                                                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `bots`                 | Up to 16. Each needs `bot_id`, an `adapter`, and a resolved `app_secret` before it can connect.                                |
+| `ws_url`               | Defaults to `wss://openws.work.weixin.qq.com`.                                                                                 |
+| `adapter`              | Local engines need an absolute `workdir`. OpenClaw forbids `workdir` and uses an existing `provider_agent_id`, default `main`. |
+| `approval_mode`        | Defaults to `full_access`.                                                                                                     |
+| `run_timeout_ms`       | Defaults to `120000`, allowed range `1..600000`.                                                                               |
+| `allowed_sender_ids`   | Omitting it adds no sender restriction; `[]` denies everyone.                                                                  |
+| `authorized_space_ids` | Validated for shape only. It does not enforce Octo Space admission on WeCom messages — use WeCom's own sender policy.          |
 
-## SDK 装配
+This block is the inner `config`. The CLI declaration wraps it as `{ "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom", "enabled": true, "config": { ... } }`; the SDK passes only `config`.
 
-从 `@mininglamp-oss/octo-runtime/extras/channel-wecom` 导入模块，默认导出为 Extra 加载函数，稳定名称为 `channel-wecom`。宿主调用 `createExtraService({endpoint, module, config: {bots}, dependencies})` 并 initialize，在当前进程构造服务。SDK 不读写 CLI 配置文件。当前 CLI 六动作只管理 channel-gateway，WeCom 由 SDK 宿主管理。
+Full field list and limits: [config-schema.json](config-schema.json).
 
-宿主 await 服务的 `close()`，确认 complete 后保存完整配置并重新构造、initialize，插件内连接整体重建。此操作不停止 Kernel 或其他 Extra。
+## Context
 
-服务对象 `status()` 的 plugin 字段返回本插件自己的 `{ "bots": [...], "errors": [...] }`。有效项包含 `connection_key`、`type: "wecom"`、`enabled`、`connected`、`state`、脱敏 `error`、`deliveries`、`sessions`，可包含已解析的 `botId`。停用项仍可见，`enabled: false`、`state: "stopped"`、`connected: false`。错误配置跳过连接，状态项返回从零开始的 `config_index`、`state: "config_error"` 和脱敏错误码，`errors` 同时记录位置及错误码；有效 Bot 继续初始化。列表或授权配置错误记录在 `errors`，不建立连接。状态同步读取内存，由宿主解释，不依赖 Octo 状态模型。完整示例见 [SDK 对接指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-独立-extra)。
+Optional `loadContexts(botConfig, { signal })` replaces same-key static Context items once per admitted turn. Defaults are 5000 ms and 8 real pending calls, bounded to `1..30000` and `1..32`. A failure prevents the invocation; a timed-out call holds capacity until it settles. Omitting Context does not add a persona.
 
-`deliveries` 只返回当前保留的回执总数，不输出消息回执列表，也不表示累计发送量。原有重试及最多 512 条防重回执缓存保持不变；状态直接取缓存数量，不复制消息标识。
+## Status, sessions, shutdown
 
-本包作为 Event 发起方提交本轮 Context，空输入与显式重复有效；不会按会话补齐上下文。执行配置独立校验，不进入模型文本。Run=7、Context=v3。会话与回执使用有界内存，不承诺跨重启恢复；真实企业微信客户端显示效果需平台验收。
+`status()` returns `{ bots, errors }`; a bad bot is reported by index and code while the valid ones still initialize. Sessions and receipt deduplication are bounded in memory, not durable restart recovery, and delivery counts describe retained receipts rather than cumulative sends. Real client rendering has to be verified on WeCom itself.
 
-卸载会取消正在建联、执行和投递的任务，并等待连接及任务清理结束。重复关闭等待同一次清理；任一资源清理失败仍尝试其他资源，最终向宿主返回 `EXTRA_DISPOSE_FAILED`，不能把它当作可忽略的配置错误后立即重载。
+Await `close()` and require `complete` before replacing the Extra. Disposal cancels connection, execution, and delivery work; observed failures surface as `EXTRA_DISPOSE_FAILED`. It never stops Kernel or other Extras.
+
+## Import and distribution
+
+Published entry: `@mininglamp-oss/octo-runtime/extras/channel-wecom`.
+
+## Further reading
+
+- [Implementation](src/index.ts), [Host SDK](../octo-runtime-host-sdk/README.md), [Octo Gateway](../octo-runtime-extra-channel-gateway/README.md).
+- [Channel contract](../../.octospec/rules/channel-integration.md).

@@ -1,163 +1,34 @@
 # Octo Gateway Channel
 
-执行直接使用 ctx.kernel.invoke(input, environment)，与 App 的 KernelClient 相同。Gateway 准备业务输入并消费结果完成 delivery；提交、身份关联、ACK 查询和订阅修复由 Kernel client 维护。内部装配依赖名为 kernel，取消用 cancelInvocation 并读取 accepted；没有单独的渠道执行端口。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-`@mininglamp-oss/octo-runtime-extra-channel-gateway` 只负责 Octo IM 接入：Bot 认证、悟空长连接、消息与卡片、typing、Context v3 和结果回发。企业微信由独立的 `octo-runtime-extra-channel-wecom` 持有。
+The Extra that puts an Octo IM bot in front of a running Kernel: bot credentials, the Wukong WebSocket, message admission, per-conversation sessions, `ctx.kernel.invoke`, and streaming replies back to the chat. It owns Octo IM only — WeCom is a separate Extra with its own lifecycle.
 
-本包是 IM Event 发起方，决定本轮 Context 的内容、顺序和发送时机。允许空上下文或显式重复；Host 只校验、转发和固定渲染，不从历史补齐上下文。执行配置与模型上下文独立，Run=7、Context=v3。
+## When to use it
 
-## 结构
+- You want an Octo bot that runs on the same execution path as your app.
+- You need private chat, groups and topics, interactive cards, or file delivery.
+- You are connecting WeCom instead: use [WeCom Channel](../octo-runtime-extra-channel-wecom/README.md).
 
-`transport/` 持有 Octo 协议和 REST API；`application/` 管理单 Bot 会话与调用；`lifecycle/` 管理配置和启停；`execution/`、`delivery/`、`presentation/` 负责本包的调用与输出。没有跨平台 connector registry，不依赖 WeCom channel。
+## Host it
 
-## 初始化与动态 Context
+```ts
+import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
+import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-入口为 `extra(context, jsonConfig)(dependencies)`：外层同步返回函数，内层异步启动。CLI 以 `{}` 初始化，使用各 Bot 显式配置的 context；下面的新配置示例均包含“我是明略科技的Octo助理”。省略 context 不会自动填充人设；Gateway 会为本轮请求追加渠道默认的英文 mention 控制指令。instructions.entries 只接受 `{ text }`，旧 source 字段会被拒绝。
-
-宿主通过 `createExtraService({module, config, endpoint, dependencies: {loadContexts}})` 后 initialize，在当前进程注入业务函数。`loadContexts(botConfig, {signal})` 返回 ContextItem 数组或 Promise，每个接纳轮次调用一次；同 namespace/name 动态整项覆盖并保留位置，新项按顺序追加，重试复用本轮快照。函数不进入 JSON，插件内部 manager 不向宿主暴露。
-
-典型场景是宿主编辑 Agent 提示词后，后续 IM 任务重新读取新值，而无需重载 Gateway 或重建连接。初始化固定的是函数引用，不是以后读取的数据。静态 `config.bots[i].context` 每轮作为基线；动态同 key 整项替换，instructions.entries 也不拼接，需保留的固定人设由宿主显式带上。动态空数组保留静态项，不沿用上一轮动态值。完整场景和覆盖例子见[Octospec 专题](../../.octospec/guides/channel-dynamic-contexts.md)，宿主函数、装配及 SDK 后续初始化见[SDK 指南第 7 节](../../SDK_CHANNEL_GATEWAY_GUIDE.md#逐轮-context)。逐轮取得新系统指令与 Provider 已有会话应用不同，不自动 reset，详见该节的会话边界。
-
-插件级 JSON 配置 `context_loading` 支持 `timeout_ms`（默认 5000，1..30000）和 `max_in_flight`（默认 8，1..32）。超时、异常或容量已满时本轮不调用模型；未结束的 IO 继续占名额，没有等待回调的队列或历史结果缓存。业务函数必须响应 signal；`/stop` 及卸载会取消加载。任意外部同步代码和自行建立的缓存不受框架内存预算约束。完整合同见[配置指南](../../.octospec/guides/extra-configuration.md)。
-
-## 宿主会话存储
-
-`ImSessionStore` 保存聊天到逻辑/Provider session 的绑定、reset 代次与控制去重、历史/规则准备游标和消息处理快照。occurrence 可能包含文本及请求快照，不是只存 ID；该接口不保存完整 Provider 历史，也不能恢复未结束 Run。默认使用有界 `MemoryImSessionStore`，CLI 不自动建库。
-
-需要跨重启保存绑定时，宿主在 `GatewayDependencies` 中提供可选同步 `createSessionStore(botConfig)`。每个有效且启用的 Bot 获得独立配置快照和句柄，宿主按可信 scope 选择存储；工厂失败不降级 Memory。Gateway 负责尾写结束后撤权并调用句柄 close 一次，数据库的创建、迁移、事务及关闭均归宿主。整个 octo-runtime 不依赖 SQLite、不提供数据库适配实现；其他满足同步接口的宿主存储同样可用。
-
-类型从主包 `/extras/channel-gateway` 导入，不放进通用 `/extra`；store 通过 dependencies 注入 Gateway，无需另行注册 Extra，也不进入 config/Kernel/worker。完整方法语义、scope/reset/patch 原子性、初始化错误、关闭次序及可执行样例见 [SDK 存储接入](../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)。停止超时或保存/释放失败返回 incomplete，不能直接替换同名实例或关闭仍被其他业务使用的数据库。
-
-## 生成文件的聊天附件交付
-
-Gateway 默认在执行前通过 `extra.im/artifact-delivery` 明示固定交付约定：成功 final 中显式引用的本地文件作为 IM 附件上传，链接及图片地址替换后再发送同一条 final。普通文件链接同时交付原生 type=8 文件卡（文件名、类型、字节数和下载地址），最终 Markdown 的链接文字和附件地址保留，不以卡片替代正文。图片以 Markdown 图片内嵌展示，保留 alt/title；仅图片引用不另发文件卡。代码、引用示例和未引用文件不会上传。
-
-HTML、Markdown 与其他文件采用同一附件合同；不会自动发布在线文档、探测企业服务或额外授予文档权限。群里发文件不应变成接收者还需申请访问的在线文档。在线协作、发布或文档分享卡属于用户明确要求后的普通 ToolCall 业务，与后处理无关。
-
-用户主动要求“上传文件”或“保存到网盘”仍由 Agent 工具调用；工具已返回的云 URL 保留，不重复上传或发送。Bot `artifact_delivery.mode: "tools"` 可关闭固定上传。默认授权本地 Agent 工作区；`allowed_roots` 可指定绝对目录，空数组拒绝全部文件，`allowed_mime_types` 可收紧类型。没有扩展名白名单；实际服务端上传策略仍可能拒绝。每张文件卡复用原 WS ACK 和独立稳定编号，发送重试不重复上传、卡片或 final；未确认的卡片在最终文本明确提示，保留成功的附件链接。原生文件卡独立于 `cards` 进度/互动卡开关。
-
-默认预算为每文件 20 MiB、合计 50 MiB、16 个不同 realpath 文件、30 秒整次准备，只能收紧。远程 Provider 的本地路径不能直接从 Gateway 读取。realpath 检查和文件描述符核验拒绝越界、symlink 逃逸、目录及超限文件；部分失败保留成功云链接，并在同条回复标明未交付文件。stop/reset 取消过期交付，发送重试复用准备结果，不重新调用模型。配置字段见 [Schema](config-schema.json)，设计与真实验证边界见 [Issue 182](../../.octospec/tasks/182-channel-artifact-delivery/brief.md)。
-
-## 群和话题规则
-
-GROUP.md/话题规则更新通知只标记规则需要刷新，不触发模型、排队、执行卡或回复。下一条满足准入条件的请求仍读取规则 API；首次会话、`/reset`/`/new` 后或版本变化时携带规则，同一可续接 Provider 会话成功执行过相同版本后省略自动规则正文。规则失效与已提供版本存于现有 binding 的 `rulesContext` 字段；每轮 API 核验覆盖漏通知，失败后下次重带。同轮 Provider 恢复使用冻结的完整规则及原输入。详见[Channel 合同](../../.octospec/rules/channel-integration.md)。
-
-## CLI 配置多个 Bot
-
-完整配置合同见 [config-schema.json](config-schema.json)，包含外层 `module`、`enabled`、`config` 及全部嵌套字段的用途、必填关系、限制和占位示例。包括 Codex 重试预算和 OpenClaw 条件字段；`provider_agent_id` 是 Provider 已有 Agent 的 ID，不是 Octo Bot ID。schema 的使用及单一发行包公开入口见 [配置指南](../../.octospec/guides/extra-configuration.md#原始-json-schema-配置合同)。
-
-宿主先安装本包及所需 Provider，再提交完整声明：
-
-```bash
-octo-runtime extraset channel-gateway <<'JSON'
-{
-  "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
-  "enabled": true,
-  "config": {
-    "bots": [
-      {
-        "api_url": "https://im-test.deepminer.com.cn/api",
-        "bot_id": "<BOT_ID_1>",
-        "bot_name": "本地助理",
-        "bf_token": "<BOT_TOKEN_1>",
-        "adapter": {
-          "adapter_type": "codex",
-          "workdir": "/absolute/workspace/first",
-          "model": "gpt-6.1-sol",
-          "effort": "medium"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      },
-      {
-        "api_url": "https://im-test.deepminer.com.cn/api",
-        "bot_id": "<BOT_ID_2>",
-        "bf_token": "<BOT_TOKEN_2>",
-        "adapter": {
-          "adapter_type": "codex",
-          "workdir": "/absolute/workspace/second",
-          "model": "gpt-6.1-sol",
-          "effort": "medium"
-        },
-        "context": {
-          "schema": "octo.context-envelope/v3",
-          "items": [
-            {
-              "namespace": "octo.control",
-              "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
-            }
-          ]
-        }
-      }
-    ]
-  }
+export async function startGateway(endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ endpoint, module: gateway, config, dependencies: {} });
+  await extra.initialize();
+  return extra;
 }
-JSON
 ```
 
-保存路径为 `<home>/extras/channel-gateway/config.json`，POSIX 权限为 `0600`。每次 `extraset` 替换完整声明，不追加 Bot、不按 `bot_id` 合并。添加、修改或删除时，必须包含希望保留的完整 `config.bots` 数组。插件名称固定为 `channel-gateway`，多个 Bot 不使用多个插件名。
+`endpoint` is an existing Kernel endpoint; the Gateway never constructs or stops Kernel. Pass `dependencies.loadContexts` when you want per-turn business Context, and `dependencies.createSessionStore` when chat-to-session bindings must survive a restart.
 
-单个 Bot 也使用 `config.bots: [bot]`，没有单对象格式。上次为 `[botA, botB]`，本次为 `[botB]`，覆盖后只保留 botB；`[]` 表示没有 Bot。声明内省略的字段不会从旧配置补齐。
+## Configuration
 
-保存后，已安装并启用后台服务的设备执行 `octo-runtime channel-gateway restart`；前台运行使用 `octo-runtime channel-gateway run`。`octo-runtime status` 查询生命周期，`loaded` 不表示所有 Bot 在线。配置写入不安装包、不立即连接，也不修改运行中的配置。
-
-## 插件字段
-
-框架只校验声明和 JSON 结构，Bot 字段由本插件解释。下表除 `config.*` 外均为 `config.bots[]` 内的字段。“连接必选”表示允许先保存空凭据配置，但实际建联必须提供。
-
-| 字段 | 必选 / 可选 | 默认值与约束 |
-| --- | --- | --- |
-| `config.bots` | 可选；接入 Bot 时必选 | 省略为 `[]`；最多 64 项，相同 API 地址与 `bot_id` 不得重复。管理操作最多 64 个在途，单份配置最多 256 KiB |
-| `api_url` | 必选 | Octo API 地址，如 `https://im-test.deepminer.com.cn/api` |
-| `bot_id` | 必选 | 非空 Bot ID |
-| `bot_name` | 可选，建议填写 | 自定义本地展示名称，便于直接区分 Bot，避免通过 `bot_id` 反查；省略时展示 `bot_id`。不参与身份匹配、不修改远端名称；`name` 不是别名 |
-| `enabled` | 可选 | 默认 `true`，控制单个 Bot；外层 `enabled` 控制整个插件 |
-| `bf_token` | 连接必选 | 宿主解析配置来源后传入的 Bot Token 值；插件不读取凭据文件或配置中心 |
-| `adapter` | 必选 | 执行设置对象；子字段要求见下表 |
-| `context` | 可选 | 提供时必须符合 `octo.context-envelope/v3`；允许空 `items` |
-| `approval_mode` | 可选 | 默认 `full_access`；支持范围按所选 Adapter 合同 |
-| `groups_enabled` | 可选 | 省略或 `true` 开启群/话题，`false` 关闭群/话题；不影响私聊，`null` 非法 |
-| `group_ids` | 可选 | 省略、`null`、`[]` 不增加群范围限制；非空名单按父群 ID 限制群及话题，不影响私聊；禁用使用 `groups_enabled: false` |
-| `allowed_sender_ids` | 可选 | 省略时 DM 沿用平台好友准入，群/话题不增加发送者限制；显式非空名单仅允许列出的发送者，owner 不隐式补入，`[]` 拒绝全部，`null` 非法；自消息始终拒绝 |
-| `run_timeout_ms` | 可选 | 默认 `86400000`（一天），范围 `100..86400000`；包含所有尝试、恢复等待与交互等待 |
-| `codex_retry` | 可选 | Codex 恢复策略；各子字段均可选，默认值见下文；不影响其他 Extra |
-| `config.authorized_space_ids` | 可选 | 租户授权列表；省略不按此项限制，`[]` 不授权任何 Space |
-
-| `adapter` 子字段 | 必选 / 可选 | 默认值与约束 |
-| --- | --- | --- |
-| `adapter_type` | 可选 | 默认 `codex`，如需 OpenClaw 必须显式填 `openclaw` |
-| `workdir` | 本地引擎可选；OpenClaw 禁止 | 本地引擎省略时使用下述固定目录；填写时必须为绝对路径 |
-| `model` | 可选 | 对应 Provider 可用的模型 ID；省略时使用 Provider 默认值 |
-| `effort` | 可选 | `low / medium / high / xhigh`；省略不传强度参数，实际应用及降档按 Adapter 合同 |
-| `provider_agent_id` | OpenClaw 可选；其他引擎禁止 | 默认 `main`；目标 Agent 必须已存在 |
-
-本地引擎省略 `adapter.workdir` 时，插件使用并创建 `~/octo-runtime/channels/{bot_id}`。OpenClaw 不填 `workdir`，可选 `provider_agent_id` 默认 `main`；连接配置由宿主通过 Adapter 配置入口准备。未知扩展字段保留并忽略，不代表已经应用；已识别字段继续校验。
-
-### OpenClaw 配置示例
-
-```bash
-octo-runtime extraset channel-gateway <<'JSON'
+```json
 {
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
   "enabled": true,
@@ -166,107 +37,86 @@ octo-runtime extraset channel-gateway <<'JSON'
       {
         "api_url": "https://im-test.deepminer.com.cn/api",
         "bot_id": "<BOT_ID>",
+        "bot_name": "local-assistant",
+        "enabled": true,
         "bf_token": "<BOT_TOKEN>",
         "adapter": {
-          "adapter_type": "openclaw",
-          "provider_agent_id": "main",
-          "model": "<OPENCLAW_MODEL_ID>",
-          "effort": "high"
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "gpt-6.1-sol",
+          "effort": "medium"
         },
+        "approval_mode": "full_access",
+        "run_timeout_ms": 600000,
         "context": {
           "schema": "octo.context-envelope/v3",
           "items": [
             {
               "namespace": "octo.control",
               "name": "instructions",
-              "payload": {
-                "entries": [
-                  {
-                    "text": "我是明略科技的Octo助理"
-                  }
-                ]
-              }
+              "payload": { "entries": [{ "text": "You are the local assistant." }] }
             }
           ]
-        }
+        },
+        "allowed_sender_ids": ["<USER_ID>"],
+        "groups_enabled": true,
+        "group_ids": ["<GROUP_ID>"],
+        "artifact_delivery": {
+          "mode": "channel",
+          "allowed_roots": ["/absolute/workspace"],
+          "allowed_mime_types": ["image/png", "application/pdf"]
+        },
+        "cards": true,
+        "typing": true
       }
     ]
   }
 }
-JSON
-
-octo-runtime channel-gateway restart
 ```
 
-`model` 替换为目标 Gateway 已配置且可用的模型 ID，也可删除以使用 Provider 默认值。`effort` 可选 `low / medium / high / xhigh`，实际应用及降档见[思考强度](../../.octospec/rules/reasoning.md)。目标 Agent 必须已存在，OpenClaw 不填 `workdir`；Gateway 连接由宿主预先准备，见 [OpenClaw 合同](../../.octospec/rules/openclaw.md)。此命令整体替换插件声明，多个 Bot 须在同一次提交的 `bots` 数组中保留。使用自定义 `--home` 时保存和重启使用同一个 Home；前台运行使用 `channel-gateway run`。
+This is the complete CLI declaration: `module`, `enabled`, and the plugin's own `config`. The SDK takes the inner object — `createExtraService({ endpoint, module, config: declaration.config, dependencies })` — and ignores `enabled`, which only decides whether the CLI service starts the plugin.
 
-IM Agent 使用固定工作目录，任务 Context 的 workspace 不得覆盖；reset 只切换会话和 Provider binding。新会话首次普通输入自动尝试一次读取当前 DM/群/话题此前最多 15 条消息，裁剪为最多 1500 Unicode 字符的纯文本背景。失败或空结果继续当前任务，同一会话后续不再自动拉取；reset 后下一条普通消息重新获得一次资格，也可以包含 reset 前历史。不提供旧 `history_limit` 模式，不新增上下文或 binding 持久化。
+One bot is still `bots: [bot]`; there is no single-object form. Each `extraset` replaces the whole declaration — omitted fields are not carried over, and bots are not merged by `bot_id`. Limits: 64 bots, 64 in-flight management operations, 256 KiB per declaration.
 
-`allowed_sender_ids` 省略时，DM 好友权限由平台负责，Gateway 不额外查询或维护好友名单；群/话题允许 owner、其他用户及其他 Bot 触发。显式名单仍约束所有频道。群/话题须通过 Space、启停及范围准入，并在本条消息中真实点名当前 Bot UID，或提供纯 `mention.ais=1` 的 @所有AI。all/humans 置位时抑制单独 ais 路径，直接 UID 点名仍有效。正文名称、Markdown 示例及前一条消息的 @ 不构成触发，不提供免 @ 开关。卡片操作必须匹配原任务发起者、Space、原卡片及频道，不能操作别人的 Run。
+## Bot fields you will actually set
 
-独立图片消息（type=2）仅接入 Codex，每条一张，无需说明文字；群/话题图片自身仍须满足上述 mention 门槛。支持 PNG/JPEG/WebP，单图最多 2 MiB，先准入再下载，原字节经 `inputs` 传递。下载逐跳校验地址，仅向原 API 同源发送 Bot 凭据；不下载历史、富文本或转发中的图片，不写图片文件。其他引擎明确返回不支持，不静默转成文本执行。
+| Field                         | Notes                                                                                                                                                              |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `api_url`, `bot_id`           | Required. `api_url` points at Octo IM, for example `https://im-test.deepminer.com.cn/api`.                                                                         |
+| `bf_token`                    | Bot token supplied by the host. The plugin never reads credential files or a config center.                                                                        |
+| `adapter`                     | Required execution settings: `adapter_type`, `workdir`, `model`, and Provider-specific options.                                                                    |
+| `context`                     | Optional Context v3 envelope; empty `items` is legal.                                                                                                              |
+| `approval_mode`               | Defaults to `full_access`; the allowed range follows the selected Adapter.                                                                                         |
+| `groups_enabled`, `group_ids` | Groups and topics. Omitting `groups_enabled` or setting `true` enables them; private chat is never affected.                                                       |
+| `run_timeout_ms`              | Defaults to `86400000` (24 h); allowed range `100..86400000`.                                                                                                      |
+| `allowed_sender_ids`          | Omitting it adds no restriction; `[]` denies everyone.                                                                                                             |
+| `artifact_delivery`           | `mode: "tools"` disables the built-in upload; `allowed_roots`, `allowed_mime_types`, `max_file_bytes`, `max_total_bytes`, `max_files`, and `timeout_ms` narrow it. |
+| `cards`, `typing`             | Booleans, both default `true`. Turning cards off keeps plain text replies working.                                                                                 |
 
-新收到的富文本（type=14）及合并转发（type=11）支持文本阅读，正文统一放入本轮 Context v3 的 `extra.im/message-content`；保留段落、转发来源及顺序，不展开频道历史。内部 mention、`/reset`、`/stop` 不参与准入或命令；图片/附件仅标明未读取。文本预算为 12000 Unicode 码点、转发条目与富文本块合计 128 个、访问深度 0..3，超量明确标记，完全没有有效支持文本则不执行。
+Full field list, defaults, and limits: [config-schema.json](config-schema.json).
 
-普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群的 Bot 交接任务时，模型查询真实 UID，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 核验当前成员的 UID、显示名及明确的真人/Bot 身份，转换为可读正文和原生 `mention.uids/entities`，通过原连接统一发送。代码块、行内代码、引用和进度不转换。查不到或身份无法确认时退为普通 @名字，正文继续发送；不另发 CLI 消息、不开放广播或自行发起 Bot 循环调用。接收 Bot 省略发送者名单时允许其他 Bot 按上述规则触发；配置显式名单时发送 Bot 必须在名单中，并满足 Space、群范围及真实 mention 准入。
+## Sessions and delivery
 
-当前 Bot 自己发出的消息永不触发 AgentRun，即使真实 `mention.uids` 点名自己、带 `mention.ais` 或自己被列入 `allowed_sender_ids`；此规则覆盖私聊、群聊和话题。其他已授权发送者点名当前 Bot 仍按原准入执行。
+- Chat-to-session bindings live in an `ImSessionStore`. The default `MemoryImSessionStore` is bounded and does not survive a restart; provide `createSessionStore(botConfig)` to persist them. The store never holds full Provider history and cannot resume an unfinished Run.
+- The plugin decides this turn's Context content and order. An empty Context is allowed; the host only validates, forwards, and renders it, and never backfills from chat history.
+- Files referenced in a successful final are uploaded as IM attachments: 20 MiB per file, 50 MiB per turn, 16 distinct files, 30 seconds of preparation. Partial failures keep the successful links and name the files that were not delivered.
+- A `session.update` from the Adapter is opaque Provider binding data, not application history.
 
-Gateway 在请求装配时生成唯一的 `octo.control/instructions`：`entries = [...hostEffectiveEntries, ...gatewayDefaultEntries]`，保序且不去重，不修改宿主输入、不累计上一轮结果。宿主静态/动态 Context 仍先按原整项替换规则得到本轮有效值；公共 `mergeContext` 和 `mandatory` 语义不变。默认指令与宿主内容均计入 Context 预算，不静默丢弃。新 Provider 会话沿原生控制通道使用完整英文规则；逐轮 `extra.im/mention-instructions` 提供英文短提醒，使既有 Provider 会话也收到更新，不自动 reset。完整规则以 `[OCTO_CHANNEL_MENTION_RULES_V1]` 标记，并要求模型在摘要或压缩时原样保留；保留效果以模型为准，不新增 compaction 保留或验证机制。历史仍只自动尝试一次。
+## Lifecycle and status
 
-## 长任务与 Codex 重试
+`status()` returns `{ bots, errors }`: valid bots report connection, delivery, and session counts, while an invalid bot is reported by index and error code without blocking the others. `loaded` does not mean every bot is online.
 
-IM 默认总时限为一天，工具无输出时限也为一天；本轮 Context 的 `octo.execution/limits` 可以显式覆盖。Host 的首帧、模型空闲及工具独立 wall 时限仍按既有合同生效，任务总期限由 Extra 独立计时。重试只拿剩余时长，不会重新获得完整一天。
+`close()` cancels the connection, execution, and delivery work the plugin owns. Await it and check `complete` before replacing the Extra; it does not stop Kernel or other Extras. Cleanup failures surface as `EXTRA_DISPOSE_FAILED`.
 
-每个 Bot 可配置 `codex_retry`：
+## CLI deployment
 
-| 字段 | 默认值 | 有效范围 |
-| --- | --- | --- |
-| `enabled` | `true` | 布尔值；关闭 Extra 的自动恢复及恢复预算 |
-| `max_consecutive_retries` | `5` | `0..100`；连续故障段内的重试次数，不含首次调用 |
-| `max_total_retries` | `20` | `0..100`；本轮累计重试次数，不随恢复进度归零 |
-| `recovery_timeout_ms` | `120000` | `100..3600000`；连续故障恢复时限，与一天任务总时限独立 |
-| `initial_delay_ms` | `2000` | `100..60000`；指数退避起点 |
-| `max_delay_ms` | `30000` | `100..300000`；必须不小于起点 |
+Saved declarations live at `<home>/extras/channel-gateway/config.json` (POSIX `0600`). After editing one, run `octo-runtime channel-gateway restart` on a device with the background service installed, or `octo-runtime channel-gateway run` in the foreground. `octo-runtime status` reports the lifecycle, again not per-bot connectivity. Writing config does not install packages, connect immediately, or mutate a running instance.
 
-原生 `run.notice/retry_scheduled` 和 Extra 新建尝试共用上述次数与恢复预算。通知表示 Provider 仍在同一次调用内恢复，Extra 此时不会再次 invoke。非空文本增量或工具完成结束连续故障段；心跳、usage、会话更新和重试通知不会刷新恢复时限。退避增加最多 20% 抖动并遵守统一失败中的 `retryAfterMs`；当前错误目录给暂态故障默认 30 秒提示，因此实际等待可能长于 2 秒。等待无法放入剩余预算时直接结束。
+## Import and distribution
 
-Extra 只对 Codex 结构化暂态限流或不可用失败（`OH-PRV-4005/4006` 且 `retryable`）创建新尝试，并等待上次流结束。首期限定在本轮未出现任何工具或交互之前；出现后仍允许 Provider 自身恢复，但不自动重放业务请求。认证、额度、配置、输入错误和未知结果不自动重跑。Extra 与 Host 断流时尽力取消并提示结果未知，不把卡片重试提示当作恢复成功。
+Published entry: `@mininglamp-oss/octo-runtime/extras/channel-gateway`. The private workspace package name is for source and submodule hosts.
 
-一次业务请求维持一张进度卡和一个逻辑最终回复；各尝试保留独立身份及终态，不拼接失败尝试的半截答案。`/stop` 或卡片停止作用于当前尝试，也能停止退避；`/reset` 阻止旧任务继续自动尝试，保留正在执行的调用。任务在途保持去重，结束后重新开始既有的 120 秒终态去重窗口；卡片按钮在任务期间有效，结束后保留 30 分钟。状态 `tasks[].attempts` 提供运行中尝试，终态尝试有界保存在 occurrence 中，不承诺进程重启后恢复或副作用恰好一次。
+## Further reading
 
-## SDK 装配
-
-默认导出为 Extra 加载函数，稳定名称为 `channel-gateway`。从主包 `/extras/channel-gateway` 导入模块，调用 `createExtraService({endpoint, module, config: {bots}, dependencies})` 后 initialize。服务直接属于调用进程；SDK 不读写 CLI 配置文件，关闭使用 close 并检查 complete。
-
-更新由宿主卸载本插件、保存完整配置、重新加载；插件内所有连接重新建立。CLI 使用 `extraset channel-gateway` 保存完整声明，再用 `channel-gateway restart` 读取最新文件；前台未安装服务时停止并重新运行 `channel-gateway run`。单插件装卸通过宿主接口完成。
-
-原生 Extra 服务提供 `initialize()`、`status()` 与 `close()`；status 的 plugin 字段包含 `{ "bots": [...], "errors": [...] }`，kernel_available 独立表示执行端点可用性。CLI 使用 `octo-runtime status`。Bot配置错误不阻止其他有效Bot初始化。首次暂态连接失败和上线后暂态断线均按5/10/15/15秒恢复，服务端Retry-After可延长；认证拒绝、未知协议和reason12踢线仍为终态，不争抢连接或重跑未知任务。
-
-`octo-runtime channel-gateway logs --lines 200 --follow` 查看组件状态，不含聊天或session/run/message标识。CLI前台stdout与 `<home>/logs/extras/channel-gateway-status-<UTC小时>.log` 独立镜像记录服务、Kernel可用性、连接及重试；最多三份、每份100MiB。SDK默认静默，可用宿主代码选项 `logging.statusOutput(record)` 接入。完整示例见 [对接指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)。
-
-Bot 的 `deliveries` 与 `cardDeliveries` 只返回当前保留的回执总数，例如 `"cardDeliveries": 123`，不返回 effectKey/messageId 明细，也不是进程启动以来的累计发送数。原有投递重试和最多 512 条的防重回执缓存保持不变；512 是当前容量选择而非协议要求。状态读取直接取缓存数量，不复制完整回执列表。
-
-## Bot 连接状态机
-
-| state | 含义 | connected / error |
-| --- | --- | --- |
-| stopped | 未启动、禁用或主动停止 | false / null |
-| connecting | 本次启动的首次连接尝试 | false / null |
-| online | 身份校验、注册、WS 握手全部成功 | true / null |
-| retrying | 曾上线后断线，等待或正在恢复连接 | false / 最近连接错误码 |
-| failed | 首次连接失败，或恢复遇到终端错误 | false / 真实连接错误码 |
-
-只有 online 表示连接健康。首次尝试任一步失败均结束本次启动，不后台重试；缺凭据也不会定时轮询。宿主补齐配置后显式卸载/重载 Extra，CLI 使用上节的卸载、保存、加载流程。一个 Bot 失败不影响其他 Bot，也不把 Extra 的 loaded 变为 Bot 已上线的证明。
-
-本次启动曾完整上线后，网络异常断线按 5、10、20、30、30 秒等待恢复。每次等待从上次失败和资源回收完成后开始；恢复请求进行中仍为 retrying。每次完整成功自动清连接错误和计数，下一次断线重新从 5 秒开始。只有注册成功不算恢复；已识别 429 的 Retry-After 可延长当次等待。停止或卸载取消定时器和在途建联，不再恢复。
-
-鉴权/权限错误、身份不匹配、服务端明确握手或断开拒绝、未知协议错误停止恢复。HTTP 状态保留为 IM_AUTH_HTTP_* / IM_REGISTER_HTTP_*，WS 拒绝保留数字原因 IM_CONNECT_REJECTED_* / IM_SERVER_DISCONNECTED_*；没有已确认的业务错误合同就不将任意 HTTP 409 或 reason 猜测成 Bot 占用。Provider、卡片、投递诊断走独立诊断通道，不污染连接 state/error，连接恢复也不代表旧任务已完成或旧回复已送达。
-
-2026-10-16 的 im-test 专用 Bot 实测中，第二次注册和握手成功，旧连接收到 reason=12 并进入 failed / IM_SERVER_DISCONNECTED_12。该环境采用替换旧连接的行为，并非拒绝第二连接；插件不会为此自动反抢，不承诺跨机器排他锁。此样本不把 reason=12 的所有来源都解释为重复登录，详见[验收记录](../../.octospec/journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)。
-
-断线状态在传输层检测到异常后更新；心跳每 25 秒发送，90 秒无包后在心跳检查时终止连接。物理断网与状态变更之间可能存在检测延迟，合盖期间不承诺 JavaScript 定时器持续运行。状态机及测试矩阵见[开发计划](../../.octospec/tasks/channel-connection-state-machine/brief.md)。
-
-凭据只用于连接，不进入模型输入或状态。会话和投递回执有界保存在内存中，不承诺跨进程恢复或 exactly-once。
-
-卸载会取消正在建联、执行和投递的任务，并等待连接及任务清理结束。重复关闭等待同一次清理；任一资源清理失败仍尝试其他资源，最终向宿主返回 `EXTRA_DISPOSE_FAILED`，不能把它当作可忽略的配置错误后立即重载。
+- [Implementation](src/index.ts), [dynamic Context guide](../../.octospec/guides/channel-dynamic-contexts.md), [channel contract](../../.octospec/rules/channel-integration.md).
+- [Gateway guide](../../SDK_CHANNEL_GATEWAY_GUIDE.md), [Host SDK](../octo-runtime-host-sdk/README.md).

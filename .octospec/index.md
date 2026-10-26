@@ -48,7 +48,7 @@
 - [IM 执行准备排查经验与架构视图](journal/shared/2026-10-16-im-invoke-preparation-lessons.md)：完整 Context 误入执行 resolver、Extra 重复准备、系统指令时机、在线状态与任务错误的区别；重复准备已修复，全面错误展示仍待实施，见[本轮交付](journal/shared/2026-10-17-extra-initializer-delivery.md)。
 - [本地运维](guides/operations.md)：真实状态、排障和日志。
 
-根目录按场景分为 [CLI 使用指南](../CLI_USAGE_GUIDE.md)、[SDK 完整原生接入指南](../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md) 和 [SDK Channel Gateway 指南](../SDK_CHANNEL_GATEWAY_GUIDE.md)；[INTEGRATION.md](../INTEGRATION.md)仅作选型导航，[DEPLOYMENTS.md](../DEPLOYMENTS.md)说明发行部署。包 README 保留包级用法。
+根目录按场景分为 [CLI 安装与运维](../docs/zh-CN/getting-started/cli.md)、[SDK 入门](../docs/zh-CN/getting-started/sdk.md) 和 [SDK Channel Gateway 指南](../SDK_CHANNEL_GATEWAY_GUIDE.md)；[INTEGRATION.md](../INTEGRATION.md)仅作选型导航，[DEPLOYMENTS.md](../DEPLOYMENTS.md)说明发行部署。包 README 保留包级用法。
 
 ## 当前任务
 

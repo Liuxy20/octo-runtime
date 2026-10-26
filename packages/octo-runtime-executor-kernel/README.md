@@ -1,51 +1,141 @@
 # Executor Kernel
 
-公开开发者参考：[English](../../docs/en/reference/kernel-ipc.md) / [简体中文](../../docs/zh-CN/reference/kernel-ipc.md)。本页保留包内监督和实现说明。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-Kernel 提供本地 JSON-RPC、独立 worker 监督以及有界 Run 源窗口。它只维护 worker 的进程生命周期，不加载 Extra、读取业务存储或调度 Loop 业务。
+Runs [Executor Core](../octo-runtime-executor-core/README.md) in a separate worker process and exposes it over local IPC. The host owns a Kernel service, business code talks to a `KernelClient`, and the worker is a small file you compile that registers the Adapters you ship. Reach for it when a Provider crash, OOM, or `process.exit` must not take down the app around it.
 
-## 公开入口
+## When to use it
 
-消费者从主发行包 /executor-kernel 导入 createKernelService、attachKernel、KernelError、serveWorker 及相关类型；本 workspace 仅为内部实现。CLI 和 App 使用同一 createKernelService 在调用进程原生构造服务，initialize 后通过 service.client 执行，close 返回真实清理结果。attachKernel 只连接已有服务。
+- Long-lived desktop or CLI host: execution is isolated, supervised, and restartable.
+- Several callers — UI, Extras, automations — share one execution service.
+- You need bounded stream replay after a dropped connection.
+
+A short script that runs one prompt and exits is simpler with Core directly.
+
+## Three pieces you will wire
+
+| Piece            | Entry point                                                 | Responsibility                                                    |
+| ---------------- | ----------------------------------------------------------- | ----------------------------------------------------------------- |
+| Business caller  | `attachKernel({ endpoint })`, or an injected `KernelClient` | Owns its connection and invocation policy                         |
+| Composition root | `createKernelService(options)`, then `initialize()`         | Owns the service, closes it on shutdown, reads the cleanup result |
+| Worker           | `serveWorker([...adapters])` in your own entrypoint         | Registers Adapters and serves execution through Core              |
+
+The socket or pipe belongs to the calling process. Isolation comes from the worker, not from the service process.
+
+## Make one call
+
+`worker.mjs` — a file you own; Kernel only spawns it:
+
+```js
+import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+
+serveWorker([dshAdapter]);
+```
+
+In the host process, construct the service. This does no I/O; nothing listens until `initialize()` resolves:
 
 ```ts
-import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { componentEndpoint, createKernelService } from "@mininglamp-oss/octo-runtime/host";
 
-const client = attachKernel({ endpoint });
+const home = process.env.OCTO_HOME ?? process.cwd();
+const kernel = createKernelService({
+  endpoint: componentEndpoint(home), // socket on POSIX, named pipe on Windows
+  workerEntrypoint: fileURLToPath(new URL("./worker.mjs", import.meta.url)),
+  stateDirectory: join(home, "state")
+});
+```
+
+Then invoke and close:
+
+```ts
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+
+await kernel.initialize();
 try {
-  for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) consume(event);
+  const input = InvokeInput.check({
+    inputs: [{ type: "text", text: "Summarize the last commit." }],
+    approvalMode: "full_access",
+    contexts: {
+      schema: "octo.context-envelope/v3",
+      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    }
+  });
+  let terminal: string | undefined;
+  for await (const event of kernel.client.invoke({ ...input, protocol_mode: "canonical" })) {
+    if (event.type === "message.delta" && event.payload.channel === "final")
+      process.stdout.write(event.payload.text ?? "");
+    if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
+      terminal = event.type;
+  }
+  if (terminal !== "run.completed") throw new Error(terminal ?? "RUN_TERMINAL_MISSING");
 } finally {
-  client.close();
+  const cleanup = await kernel.close();
+  if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 }
 ```
 
-普通 App、kernelService.client 和 Extra 的 ctx.kernel 使用同一个 invoke(input, environment?)，无需安装或加载 Extra。输入仍是 InvokeInput 的 inputs/contexts；首次 next 才提交。省略模式或 native 返回 HostFrame，canonical 返回 CanonicalEvent，变量模式返回联合类型。完整示例见 [SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
+`stateDirectory` is optional, but it is where orphan-cleanup records survive a restart.
 
-高级调用方可明确使用 submit 返回完整 RunRef，再 get/subscribe；cancel(ref)、respond(ref)、respondNative(ref) 校验 Kernel instance 和完整执行身份。这些低层调用的所有权由调用方自行管理，不进入 invoke 登记。命令被接纳不等于执行完成，完成以源终态为准。
+## Calling from another process
 
-## 取消、观察和 owner 清理
+```ts
+import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+import type { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 
-- caller signal 在写请求前取消时不提交；写出后仍按原身份取得回执，然后请求一次取消。原订阅继续接收尾事件，正常耗尽后抛出实际 signal.reason。传输、控制 ACK 未知等具体错误优先保留。
-- cancelInvocation(invocationId, reason?)、respondInteraction 和 respondNativeInteraction 只控制本 client 登记的 invoke；未登记或其他 client 的身份拒绝。取消返回 accepted，不能解读成 Provider 已 cancelled。
-- iterator.return、退出迭代、subscription signal 和 client.close 只停止本地观察，不隐式 cancel。已接纳 Run 可由其他 client 按原 ref 继续观察。
-- 标准服务接入只需调用服务 close；Extra 服务在内部自动停止接纳并排空所属 invoke，普通 App/Extra 无需手动操作 invocations。底层接口 invocations.stopAdmission()/drain({deadline, reason}) 留给自行 attach 并明确实现调用所有权策略的高级调用方，返回 complete/unresolved。deadline 是与业务 dispose 共用的绝对时间，重复 drain 共享首次操作。
-- snapshot 只复制身份、阶段、取消状态、游标和错误码，不保存输入/输出正文；在途与未知记录均计入 128 个额度。确认 completed/failed/cancelled 才释放，lost 返回 RUN_OUTCOME_UNKNOWN，清理保持 incomplete。
-- 排空查询和取消并发各不超过 4，不创建逐 Run 重放订阅。执行终态不代表 delivery 或存储完成，owner 继续等待业务 onDispose 后才释放资源。
+export async function runAgainstKernel(home: string, input: InvokeInput): Promise<void> {
+  const client = attachKernel({ endpoint: componentEndpoint(home) });
+  try {
+    let terminal: string | undefined;
+    for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) {
+      if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
+        terminal = event.type;
+    }
+    if (terminal !== "run.completed") throw new Error(terminal ?? "RUN_TERMINAL_MISSING");
+  } finally {
+    client.close(); // does not cancel the run and does not stop the service
+  }
+}
+```
 
-executionEnvOverrides 逐次传递；signal 仅在本地。Kernel 当前 wire 不支持 environment.streamLimits，显式传入会拒绝 KERNEL_STREAM_LIMITS_UNSUPPORTED。直接 Core 支持该本地预算，且主动关闭其执行 iterator 会取消执行；Kernel 的观察关闭语义不同。
+The consumer has to answer interaction requests for the selected Provider. [attach.mts](../../docs/examples/attach.mts) shows connection ownership plus interaction replies; [service.mts](../../docs/examples/service.mts) shows owning the service and keeping execution and cleanup errors apart.
 
-每个连接只提交一条 UTF-8 LF 结尾 JSON-RPC 请求。invoke ACK 与订阅分离，Kernel 独立消费源；ACK 丢失只查询原身份，不重新 invoke。重放沿原 stream/after_seq 继续，缺口、过期和实例变化明确失败。合同见 [wire Schema](../octo-runtime-protocol/schema/kernel-ipc.schema.json)。
+## Service lifecycle
 
-## worker
+Construction performs no I/O. After `initialize({ signal? })`, `kernel.client` is usable and `status()` reports phase, endpoint, pid, and worker state. `close()` stops admission and coordinates shutdown within the shared five-second budget, returning a `ServiceCleanupResult`; the `closed` promise resolves with the same value. A failed `initialize()` throws `ServiceInitializationError` carrying the original `cause` and whatever `cleanup` it managed.
 
-worker 实例化唯一 AgentExecutor。执行通道为 stdio NDJSON；独立 Node IPC 的 ping/pong 由 worker 主循环响应。1 秒检查，单个 probe 5 秒未响应判失联；长调度间隔后重新探测，启动就绪预算 15 秒。失败先回收受管进程组，再按 250/1000/4000 ms 退避，60 秒活跃观测窗口最多三次快速替换。快速额度耗尽后保持 recovering，每次冷却 15 秒再串行尝试，直到恢复或关闭；连续健康观测 60 秒后重置策略。仅清理或所有权确认失败保持 exhausted，阻止替换并保留 close 失败。恢复不重启 Kernel 进程或本地监听，status 保持可查，close 取消冷却。
+Neither `closed` nor a stopped leader process proves cleanup finished — check `complete`. Close the Extras you own before the Kernel you own, and never let an Extra close a shared Kernel or somebody else's runs. Attaching a client does not make you the service owner.
 
-worker 丢失时，未完成 Run 产生一次 lost 终态；已接纳的完成终态保持原样。新 worker 只接纳新 Run，不重放旧请求。进程清理失败禁止替换。进程身份清单仅用于回收孤儿，不保存业务执行历史。
+## Cancellation and observation
 
-## 容量与平台
+| Operation                                                    | Meaning                                                                                                                |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `invoke(input, { signal })`                                  | Abort before dispatch: nothing is submitted. Abort after: asks to cancel that invocation and keeps observing its tail. |
+| `cancelInvocation(invocationId)`                             | Cancel an invocation started through this client. `accepted` is not a terminal state.                                  |
+| Iterator `return()`, ending a subscription, `client.close()` | Stop observing. Accepted execution keeps running and the service stays up.                                             |
+| Extra or service `close()`                                   | Applies the owning service's explicit cancellation and cleanup policy.                                                 |
 
-中央源窗口默认每 Run 32 MiB / 4096 帧，全局 128 MiB / 128 Run，终态 TTL 120 秒。最多 64 连接、16 订阅，写入 drain 等待 5 秒；客户端最多 32 个在途连接。按异步迭代消费，不增加无限生产队列。
+A client tracks at most 128 in-flight or unknown invocations. Service shutdown manages those for ordinary users; advanced attached callers can use `invocations.stopAdmission()` and `drain({ deadline, reason })`, which confirms execution state but not delivery or database completion.
 
-POSIX socket 为 0600；仅持有本实例端点租约才能移除 socket。Windows 使用命名管道。POSIX 清理按受管 PGID，Windows 使用有界 taskkill /T；原生平台和父进程先退出后的后代回收证据必须单独核对。
+Low-level `submit`, `get`, `subscribe`, `cancel`, `respond`, and `respondNative` remain available when you manage complete `RunRef` ownership yourself. They are not enrolled in the high-level registry automatically. See the [IPC reference](../../docs/en/reference/kernel-ipc.md).
 
-测试入口：[Kernel clients](../../test/kernel-clients.test.js)、[监督](../../test/kernel-worker-supervision.test.js)、[源窗口](../../test/host-run-service.test.js)。
+## Recovery and limits
+
+- Transport is one UTF-8, LF-terminated JSON-RPC 2.0 request per connection over a Unix socket or Windows named pipe. Worker execution uses stdio NDJSON; a separate Node IPC channel carries supervision heartbeats.
+- A lost submission acknowledgement is repaired by querying the original identity, never by submitting again. Stream repair resumes from the original identity and last contiguous sequence; gaps, expiry, and instance changes fail explicitly.
+- Worker failure first runs owned-process cleanup, then bounded rapid retries, then low-frequency recovery. Failed cleanup or ownership blocks replacement. A new worker accepts new runs and does not replay interrupted ones; active runs that lose their worker report `lost`, and an already retained terminal is preserved.
+- Defaults: 4,096 frames or 32 MiB per Run, 128 MiB or 128 Runs globally, 120-second terminal retention. Kernel allows 64 connections and 16 subscriptions; a client allows 32 in-flight connections. These bound transport records — they are not durable history and say nothing about process RSS.
+- POSIX endpoints rely on socket permissions; Windows uses its own named-pipe mechanism. Process-tree cleanup is platform-specific, and a dead leader is not proof that descendants exited. Inspect cleanup evidence instead of inferring it.
+
+## Import and distribution
+
+Private workspace package. Applications import `@mininglamp-oss/octo-runtime/executor-kernel` for `attachKernel`, `KernelClient`, and `serveWorker`. `@mininglamp-oss/octo-runtime/host` also re-exports `createKernelService` and the endpoint helpers; the implementation stays in this package. Kernel and Core do not depend on Host SDK.
+
+## Further reading
+
+- [Exports](src/index.ts), [service](src/service.ts), [client](src/client.ts), [worker entry](src/serve.ts), [source window](src/host-run-service.ts), [supervisor](src/supervisor.ts).
+- [Core](../octo-runtime-executor-core/README.md), [Host SDK](../octo-runtime-host-sdk/README.md), [SDK onboarding](../../docs/en/getting-started/sdk.md), [module loading](../../docs/en/concepts/module-loading.md).
+- [Client tests](../../test/kernel-clients.test.js), [worker supervision tests](../../test/kernel-worker-supervision.test.js), [source-window tests](../../test/host-run-service.test.js).

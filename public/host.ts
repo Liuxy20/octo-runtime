@@ -1,6 +1,5 @@
 export {
   createExtraService,
-  ComponentStartError,
   componentEndpoint,
   componentServiceId,
   homeHash,
@@ -9,11 +8,8 @@ export {
 export type {
   ExtraService,
   ExtraServiceOptions,
-  ExtraServiceStatus,
-  CleanupResult
+  ExtraServiceStatus
 } from "@mininglamp-oss/octo-runtime-host-sdk";
-export { startNativeComponent } from "@mininglamp-oss/octo-runtime-host-sdk";
-export type { NativeComponentOptions } from "@mininglamp-oss/octo-runtime-host-sdk";
 export type {
   RuntimeLoggingOptions,
   ExtraStatusRecord

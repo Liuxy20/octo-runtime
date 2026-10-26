@@ -1,27 +1,61 @@
-# @mininglamp-oss/octo-runtime-adapter-hermes
+# Hermes Adapter
 
-> 全局 Context 约束：本轮模型上下文由业务方选择，selection 等业务项可不发送，可传空或显式重复。必要执行配置独立校验且不注入 LLM。底层只转发并渲染本轮数据，不按 sessionId 缓存、补齐、合并、去重或省略；reset／新 Provider 会话／resume 失败后由业务方重新提供必要背景。见 [分类矩阵](../../.octospec/rules/context-input.md) 与 [IPD-SE](../../.octospec/rules/context-input.md)。Host 仅按白名单 pattern 保序拼接，不做业务检查或编译。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-Hermes ACP adapter，adapter type 为 `hermes`。每次调用启动 `hermes acp`，通过通用 ACP adapter 完成 session 创建/恢复、模型选择、prompt 流和 canonical event 转换。
+Binds the Hermes CLI (`hermes acp`) to Runtime through the shared ACP Adapter. One prepared invocation per turn, explicit Hermes sessions, native updates normalized into `CanonicalEvent`. The host installs and authenticates Hermes.
 
-## 模型配置与环境变量
+## When to use it
 
-Agent Revision 使用 `execution_profile.agent_config.model`。Hermes 在 `session/new`/`session/load` 响应的 legacy `models.availableModels` 中发布可选模型；adapter 校验请求值后，通过 `session/set_model` 设置该 session。值必须使用返回的 `modelId`，不是展示名称。本机 Hermes 0.21.2 对腾讯 GLM 的实际 ID 为 `custom:tencent/glm-5.3`。
+- Hermes is installed and logged in on the machine that runs the executor.
+- You want it behind the same Core or Kernel path as the other Providers.
 
-未配置时沿用 Hermes 当前 session/default config。Hermes CLI 的模型覆盖环境变量为 `HERMES_INFERENCE_MODEL`，等价入口为 `hermes --model`；但 ACP adapter 不写该环境变量，而是在 session 建立后使用协议级选模，这样同一个 Runtime 上的不同 Agent 可以独立配置模型。
+## Register the Adapter and prepare input
 
-若当前 Hermes 版本没有发布 model capability，或请求的 `modelId` 不在 `availableModels` 中，adapter 会在发送 prompt 前失败，不会静默退回默认模型。
+This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
-## 使用
+```ts
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { hermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
 
-```bash
-pnpm cli adapter probe hermes
+const executor = new AgentExecutor();
+executor.register(hermesAdapter);
+
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Say hello." }],
+  protocol_mode: "canonical",
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "hermes" } }]
+  }
+});
 ```
 
-`probe` 只检查可执行文件；登录态、模型凭据和实际推理网络仍需在 Runtime 上配置。
+Consume the events as described in [Runtime Protocol](../octo-runtime-protocol/README.md); `run.completed` is the only success terminal.
 
-## 模块责任边界
+## What it binds
 
-- 负责：将 hermes 原生执行协议映射为 InvokeRequest / CanonicalEvent，由 adapter-host 调用。
-- 不负责：Worker/IM WS、聊天历史、Event/AgentRun 登记。
-- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。
+| Item         | Value                                                                                                                     |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Adapter type | `hermes`                                                                                                                  |
+| Export       | `hermesAdapter`                                                                                                           |
+| Command      | `hermes acp`                                                                                                              |
+| Output       | canonical events only                                                                                                     |
+| Session      | explicit resume; an empty `session/load` result counts as a missing session and falls back to the caller's recovery input |
+| Model        | Provider-advertised IDs; omit the model to keep the Provider default                                                      |
+
+## Limits
+
+- Canonical-only: pass `protocol_mode: "canonical"`. Core's native default is not a conversion.
+- `ask` and `full_access` only; `assisted` is rejected before the process starts.
+- A probe checks that `hermes` exists, not that it is authenticated or has model access.
+- Each invocation owns its ACP process; await cleanup rather than trusting a cancellation receipt.
+
+## Import and distribution
+
+Private workspace package. The published distribution has no Hermes subpath.
+
+## Further reading
+
+- [Implementation](src/index.ts), [ACP Adapter](../octo-runtime-adapter-acp/README.md), [Provider matrix](../../.octospec/guides/providers.md).
+- [Input reference](../../docs/en/reference/invoke-input.md).

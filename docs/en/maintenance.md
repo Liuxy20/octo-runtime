@@ -10,18 +10,17 @@ English and Chinese use matching paths under `docs/en` and `docs/zh-CN`. Languag
 
 ## Existing-Document Map
 
-| Existing entry                                                                         | Purpose                                                                                                   |
-| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| Root [README](../../README.md), [INTEGRATION](../../INTEGRATION.md)                    | Project overview and integration selection; detailed APIs link here.                                      |
-| [ARCHITECTURE](../../ARCHITECTURE.md)                                                  | Design background, historical comparison, and future goals; current module APIs are covered here.         |
-| [SDK native guide](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)                         | Retains Chinese source/submodule integration and application initialization steps; common APIs link here. |
-| [SDK Gateway guide](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                                | Retains Chinese IM configuration and storage implementations; common Extra lifecycle is covered here.     |
-| [CLI usage](../../CLI_USAGE_GUIDE.md), [deployments](../../DEPLOYMENTS.md), CLI README | Service operations and distribution steps.                                                                |
-| Package READMEs                                                                        | Package implementation and contribution details; application integration APIs are covered here.           |
-| `release/README.md`                                                                    | Removed; packaging uses the root README. Temporary CI download directories are unaffected.                |
-| Octospec                                                                               | Development context and process records, not required for SDK integration.                                |
+| Existing entry                                                                            | Purpose                                                                                               |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Root [README](../../README.md), [INTEGRATION](../../INTEGRATION.md)                       | Project overview and integration selection; detailed APIs link here.                                  |
+| [ARCHITECTURE](../../ARCHITECTURE.md)                                                     | Design background, historical comparison, and future goals; current module APIs are covered here.     |
+| [SDK Gateway guide](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                                   | Retains Chinese IM configuration and storage implementations; common Extra lifecycle is covered here. |
+| [CLI operations](getting-started/cli.md), [deployments](../../DEPLOYMENTS.md), CLI README | Service operations and distribution steps.                                                            |
+| Package READMEs                                                                           | Package implementation and contribution details; application integration APIs are covered here.       |
+| `release/README.md`                                                                       | Removed; packaging uses the root README. Temporary CI download directories are unaffected.            |
+| Octospec                                                                                  | Development context and process records, not required for SDK integration.                            |
 
-Existing document links remain usable. Common SDK integration content is available in both languages. Legacy operational and business-specific guides retain their original language for now; add translations when updating those guides.
+Repository links point to the consolidated pages listed above; the superseded root CLI and native SDK guides have been removed. Common SDK integration content is available in both languages. Business-specific guides retain their original language for now; add translations when updating those guides.
 
 ## Update Rules
 

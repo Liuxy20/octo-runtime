@@ -1,105 +1,67 @@
 # DeepSeek Harness Adapter
 
-`dsh` 是独立的 canonical Adapter。KernelClient 经 Kernel worker 调用本机已安装的 DeepSeek Harness；不控制 Desktop 窗口，不安装 Provider，不修改用户 profile 或认证文件。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-DSH 接入为实验性支持，直接使用未修改的官方 SDK，不保证稳定性。SDK 内部的解析前输入、stderr 与会话关系表没有本项目补充的内存上界；`close()` 只确认直接子进程退出，不保证全部工具后代回收。调用、续聊及取消继续提供，已观察到的失败仍如实返回。上游能力反馈及历史补丁参考见 [DSH #11031](https://github.com/deepseek-ai/deepseek-harness/discussions/11031)。
+Runs one invocation through DeepSeek Harness's official Client SDK over its stdio service: start or resume an explicit native session, send this turn, map the trajectory into `CanonicalEvent`. This is the only Adapter with a public entry, `@mininglamp-oss/octo-runtime/adapters/dsh`. It wraps the unmodified upstream SDK, so treat the integration as experimental rather than a stability guarantee.
 
-## 支持版本和入口
+## When to use it
 
-运行已安装的 Runtime CLI 或 SDK 需要 **Node.js 24.x 或 26.x**，精确范围为 `^24.0.0 || ^26.0.0`；这也是用户运行环境要求，不只是开发或编译环境要求。Node.js 22 不在支持范围内，请先升级到 Node.js 24；“24+”不代表支持任意更高主版本。
+- DeepSeek Harness is installed and logged in, as Desktop or CLI.
+- You are on Node.js `^24` or `^26` — not an arbitrary higher major.
+- You accept the upstream limits listed below.
 
-macOS Desktop 入口依赖 Node.js 的 [`process.execve`](https://nodejs.org/api/process.html#processexecvefile-args-env)，用于保留官方 Client 拥有的 PID 和 stdio。该 API 仍标记为 Experimental；当前实现保留此依赖，并在 API 不可用时明确失败。Node.js 24/26 有自动化覆盖，本机真实 Desktop 验收使用 Node.js 24；不声明 Node.js 22 兼容性。
+## Register the Adapter and prepare input
 
-直接使用官方 `@deepseek-ai/dsh-sdk-client@0.2.1-rc.3` 的 `HarnessClient`，不自行实现 JSON-RPC Client。该版本是 2026-10-25 查询 npm 得到的最高版本，标签为 `next`；上游 `latest` 标签仍指向旧版，故显式锁定版本。
-
-当前支持同版 `@deepseek-ai/dsh@0.2.1-rc.3`、SDK wire `deepseek-harness-sdk-runtime/0.0.1`。本机验证的 Desktop commit 为 `be72761ee1a6736ebcdf4f3739363b083ae53c98`。升级后版本检查明确失败，需要重新核对原生合同。
-
-默认优先使用 PATH 中的 `dsh`；macOS 找不到时使用 `/Applications/DeepSeek Harness.app` 内嵌的 CLI。官方 Client 用 Node 启动 `dshBin`；Desktop 入口通过 `execve` 保留该进程的 PID/stdio，切换到 Electron 和 asar 内 CLI，不另建协议代理。其他安装位置使用 `desktopPath`。Windows/Linux 可以通过 `dshBin` 显式选择 Node CLI module；本次未验证其真实 DSH 发行版。
-
-先在 Desktop 登录，再以同一操作系统账号启动 Runtime。默认 `profile=sdk`、`provider=deepseek-account`、`model=deepseek-flash`，复用 Provider 自己的凭据解析；API key 路径需显式选择 `deepseek-official` 并由宿主准备。默认不会根据缺少某个环境变量猜测登录状态。
-
-```sh
-octo-runtime adapter probe dsh
-```
-
-probe 只证明兼容入口可运行，不证明账户、模型或工具可用。真实验证入口：仓库构建后运行 `node scripts/verify-dsh-live.mjs`，会调用模型并在临时工作目录写入验证文件。该脚本是依赖本机已安装且配置完成的 DSH 的手动验收，不作为普通 CI 门禁；CI 使用可控 fixture，不能替代真实 Desktop 验收。
-
-## SDK 与 CLI
-
-主发行包导出 `@mininglamp-oss/octo-runtime/adapters/dsh`。宿主维护的独立 worker 文件：
+This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
-serveWorker([dshAdapter]);
-```
 
-宿主在本进程构造 `createKernelService({endpoint, workerEntrypoint})`，业务调用 `kernel.client.invoke(input)`；完整所有权示例见 [原生服务指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。不需要 SDK manifest。CLI 内置 manifest 已注册 `dsh`；Gateway 只需设置 `adapter.adapter_type="dsh"`，保持已有 DM/群授权、卡片和会话管理链路。
+const executor = new AgentExecutor();
+executor.register(dshAdapter);
 
-本轮请求必须显式使用 canonical 和 full_access：
-
-```json
-{
-  "inputs": [{ "type": "text", "text": "Reply OK" }],
-  "protocol_mode": "canonical",
-  "contexts": {
-    "schema": "octo.context-envelope/v3",
-    "items": [
-      { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "dsh" } },
-      { "namespace": "octo.execution", "name": "workspace", "payload": { "mode": "fixed", "path": "/absolute/project" } },
-      { "namespace": "octo.security", "name": "approval_policy", "payload": { "mode": "full_access" } }
-    ]
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Say hello." }],
+  protocol_mode: "canonical",
+  approvalMode: "full_access",
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
-}
+});
 ```
 
-调用方保存真实 `session.update.payload.providerSession`，续聊原样传回。Adapter 先原生 resume，再设置本轮工作目录，最后发送本轮输入；恢复失败不会另建会话。可信 controlInstructions 只在新会话中作为独立 user text block 发送，不冒充原生 system prompt。普通业务 Context 每轮由 Core 渲染，不从 Provider 历史补齐。
+## What it binds
 
-执行参数位于 `agentConfig.providerOptions`；CLI profile 中使用 `adapters.dsh.execution.provider_options`，其值须为字符串。SDK 的 `args` 仅支持字符串数组，CLI 字符串配置不支持该数组。
+| Item         | Value                                                                               |
+| ------------ | ----------------------------------------------------------------------------------- |
+| Adapter type | `dsh`                                                                               |
+| Exports      | `dshAdapter`, `createDshAdapter`                                                    |
+| Public entry | `@mininglamp-oss/octo-runtime/adapters/dsh`                                         |
+| Executable   | PATH `dsh` first, then the macOS Desktop build; `dshBin` and `desktopPath` override |
+| Output       | canonical events only                                                               |
+| Approval     | `full_access` only                                                                  |
+| Defaults     | profile `sdk`, provider `deepseek-account`, model `deepseek-flash`                  |
 
-| 选项 | 默认值 | 说明 |
-| --- | --- | --- |
-| `dshBin` | 自动发现 | 官方 Client 的 Node CLI module 路径；与 command/args/desktopPath 互斥 |
-| `command`、`args` | 自动发现 | 保留 Node executable 加单个 CLI module 的旧配置；显式 arg 最多 4096 UTF-8 bytes，超量在探针前拒绝；任意 executable/argv 组合明确拒绝，改用 dshBin |
-| `desktopPath` | macOS 默认安装位置 | 绝对 `.app` 路径；当前仅 macOS |
-| `profile` | `sdk` | 使用已有 SDK profile；自定义 profile 必须暴露同一 RPC 服务 |
-| `dshHome` | Provider 原生默认 | 子进程的 DSH_HOME；宿主负责准备和保护 |
-| `provider` | `deepseek-account` | 原生 provider ID |
-| `maxTokens` | 原生默认 | 正整数输出上限；model 使用 `agentConfig.model` 或本轮 model Context |
-| `initializeTimeoutMs` | 15000 | 握手期限，毫秒 |
-| `requestTimeoutMs` | 30000 | 普通 RPC 期限，毫秒 |
-| `shutdownTimeoutMs` | 1000 | shutdown 回执期限，毫秒；随后仍确认拥有进程退出 |
+## Compatibility
 
-`session/wait` 使用本轮 runTimeoutMs，未指定时为 120000 毫秒。版本探针有独立 10000 毫秒期限，也观察取消并回收其拥有的进程组。正式调用的进程由官方 SDK 管理，Adapter 在通知回调中同步投影；投影后的 canonical 事件和队列沿 Runtime StreamLimitPolicy 的独立预算。这些预算不限制 SDK 解码、JSON 解析、诊断及关系表的内部占用。
+The Client and Provider are pinned to `0.2.1-rc.3`, wire protocol `deepseek-harness-sdk-runtime/0.0.1`. The recorded macOS Desktop build is commit `be72761ee1a6736ebcdf4f3739363b083ae53c98`; unknown versions fail verification. Desktop launch depends on the experimental `process.execve` to keep the official Client's PID and stdio ownership. Real Desktop evidence comes from Node 24; Windows and Linux native distributions have not passed real integration.
 
-官方 SDK 未提供可配置的解析前行字节预算、stderr 总字节预算和 lineage 表上界。超大响应、无换行数据、诊断输出及无关会话通知可能增加 SDK 内部内存占用；Runtime 不再通过依赖补丁补足这些能力。
+## Sessions and limits
 
-订阅过滤回调返回 false，避免在 SDK 的订阅队列额外积累通知；这不限制 SDK 自己的会话关系表。pending next 只监听订阅失败，不因首条通知完成，关闭会拒绝该等待。非 JSON 行按上游行为忽略，无有效初始化响应最终超时失败；不得将超时解释为已实施解析前内存保护。
+- An explicit session is resumed **before** the working directory is updated and the turn is sent. A failed resume does not silently start a new session.
+- New-session control instructions are separate user text blocks, not a native system prompt. No application history is reconstructed.
+- Upstream pre-parse input, stderr, and session maps have no Runtime-added memory bounds, and upstream close confirms the direct child only — not every tool descendant. Kernel worker isolation does not remove these limits.
+- Using a host-owned API key means selecting `deepseek-official` explicitly. Missing environment variables never decide native login state.
+- SDK `args` is a string array, unlike CLI string-valued options.
 
-## 输出和限制
+## Verification
 
-原生 prompt 回执只表示入队。成功还需关联 receipt、root turn/end=completed、非空 committed answer、session/wait 成功，以及官方 Client.close 成功。close 成功只反映 SDK 的直接子进程观测范围，不证明工具后代全部退出。只收到 idle、空回答、EOF 或 enqueue ACK 都不会报成功。
+`node scripts/verify-dsh-live.mjs` calls the configured real Provider and writes verification files; it is opt-in, not a CI check. The release bundles the imported official Client and Protocol JavaScript, not the Provider installation or native binaries, and applies no downstream SDK patches.
 
-DSH 原生事件 seq 用于按会话去重，允许非零起点和向前跳号；相同序号的完全相同事件去重，冲突重复仍报错。执行是否成功由上述完成证据判定，不因原生序号不连续而失败。Runtime HostFrame 的 seq 由 Core 独立生成，与 DSH 原生序号无关。
+## Further reading
 
-Provider 兼容原则：Adapter 的强制校验限于正确映射结果、确认执行终态和完成资源清理所需的合同，以及已有资源预算。未映射的原生事件类型忽略，不因内部编号习惯或与结果无关的事件差异中断整轮执行。重复事件去重；但明确的执行失败、传输中断、必要完成证据缺失或相互矛盾、资源超限和清理失败仍须按对应状态处理，不能以兼容为由补造结果或报告成功。DSH seq 不连续本身不是完成证据缺失。
-
-本版 SDK 在消息提交后转发 compact text-chunks，Adapter 重放这些增量并与 committed snapshot 对账；这不是实时逐 token 流。工具参数从原生 JSON 字符串解析，结果使用 toolCallId 关联；单工具失败不替代 root 的终态。Child 仅在发现原生 lineage 后纳入，文本使用 commentary，不混入 root final。原生 reasoning 标记 analysis/private_reasoning 和来源，公共卡片不能展示该内容。usage 只传递已报告的数值，不估算 token。
-
-本版 SDK 没有交互审批传输，因此只接受调用方明确选择的 full_access，原生权限固定为 danger-full-access；ask/assisted 在启动前拒绝。工作目录不是沙箱。非 default actmode、逐轮 MCP 不支持时明确拒绝；effort 没有 setter，沿统一 notice 回执说明未应用。
-
-失败边界沿现有 Adapter SDK / Core 合同：Core 在接纳调用前检查协议和审批模式，拒绝时 invoke 迭代会抛错且不启动 Provider；直接调用 Adapter 的 ask/assisted 同样抛出 APPROVAL_MODE_UNSUPPORTED。Adapter SDK 的协议和逐轮 MCP 合同检查也允许抛错。调用被接纳后，DSH 自身的 actmode、沙箱、启动参数、恢复会话和会话占用校验返回单个 canonical run.failed；其中配置错误使用 DSH_CONFIG_INVALID，actmode 使用 DSH_ACTMODE_UNSUPPORTED。重复会话的拒绝不会释放正在执行的会话占用。Core 对这些 DSH 失败保持 cleanup=complete；已启动进程的失败仍须先确认回收。
-
-恢复后的工作目录须与本轮请求经 realpath 解析为同一目录，符号链接别名可接受；仅返回请求根下的其他子目录仍报 DSH_SESSION_RESUME_FAILED，避免在错误目录执行。大小写别名在支持的文件系统上通过真实目录回归验证，不把字符串统一转小写当成跨平台等价规则。
-
-每轮独占一个官方 HarnessClient；取消调用其 close，不终止 Desktop GUI 或兄弟调用。SDK 先请求 shutdown，再通过 stdin EOF、TERM/KILL 及直接子进程退出确认完成自身清理；Runtime 不读取 SDK 私有进程字段，不注入额外进程清理实现。父进程先退出或工具忽略退出请求时可能留下后代，这一限制适用于当前实验性 DSH 接入，不能宣称已由 Kernel 隔离解决。已观察到的 close 失败保留执行和清理两种原因。真实 Windows DSH 未验收。Session 文件由 DSH 原生管理，Adapter 不另存业务历史。
-
-失败沿共同 FailureEnvelope：公共 OH 分类码在 `payload.failure.code`，DSH 稳定原因在 `payload.failure.reasonCode` 和顶层兼容 `code`。例如 DSH_SESSION_RESUME_FAILED、DSH_INITIALIZE_TIMEOUT、DSH_REQUEST_TIMEOUT、DSH_TRANSPORT_CLOSED、DSH_TRAJECTORY_INVALID、DSH_EXECUTION_FAILED、DSH_NO_FINAL_OUTPUT、DSH_CANCEL_FAILED、DSH_CLEANUP_FAILED。容量超限保留共同 PROVIDER_MESSAGE_TOO_LARGE / STREAM_QUEUE_* 原因码。Core 日志保留公共码与 reason_code；Adapter 经 invocation context 复用同一日志入口，记录有界阶段、时间、原生安全 code，不记录 prompt、凭据、原生 error.message 或 stderr。官方公共 API 不暴露 PID/request ID，故不读取私有字段或解析其错误文本。独立调用可用 `createDshAdapter({log})` 提供同一受控 RuntimeLog；错误不自动重发模型或工具。
-
-源码声明官方 Client 精确生产依赖。构建发行包时，esbuild 按实际 import 收集未修改的官方 Client 和 SDK Protocol JavaScript，保留 workspace 依赖为外部包并记录上游版本和 MIT 许可，不再复制或应用下游补丁。Adapter 始终传入显式 dshBin，因此不使用官方 SDK 自动解析 npm Provider 的默认路径；发行包不携带整套 Provider 或平台原生模块，不在消费者安装时下载 Provider。离线包验证覆盖这条路径。
-
-测试沿仓库的构建产物约定：运行 pnpm test 会先清理并构建当前源码，再执行测试；CI 的 pnpm typecheck 同样先构建，随后运行 pnpm test:suites。内部 trajectory 测试读取本轮构建产物，不作为公共 API 导出；官方 Client 测试通过包名解析其公开入口，不依赖 node_modules 内部布局。单独执行 node --test 前需先运行 pnpm build。
-
-源码安装使用 `pnpm install --frozen-lockfile` 获取未修改的锁定 SDK。Protocol 测试保留 UTF-8、CRLF 和订阅语义；Adapter 测试及离线发行验证确认普通调用、续聊、取消、错误映射和 Runtime 自身预算仍可用。超大初始化响应不再按 Runtime 原始预算拒绝，无换行输入沿官方初始化超时处理；后代清理由测试宿主自行收尾，不再把它记为 Adapter 保证。历史补丁及其回归证据保存在上游反馈中。
-
-源码依赖图包含官方 Client 声明的同版 Provider 依赖，因此 lockfile 明显增大。默认 CLI 内置 DSH，暂不改成可选 Adapter 安装；消费者发行包只收集实际使用的 Client/Protocol JavaScript，不携带该 Provider 依赖图。构建脚本禁止误收集 Provider，离线验证检查发行主包不声明官方 Provider/Client npm 依赖；不能通过手工裁剪 lockfile 减少这部分源码依赖。
+- [Implementation](src/index.ts), [Adapter SDK](../octo-runtime-adapter-sdk/README.md), [Runtime Protocol](../octo-runtime-protocol/README.md).
+- [SDK quickstart](../../docs/en/getting-started/sdk.md), [upstream limitations](https://github.com/deepseek-ai/deepseek-harness/discussions/11031).

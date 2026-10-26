@@ -93,4 +93,4 @@ CLI 可执行入口仅为参数解析及校验确认的前台组件 run 选择�
 
 旧 daemon 架构的 1.0.1 列为 deprecated；不支持旧版升级或迁移。已有安装须先停止并移除旧服务，执行 npm uninstall -g @mininglamp-oss/octo-runtime 后重新安装新架构版本并重新配置。npm 卸载不会自动移除系统服务或 Home；遗留数据存在不表示支持迁移。发行时须另行完成 npm registry deprecation，记录实际结果，不能用文档声明替代 registry 操作。
 
-Provider/插件安装和认证方案始终归 HostApp。SDK 不继承 CLI 的全量 manifest、JSON 配置目录或系统服务约定。详见 [SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
+Provider/插件安装和认证方案始终归 HostApp。SDK 不继承 CLI 的全量 manifest、JSON 配置目录或系统服务约定。详见 [SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。

@@ -13,8 +13,7 @@ filter that could leave its required check waiting indefinitely.
 Ubuntu, macOS, and Windows each use a required **Node.js 24.x and 26.x** matrix and the pnpm version
 declared in `package.json#packageManager`. `.nvmrc` intentionally selects Node.js 24
 for local development; CI selects each major explicitly. CI installs ripgrep for the
-naming check rather than relying on the runner image. The Ubuntu/macOS matrix also
-installs Go 1.25.x to compile the native-component fixture, then executes:
+naming check rather than relying on the runner image, then executes:
 
 1. `pnpm install --frozen-lockfile`.
 2. `pnpm lint`, `pnpm lint:names` and `pnpm format:check`.

@@ -1,8 +1,8 @@
-# CLI 安装与调用
+# CLI 安装与运维
 
 [English](../../en/getting-started/cli.md) | [文档目录](../README.md)
 
-通过 Runtime CLI 可以启动 Executor Kernel、检查 Adapter，并试运行一次 Agent 调用。运行环境使用 Node.js 24.x 或 26.x（LTS）。
+通过 Runtime CLI 可以安装、启动和运维 Executor Kernel 与可选 Extra，检查 Adapter，并试运行一次 Agent 调用。运行环境使用 Node.js 24.x 或 26.x（LTS）。
 
 ## 需要安装哪些程序
 
@@ -22,7 +22,7 @@ octo-runtime --help
 octo-cli --help
 ```
 
-以上命令安装 npm 上已发布的版本。2026-10-21 核对时，Runtime 的 `latest` 仍为旧 daemon 架构的 `1.0.1`；下文命令要求版本的帮助信息中包含 `executor-kernel`，新版本发布前请使用下面的源码构建方式。替换已有 daemon 安装前，先查看[部署说明](../../../DEPLOYMENTS.md)。
+以上命令安装 npm 上已发布的版本。下文命令要求版本的帮助信息中包含 `executor-kernel`；如果已装版本没有，请使用下面的源码构建方式。
 
 在本仓库中使用 `package.json` 声明的 pnpm 版本：
 
@@ -74,6 +74,92 @@ octo-runtime executor-kernel uninstall
 
 CLI 从内置清单加 `<Home>/manifest.json` 选择 Adapter 和 Extra。两份均含 `adapters` 和 `extras`；声明 Extra 不等于启用或启动。`--manifest` 完整替换两份来源。格式、解析锚点和旧 Extra `module` 字段迁移见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
 
+## 配置 Octo IM Gateway
+
+Bot 通过 `channel-gateway` Extra 接入。保存声明时把占位值全部替换掉：
+
+```bash
+octo-runtime extraset channel-gateway <<'JSON'
+{
+  "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
+  "config": {
+    "bots": [
+      {
+        "api_url": "https://im-test.deepminer.com.cn/api",
+        "bot_id": "<OCTO_BOT_ID>",
+        "bot_name": "local-assistant",
+        "bf_token": "bf_REPLACE_WITH_REAL_BOT_TOKEN",
+        "adapter": {
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace"
+        },
+        "context": {
+          "schema": "octo.context-envelope/v3",
+          "items": [
+            {
+              "namespace": "octo.control",
+              "name": "instructions",
+              "payload": { "entries": [{ "text": "You are the local assistant." }] }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+JSON
+```
+
+保存不会连接 Bot、不会安装插件，也不会重启组件。每次 `extraset` 都整体替换声明，不按 `bot_id` 合并，多个 Bot 要放进同一个 `config.bots` 数组。`module` 可以省略；写了就必须和有效 manifest 一致。POSIX 配置文件权限为 `0600`。
+
+后台 Gateway 正在运行时，改完配置执行：
+
+```bash
+octo-runtime channel-gateway restart
+octo-runtime status
+```
+
+`extraget channel-gateway` 会返回含凭据的完整配置，输出不要贴进日志。
+
+### Provider 与准入
+
+- Claude Code：把 `adapter_type` 改成 `claude-code`；`model`、`effort` 可省略。
+- OpenClaw：用 `{ "adapter_type": "openclaw", "provider_agent_id": "main" }`，不填 `workdir`；Gateway 由 OpenClaw 自己启动。
+- 本地 Provider 省略 `workdir` 时使用 `~/octo-runtime/channels/{bot_id}`，与 CLI Home 无关。
+- `groups_enabled: false` 关闭群与话题；`group_ids` 省略、`null` 或 `[]` 都表示不加额外范围限制。
+- `allowed_sender_ids` 省略表示不加限制；显式名单只允许列出的发送者，`[]` 拒绝全部，`null` 非法。
+
+## Extra 组件与日志
+
+```text
+octo-runtime <extra-name> install|start|restart|stop|status|uninstall|logs
+```
+
+`<extra-name>` 可以是 `channel-gateway`、`channel-wecom`、`webui`，或通过 `extraset` 保存的名称。这些动作沿用 Kernel 的自启与就绪规则；Extra 可以先于 Kernel 启动，此时报告 Kernel 不可用，Kernel 上线后自动恢复。
+
+```bash
+octo-runtime channel-gateway logs --lines 200
+octo-runtime channel-gateway logs --follow --json
+```
+
+日志只包含组件状态：初始化与关闭、Kernel 可用性、连接与重试计划，不含聊天正文、标识、模型输出或凭据。CLI 同时镜像到 `<Home>/logs/extras/<extra>-status-<UTC小时>.log`，保留当前文件加最近两份归档，每份最多 100 MiB；`logs` 最多读取最近三份中的 4 MiB。
+
+## 诊断与恢复
+
+`status` 分别返回原生 `service` 状态和 IPC `runtime` 状态，退出码 0 不代表业务可用。`doctor` 报告服务管理器探测和服务定义；`adapter list`、`adapter probe` 查询已运行的 Kernel，不会启动它。
+
+返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。文本错误写 stderr，JSON 错误写 stdout。
+
+Windows 崩溃后工具树状态未知时，启动会以 `ORPHAN_CLEANUP_INCOMPLETE` 失败。确认遗留进程已停止后再执行：
+
+```bash
+octo-runtime doctor --home <home>
+octo-runtime executor-kernel recover --acknowledge-orphan-cleanup --home <home>
+octo-runtime executor-kernel start --home <home>
+```
+
+恢复只确认这一份清单归档，不会终止未知进程，也不会把人工确认报告成已验证清理。
+
 ## 试运行一次调用
 
 创建 `request.json`，内容如下：
@@ -108,7 +194,7 @@ octo-runtime playboard < request.json
 node docs/examples/attach.mts /absolute/path/to/kernel.sock codex
 ```
 
-地址处理和事件消费见 [SDK 入门](sdk.md)。注册 Kernel 后还需单独配置、启动 `channel-gateway`，才能接入 Octo IM；见 [Extra 指南](../guides/extras.md)和[完整 CLI 运维指南](../../../CLI_USAGE_GUIDE.md)。
+地址处理和事件消费见 [SDK 入门](sdk.md)。注册 Kernel 后还需单独配置、启动 `channel-gateway`，才能接入 Octo IM；接入方式见 [Extra 指南](../guides/extras.md)。
 
 ## 让 Agent 使用 octo-cli
 

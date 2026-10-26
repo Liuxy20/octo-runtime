@@ -1,57 +1,116 @@
-# Packages 与责任边界
+# Runtime Packages and Layers
 
-现行设计见 [Runtime 本地存在与按需在线合同](../.octospec/rules/runtime-lifecycle.md)。HostApp 决定携带和启用哪些包；本地 Runtime 身份与云端登记独立。
+[简体中文](README.zh.md) | [Developer documentation](../docs/en/README.md)
 
-> 全局 Context 约束：本轮模型上下文由业务方选择，selection 等业务项可不发送，可传空或显式重复。必要执行配置独立校验且不注入 LLM。底层只转发并渲染本轮数据，不按 sessionId 缓存、补齐、合并、去重或省略；reset／新 Provider 会话／resume 失败后由业务方重新提供必要背景。见 [分类矩阵](../.octospec/rules/context-input.md) 与 [IPD-SE](../.octospec/rules/context-input.md)。Host 仅按白名单 pattern 保序拼接，不做业务检查或编译。
+Octo Runtime is one Provider-neutral execution implementation shared by SDK applications, the bundled CLI, and optional business integrations. The host picks Adapters, configuration, and Extras. `AgentExecutor` in Executor Core performs the work; Executor Kernel adds local IPC and supervision of an isolated worker; Host SDK composes optional Extras around it.
 
-接入模块通过统一 Host IPC 执行。Worker 接入、IM 接入和本地助理共享 Kernel worker；IM 已实现最小私聊单轮链路。宿主通过 Host SDK 独立装配 Kernel 和各 Extra，接入包不创建第二套执行实现。
+This directory holds the private workspace packages. Each README explains its purpose, integration entry, and boundaries; execution examples live with Core and Kernel, while Adapter pages show registration and input preparation.
 
-| 模块                                                                           | 职责                                                                                                                                                                 |
-| ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [octo-runtime-acp-client](octo-runtime-acp-client/README.md)                   | 实现 ACP 传输、请求关联与协议交互                                                                                                                                    |
-| [octo-runtime-adapter-acp](octo-runtime-adapter-acp/README.md)                 | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-antigravity](octo-runtime-adapter-antigravity/README.md) | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-claude-code](octo-runtime-adapter-claude-code/README.md) | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-codebuddy](octo-runtime-adapter-codebuddy/README.md)     | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-codex](octo-runtime-adapter-codex/README.md)             | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-dsh](octo-runtime-adapter-dsh/README.md) | DeepSeek Harness 原生 SDK stdio 适配，复用已安装 Desktop/CLI，由 Kernel worker 调用 |
-| [octo-runtime-adapter-hermes](octo-runtime-adapter-hermes/README.md)           | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-grok-build](octo-runtime-adapter-grok-build/README.md)   | Grok CLI ACP 适配，共享通用 ACP client，由 Kernel worker 调用 |
-| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.md)               | 通过 Kernel IPC 统一 invoke、cancel、probe 和交互响应，管理适配器与事件生命周期                                                                                  |
-| [octo-runtime-adapter-kimi-code](octo-runtime-adapter-kimi-code/README.md)     | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-mcode](octo-runtime-adapter-mcode/README.md)             | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-openclaw](octo-runtime-adapter-openclaw/README.md)       | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-opencode](octo-runtime-adapter-opencode/README.md)       | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-qodercli](octo-runtime-adapter-qodercli/README.md)       | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-qoderclicn](octo-runtime-adapter-qoderclicn/README.md)   | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-adapter-sdk](octo-runtime-adapter-sdk/README.md)                 | 提供适配器共用的进程、流解析和事件辅助工具                                                                                                                           |
-| [octo-runtime-adapter-zcode-gui](octo-runtime-adapter-zcode-gui/README.md)     | provider 协议适配，由 Kernel worker 调用                                                                                                                              |
-| [octo-runtime-executor-core](octo-runtime-executor-core/README.md) | AgentExecutor：唯一执行实现、输入准备、取消、交互及清理；不含 IPC、回放或业务历史 |
-| [octo-runtime-cross-service](octo-runtime-cross-service/README.md)             | 管理 launchd/systemd/Windows 用户服务的生命周期                                                                                                                      |
-| [octo-runtime-host-sdk](octo-runtime-host-sdk/README.md) | 调用进程原生 Extra 装配与依赖生命周期；独立管理服务对象，不依赖业务 Channel。 |
-| [octo-runtime-extra-channel-gateway](octo-runtime-extra-channel-gateway/README.md)                   | 读取本地 bf_token、连接 IM 专用 WS、管理私聊会话与 /reset，经共享 Kernel IPC 执行后回发最终文本。                                                                |
-| [octo-runtime-protocol](octo-runtime-protocol/README.md)                       | 定义和校验统一执行、事件与 Context 合同                                                                                                                              |
-| [octo-runtime-extra-channel-wecom](octo-runtime-extra-channel-wecom/README.md) | 企业微信专用 WebSocket、原生 stream 回复与独立生命周期；不依赖 gateway。 |
+## Where to start
 
-worker-access 预研已移到生态目录外的独立仓库 `../../octo-runtime-worker-access`，只作备份，不参与 workspace、构建、打包或宿主加载。
+| You want to…                                 | Start with                                                                                                           |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Run an agent inside your own process         | [Executor Core](octo-runtime-executor-core/README.md)                                                                |
+| Run it isolated, with supervision and replay | [Executor Kernel](octo-runtime-executor-kernel/README.md)                                                            |
+| Talk to a Provider CLI                       | the Provider table below                                                                                             |
+| Write a new Adapter                          | [Adapter SDK](octo-runtime-adapter-sdk/README.md), then [ACP Adapter](octo-runtime-adapter-acp/README.md)            |
+| Connect Octo IM or WeCom                     | [Channel Gateway](octo-runtime-extra-channel-gateway/README.md), [WeCom](octo-runtime-extra-channel-wecom/README.md) |
+| Compose Extras into your app                 | [Host SDK](octo-runtime-host-sdk/README.md)                                                                          |
+| Install a user-level background service      | [Cross-platform User Services](octo-runtime-cross-service/README.md)                                                 |
 
-## Provider Agent 配置
+The typical path:
 
-业务发起方负责 Agent 定义、defaults／mandatory 和本轮执行配置，决定 adapter、workdir、model 与 provider-specific options。Worker 不管理 Agent registry 或配置；Runtime CLI／SDK 不在注册、启动或 invoke 时创建 Agent。
+```text
+Application or Extra
+  -> KernelClient -> local IPC
+  -> isolated worker -> AgentExecutor -> selected Adapter -> Provider
+```
 
-常见配置字段：
+Kernel and Extra service objects are built in their calling process. An Electron host can build both in its main process; the CLI deploys Kernel and Extras as separate services through the same factories. Core can also be embedded directly, at the cost of sharing the host's failure domain. Extras are optional.
 
-| 字段                  | 使用者                          | 说明                |
-| --------------------- | ------------------------------- | ------------------- |
-| `workdir`             | Codex/Claude/CodeBuddy/OpenCode | provider cwd        |
-| `model`               | provider adapter                | provider model      |
-| `permissionMode`      | Claude/CodeBuddy                | provider 权限模式   |
-| `sandbox`             | Codex                           | Codex sandbox       |
-| `providerAgent`       | OpenClaw                        | OpenClaw agent slug |
-| `thinking` / `effort` | 支持的 provider                 | 推理选项            |
+## Protocol
 
-Provider 执行返回真实 `session.update`。本地调用由宿主业务保存 opaque provider session；远程调用按 Worker 独立执行合同保存和下发。Adapter 翻译原生 resume 参数，不保证恢复必然成功，也不补齐模型上下文。
+| Package                                                  | What it does                                                                      | Watch out for                                                                    |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| [octo-runtime-protocol](octo-runtime-protocol/README.md) | `InvokeInput`, Context v3, `CanonicalEvent`, `HostFrame`, JSON Schema, validators | It is the vocabulary, not an engine: it never calls a Provider or stores history |
 
-## 安全
+## Adapter building blocks
 
-Workdir 不是安全边界。危险 bypass/auto-approve 选项必须结合容器、VM 或等价隔离。Runtime 凭据由宿主从受保护配置读取并注入接入模块。Adapter manifest 不得包含业务凭证、IM bot token 或 Worker token。
+| Package                                                        | What it does                                                                       | Watch out for                                                    |
+| -------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [octo-runtime-adapter-sdk](octo-runtime-adapter-sdk/README.md) | `Adapter` interface, `defineAdapter`, subprocess, queue, approval, env/MCP helpers | You get a prepared `InvokeRequest`, not the public `InvokeInput` |
+| [octo-runtime-acp-client](octo-runtime-acp-client/README.md)   | ACP JSON-RPC over NDJSON: correlation, update queues, permissions, cancel          | It does not produce `CanonicalEvent`; that is the Adapter's job  |
+| [octo-runtime-adapter-acp](octo-runtime-adapter-acp/README.md) | Turns any ACP CLI into a full Adapter                                              | Canonical-only; `assisted` is rejected                           |
+
+## Provider adapters
+
+| Provider         | Package                                                                        | Transport                                 | Notes                                                                  |
+| ---------------- | ------------------------------------------------------------------------------ | ----------------------------------------- | ---------------------------------------------------------------------- |
+| Codex            | [octo-runtime-adapter-codex](octo-runtime-adapter-codex/README.md)             | `codex app-server` JSON-RPC stdio         | native and canonical; approvals and questions route back to the caller |
+| Claude Code      | [octo-runtime-adapter-claude-code](octo-runtime-adapter-claude-code/README.md) | `claude` stream-json stdio                | native and canonical; `can_use_tool` interactions                      |
+| CodeBuddy        | [octo-runtime-adapter-codebuddy](octo-runtime-adapter-codebuddy/README.md)     | ACP stdio                                 | canonical; images and MCP unsupported                                  |
+| OpenCode         | [octo-runtime-adapter-opencode](octo-runtime-adapter-opencode/README.md)       | JSON CLI for `full_access`, ACP for `ask` | canonical; requires `>=2.1.3 <3`                                       |
+| DeepSeek Harness | [octo-runtime-adapter-dsh](octo-runtime-adapter-dsh/README.md)                 | official Client SDK over stdio            | canonical; `full_access` only; the one publicly exported Adapter       |
+| OpenClaw         | [octo-runtime-adapter-openclaw](octo-runtime-adapter-openclaw/README.md)       | Gateway WebSocket RPC                     | canonical; calls an existing remote Agent                              |
+| Grok Build       | [octo-runtime-adapter-grok-build](octo-runtime-adapter-grok-build/README.md)   | ACP stdio with native auth negotiation    | canonical; `>=1.0.67 <2`                                               |
+| Antigravity      | [octo-runtime-adapter-antigravity](octo-runtime-adapter-antigravity/README.md) | `agy` stream-json stdio                   | canonical; `full_access` only                                          |
+| ZCode            | [octo-runtime-adapter-zcode-gui](octo-runtime-adapter-zcode-gui/README.md)     | bundled app-server NDJSON stdio           | canonical; no per-invocation model                                     |
+| Hermes           | [octo-runtime-adapter-hermes](octo-runtime-adapter-hermes/README.md)           | `hermes acp`                              | canonical; empty load result means missing session                     |
+| Kimi Code        | [octo-runtime-adapter-kimi-code](octo-runtime-adapter-kimi-code/README.md)     | `kimi acp`                                | canonical; model from advertised `configOptions`                       |
+| MCode            | [octo-runtime-adapter-mcode](octo-runtime-adapter-mcode/README.md)             | `mcode acp`                               | canonical; MiniMax owns model selection                                |
+| Qoder CLI        | [octo-runtime-adapter-qodercli](octo-runtime-adapter-qodercli/README.md)       | `qodercli --acp`                          | canonical; `--yolo` only for `full_access`                             |
+| Qoder CLI CN     | [octo-runtime-adapter-qoderclicn](octo-runtime-adapter-qoderclicn/README.md)   | `qoderclicn --acp`                        | canonical; separate binary and adapter type                            |
+
+The host selects and supplies Adapter implementations. In the Kernel path, its worker imports and registers them. Each Adapter README lists its own Provider prerequisites and verification limits; being in this table is not evidence that a feature or platform passed real integration.
+
+## Executor
+
+| Package                                                                | What it does                                                                                       | Watch out for                                            |
+| ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| [octo-runtime-executor-core](octo-runtime-executor-core/README.md)     | The single `AgentExecutor`: input preparation, rendering, output validation, cancellation, cleanup | Shares the host's event loop and failure domain          |
+| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.md) | `createKernelService`, `KernelClient`, local JSON-RPC, worker supervision, bounded replay          | Does not replay interrupted runs or own business history |
+
+Kernel workers and direct embedding run the same Core. Replacing a worker restores capacity for new runs, not the interrupted one. A bounded source replay window is not durable history.
+
+## Extras
+
+| Package                                                                            | What it does                                                                    | Watch out for                                                       |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| [octo-runtime-extra-channel-gateway](octo-runtime-extra-channel-gateway/README.md) | Octo IM bots: credentials, Wukong WebSocket, sessions, streaming replies, files | Needs an existing Kernel endpoint; never constructs or stops Kernel |
+| [octo-runtime-extra-channel-wecom](octo-runtime-extra-channel-wecom/README.md)     | Independent WeCom bots with their own connection and lifecycle                  | The CLI `channel-gateway` service does not load it                  |
+| [octo-runtime-extra-webui](octo-runtime-extra-webui/README.md)                     | Local browser workbench and its HTTP/SSE surface                                | A debugging UI, not a production application                        |
+
+Extras own their business behavior and external connections. They receive execution through `ctx.kernel` and register cleanup through `ctx.onDispose`. The host decides which Extras to load — including none.
+
+## Host composition and deployment
+
+| Package                                                            | What it does                                                                                   | Watch out for                                                    |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| [octo-runtime-host-sdk](octo-runtime-host-sdk/README.md)           | `createExtraService`, Extra lifecycle, host-function injection, Home/identity/endpoint helpers | Does not implement execution or start Kernel for an Extra        |
+| [octo-runtime-cross-service](octo-runtime-cross-service/README.md) | launchd, systemd, and Windows Task Scheduler operations for user services                      | Installing a definition does not prove Provider or IPC readiness |
+
+Host SDK depends on Kernel; Core and Kernel do not depend on Host SDK. Local execution needs no login and no cloud enrollment.
+
+## Private packages and public entries
+
+Everything in this directory is a private `@mininglamp-oss/octo-runtime-*` workspace package. Source and submodule hosts depend on them through the workspace. npm consumers install `@mininglamp-oss/octo-runtime` and use its public subpaths:
+
+| Source package                       | Public entry                                                                                                 |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `octo-runtime-protocol`              | `/protocol`, plus `/protocol/schema.json`                                                                    |
+| `octo-runtime-executor-core`         | `/executor-core`: `AgentExecutor`                                                                            |
+| `octo-runtime-executor-kernel`       | `/executor-kernel`: `attachKernel`, `createKernelService`, `serveWorker`, `/executor-kernel/ipc-schema.json` |
+| `octo-runtime-host-sdk`              | `/host`: `createExtraService`, `componentEndpoint`; `/extra`: plugin types                                   |
+| `octo-runtime-adapter-dsh`           | `/adapters/dsh`: `dshAdapter`, `createDshAdapter`                                                            |
+| `octo-runtime-extra-channel-gateway` | `/extras/channel-gateway`                                                                                    |
+| `octo-runtime-extra-channel-wecom`   | `/extras/channel-wecom`                                                                                      |
+| `octo-runtime-extra-webui`           | `/extras/webui`                                                                                              |
+
+Not every workspace export is public. For example, the workspace Home and identity helpers are not re-exported by `/host` today, and no other Adapter has a public subpath. SDK module selection uses native imports and does not require a CLI manifest.
+
+The host owns installation, configuration, credentials, per-turn Context, history, and storage. Acceptance, cancellation acknowledgement, execution completion, delivery, and resource cleanup remain distinct events.
+
+## Next
+
+- [SDK onboarding](../docs/en/getting-started/sdk.md), [architecture](../docs/en/concepts/architecture.md), [module loading](../docs/en/concepts/module-loading.md).
+- [Kernel IPC reference](../docs/en/reference/kernel-ipc.md), [input reference](../docs/en/reference/invoke-input.md).

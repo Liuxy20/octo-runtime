@@ -19,7 +19,7 @@ tags: [architecture, extra, lifecycle, channel, session, storage]
 
 用户进一步要求解释存储用途、Electron 自有 SQLite 接法及收益。补充 [用途与接入说明](../../tasks/channel-host-session-store/session-store-explained.md)，区分三类存储记录、输入准备状态和完整聊天历史，明确 occurrence 可能保存文本和请求快照；说明 CLI 默认内存、宿主工厂适配、逐 Bot 句柄与共享数据库所有权，以及重启续聊的条件和代价。同步简报、计划和 A21 文档验收，仍未修改产品代码。
 
-随后按用户要求刷新根目录 [Gateway 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)和 [原生 SDK 指南](../../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#0-源码接入使用最新-main)：补充宿主存储工厂的目标加载示例、`/extras/channel-gateway` 专属类型与通用 `/extra` 的边界，校正旧 stop/runner 说明。submodule 明确跟踪最新远端 main，新增与已有子仓的命令均不依赖功能分支；宿主仍记录验收后的 commit 供 CI 复现。工厂示例保留待实现标记，不能以文档更新宣称 main 已支持。
+随后按用户要求刷新根目录 [Gateway 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)和 `SDK_NATIVE_INTEGRATION_FULL_GUIDE.md`（已删除）：补充宿主存储工厂的目标加载示例、`/extras/channel-gateway` 专属类型与通用 `/extra` 的边界，校正旧 stop/runner 说明。submodule 明确跟踪最新远端 main，新增与已有子仓的命令均不依赖功能分支；宿主仍记录验收后的 commit 供 CI 复现。工厂示例保留待实现标记，不能以文档更新宣称 main 已支持。
 
 - 修改前 OKF 检查通过：273 个 OKF 单元、20 条规则、1726 个本地文件链接。
 - 刷新 SDK 指南后 OKF 检查通过：279 个 OKF 单元、20 条规则、1754 个本地文件链接；`git diff --check` 通过，新增文件另用 `--no-index --check` 检查。目标存储工厂尚未实现，未将其文档示例编译结果记作通过。

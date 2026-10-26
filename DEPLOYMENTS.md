@@ -33,27 +33,7 @@ octo-runtime channel-gateway start
 octo-runtime status
 ```
 
-首次 install 不带选项默认关闭自启。两个服务独立；channel-gateway 不负责维护或拉起 Kernel。卸载服务不清理身份、凭据或配置。
-
-## 旧版弃用与重新安装
-
-`1.0.1` 为旧 daemon 架构的 deprecated 版本，不支持升级或迁移到当前架构。已有安装先用旧版本命令或原生服务管理器停止并移除旧 daemon 服务，再卸载 npm 包并重新安装：
-
-```bash
-npm uninstall -g @mininglamp-oss/octo-runtime
-npm install -g @mininglamp-oss/octo-runtime@<NEW_VERSION>
-octo-runtime --help
-```
-
-`<NEW_VERSION>` 替换为已发布的新架构版本，不能使用 `1.0.1`。重新安装后重新配置并分别注册两个组件；不提供旧配置、状态或服务定义的迁移流程。npm 卸载不自动清理旧进程、系统服务或 Home。
-
-发行维护者须在 npm registry 将旧版本标记为 deprecated，提示使用方卸载后重新安装。操作命令为：
-
-```bash
-npm deprecate @mininglamp-oss/octo-runtime@1.0.1 "Deprecated daemon architecture. In-place upgrades are not supported. Remove the old service, run npm uninstall -g @mininglamp-oss/octo-runtime, then install a new-architecture release and configure it again."
-```
-
-以上命令是发行操作说明，不代表本工作区已修改 npm registry。
+首次和重复 install 不带选项均默认开启自启；只有显式 `--autostart=false` 才禁用。两个服务独立；channel-gateway 不负责维护或拉起 Kernel。卸载服务不清理身份、凭据或配置。
 
 ## 新架构版本之间的更新
 
@@ -61,7 +41,7 @@ npm deprecate @mininglamp-oss/octo-runtime@1.0.1 "Deprecated daemon architecture
 
 ## SDK 宿主
 
-宿主可以在自己的发行目录中携带 Node 和此发行包，使用 /host 管理组件；不启动 CLI 或解析终端输出。宿主提供自己的 worker 入口及 Adapter 集合、Extra 声明和配置来源。参见 [接入指南](SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
+宿主可以在自己的发行目录中携带 Node 和此发行包，使用 /host 管理组件；不启动 CLI 或解析终端输出。宿主提供自己的 worker 入口及 Adapter 集合、Extra 声明和配置来源。参见 [SDK 入门](docs/zh-CN/getting-started/sdk.md)。
 
 ## 验收边界
 

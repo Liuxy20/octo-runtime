@@ -6,12 +6,12 @@
 
 ## 目录与命令
 
-- `apps/`：CLI 宿主入口；不再包含 daemon app。
+- `apps/`：CLI 宿主入口；不再包含旧架构的独立应用。
 - `packages/`：协议、Executor Core/Kernel、Host SDK、Provider Adapter 和 Extra。
 - `test/`：跨包测试；包内测试按各包目录维护。
 - `.octospec/rules/`、`.octospec/guides/`：当前合同与操作指南；历史结论放 journal。
-- `CLI_USAGE_GUIDE.md`：云端设备的 CLI 使用、部署和运维。
-- `SDK_NATIVE_INTEGRATION_FULL_GUIDE.md`：原生启动、特性配置及可选 Agent 调用。
+- `docs/{en,zh-CN}/getting-started/cli.md`：设备部署与运维（Home、生命周期、Gateway 配置、诊断）。
+- `docs/{en,zh-CN}/getting-started/sdk.md`：SDK 原生启动、事件消费与 Extra 装配；`docs/{en,zh-CN}/guides/extras.md` 是 Extra 细节。
 - `SDK_CHANNEL_GATEWAY_GUIDE.md`：仅接入 Octo IM，OctoBuddy 推荐入口。
 - `INTEGRATION.md`、`DEPLOYMENTS.md`：选型导航及发行部署入口。
 - `pnpm build`：构建 workspace。
@@ -26,6 +26,7 @@
 核心实现及接入使用代码必须遵守[核心代码注释要求](.octospec/rules/engineering.md#核心代码注释要求)，尤其是 Executor Core、Executor Kernel、Host SDK 及其调用示例。新增或修改核心逻辑时，必须同步维护就近的中文注释：公开入口说明输入、输出、所有权和调用顺序；复杂分支说明设计原因、状态转换、取消/超时竞态与失败边界。评审须检查注释与当前实现一致，禁止只改代码而保留过时合同，或将请求受理、终态、资源回收混为成功。避免逐行复述代码。
 
 <!-- octospec:begin -->
+
 ## octo-spec 工程规范
 
 本仓库将工程知识保存为 `.octospec/` 下的 OKF Markdown，供各编码 Agent 共用。

@@ -53,11 +53,6 @@ jobs:
           node-version: ${{ matrix.node }}
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
         # Read the pnpm version from package.json's packageManager field.
-      - name: Install Go for native component fixture
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version: "1.25.x"
-          cache: false
       - name: Install naming-check prerequisite
         shell: bash
         run: |
@@ -156,7 +151,7 @@ jobs:
       - name: Verify release process ownership and failure diagnostics on Windows
         run: node --unhandled-rejections=strict --test test/release-process.test.js test/windows-release-verifier.test.js
       - name: Verify Core, Kernel and independent Extra lifecycle on Windows
-        run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/zcode-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/kernel-worker-supervision.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/extra-startup.test.js test/native-startup.test.js test/service-bind-startup.test.js
+        run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/zcode-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/kernel-worker-supervision.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/extra-startup.test.js test/service-bind-startup.test.js
       # Native process identity queries have their own deadlines; isolate them from process-heavy suites.
       - name: Verify Windows process identity and startup rollback
         run: |

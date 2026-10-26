@@ -9,7 +9,7 @@ implementation_baseline: df63c8f
 
 # Extra 配置与仓库外开发
 
-当前配置、函数式插件合同和生命周期以 [Extra 规则](../rules/extras.md) 为准。Host SDK 的原生服务和动态函数示例见 [原生接入指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md#3-原生-extra)，CLI 文件操作见 [CLI README](../../apps/cli/README.md#extra-配置)。
+当前配置、函数式插件合同和生命周期以 [Extra 规则](../rules/extras.md) 为准。Host SDK 的原生服务和动态函数示例见 [Extra 指南](../../docs/zh-CN/guides/extras.md)，CLI 文件操作见 [CLI README](../../apps/cli/README.md#extra-配置)。
 
 第三方使用主发行包 /extra 与 /protocol 导入通用类型和工具，通过 /host.createExtraService 装配模块、配置与泛型依赖，再 initialize/status/close。Gateway 模块和业务类型从 /extras/channel-gateway 导入。JSON Schema 由 /extras/<name>/config-schema.json 公开；SDK 只接受已解析配置值，存储来源由宿主选择。严格包外 TS 编译与运行见 [public-extra](../../test-support/public-extra/plugin.mts) 和 [发行验证](../../scripts/verify-release.mjs)。
 

@@ -1,33 +1,61 @@
-# @mininglamp-oss/octo-runtime-adapter-qodercli
+# Qoder CLI Adapter
 
-> 全局 Context 约束：本轮模型上下文由业务方选择，selection 等业务项可不发送，可传空或显式重复。必要执行配置独立校验且不注入 LLM。底层只转发并渲染本轮数据，不按 sessionId 缓存、补齐、合并、去重或省略；reset／新 Provider 会话／resume 失败后由业务方重新提供必要背景。见 [分类矩阵](../../.octospec/rules/context-input.md) 与 [IPD-SE](../../.octospec/rules/context-input.md)。Host 仅按白名单 pattern 保序拼接，不做业务检查或编译。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-Qoder CLI ACP adapter，adapter type 为 `qodercli`。每次调用启动 `qodercli --yolo --acp`，通过通用 ACP adapter 完成 session 创建/恢复、模型选择、prompt 流、model step 重建和 canonical event 转换。
+Binds the international Qoder CLI (`qodercli --acp`) to Runtime through the shared ACP Adapter. Full access adds Qoder's `--yolo`, which selects the ACP "bypass permissions" mode so headless tool runs do not block on interactive approval.
 
-## 启动参数
+## When to use it
 
-`--acp` 让 Qoder 讲 Agent Client Protocol（JSON-RPC 2.0 over stdio）；`--yolo` 选择 Qoder 的 ACP “bypass permissions” 模式，使无人值守的工具调用不会卡在交互式审批。
+- The international Qoder build is installed and logged in.
+- You want session resume through `session/load` rather than a fresh fallback.
 
-> **安全要求**：`--yolo` 是危险权限模式（bypass permissions）。按 `CONTRIBUTING.md` 安全约定，此类模式只能在 Runtime 提供的外部容器/VM 沙箱内运行；workdir 只是 `cwd`，不是安全边界。
+## Register the Adapter and prepare input
 
-## 模型配置
+This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
-Qoder 在 `session/new`/`session/load` 响应中发布可选模型。若 Revision 配置了 `execution_profile.agent_config.model`，adapter 通过标准 ACP 选模（`session/set_config_option` 或 `session/set_model`）设置该 session，值必须是 Qoder 返回的模型 id，不是展示名称。未配置时沿用 Qoder 当前默认模型。若请求模型不在发布列表，adapter 会在发送 prompt 前失败，不会静默退回默认模型。
+```ts
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { qoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
 
-## 会话恢复
+const executor = new AgentExecutor();
+executor.register(qoderCliAdapter);
 
-Qoder advertises 会话加载能力，已保存的 provider session 通过 `session/load` 恢复，不走新建回退。
-
-## 使用
-
-```bash
-pnpm cli adapter probe qodercli
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Say hello." }],
+  protocol_mode: "canonical",
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "qodercli" } }]
+  }
+});
 ```
 
-`probe` 只检查可执行文件；登录态、模型凭据和实际推理网络仍需在 Runtime 上配置。
+Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 
-## 模块责任边界
+## What it binds
 
-- 负责：将 qodercli 原生执行协议映射为 InvokeRequest / CanonicalEvent，由 adapter-host 调用。
-- 不负责：Worker/IM WS、聊天历史、Event/AgentRun 登记。
-- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。
+| Item         | Value                                                                              |
+| ------------ | ---------------------------------------------------------------------------------- |
+| Adapter type | `qodercli`                                                                         |
+| Export       | `qoderCliAdapter`                                                                  |
+| Command      | `qodercli --acp`; `qodercli --yolo --acp` for `full_access`                        |
+| Output       | canonical events only                                                              |
+| Session      | resumed through `session/load`; no fresh fallback needed                           |
+| Model        | standard ACP option selection when the runtime configures a model Qoder advertises |
+
+## Limits
+
+- `--yolo` is added only for `full_access`. It does not elevate any other mode.
+- Canonical-only: pass `protocol_mode: "canonical"`.
+- `ask` and `full_access` only; `assisted` is rejected.
+- A probe checks that `qodercli` exists, not that it is authenticated.
+
+## Import and distribution
+
+Private workspace package. For the China build use [Qoder CLI CN](../octo-runtime-adapter-qoderclicn/README.md), which is a separate binary and adapter type.
+
+## Further reading
+
+- [Implementation](src/index.ts), [ACP Adapter](../octo-runtime-adapter-acp/README.md), [Provider matrix](../../.octospec/guides/providers.md).
+- [Input reference](../../docs/en/reference/invoke-input.md).

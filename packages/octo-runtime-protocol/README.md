@@ -1,135 +1,117 @@
-# @mininglamp-oss/octo-runtime-protocol
+# Runtime Protocol
 
-统一执行 JSON 的原始 TS class 为 `InvokeInput`；完整字段、默认值及内部映射见 [Invoke 合同](../../.octospec/rules/invoke-input.md)。CLI、SDK、Host 与各 channel 使用同一对象，示例不代表字段全集。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-> 全局 Context 约束：本轮模型上下文由业务方选择，selection 等业务项可不发送，可传空或显式重复。必要执行配置独立校验且不注入 LLM。底层只转发并渲染本轮数据，不按 sessionId 缓存、补齐、合并、去重或省略；reset／新 Provider 会话／resume 失败后由业务方重新提供必要背景。见 [分类矩阵](../../.octospec/rules/context-input.md) 与 [IPD-SE](../../.octospec/rules/context-input.md)。Host 仅按白名单 pattern 保序拼接，不做业务检查或编译。
+The data contract for everything that crosses a module boundary in Octo Runtime: the input you hand to an executor, the Context attached to one turn, the events that come back, and the terminal states that tell you whether the run actually succeeded. `InvokeInput`, `CanonicalEvent`, `HostFrame`, and the Context envelope live here as JSON Schema, TypeScript types, and runtime validators.
 
-Octo Runtime 的协议包：定义 Core、Adapter Host 与所有 provider 适配器共用的类型契约与运行时校验，包括 `InvokeRequest`、`CanonicalEvent`、`EventEnvelope`、provider 会话与 capability。它与具体 provider 及传输方式均无关。
+## When you touch this package
 
-新增 native / canonical 的模式、帧、接纳身份和交互响应合同，详见[实施记录](../../.octospec/rules/output-protocol.md)。当前只完成 Protocol 子包，运行入口尚未接入双模式；下文流程仍描述现有 canonical 执行。
+- You build an `InvokeInput` and call Core or Kernel.
+- You consume output and need to tell progress from a terminal result.
+- You write an Adapter or a host and need the exact JSON shape.
 
-## 定位与职责
+It never runs a Provider, chooses business Context, or stores history. This is the vocabulary, not the engine.
 
-各 provider 的原生事件格式差异很大。若缺少统一契约，会带来两个问题：其一，上层（UI、存储）被 provider 绑定，需为每家单独解析，更换 provider 即需重写；其二，适配器作为插件，一个格式错误的事件对象可能污染 Core 的状态。
-
-本包提供一套 **provider 无关、传输无关** 的类型定义与 `assert*` 校验函数：规范一次调用的输入（`InvokeRequest`）、事件的形态（`CanonicalEvent`）、以及持久化时的封装（`EventEnvelope`），并在插件边界上进行运行时校验。
-
-## 工作原理
-
-同一条信息存在三个层次，越靠上越稳定。provider 的原生事件须先由适配器翻译为 `CanonicalEvent`，Core 在持久化前再封装为 `EventEnvelope`：
-
-```mermaid
-flowchart LR
-    Native["provider 原生事件<br/>(codex thread.item / claude stream-json 等)"]
-    Canonical["CanonicalEvent<br/>{ type, payload }"]
-    Envelope["EventEnvelope<br/>+ id / seq / tsMs / agentSessionId / runId"]
-
-    Native -->|适配器翻译| Canonical
-    Canonical -->|Core: envelope()| Envelope
-    Envelope -->|按 (runId, seq) 幂等追加| Store[(Store)]
-```
-
-关键约定：
-
-1. **四个 ID 互不混淆**：Worker AgentSession ID、AgentRun ID、Runtime invocation ID、Provider Session ID（Codex thread / Claude UUID 等）是独立标识。`seq` 仅在单个 run 内单调递增，消费方按 `(runId, seq)` 排序与去重。
-2. **终态唯一**：一次 run 最终只能收敛为 `run.finished` / `run.error` / `run.stopped` 之一。
-3. **会话凭证不透明**：Core 仅搬运 provider session，不解释其私有字段。
-4. **`modelInput ?? prompt`**：发送给模型的文本与用于产品展示的文本可以不同，从而使“发送给模型的隐藏上下文”精确地只发送一次。
-5. **编译期与运行时双重校验**：TypeScript 负责编译期，`assert*` 函数保护动态插件边界。
-
-## 使用
+## Validate one invocation
 
 ```ts
-import {
-  assertCanonicalEvent,
-  envelope,
-  isTerminal,
-  type CanonicalEvent
-} from "@mininglamp-oss/octo-runtime-protocol";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 
-const event: CanonicalEvent = {
-  type: "message.delta",
-  payload: { channel: "final", text: "done" }
-};
-
-assertCanonicalEvent(event); // 边界校验
-const stored = envelope({ id: "run-1", sessionId: "session-1" }, 1, event);
-console.log(stored.seq, isTerminal(event));
+const input = InvokeInput.check({
+  inputs: [{ type: "text", text: "Summarize the last commit." }],
+  contexts: {
+    schema: "octo.context-envelope/v3",
+    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+  }
+});
 ```
 
-以下两个细节属于正式契约，需特别注意：
+`check` throws on a malformed shape or an oversized payload and returns the same object. It calls nothing and generates nothing: Core and Kernel fill in `invocationId`, `runId`, and `sessionId` when you omit them, so keep the returned IDs if you want to cancel or correlate the run later.
 
-- **工具输入是契约，而非 UI 推导字段**：完整输入位于 `tool_call.create.payload.args`；分片型 provider 先发送空 `args`，再按同一 `id` 发送多个 `tool_call.delta.argsDelta`，消费方须按顺序拼接 JSON 片段、完整后仅解析一次。`tool_call.update` 仅负责收尾，不能以其 output 反推输入。
-- **消息 channel 表达用途，不表达 Provider 名称**：`analysis` 是推理类内容，必须继续经过 `exposure` 授权；`commentary` 是 Run 执行期间可公开的过程播报，可以进入进度卡但绝不能进入最终答案；`final` 是答案内容候选，只有 Run 收敛到 `run.finished` 后才允许作为最终正文交付。`message.update` 只结束一个 message item，不代表 Run 已结束。
-- **`channel=analysis` 不等同于可公开**：仅当 `exposure` 明确为 `public_reasoning` / `public_summary` / `public_plan` 时方可进入公开展示；缺失、`unknown`、`private_reasoning` 一律视为不可公开——不应仅依据 `channel=analysis` 判断。
-- **模型轮次与内容分离**：`model_step.started/finished` 描述一次 provider 模型轮次的边界；同轮的 message/tool 通过 `stepId` 关联。它用于过程时间轴和聚合，不替代最终 `channel=final` 正文。
+## The fields that matter
 
-## 协议真值：JSON Schema 与代码生成
+| Field                                | Required | What it does                                                                                      |
+| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
+| `inputs`                             | yes      | This turn's text and image parts, in order. Image bytes go here once.                             |
+| `contexts`                           | yes      | Context v3 envelope. Its `octo.execution` / `adapter` item selects the Adapter; empty is legal.   |
+| `workdir`                            | no       | Provider working directory. Defaults to the host workspace; it is not a sandbox.                  |
+| `protocol_mode`                      | no       | `native` (default) or `canonical`.                                                                |
+| `providerSession`                    | no       | Explicit Provider session to resume. Never rebuilt from `sessionId`.                              |
+| `agentConfig`                        | no       | Full Provider configuration, including `providerOptions`. Must agree with the Context selections. |
+| `runtimeLimits`                      | no       | Timeouts and enforcement for this turn; execution defaults apply when omitted.                    |
+| `sessionId`, `invocationId`, `runId` | no       | Correlation IDs, generated when omitted. Not Provider history.                                    |
 
-数据结构类型并非手写，而是以 `schema/protocol.schema.json`（JSON Schema draft-07）为唯一真值自动生成：
+`inputs` and `contexts` are the only required fields, but a request without the `octo.execution` / `adapter` item fails before any Provider starts.
 
-```text
-schema/protocol.schema.json → scripts/gen-types.mjs → src/generated/protocol-types.ts → src/index.ts 组合导出
+## Reading the output
+
+Two views over one stream:
+
+- `native` (default) — `HostFrame`: the Provider's own payload wrapped in Runtime control frames.
+- `canonical` — `CanonicalEvent`: normalized across Providers. Most applications want this one.
+
+In native mode the terminal is the `control` frame with `type: "state"`.
+
+## Canonical event types
+
+Adapters translate each Provider's events into this one set, so a Provider-specific event name never reaches you. Every canonical event is `{ protocolVersion: 2, type, payload }`. The 24 types below are ordered by lifecycle; the payload column lists the fields you will actually read, not an exhaustive schema.
+
+| Type                    | Group       | When it appears                                            | Key payload fields                                                                                                   |
+| ----------------------- | ----------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `run.queued`            | run         | Accepted and waiting; reserved, no built-in producer today | —                                                                                                                    |
+| `run.started`           | run         | Execution begins; reserved like `run.queued`               | —                                                                                                                    |
+| `run.completed`         | run         | Normal end — the only success terminal                     | —                                                                                                                    |
+| `run.failed`            | run         | Execution failed                                           | `message`, `code`, `adapterType`; a normalized `failure` may be attached                                             |
+| `run.cancelled`         | run         | Cancelled, or the stream was aborted                       | —                                                                                                                    |
+| `message.create`        | message     | A message starts                                           | `messageId`, `role`, `channel`                                                                                       |
+| `message.delta`         | message     | Incremental text                                           | `text`, `channel`, `messageId`                                                                                       |
+| `message.update`        | message     | Full replacement or status change                          | `text`, `status`, `messageId`                                                                                        |
+| `model_step.started`    | step        | One model round begins                                     | `stepId`, `startedAtMs`                                                                                              |
+| `model_step.finished`   | step        | That round ends                                            | `stepId`, `status`, `finishReason`                                                                                   |
+| `tool_call.create`      | tool        | A tool call starts                                         | `id`, `name`, `args`, `status: "running"`                                                                            |
+| `tool_call.delta`       | tool        | Streaming argument or output fragment                      | `id`, and one of `argsDelta`, `outputDelta`, `outputSnapshot`                                                        |
+| `tool_call.update`      | tool        | Tool call reaches a terminal status                        | `id`, `status`, `output`, `error`, `exitCode`                                                                        |
+| `tool_call.progress`    | tool        | Long-running progress                                      | `id`, `progress` (`message`, `completed`, `total`, `unit`)                                                           |
+| `activity.started`      | activity    | Thinking, executing, waiting for approval or input         | `activityId`, `kind`, `subject`, `source`, `info`                                                                    |
+| `activity.updated`      | activity    | Activity details refreshed                                 | `activityId`, `info`                                                                                                 |
+| `activity.finished`     | activity    | Activity ends                                              | `activityId`, `status`                                                                                               |
+| `plan.updated`          | plan        | Whole plan replaced                                        | `planId`, `revision`, `steps[]`                                                                                      |
+| `run.notice`            | notice      | Retry, compaction, reroute, configuration warning          | `noticeId`, `code`, `severity`, `params`                                                                             |
+| `interaction.requested` | interaction | Needs approval, an answer, or more input                   | `interactionId`, `kind`, `expiresAt`, `request`                                                                      |
+| `interaction.resolved`  | interaction | Handled, expired, or invalidated                           | `interactionId`, `status`, `outcome`, `reasonCode`                                                                   |
+| `session.update`        | state       | Provider session data changed                              | `providerSession`                                                                                                    |
+| `execution.update`      | state       | Execution-mode evidence, for example actmode               | `actmode`                                                                                                            |
+| `usage.update`          | state       | Token usage for this turn                                  | Adapter-normalized counts such as `inputTokens` and `outputTokens`, optionally `cumulative` and `modelContextWindow` |
+
+Three rules cover the whole table:
+
+- Exactly one terminal event per run: `run.completed`, `run.failed`, or `run.cancelled`. Nothing else is success — not a final message, not an accepted cancellation, not a process exit, not stream EOF.
+- Message channels are `analysis` (reasoning, gated by `exposure`), `commentary` (in-run progress), and `final` (answer text). Final text can stream before the terminal; a consumer must observe `run.completed` before treating it as a successful answer for delivery.
+- Analysis stays private unless `exposure` is `public_reasoning`, `public_summary`, or `public_plan`.
+
+## Envelope and wire shape
+
+A bare event carries no identity. `envelope()` adds `id`, `seq`, `tsMs`, `runId`, and `agentSessionId` when an event is persisted or forwarded; Kernel's transport wraps it in a `CanonicalHostFrame` carrying `run_id`, `invocation_id`, `stream_id`, and `session_generation`.
+
+In canonical mode both `AgentExecutor.invoke` and `KernelClient.invoke` yield the bare event and check sequence continuity for you: a gap throws `STREAM_GAP` instead of silently skipping. Only a hand-written IPC client has to deal with the frame.
+
+## Versions
+
+Run contract 7, Context v3, and Adapter protocol 2 version independently. A new Context schema does not imply a new Run contract; check each side instead of assuming one bundle version covers the others.
+
+## Import and distribution
+
+This is a private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-protocol`. Published consumers use `@mininglamp-oss/octo-runtime/protocol`, which exposes a subset — not every workspace export is reachable there.
+
+[protocol.schema.json](schema/protocol.schema.json) is the wire source of truth. [gen-types.mjs](scripts/gen-types.mjs) generates [protocol-types.ts](src/generated/protocol-types.ts): change the schema, regenerate, and never hand-edit the generated types.
+
+```sh
+pnpm --filter @mininglamp-oss/octo-runtime-protocol gen
+pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 ```
 
-- **自动生成**：各类可 JSON 序列化的结构体（`ProviderSession`、`AgentConfig`、`CanonicalEventPayload`、`InvokeRequestWire` 等）。
-- **仍需手写**（非纯数据，代码生成无法表达）：运行时枚举常量（如 `CANONICAL_EVENT_TYPES`）、泛型 `CanonicalEvent<TType>`，以及带 `AbortSignal` 的 `InvokeRequest`（即 `InvokeRequestWire` 交叉一个 `signal`）。
+## Further reading
 
-修改协议的流程：
-
-```bash
-$EDITOR schema/protocol.schema.json   # 1. 修改 schema
-pnpm gen                              # 2. 重新生成（build 前会自动执行）
-pnpm build                            # 3. 构建
-```
-
-`src/generated/*` 带有“请勿手改”横幅，任何改动均须经由 schema。
-
-## 约束与注意事项
-
-- 本包不表达某个 provider 的完整私有协议；无法统一的字段应保留在适配器内，必要时置于可扩展的 payload 或 provider session 中。
-- 选用 JSON Schema（而非 Protobuf/Thrift）的权衡，以及为将来 Go/Rust daemon 抽取类型的意义，见下方文档。
-
-## Context 统一处理合同
-
-内置 Context 各类型是否进入 LLM 提示词及目标通道，必须遵循 [Context v3 的 LLM 注入约束](../../.octospec/rules/context-input.md)。执行参数不进入提示词；inline、references 和 extra 进入普通上下文块；已授权 control instructions 使用独立控制通道。框架固定边界和标签统一使用英文，首尾使用标准 XML 注释；`<guidence>` 保留原始 Markdown、真实换行和缩进，不转义、不包 CDATA，API 字段仍为 `guidance`，缺省或空字符串时省略元素。`<data>` 用 CDATA 包裹现有 payload 序列化文本，不解析内部材料，业务多语言内容保留原值。
-
-```text
-<!-- Context information begins: the following is the current context -->
-<contexts>
-  <context-item namespace="extra.project" name="reference">
-    <guidence>Use this reference when answering the request. 保留原文。</guidence>
-    <data><![CDATA[{"key":"value","text":"中文 日本語"}]]></data>
-  </context-item>
-</contexts>
-<!-- Context information ends -->
-```
-
-Migration note (#99, following #87): Standard XML comments and the `guidence` / `data` elements replace the previous nonstandard markers and `Guidance:` / `Data:` prefixes. Integrations matching those strings must update their parsers, assertions and prompt snapshots. Embedded `]]>` in data is split across adjacent CDATA sections to preserve the serialized content. Guidance remains raw Markdown, so the model-facing text is not a strict XML interchange format. Caller-supplied content remains in its original language; this does not require English model responses. The Context v3 schema, item order, filtering, serialization and separate control-instruction channel are unchanged.
-
-运行合同固定采用 schema 7，选路快照为 `octo.runtime-selection/v2`，Context 信封固定为 `octo.context-envelope/v3`。Compiler/Catalog 版本与编译应用协议已删除。新增可选场景元数据不升级 Run/Context 版本；通过 candidates 或 explicit 声明设备意图，授权候选由 Worker 固定。
-
-`CONTEXT_TYPE_CATALOG` 只记录已定义类型的 schema、持久性与可信通道。处理阶段和覆盖检查已删除。提示词渲染位于 AdapterHost.invoke() 的 model-input 模块，只按白名单 pattern 保序拼接，不执行目录覆盖或业务检查；全新 extra 不需要注册。Protocol 不构造或渲染业务模型上下文。
-
-`ContextConfiguration` 包含 defaults 与 mandatory。使用 `assertContextConfiguration` 验证持久配置，再用 `resolveContextConfiguration(configuration, request)` 解析有效项。adapter/model/workspace/runtime/approval_policy 沿当前独立类型合并，limits 按字段覆盖。mandatory 检查原始请求，冲突必须拒绝；内部能力要求由可信执行计划提供。
-
-随机目录声明仅使用 `{mode:"random"}`，不得携带 scope 或 path。Runtime 在 AgentSession 首次运行时创建目录，后续运行复用；不同 AgentSession 使用独立目录。实际路径由 Runtime 准备，不能以空 workdir 启动 Provider。
-
-Skill、Plugin、CLI 和 MCP 程序由 HostApp 管理安装；本轮 MCP 连接配置使用 `octo.execution/mcp`，payload 为动态名称 map `mcpServers`，执行计划冻结到 `mcp`。详见 [Run MCP 合同](../../.octospec/rules/mcp.md)。`octo.resources` 及旧云端安装字段直接拒绝；执行计划不包含 `resources` 或 `mcp_servers`。Context 表达发起方选择的普通材料以及独立执行配置；不生成 continuity 或编译应用证据。
-
-`ToolAuthorization` 只包含 `service_subject_id`、`allowed_tools` 与 `resource_refs`。独立授权接口返回 `IssuedToolAuthorization`，增加短期 `token`、`octo_space_id`、`namespace` 与 `expires_at`；不允许携带地址、命令或配置模板。凭据只能进入本地已配置的业务连接或宿主授权接收器，不能进入模型输入。
-
-这些公开函数不执行 ACL 检查、签发凭据或下载资源。职责与验收见 [Event Context IPD-SE](../../.octospec/rules/context-input.md)；旧 Pipeline 文档只保留历史背景。
-
-## 相关设计
-
-Canonical `run.notice` 支持 `provider_diagnostic`，严重度固定 `warning`。`params` 必须且只能包含字符串 `adapter`、`diagnosticId`、`category`、`message`；前三项各 1–191 字符，公开原因经脱敏后最多 2048 UTF-8 字节。它记录过程错误，不是失败终态，也不授予重放资格。原生重试沿用 `retry_scheduled`。新 code 需要同步升级严格校验的独立消费者；Run 7、Context v3、Adapter protocol 2 保持不变。业务收尾规则见 [IM 任务](../../.octospec/tasks/im-diagnostic-silent-completion/brief.md)。
-
-- 事件生命周期与 JSON-RPC 映射：[Architecture](../../.octospec/rules/architecture.md)
-- 为何选用 JSON Schema：[Protocol Schema And Codegen](../../.octospec/rules/protocol-schema.md)
-
-## 模块责任边界
-
-- 负责：定义和校验统一执行、事件与 Context 合同。
-- 不负责：连接管理、provider 执行、业务状态。
-- 协作边界：见 [根架构与包边界](../../README.md#执行结构)。隔离入口共用 Kernel IPC 和 worker，显式 direct 模式使用同一 AgentExecutor；模块按职责提供协议、执行或宿主能力。
+- [InvokeInput](src/invoke-input.ts), [workspace exports](src/index.ts), [generated types](src/generated/protocol-types.ts).
+- [Input reference](../../docs/en/reference/invoke-input.md), [output and control](../../docs/en/reference/output-and-control.md), [Kernel IPC](../../docs/en/reference/kernel-ipc.md).
+- [Protocol tests](test/run-protocol.test.js).

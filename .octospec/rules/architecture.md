@@ -36,6 +36,8 @@ supersedes: []
 
 本节约束优先于旧任务和实现说明中的 launcher 设计。具体接口合同、迁移与验收见[设计](../tasks/unified-native-sdk-services/design.md)、[迁移](../tasks/unified-native-sdk-services/migration.md)和[验收矩阵](../tasks/unified-native-sdk-services/acceptance.md)。需要变更服务构造或新增进程时，必须先按本节检查；不得以“能启动/能调用”为唯一完成标准。
 
+2026-10-26 用户明确删除外部组件启动器 `startNativeComponent`，包括其选项、部署清理类型、实现、公开导出和专属测试；不保留兼容入口或替代 launcher。Runtime 接入采用 CLI 宿主或原生 SDK 服务工厂。此决定覆盖历史任务中保留该外部组件 API 的约定，不改变 Kernel 内部 worker 和 Adapter 调用 Provider CLI 的执行隔离合同。
+
 ## ExecutorCore 抽取后的执行边界
 
 接入通过原生 SDK 服务及 Kernel IPC，服务直接构造在宿主选择的服务进程中；尤其是 Electron，Kernel 服务在主进程构造，不能由外部 Node 代启。执行隔离由 Kernel 内部 worker 承担。允许宿主显式选择直接嵌入 Core，但它不是 CLI/Electron 服务合同的替代分支。历史实现证据见 [Kernel/Host 实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)，其中 owned launcher 已由上节否决。
@@ -74,7 +76,7 @@ Go 二进制，不在本仓实现；平台和真实业务验收按各自实际�
 - **公共层不引入原生实现。** 不为框架能力新增 Go、Rust、C/C++ 辅助程序、Node 原生扩展，或随包分发、安装时下载的分架构 `.exe`、动态库等运行时二进制。不得为了 Windows 进程清理引入原生 Job Object broker，也不得把编译工具链、二进制构建、摘要校验和分发变成公共 Runtime 的依赖。
 - **平台差异留在 Node.js 合同内。** 使用 Node.js API 和操作系统已有命令实现常规生命周期管理，明确实际保证及限制。Windows 的 `taskkill /PID … /T /F` 依赖仍可识别的进程树；父进程先退出、Runtime 被强杀或事件循环无法运行时，不承诺后代必然清空。现有 Windows 清理在 leader 已退出时可能返回成功；`cleanup.complete` 仅反映既有观测范围，不能证明此时全部后代已清空。已观察到的清理失败须如实报告，不得把不可观测场景写成已解决的强保证。
 - **业务 Extra 可以拥有原生依赖。** 原生实现、构建、打包、安装和清理由对应 Extra 自身负责，保持可选且隔离，不成为 Kernel 或公共 SDK 的启动、构建或发布前提。不得把公共进程管理搬入一个 Extra，以绕过本约束。
-- **调用外部程序不等于内置原生实现。** Adapter 调用宿主选择的 Provider CLI、业务 Extra 使用 octo-cli，以及 SDK 启动调用方显式提供的外部组件，仍按各自已有合同执行；不因此授权 Runtime 自带通用原生辅助程序。用于验证这些外部组件合同的测试 fixture 也不构成产品运行时依赖。
+- **调用外部程序不等于内置原生实现。** Adapter 调用宿主选择的 Provider CLI、业务 Extra 使用 octo-cli，仍按各自已有合同执行；不因此授权 Runtime 自带通用原生辅助程序。Host SDK 不提供通用外部组件进程启动 API。
 
 本次 Windows 清理方案不属于原生例外，必须撤除已有 Go broker、专属构建及二进制分发接线。未来若确有公共层原生实现的必要性，应先明确需求、替代方案、维护成本和例外边界，并取得用户明确授权；实现方不能自行以必要性为由突破本约束。
 
@@ -439,4 +441,4 @@ Extra 的函数式入口负责封装内部流程：宿主传入完整配置和�
 - 外部接入必须在实际合同边界校验身份、权限及适用的租约、fencing；这些要求不把外部登记变成本地 Runtime 存在或本地调用的前置条件。
 - 凭据留在受保护的宿主或插件配置中，不进入 renderer、模型文本、公开日志或命令行参数。Provider workdir 是工作目录，不是操作系统隔离边界。
 
-实现与接入细节见 [CLI 使用指南](../../CLI_USAGE_GUIDE.md)、[SDK 完整原生接入指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)、[SDK Channel Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)、[部署说明](../../DEPLOYMENTS.md) 和 [Context 输入合同](context-input.md)。历史决策与撤回理由见 [架构演进](../journal/shared/architecture-evolution.md)。
+实现与接入细节见 [CLI 安装与运维](../../docs/zh-CN/getting-started/cli.md)、[SDK 入门](../../docs/zh-CN/getting-started/sdk.md)、[SDK Channel Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)、[部署说明](../../DEPLOYMENTS.md) 和 [Context 输入合同](context-input.md)。历史决策与撤回理由见 [架构演进](../journal/shared/architecture-evolution.md)。

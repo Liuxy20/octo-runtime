@@ -12,8 +12,6 @@ Read [ARCHITECTURE.md](ARCHITECTURE.md) and the
   `sudo apt-get install ripgrep` on Ubuntu. CI installs this prerequisite explicitly.
   Non-Git test directories fall back to Node filesystem traversal when `rg` is missing;
   Git worktrees require the executable to preserve ignore rules. A shell function is insufficient.
-- Install Go 1.25.x to compile the native-component test fixture. CI installs it
-  explicitly; Runtime users do not need Go to run the distribution.
 - Install and authenticate a Provider CLI only for explicitly requested live runs.
   Automated tests use fake Providers and do not require real models.
 
@@ -61,7 +59,7 @@ decisions. Extras own their business integrations and load/unload as whole plugi
 Prioritize stability: recommend SDK access over IPC to an independent Executor
 Kernel, especially for Electron and other long-running hosts. The Kernel supervises
 its isolated worker over NDJSON; hosts independently own Kernel and Extra lifecycles.
-The old daemon packages, binary, API and CLI commands have been removed. Explicit in-process
+The legacy cloud-host packages, binary, API, and CLI commands have been removed. Explicit in-process
 Core embedding is allowed as a simpler SDK integration option. Its host owns the
 lifecycle and shares the execution process failure domain. Both paths reuse the
 same AgentExecutor implementation. Keep business workflows out of the kernel and
@@ -129,9 +127,7 @@ approvals; the branch protection above requires at least one.
 ## Security and Local State
 
 Preserve existing Runtime Home, identities, profiles and configuration during updates
-between new-architecture releases. The old 1.0.1 daemon architecture is deprecated
-and has no supported upgrade or migration path; follow the uninstall/reinstall
-instructions in [DEPLOYMENTS.md](DEPLOYMENTS.md).
+between releases.
 Historical reset or destructive migration notes do not authorize new deletion.
 The working directory is not an operating-system sandbox. Respect the execution
 permission contract and the host's installation decisions.

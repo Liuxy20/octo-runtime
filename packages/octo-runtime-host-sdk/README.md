@@ -1,11 +1,76 @@
 # Host SDK
 
-业务通过 KernelClient 调用 RPC，像使用普通工具一样 invoke 并消费结果，按需取消或响应交互；不要求构造服务、操作调用登记或手动 drain。服务托管归 CLI/App 装配入口：使用 createKernelService / createExtraService 在调用进程构造服务，依次 initialize、status、close。attachKernel 只连接既有服务，client.close 不取消 Run 或关闭 Kernel。
+[简体中文](README.zh.md) | [Packages](../README.md)
 
-工厂无 IO，初始化失败携带 ServiceInitializationError.cleanup。Extra 关闭共用 4 秒单调预算及继承的更早截止，立即停新 invoke，并发等待所属 Run 排空和插件清理。disposer 等待自己的消费、保存和投递任务；清理完成或到期前允许收尾调用注入函数，之后封锁后续调用，再等待全部实际依赖。complete=false 保留失败所有权，阻止同 endpoint/name 替换；SDK 不退出宿主进程，不关闭宿主数据库。
+Composes Runtime components inside your own application: turns an Extra module plus JSON configuration into a service in the calling process, injects business functions, reports status, and coordinates bounded shutdown. It also carries the shared Home, identity, and endpoint conventions so hosts stop re-inventing them. Execution stays in Core and Kernel; a host may load no Extras at all.
 
-Extra 保持 extra(ctx, config)(dependencies) 两阶段合同。ctx.kernel 使用共享 KernelClient；函数依赖在宿主同进程直接调用，不经 IPC。配置、模块及函数引用变化时先完整关闭再构造；同一函数读取的数据变化下一轮生效。SQLite 完全由宿主维护，SDK/Extra 不创建、迁移或关闭应用数据库。
+## When to use it
 
-App 使用 attachKernel(...).invoke 或 kernelService.client.invoke；插件使用 ctx.kernel.invoke。SDK 不实现第二个 invoke。每个独立 Extra 获得自己的 client，停止时关闭其接纳，按共享 deadline 排空它的调用，再等待 onDispose 和释放连接。旧 ExtraAdapterHost、ctx.adapterHost、extra-port 已删除；插件取消改用 ctx.kernel.cancelInvocation，回执字段为 accepted。详见 [Kernel 合同](../octo-runtime-executor-kernel/README.md)。
+- Your host loads optional Extras — channel gateway, WeCom, Web UI — and needs one lifecycle for them.
+- You want the same endpoint and Home conventions the CLI uses.
+- You do not need it to call an existing Kernel (`/executor-kernel` is enough) or to embed Core directly.
 
-startNativeComponent 只用于显式配置的外部原生程序，保留自己的进程清理合同，不能用于替代 Kernel/Extra 原生构造。完整类型、用法、限制和迁移见 [SDK 指南](../../SDK_NATIVE_INTEGRATION_FULL_GUIDE.md)。
+## Host an Extra
+
+```ts
+import { createExtraService, type ExtraService } from "@mininglamp-oss/octo-runtime/host";
+import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
+
+export async function withGateway(
+  endpoint: string,
+  config: JsonObject,
+  dependencies: GatewayDependencies,
+  runHost: (extra: ExtraService) => Promise<void>
+): Promise<void> {
+  const extra = createExtraService({ endpoint, module: gateway, config, dependencies });
+  const errors: unknown[] = [];
+  try {
+    await extra.initialize();
+    await runHost(extra);
+  } catch (error) {
+    errors.push(error);
+  } finally {
+    try {
+      const cleanup = await extra.close();
+      if (!cleanup.complete) errors.push(new Error("Extra cleanup remains incomplete"));
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, "Gateway host failed");
+}
+```
+
+`GatewayDependencies` carries `loadContexts` and an optional `createSessionStore`. Other Extras define their own. These functions run in your process and are never serialized to JSON or sent to Kernel.
+
+## What it does, and what it does not
+
+| Includes                                                      | Leaves to others                              |
+| ------------------------------------------------------------- | --------------------------------------------- |
+| Extra module assembly, dependency injection, status, shutdown | Execution: that is Core's `AgentExecutor`     |
+| Home, identity, and endpoint helpers                          | Starting a Kernel on an Extra's behalf        |
+| Passing a live `KernelClient` into each Extra                 | Provider installation, login, or model policy |
+
+Core and Kernel never depend on Host SDK.
+
+## Lifecycle
+
+- Construction performs no I/O. `initialize()` starts the plugin; `status()` reports the service and plugin state. A failed `initialize()` throws `ServiceInitializationError` with the original cause and its rollback `cleanup`.
+- Each Extra gets its own `KernelClient`. `close()` stops new invocations, cancels the calls it owns, and waits for them plus plugin disposers inside a shared four-second monotonic budget — shortened if an earlier deadline is inherited.
+- `onDispose` must wait for consumers, persistence, and delivery. An execution terminal alone does not prove that work is done.
+- Until plugin cleanup finishes, bounded host-function calls are still allowed for final persistence or delivery; after that, new dependency calls are rejected and pending operations are awaited. A timeout cannot force-kill arbitrary host JavaScript.
+- `complete: false` preserves the failed ownership and blocks replacing the same endpoint and name. Calling `close()` again returns the same result.
+- Close the old Extra completely before changing its module, JSON configuration, or dependency function references. Data read by an unchanged function can change between turns without a reload.
+- Extra shutdown does not stop the shared Kernel, other Extras, or host databases, and never exits the host process. SQLite stays entirely with the application.
+
+## Import and distribution
+
+Private workspace package for source and submodule hosts. Published consumers use `/host` (`createExtraService`, endpoint helpers, and Kernel's `createKernelService` re-export), `/extra` for authoring types, and the concrete `/extras/*` entries. Workspace Home and identity helpers such as `hostHomePaths`, `ensureHostHome`, and `ensureLocalRuntime` are not re-exported by `/host` today.
+
+## Further reading
+
+- [Exports](src/index.ts), [Extra service](src/extra-service.ts), [plugin contract](src/extras.ts), [Home helpers](src/home.ts), [identity](src/identity.ts), [endpoints](src/endpoint.ts).
+- [Public host facade](../../public/host.ts), [Extra guide](../../docs/en/guides/extras.md), [module loading](../../docs/en/concepts/module-loading.md).
+- [SDK quickstart](../../docs/en/getting-started/sdk.md), [Gateway configuration and storage](../../SDK_CHANNEL_GATEWAY_GUIDE.md) (Chinese).
