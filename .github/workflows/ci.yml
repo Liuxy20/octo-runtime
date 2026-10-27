@@ -153,7 +153,7 @@ jobs:
       - name: Verify Playboard temporary IPC with long Unicode paths on Windows
         run: node --unhandled-rejections=strict --test --test-name-pattern="Playboard temporary IPC ignores" test/playboard.test.js
       - name: Verify file security boundaries on Windows
-        run: node --unhandled-rejections=strict --test test/security-remediation.test.js test/hourly-log.test.js test/channel-tool-environment.test.js
+        run: node --unhandled-rejections=strict --test test/security-remediation.test.js test/hourly-log.test.js test/channel-tool-environment.test.js test/file-protection.test.js test/context-mcp.test.js test/webui-extra.test.js test/webui-session-store.test.js
       - name: Verify release process ownership and failure diagnostics on Windows
         run: node --unhandled-rejections=strict --test test/release-process.test.js test/windows-release-verifier.test.js
       - name: Verify Core, Kernel and independent Extra lifecycle on Windows

@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 const execute = promisify(execFile);
 const inspectAcl = String.raw`
 $ErrorActionPreference = 'Stop'
+$env:PSModulePath = "$PSHOME\Modules"
 $acl = Get-Acl -LiteralPath $env:OCTO_FILE_PROTECTION_FIXTURE
 $trusted = @(
   [Security.Principal.WindowsIdentity]::GetCurrent().User.Value,
@@ -36,6 +37,7 @@ export async function assertPrivateFile(file) {
   }
   // 只读检查实际 DACL。SID 避免依赖系统语言；ReadData / GENERIC_READ / GENERIC_ALL
   // 都可能授予正文读取。保守拒绝其他主体的 Allow ACE，不模拟任意 deny/group 的有效权限。
+  // 子进程只用自身系统模块，避免继承 pwsh 的不兼容模块路径；不改变父进程环境。
   // 缺少 PowerShell、读取 ACL 失败或共享临时目录均须暴露失败，不能退化为跳过。
   const { stdout } = await execute(
     "powershell.exe",

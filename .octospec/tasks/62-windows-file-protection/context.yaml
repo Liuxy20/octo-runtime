@@ -17,6 +17,7 @@ injected:
     source: repo
     reason: PR 交付；公开提交与 PR 文案按 CONTRIBUTING 的英文约定执行
 files_expected:
+  - .github/workflows/ci.yml
   - test-support/file-protection.mjs
   - test/file-protection.test.js
   - test/context-mcp.test.js
