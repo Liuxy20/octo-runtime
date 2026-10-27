@@ -22,6 +22,7 @@ import {
   type RunSnapshot
 } from "./types.js";
 import { InvocationRegistry, type TrackedInvocation } from "./invocation-lifecycle.js";
+import { markSubmissionRejected } from "./submission-error.js";
 
 /**
  * 连接本机 socket/Windows Pipe，返回不拥有 Kernel 进程的客户端。
@@ -391,6 +392,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       if (!sameLookup(ref, lookupFor(request))) throw new KernelError("RUN_IDENTITY_MISMATCH");
     } catch (error) {
       if (!submitted) throw error;
+      markSubmissionRejected(error, instance);
       if (
         error instanceof KernelError &&
         !["KERNEL_TIMEOUT", "CONNECTION_CLOSED"].includes(error.code)

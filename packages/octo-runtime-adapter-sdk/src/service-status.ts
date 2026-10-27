@@ -8,6 +8,63 @@ export interface ExtraStatusRecord {
   event: string;
   data: Record<string, string | number>;
 }
+
+export interface KernelStatusRecord {
+  time: string;
+  level: RuntimeLogLevel;
+  source: "kernel";
+  event: string;
+  data: Record<string, string | number>;
+}
+
+/** Kernel 父进程的监督诊断白名单；读盘时也重建，绝不包含执行正文或原始异常。 */
+export function kernelStatusRecord(
+  level: RuntimeLogLevel,
+  event: string,
+  data?: Readonly<Record<string, unknown>>,
+  time = new Date().toISOString()
+): KernelStatusRecord | undefined {
+  if (
+    !["info", "warn", "error"].includes(level) ||
+    ![
+      "worker.ready",
+      "worker.lost",
+      "worker.recovery_blocked",
+      "worker.retry_scheduled",
+      "worker.start_failed"
+    ].includes(event) ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(time) ||
+    !Number.isFinite(Date.parse(time))
+  )
+    return;
+  const safe: Record<string, string | number> = {};
+  for (const key of ["code", "signal", "trigger", "stage", "occurred_at", "retry_at"]) {
+    const value = data?.[key];
+    if (typeof value !== "string") continue;
+    const valid =
+      key === "code"
+        ? /^[A-Z][A-Z0-9_]{0,95}$/.test(value)
+        : key === "signal"
+          ? /^SIG[A-Z0-9]+$/.test(value)
+          : key === "trigger"
+            ? ["exit", "error", "heartbeat", "ipc"].includes(value)
+            : key === "stage"
+              ? ["cleanup", "manifest", "starting", "backoff"].includes(value)
+              : /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+                Number.isFinite(Date.parse(value));
+    if (valid) safe[key] = value;
+  }
+  for (const key of ["pid", "generation", "attempt", "delay_ms", "exit_code"]) {
+    const value = data?.[key];
+    if (
+      typeof value === "number" &&
+      Number.isSafeInteger(value) &&
+      (key === "exit_code" || value >= 0)
+    )
+      safe[key] = value;
+  }
+  return Object.freeze({ time, level, source: "kernel", event, data: Object.freeze(safe) });
+}
 const events = new Set([
   "service.initializing",
   "service.ready",

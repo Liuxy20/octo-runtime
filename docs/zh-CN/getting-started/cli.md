@@ -249,6 +249,22 @@ octo-runtime channel-gateway logs --follow --json
 
 ## 诊断与恢复
 
+```bash
+octo-runtime executor-kernel logs --lines 200
+octo-runtime executor-kernel logs --follow --json
+```
+
+Kernel 父进程独立记录 worker 的退出信号/退出码、恢复阶段、错误码、代次和下次重试，
+位于 `<Home>/logs/kernel-status-<UTC小时>.log`，沿用上述保留和读取限制，不含执行正文。
+SDK 宿主通过 `createKernelService({ logging: { directory } })` 显式选择日志目录。
+
+`service.state=running` 只表示服务进程存在，执行能力以 `runtime.execution_ready` 为准。
+worker 退出后自动恢复新请求；清理或 manifest 写入失败按 1/2/5 秒间隔重试，之后最多每
+5 秒重试一次。`worker.state=exhausted` 表示当前恢复被阻塞，仍会重试；查看
+`worker.recovery` 中的阶段、原因和 `retry_at`。间隔不包含清理及 worker 启动耗时，
+持续权限或身份问题可能仍需处理。恢复不重新执行旧请求；确定尚未执行的拒绝与在途执行
+失联后的未知结果分别反馈，不要求重启 Channel Gateway。
+
 `status` 分别返回原生 `service` 状态和 IPC `runtime` 状态，退出码 0 不代表业务可用。`doctor` 报告服务管理器探测和服务定义；`adapter list`、`adapter probe` 查询已运行的 Kernel，不会启动它。
 
 返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。文本错误写 stderr，JSON 错误写 stdout。

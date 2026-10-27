@@ -247,6 +247,25 @@ Logs carry component state only — initialization and shutdown, Kernel availabi
 
 ## Diagnostics and Recovery
 
+```bash
+octo-runtime executor-kernel logs --lines 200
+octo-runtime executor-kernel logs --follow --json
+```
+
+The Kernel parent records Worker exit signals/codes, recovery stages, error codes, generations,
+and retry schedules in `<Home>/logs/kernel-status-<UTC hour>.log`, with the same retention and
+read limits above and no execution content. SDK hosts opt in using
+`createKernelService({ logging: { directory } })`.
+
+`service.state=running` only describes the service process; use `runtime.execution_ready` for
+execution availability. Worker loss automatically recovers service for new requests. Cleanup or
+manifest failures retry after 1, 2, then 5 seconds, capped at 5 seconds between attempts.
+`worker.state=exhausted` means recovery is currently blocked but continues retrying; inspect
+`worker.recovery` for the stage, reason, and `retry_at`. These intervals exclude cleanup and
+startup time; persistent permission or identity failures may still require intervention.
+Recovery never replays old requests. Confirmed rejections before execution are reported separately
+from unknown outcomes of interrupted executions, and Channel Gateway does not need a restart.
+
 `status` reports native `service` state and IPC `runtime` state separately, and exit code 0 does not prove business readiness. `doctor` reports service-manager probing and service definitions; `adapter list` and `adapter probe` query a running Kernel without starting one.
 
 Exit codes: 0 success; 2 invalid arguments or declaration; 3 component not installed; 4 unreachable or not ready; 5 incomplete cleanup; 1 other failure. Text errors go to stderr, JSON errors to stdout.

@@ -54,6 +54,8 @@
 
 ## 当前任务
 
+- [Issue 210：Codex worker 快速恢复与日志](tasks/210-kernel-recovery/brief.md)：独立 worktree 基于 main@005116e；[方案](tasks/210-kernel-recovery/design.md)定义暂态清理/manifest 故障持续重试、Kernel 独立日志和准确未提交反馈。[本地验收](tasks/210-kernel-recovery/validation.md)首轮故障解除后约 1.3–1.4 秒新请求成功，首个提交 Node 全量 2022 通过；[审查](tasks/210-kernel-recovery/review.md)两项 medium 与后续外部 Windows P1 已复现并修复。P1 专项通过，本轮全量未通过，Windows 原生结果待 CI。未部署，原事故退出原因仍未知。
+
 - [CLI 与 Extra 命令统一展示](tasks/cli-extra-display/brief.md)：以 Commander 统一有效命令目录、分层帮助与 Extra 自有命令；完整声明读写收进 Extra，顶层旧入口隐藏兼容，删除内置 config set/get；[验证记录](journal/shared/2026-10-27-cli-extra-display.md)。
 
 - [Issue 64：Windows discovery 夹具](tasks/64-provider-discovery-fixture/brief.md)：仅修复测试专用可执行夹具，SDK/probe 与产品实现保持不变；原整文件 2 项、相关 Windows 回归 22 项通过，见[验证记录](journal/shared/2026-10-27-64-provider-discovery-fixture.md)。macOS/Linux 未验证。

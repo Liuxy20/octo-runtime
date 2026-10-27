@@ -1,7 +1,7 @@
 /** Optional metadata logging; bounded queues isolate filesystem writes in a dedicated worker. */
 import { isAbsolute } from "node:path";
 import { Worker } from "node:worker_threads";
-import { extraStatusRecord, type ExtraStatusRecord } from "./service-status.js";
+import { extraStatusRecord, kernelStatusRecord, type ExtraStatusRecord } from "./service-status.js";
 
 export type RuntimeLogLevel = "info" | "warn" | "error";
 export type RuntimeLog = (
@@ -111,6 +111,17 @@ export class RuntimeLogging {
     data?: Readonly<Record<string, unknown>>
   ): void {
     if (this.#closed) return;
+    if (source === "kernel" && this.#worker && this.#statusPending < 128) {
+      try {
+        const status = kernelStatusRecord(level, event, data);
+        if (status) {
+          this.#worker.postMessage({ status: true, line: `${JSON.stringify(status)}\n` });
+          this.#statusPending++;
+        }
+      } catch {
+        /* 状态镜像失败不影响执行或普通日志。 */
+      }
+    }
     if (extra) {
       try {
         const status = extraStatusRecord(extra, level, event, data);

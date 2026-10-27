@@ -65,6 +65,8 @@ Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervis
 
 ## CLI
 
+executor-kernel 同样提供 logs 命令，参数、读取预算、轮转跟随和错误语义沿用 Extra。只读取当前 Home/logs/kernel-status-*.log 独立状态系列；父进程记录 worker 丢失、恢复阻塞、退避、启动失败与就绪，不包含 worker stderr 或任意错误正文。CLI 自动启用此日志，SDK 通过 logging.directory 选择目录。status 展示 recovery 阶段、稳定错误码、下次重试和日志命令；running 不等于 execution_ready。详见 [Issue 210 方案](../tasks/210-kernel-recovery/design.md)。
+
 Extra新增 `logs [--lines 1..10000] [--follow] [--json]`，默认200条，JSON为NDJSON。只读取当前Home对应Extra的独立状态系列，最近三份最多4MiB，重建白名单记录；不得读普通执行日志或链接到外部文件。日志路由先于配置解析、模块载入及管理器操作。空日志stderr提示并成功；参数/权限错误非零；follow跟随轮转并在Ctrl+C释放监听。CLI前台Extra向stdout写状态，最多128条/1MiB，背压不阻塞服务，恢复后报告丢弃数量。后台镜像不依赖manager的stdoutPath，不引入shell wrapper。
 
 start/restart 成功结果复用本组件 status 的查询与格式化：展示服务、自启、IPC、Manager、PID、Worker/Extra 业务状态和服务定义路径；JSON 保留 component/action 并提供同一 service/runtime 数据。启动成功不等同于 Bot 已连通，业务状态沿 Extra 自身接口反馈。

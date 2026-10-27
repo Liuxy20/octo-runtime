@@ -376,7 +376,7 @@ export async function parseCliCommand(
       ...(name === "executor-kernel" ? [] : [extrasetExample(name, configExample, module)])
     ]);
     for (const [action, summary] of lifecycleCommands) {
-      if (name === "executor-kernel" && ["logs", "extraset", "extraget"].includes(action)) continue;
+      if (name === "executor-kernel" && ["extraset", "extraget"].includes(action)) continue;
       const child = leaf(parent, action, summary);
       const invocation = `${prefix} ${action}`;
       commandExamples.set(child, [

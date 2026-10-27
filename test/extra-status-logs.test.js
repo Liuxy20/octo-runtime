@@ -17,6 +17,7 @@ import { setImmediate as immediate } from "node:timers/promises";
 import {
   RuntimeLogging,
   extraStatusRecord,
+  kernelStatusRecord,
   HourlyLogWriter
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
@@ -180,36 +181,45 @@ test("CLI logs reads status only with broken config and no manager or Kernel", a
   );
 });
 
-test("follow consumes partial lines and rotation once and exits cleanly on cancellation", async (t) => {
-  const { home, directory } = await fixture(t);
-  const first = join(directory, `${extra}-status-20261022T01.log`);
-  await writeFile(first, line("service.ready"));
-  const controller = new AbortController(),
-    output = [];
-  const before = process.listenerCount("SIGINT");
-  const following = runCli([extra, "logs", "--home", home, "--follow", "--json"], {
-    output: (value) => output.push(JSON.parse(value)),
-    errorOutput() {},
-    logsSignal: controller.signal
+for (const component of [extra, "executor-kernel"])
+  test(`${component} follow consumes partial lines and rotation once and exits cleanly on cancellation`, async (t) => {
+    const { home, directory } = await fixture(t);
+    const kernel = component === "executor-kernel";
+    const logDirectory = kernel ? join(home, "logs") : directory;
+    const prefix = kernel ? "kernel" : extra;
+    const events = kernel
+      ? ["worker.lost", "worker.retry_scheduled", "worker.ready"]
+      : ["service.ready", "channel.retry_scheduled", "channel.connected"];
+    const row = (event, data) =>
+      kernel ? `${JSON.stringify(kernelStatusRecord("info", event, data))}\n` : line(event, data);
+    const first = join(logDirectory, `${prefix}-status-20261022T01.log`);
+    await writeFile(first, row(events[0]));
+    const controller = new AbortController(),
+      output = [];
+    const before = process.listenerCount("SIGINT");
+    const following = runCli([component, "logs", "--home", home, "--follow", "--json"], {
+      output: (value) => output.push(JSON.parse(value)),
+      errorOutput() {},
+      logsSignal: controller.signal
+    });
+    t.after(() => controller.abort());
+    await waitFor(() => output.length === 1);
+    const next = row(events[1], { delay_ms: 15000 });
+    await appendFile(first, next.slice(0, 40));
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assert.equal(output.length, 1);
+    await appendFile(first, next.slice(40));
+    await waitFor(() => output.length === 2);
+    await writeFile(join(logDirectory, `${prefix}-status-20261022T02.log`), row(events[2]));
+    await waitFor(() => output.length === 3);
+    controller.abort();
+    assert.equal(await following, 0);
+    assert.deepEqual(
+      output.map((row) => row.event),
+      events
+    );
+    assert.equal(process.listenerCount("SIGINT"), before);
   });
-  t.after(() => controller.abort());
-  await waitFor(() => output.length === 1);
-  const next = line("channel.retry_scheduled", { delay_ms: 15000 });
-  await appendFile(first, next.slice(0, 40));
-  await new Promise((resolve) => setTimeout(resolve, 600));
-  assert.equal(output.length, 1);
-  await appendFile(first, next.slice(40));
-  await waitFor(() => output.length === 2);
-  await writeFile(join(directory, `${extra}-status-20261022T02.log`), line("channel.connected"));
-  await waitFor(() => output.length === 3);
-  controller.abort();
-  assert.equal(await following, 0);
-  assert.deepEqual(
-    output.map((row) => row.event),
-    ["service.ready", "channel.retry_scheduled", "channel.connected"]
-  );
-  assert.equal(process.listenerCount("SIGINT"), before);
-});
 
 test("empty logs succeed; non-regular log paths and oversized records cannot expose content", async (t) => {
   const { home, directory } = await fixture(t);

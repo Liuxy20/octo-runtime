@@ -22,6 +22,78 @@ export interface SpawnWorkerOptions {
 
 type HostedChild = ChildProcessByStdio<Writable, Readable, Readable>;
 
+/** 保留失败进程的回收入口；只有重新确认回收成功后，监督器才允许创建替代 worker。 */
+export class WorkerCleanupError extends AggregateError {
+  readonly code: string;
+  constructor(
+    errors: unknown[],
+    readonly retryCleanup: (until: number) => Promise<void>,
+    readonly pid?: number
+  ) {
+    super(errors, "WORKER_CLEANUP_INCOMPLETE", { cause: errors.at(-1) });
+    const cause = errors.at(-1);
+    const code = cause instanceof Error && "code" in cause ? cause.code : undefined;
+    this.code =
+      typeof code === "string" && /^[A-Z][A-Z0-9_]{0,95}$/.test(code)
+        ? code
+        : "WORKER_CLEANUP_INCOMPLETE";
+  }
+}
+
+/** 每轮失败后允许重新观测；成功后永不再次向旧 PGID 发信号，避免历史身份被复用。 */
+function workerCleanup(child: HostedChild): () => Promise<void> {
+  let complete = false;
+  let pending: Promise<void> | undefined;
+  let failure: Error | undefined;
+  return () => {
+    if (complete) return Promise.resolve();
+    if (pending) return pending;
+    // Windows 已观察到树回收失败后，leader 消失也不能抹去未知后代的事实。
+    if (
+      process.platform === "win32" &&
+      failure &&
+      (child.exitCode !== null || child.signalCode !== null)
+    )
+      return Promise.reject(failure);
+    // leader 已退出后，同号 PID 若重新出现就不能再向旧 PGID 发信号。
+    // 只在原 PID 仍不存在时确认所属剩余进程组，不扫描或回收其他应用。
+    if (
+      process.platform !== "win32" &&
+      child.pid !== undefined &&
+      (child.exitCode !== null || child.signalCode !== null)
+    ) {
+      try {
+        process.kill(child.pid, 0);
+        return Promise.reject(
+          Object.assign(new Error("WORKER_PROCESS_IDENTITY_CONFLICT"), {
+            code: "WORKER_PROCESS_IDENTITY_CONFLICT"
+          })
+        );
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH")
+          return Promise.reject(
+            error instanceof Error ? error : new Error("WORKER_IDENTITY_UNKNOWN")
+          );
+      }
+    }
+    pending = createProcessCleanup(child, {
+      processGroup: process.platform !== "win32",
+      processTree: true
+    })()
+      .then(() => {
+        complete = true;
+      })
+      .catch((error: unknown) => {
+        failure = error instanceof Error ? error : new Error("WORKER_CLEANUP_INCOMPLETE");
+        throw error;
+      })
+      .finally(() => {
+        pending = undefined;
+      });
+    return pending;
+  };
+}
+
 // Reserve more time for tree cleanup until the worker confirms it has started shutdown.
 // A cooperating worker can use its existing 2.5 s shutdown + 1 s logging bounds.
 const WINDOWS_CLOSE_GRACE_MS = 4_000;
@@ -83,10 +155,7 @@ export async function spawnWorker({
       detached: process.platform !== "win32"
     }
   ) as HostedChild;
-  const cleanup = createProcessCleanup(child, {
-    processGroup: process.platform !== "win32",
-    processTree: true
-  });
+  const cleanup = workerCleanup(child);
   let stderr = "";
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (value: string | Buffer) => {
@@ -119,11 +188,7 @@ export async function spawnWorker({
     try {
       await cleanup();
     } catch (cleanupError) {
-      throw new AggregateError(
-        [error, cleanupError],
-        `${errorMessage(error)}${stderr ? `: ${stderr}` : ""}; cleanup: ${errorMessage(cleanupError)}`,
-        { cause: cleanupError }
-      );
+      throw new WorkerCleanupError([error, cleanupError], async () => cleanup(), child.pid);
     }
     throw new Error(`${errorMessage(error)}${stderr ? `: ${stderr}` : ""}`, { cause: error });
   }
@@ -156,6 +221,19 @@ export async function spawnWorker({
             throw Object.assign(new Error("EXECUTOR_CLEANUP_INCOMPLETE"), {
               code: "EXECUTOR_CLEANUP_INCOMPLETE"
             });
+        } catch (error) {
+          // 普通 close 仍共享首次结果；恢复专用入口重新执行 OS 确认，不复用 rejected Promise。
+          throw new WorkerCleanupError(
+            [error],
+            async (retryUntil) => {
+              if (drained === "incomplete") throw error;
+              if (process.platform === "win32" && drained !== "skipped")
+                await cleanupWindowsWorker(child, retryUntil);
+              else await cleanup();
+              closing = Promise.resolve();
+            },
+            child.pid
+          );
         } finally {
           if (process.platform === "win32") {
             // 正常收尾或 fallback 结束后释放本层管道；回收失败仍向调用方传播。

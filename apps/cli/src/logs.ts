@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
   extraStatusRecord,
-  type ExtraStatusRecord
+  kernelStatusRecord,
+  type ExtraStatusRecord,
+  type KernelStatusRecord
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 const MAX_READ = 4 * 1024 * 1024;
@@ -15,10 +17,15 @@ interface Cursor {
   pending: string;
   skipping: boolean;
 }
-function record(line: string, extra: string): ExtraStatusRecord | undefined {
+type StatusRecord = ExtraStatusRecord | KernelStatusRecord;
+function record(line: string, extra: string): StatusRecord | undefined {
   if (Buffer.byteLength(line) > MAX_LINE) return;
   try {
-    const value = JSON.parse(line) as ExtraStatusRecord;
+    const value = JSON.parse(line) as StatusRecord;
+    if (extra === "executor-kernel")
+      return value.source === "kernel" && typeof value.time === "string"
+        ? kernelStatusRecord(value.level, value.event, value.data, value.time)
+        : undefined;
     if (value.source !== "extra" || value.extra_type !== extra || typeof value.time !== "string")
       return;
     return extraStatusRecord(extra, value.level, value.event, value.data, value.time);
@@ -27,7 +34,7 @@ function record(line: string, extra: string): ExtraStatusRecord | undefined {
   }
 }
 async function files(home: string, extra: string): Promise<string[]> {
-  const directory = join(home, "logs", "extras");
+  const directory = extra === "executor-kernel" ? join(home, "logs") : join(home, "logs", "extras");
   for (const path of [join(home, "logs"), directory]) {
     try {
       const stat = await lstat(path);
@@ -38,7 +45,9 @@ async function files(home: string, extra: string): Promise<string[]> {
       throw error;
     }
   }
-  const pattern = new RegExp(`^${extra}-status-\\d{8}T\\d{2}\\.log$`);
+  const pattern = new RegExp(
+    `^${extra === "executor-kernel" ? "kernel" : extra}-status-\\d{8}T\\d{2}\\.log$`
+  );
   // Keep only three candidates while scanning, without loading an unbounded directory listing.
   const selected: string[] = [];
   let count = 0;
@@ -98,16 +107,16 @@ export async function showExtraLogs(options: {
     if (options.signal?.aborted) stop();
   }
   const cursors = new Map<string, Cursor>();
-  const emit = async (value: ExtraStatusRecord) => {
+  const emit = async (value: StatusRecord) => {
     const text = options.json
       ? JSON.stringify(value)
-      : `${value.time} ${value.level.toUpperCase()} ${value.extra_type} ${value.event}${Object.keys(value.data).length ? ` ${JSON.stringify(value.data)}` : ""}`;
+      : `${value.time} ${value.level.toUpperCase()} ${value.source === "extra" ? value.extra_type : "executor-kernel"} ${value.event}${Object.keys(value.data).length ? ` ${JSON.stringify(value.data)}` : ""}`;
     await options.output(text, controller.signal);
   };
   try {
     const selected = await files(options.home, options.extra);
     let remaining = MAX_READ;
-    const chunks: ExtraStatusRecord[][] = [];
+    const chunks: StatusRecord[][] = [];
     // Spend the shared byte budget newest-first, then emit complete records in file order.
     for (const path of [...selected].reverse()) {
       try {
@@ -125,7 +134,7 @@ export async function showExtraLogs(options: {
         chunks.unshift(
           lines
             .map((line) => record(line, options.extra))
-            .filter((value): value is ExtraStatusRecord => !!value)
+            .filter((value): value is StatusRecord => !!value)
         );
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;

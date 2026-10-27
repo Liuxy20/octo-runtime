@@ -18,8 +18,8 @@ parentPort!.on(
     try {
       const category = message.extra
         ? `${message.extra}${message.status ? "-status" : ""}`
-        : "kernel";
-      const key = message.extra ? `extra:${category}` : "kernel";
+        : `kernel${message.status ? "-status" : ""}`;
+      const key = message.extra ? `extra:${category}` : category;
       let writer = writers.get(key);
       if (!writer && writers.size < 128) {
         writer = new HourlyLogWriter(

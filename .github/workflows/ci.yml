@@ -173,6 +173,8 @@ jobs:
           test/extra-status-logs.test.js
           test/kernel-heartbeat.test.js
           test/kernel-worker-recovery.test.js
+          test/kernel-recovery.test.js
+          test/kernel-windows-recovery.test.js
           test/im-connection-state-machine.test.js
           test/recovery-dual-mode.test.js
       - name: Verify Windows worker log drain and close budget

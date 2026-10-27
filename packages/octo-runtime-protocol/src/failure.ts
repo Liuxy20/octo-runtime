@@ -13,7 +13,7 @@ export interface FailureClassificationContext {
   occurredAt?: string;
   /** Only trusted downstream boundaries may retain a previously validated envelope. */
   preserveExisting?: boolean;
-  /** 仅可信调用边界在确认 Kernel 本地写出前拒绝后设置；错误字符串不能提供此证据。 */
+  /** 仅可信调用边界确认未进入执行源后设置；错误字符串不能提供此证据。 */
   invocationNotSubmitted?: boolean;
 }
 
@@ -318,7 +318,11 @@ export function classifyFailure(
         ? "OH-RUN-2011"
         : context.stage === "channel_admission" &&
             context.invocationNotSubmitted === true &&
-            evidence.explicitCode === "CLIENT_INVOCATION_ADMISSION_CLOSED"
+            [
+              "CLIENT_INVOCATION_ADMISSION_CLOSED",
+              "KERNEL_UNAVAILABLE",
+              "WORKER_RESTART_EXHAUSTED"
+            ].includes(evidence.explicitCode ?? "")
           ? "OH-RUN-2012"
           : undefined;
   const classification = channelCode

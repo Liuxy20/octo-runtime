@@ -35,6 +35,14 @@ const validators = {
   HostFrame: assertHostFrame
 };
 
+test("KernelStatus: shared recovery fixtures agree with the schema", () => {
+  const validate = ajv.compile({ $ref: `${schema.$id}#/definitions/KernelStatus` });
+  for (const value of fixtures.valid.KernelStatus)
+    assert.equal(validate(value), true, JSON.stringify(validate.errors));
+  for (const value of fixtures.invalid.KernelStatus)
+    assert.equal(validate(value), false, JSON.stringify(value));
+});
+
 for (const [name, validateRuntime] of Object.entries(validators)) {
   test(`${name}: shared fixtures agree between schema and runtime`, () => {
     const validateSchema = ajv.compile({ $ref: `${schema.$id}#/definitions/${name}` });

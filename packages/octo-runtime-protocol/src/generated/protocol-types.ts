@@ -638,6 +638,15 @@ export interface KernelStatus {
     pid?: number;
     generation: number;
     restart_attempt: number;
+    recovery?: {
+      trigger: "exit" | "error" | "heartbeat" | "ipc";
+      stage: "cleanup" | "manifest" | "starting" | "backoff";
+      code: string;
+      occurred_at: string;
+      retry_at?: string;
+      exit_code?: number;
+      signal?: string;
+    };
     state: "starting" | "ready" | "recovering" | "stopped" | "exhausted";
   };
 }

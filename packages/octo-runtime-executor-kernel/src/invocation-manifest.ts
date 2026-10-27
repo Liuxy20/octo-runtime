@@ -113,9 +113,12 @@ export class InvocationManifest {
       ...(this.#worker ? { worker: { ...this.#worker } } : {}),
       invocations: [...this.#invocations.values()].map((entry) => ({ ...entry }))
     };
-    this.#writes = this.#writes.then(async () => {
-      await writeManifest(this.#path, snapshot);
-    });
+    // 当前调用仍收到自己的 IO 失败；后续完整快照可重试，不能让一次失败毒化整个串行队列。
+    this.#writes = this.#writes
+      .catch(() => undefined)
+      .then(async () => {
+        await writeManifest(this.#path, snapshot);
+      });
     return this.#writes;
   }
 }

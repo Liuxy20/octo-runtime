@@ -64,7 +64,12 @@ export {
   type RuntimeLogLevel,
   type RuntimeLoggingOptions
 } from "./runtime-log.js";
-export { extraStatusRecord, type ExtraStatusRecord } from "./service-status.js";
+export {
+  extraStatusRecord,
+  kernelStatusRecord,
+  type ExtraStatusRecord,
+  type KernelStatusRecord
+} from "./service-status.js";
 export { sanitizePublicValue } from "./public-display.js";
 export {
   DEFAULT_REASONING_LEVEL_MAPS,

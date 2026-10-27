@@ -27,7 +27,8 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
     adapterModules: options.adapterModules && structuredClone(options.adapterModules),
     adapterConfigurations:
       options.adapterConfigurations && structuredClone(options.adapterConfigurations),
-    env: options.env && { ...options.env }
+    env: options.env && { ...options.env },
+    logging: options.logging && { ...options.logging }
   };
   const owner = new AbortController();
   let phase: ServicePhase = "created";

@@ -119,10 +119,13 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     // Route logs before config/module/manager access so offline failures remain diagnosable.
     if (positional[1] === "logs") {
       const extra = positional[0];
-      context = { component: extra, action: "logs", logs: join(home, "logs", "extras") };
+      context = {
+        component: extra,
+        action: "logs",
+        logs: extra === "executor-kernel" ? join(home, "logs") : join(home, "logs", "extras")
+      };
       if (
         positional.length !== 2 ||
-        extra === "executor-kernel" ||
         !/^[a-z][a-z0-9-]{0,63}$/.test(extra) ||
         flags.autostart !== undefined
       )
@@ -323,6 +326,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       if (component === "executor-kernel") {
         const config = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
         handle = createKernelService({
+          logging: { directory: join(home, "logs") },
           endpoint,
           stateDirectory: kernelStateDirectory,
           workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),

@@ -30,6 +30,13 @@ export function formatStatus(name: string, snapshot: ComponentSnapshot): string 
   ];
   if (runtime.execution_ready !== undefined)
     lines.push(`  Worker: ${runtime.execution_ready ? "ready" : "unavailable"}`);
+  const recovery = record(record(runtime.worker).recovery);
+  if (recovery.code) {
+    lines.push(
+      `  Recovery: ${text(recovery.stage)} (${text(recovery.code)})${recovery.retry_at ? `  Next retry: ${text(recovery.retry_at)}` : ""}`
+    );
+    lines.push("  Diagnostics: octo-runtime executor-kernel logs --follow (use the same --home)");
+  }
   if (runtime.available === false)
     lines.push(`  Reason: ${text(record(runtime.error).code ?? "COMPONENT_UNAVAILABLE")}`);
   if (service.lastExitCode !== undefined && service.lastExitCode !== 0)

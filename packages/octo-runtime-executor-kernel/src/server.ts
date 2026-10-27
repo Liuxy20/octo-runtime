@@ -4,6 +4,9 @@ import { chmod, mkdir, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   readBoundedLines,
+  RuntimeLogging,
+  assertRuntimeLogging,
+  type RuntimeLoggingOptions,
   type AdapterProbeOptions
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
@@ -42,6 +45,8 @@ export interface KernelServerOptions {
   env?: NodeJS.ProcessEnv;
   adapterConfigurations?: Record<string, AdapterProbeOptions>;
   stateDirectory?: string;
+  /** 父进程独立记录 worker 监督状态；不依赖 worker 的执行日志，调用方选择日志目录。 */
+  logging?: RuntimeLoggingOptions;
   configurations?: (runtimeId?: string) => Record<string, AdapterProbeOptions>;
 }
 
@@ -117,6 +122,7 @@ function validateParams(method: string, params: Record<string, unknown>): void {
  * 启动失败也执行回收；close 失败会保留所有权证据，客户端断开不等同于 owner 关闭。
  */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
+  assertRuntimeLogging(options.logging);
   if (options.manifest && options.adapterModules !== undefined)
     throw new TypeError("manifest and adapterModules are mutually exclusive");
   // 文件仅在服务启动时读取一次；worker 自动恢复沿用快照，不因磁盘改动改变加载集合。
@@ -124,10 +130,12 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     ? resolveAdapterModules(await readModuleManifest(options.manifest, { legacy: true }))
     : options.adapterModules;
   const instance = randomUUID();
+  const logging = new RuntimeLogging(options.logging);
   let manifest: InvocationManifest | undefined;
   const worker = new WorkerSupervisor(
     { entrypoint: options.workerEntrypoint, adapterModules, env: options.env },
-    (pid) => manifest?.setWorker(pid, options.workerEntrypoint) ?? Promise.resolve()
+    (pid) => manifest?.setWorker(pid, options.workerEntrypoint) ?? Promise.resolve(),
+    logging.kernel
   );
   const configure = (input: InvokeInput) => {
     const type = contextItem(input.contexts, "octo.execution", "adapter")?.payload.type;
@@ -242,9 +250,14 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
         case "agent_run.invoke": {
           if (params.kernel_instance_id !== undefined && params.kernel_instance_id !== instance)
             throw new KernelError("KERNEL_INSTANCE_CHANGED");
-          if (worker.status.state === "exhausted")
-            throw new KernelError("WORKER_RESTART_EXHAUSTED");
-          if (!status().execution_ready) throw new KernelError("KERNEL_UNAVAILABLE");
+          // 此处尚未调用执行源；专用证据只标记本次拒绝，不能推广到已接纳或 ACK 未知的请求。
+          if (!status().execution_ready)
+            throw new KernelError(
+              worker.status.state === "exhausted"
+                ? "WORKER_RESTART_EXHAUSTED"
+                : "KERNEL_UNAVAILABLE",
+              { invocation_not_submitted: true }
+            );
           const receipt = await runs.submit(params.input as InvokeInput, {
             executionEnvOverrides:
               params.executionEnvOverrides as InvokeEnvironment["executionEnvOverrides"]
@@ -361,7 +374,17 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
             : {
                 jsonrpc: "2.0",
                 id,
-                error: { code: rpcCode, message: "Kernel request failed", data: { code } }
+                error: {
+                  code: rpcCode,
+                  message: "Kernel request failed",
+                  data: {
+                    code,
+                    ...(error instanceof KernelError &&
+                    error.data?.invocation_not_submitted === true
+                      ? { invocation_not_submitted: true, kernel_instance_id: instance }
+                      : {})
+                  }
+                }
               }
         ).catch(() => undefined);
         socket.end();
@@ -406,8 +429,11 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())));
     // 先终止 worker 才能让失联的源流结束，再清空 Run 缓存；每个资源仍独立尝试回收并汇总失败。
     // 内部沿用服务截止时间，为清单和端点收尾预留时间；不重启一份独立关闭预算。
+    // 父日志与 worker 独立关闭，重叠使用剩余期限；不能在 worker 排空后再加一秒日志预算。
+    const loggingClosed = attempt(() => logging.close());
     const workerStopped = await attempt(() => worker.close(until - 200));
     await attempt(() => runs.close());
+    await loggingClosed;
     // An incomplete worker close retains ownership, including an observed executor cleanup failure.
     if (workerStopped) {
       await attempt(() => manifest?.close() ?? Promise.resolve());

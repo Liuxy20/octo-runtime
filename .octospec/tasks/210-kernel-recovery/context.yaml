@@ -1,0 +1,44 @@
+task: 210-kernel-recovery
+baseline: 005116ec7a28e27ccaddde75057e6289cfb549a5
+branch: codex/issue-210-kernel-recovery
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/210
+phase: pr-212-windows-p1-followup
+loaded_rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/protocol-schema.md
+authorization:
+  new_worktree: true
+  local_fault_simulation: true
+  local_recovery_and_logs_implementation: true
+  production_service_changes: false
+  commits_push_pr: true
+  loop_pr_comment: true
+validation:
+  build_and_typecheck: passed
+  lint: passed
+  names: passed
+  node_full_suite: initial e8feadb passed 2022 with 56 skipped; P1 followup full runs did not pass
+  webui: 35 passed
+  reproduction: 5 passed, zero failures or skips
+  recovery: 7 passed in the final full suite, zero failures or skips
+  logs_and_gateway: 39 passed, zero failures or skips
+  native_generated_consistency: passed
+  native_protocol: Go and Python each passed 358 shared fixtures
+  docs: passed
+  environment: macOS, Node.js 24.19.0
+  formatting: passed for changed source and test scripts
+  okf: passed
+  verified_review: two medium findings and one external P1 reproduced and fixed; followup full runs not passing
+  external_p1: Windows already-exited recovery regression reproduced and fixed
+  windows_branch_regressions: passed, native Windows validation pending CI
+limitations:
+  - Real Codex adapter and worker; local app-server protocol fixture, no real model.
+  - No live IM connection or production Home was used.
+  - Original Worker exit cause remains unknown.
