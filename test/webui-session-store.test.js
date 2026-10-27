@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { SessionStore } from "../packages/octo-runtime-extra-webui/dist/store.js";
+import { assertPrivateFile } from "../test-support/file-protection.mjs";
 
 const waits = [20, 50, 100, 200, 400, 800, 1600];
 const realPlatform = process.platform;
@@ -81,18 +82,14 @@ async function fixture(t, log) {
   };
 }
 
-// 将 POSIX mode 检查与会话功能验收分开。
-test(
-  "POSIX session files retain private 0600 permissions",
-  { skip: process.platform === "win32" },
-  async (t) => {
-    const f = await fixture(t);
-    await f.store.change((records) => {
-      records[0].title = "private";
-    });
-    assert.equal((await fs.stat(f.path)).mode & 0o777, 0o600);
-  }
-);
+// 文件保护独立于会话功能验收；Windows 读取 DACL，POSIX 保留 0600 断言。
+test("session files retain platform-specific private access", async (t) => {
+  const f = await fixture(t);
+  await f.store.change((records) => {
+    records[0].title = "private";
+  });
+  await assertPrivateFile(f.path);
+});
 
 for (const mode of ["partial write", "close", "write and close", "replace", "cleanup"]) {
   test(

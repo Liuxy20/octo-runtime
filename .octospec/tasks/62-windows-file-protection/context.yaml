@@ -1,0 +1,25 @@
+brief: .octospec/tasks/62-windows-file-protection/brief.md
+baseline: aa16c894b2b2c7ae9a2771cf10a427f7b677c976
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 保持系统账号信任边界、公共接口和运行时依赖不变
+  - id: runtime-mcp
+    source: repo
+    reason: MCP 临时配置内容、映射和清理合同
+  - id: runtime-channel
+    source: repo
+    reason: OpenClaw 既有测试仅替换权限判据，不改变渠道行为
+  - id: runtime-engineering
+    source: repo
+    reason: 文件权限负向 fixture、平台验证和错误保留
+  - id: commit
+    source: repo
+    reason: PR 交付；公开提交与 PR 文案按 CONTRIBUTING 的英文约定执行
+files_expected:
+  - .github/workflows/ci.yml
+  - test-support/file-protection.mjs
+  - test/file-protection.test.js
+  - test/context-mcp.test.js
+  - test/channel-tool-environment.test.js
+  - test/webui-session-store.test.js
