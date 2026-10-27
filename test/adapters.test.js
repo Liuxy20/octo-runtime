@@ -1,7 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { once } from "node:events";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { WebSocketServer } from "ws";
 import { createJsonCliAdapter } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
@@ -399,12 +401,68 @@ test("Codex reconstructs model rounds and associates reasoning, tool batches, an
   });
 });
 
-test("Codex command starts app-server over stdio", async () => {
-  const command = await buildCodexCommand(request);
-  assert.deepEqual(command.args, ["app-server", "--listen", "stdio://"]);
-  assert.equal(command.cwd, request.workdir);
-  assert.equal(command.env.CODEX_HOME, process.env.CODEX_HOME ?? join(process.env.HOME, ".codex"));
-  await command.cleanup();
+test("Codex command starts app-server over stdio", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "octo-codex-home-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = join(root, "home");
+  const profile = join(root, "profile");
+  const explicitHome = join(root, "explicit-codex");
+  await Promise.all([home, profile, explicitHome].map((path) => mkdir(path)));
+  const nativeHome = process.platform === "win32" ? profile : home;
+  const adapterUrl = new URL(
+    "../packages/octo-runtime-adapter-codex/dist/index.js",
+    import.meta.url
+  );
+  const cases = [
+    { name: "absent CODEX_HOME with different HOME and USERPROFILE" },
+    { name: "explicit CODEX_HOME", codexHome: explicitHome },
+    { name: "empty CODEX_HOME", codexHome: "" },
+    { name: "absent HOME on native Windows", unsetHome: true }
+  ];
+  for (const scenario of cases) {
+    await t.test(
+      scenario.name,
+      {
+        skip:
+          scenario.unsetHome && process.platform !== "win32" && "Windows native-profile fallback"
+      },
+      () => {
+        // 原生 Home 取决于子进程环境；不能改全局环境或把 HOME/profile 合并来掩盖差异。
+        const env = { ...process.env };
+        for (const key of Object.keys(env)) {
+          if (["HOME", "USERPROFILE", "CODEX_HOME"].includes(key.toUpperCase())) delete env[key];
+        }
+        env.USERPROFILE = profile;
+        if (!scenario.unsetHome) env.HOME = home;
+        if (scenario.codexHome !== undefined) env.CODEX_HOME = scenario.codexHome;
+        const expectedHome = scenario.codexHome || join(nativeHome, ".codex");
+        execFileSync(
+          process.execPath,
+          [
+            "--input-type=module",
+            "--eval",
+            `import assert from "node:assert/strict";
+             import { homedir } from "node:os";
+             import { buildCodexCommand } from ${JSON.stringify(adapterUrl.href)};
+             const request = ${JSON.stringify({ ...request, workdir: root })};
+             assert.equal(homedir(), ${JSON.stringify(nativeHome)});
+             const command = await buildCodexCommand(request);
+             try {
+               assert.equal(command.command, "codex");
+               assert.deepEqual(command.args, ["app-server", "--listen", "stdio://"]);
+               assert.equal(command.cwd, request.workdir);
+               assert.equal(command.env.CODEX_HOME, ${JSON.stringify(expectedHome)});
+               assert.equal(command.env.HOME, process.env.HOME);
+               assert.equal(command.env.USERPROFILE, process.env.USERPROFILE);
+             } finally {
+               await command.cleanup();
+             }`
+          ],
+          { env, encoding: "utf8" }
+        );
+      }
+    );
+  }
 });
 
 test("Claude native events map to session/message/terminal", () => {

@@ -1,0 +1,20 @@
+brief: .octospec/tasks/88-native-codex-home/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "保持现有产品职责、SDK 和真实用户配置边界"
+  - id: runtime-engineering
+    source: repo
+    reason: "隔离 fake-Provider 测试和必要检查"
+  - id: runtime-environment
+    source: repo
+    reason: "核对 CODEX_HOME 显式覆盖和原生回退合同"
+  - id: runtime-adapter-metadata
+    source: repo
+    reason: "Adapter 内部责任归属，不扩大 Provider 验证范围"
+  - id: commit
+    source: repo
+    reason: "用户授权 PR 交付；公开提交及 PR 文案按 CONTRIBUTING 使用英文"
+files_expected:
+  - test/adapters.test.js
+updated_at: 2026-10-27T10:00:00Z
