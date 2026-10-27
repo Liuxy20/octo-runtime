@@ -52,6 +52,8 @@
 
 ## 当前任务
 
+- [Issue 198：断网后 Gateway 重连](tasks/198-gateway-reconnect/brief.md)：独立 worktree 基于 main@f0bacb0。按用户明确的单实例断网与滚动更新需求，合法 DISCONNECT 默认重试，握手暂态与 HTTP 408 补齐分类；实现与验证见[记录](journal/shared/2026-10-27-198-gateway-reconnect.md)。
+
 - [Issue 156：CLI 与 Extra 操作文档收敛](tasks/156-cli-docs/brief.md)：基于 PR #191 后的 main 修复 Extra 指南与 Skill 的安装、自启和组件路由说明；双语 CLI 入门补齐禁用与未安装行为。验证边界见[本轮记录](journal/shared/2026-10-27-156-cli-docs.md)。
 
 - [Issue 192：CLI 全局 Extra 自动发现](tasks/192-global-extra-discovery/brief.md)：独立 worktree 从最新 main 规划并实施，可执行性 97/100；npm/pnpm 来源隔离、延迟加载和包外安装验证，交付 PR 到 main，不自动合并。

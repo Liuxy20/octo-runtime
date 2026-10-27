@@ -222,7 +222,7 @@ export class ImRuntime {
       const failure = connectionFailure(error);
       this.#connectionAbort.abort();
       this.#error = failure.message;
-      // Offline startup and later disconnects share recovery; only error semantics decide eligibility.
+      // 首次离线与后续断线共用恢复；服务端断开不等于永久拒绝，由传输分类决定资格。
       const retry = failure.retryable;
       this.#state = retry ? "retrying" : "failed";
       this.#log("channel.connection_failed", { state: this.#state, code: failure.message });
@@ -237,12 +237,12 @@ export class ImRuntime {
     }
   }
   #lostConnection(connector: GatewayTransport, failure: ImConnectionError): void {
-    this.#log("channel.disconnected", { code: failure.message });
     this.#error = failure.message;
     const retry = failure.retryable;
     this.#state = retry ? "retrying" : "failed";
+    this.#log("channel.disconnected", { state: this.#state, code: failure.message });
     this.#connectionAbort?.abort();
-    // Reap the old connection before backoff; shutdown and stale callbacks cannot create a second owner.
+    // 先回收旧连接再开始退避；关闭和旧回调不能再创建连接，回收失败须单独诊断。
     this.#disconnecting = connector.close();
     void this.#disconnecting.then(
       () => {

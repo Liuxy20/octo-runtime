@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
 import {
+  randomUUID,
   createHash,
   createCipheriv,
   createDecipheriv,
@@ -63,12 +64,15 @@ function reader(bytes) {
 }
 export async function recoveryImFixture(t) {
   let offline = true,
+    blackhole = false,
     sequence = 0,
     connections = 0,
     current;
   const replies = [],
     cards = [];
   const http = createServer(async (req, res) => {
+    // 长时故障试验丢弃应用层流量，不发 close/error，保留真实心跳计时。
+    if (blackhole) return;
     if (offline) {
       res.writeHead(503).end("{}");
       return;
@@ -83,7 +87,7 @@ export async function recoveryImFixture(t) {
           robot_id: "bot",
           owner_uid: "owner",
           owner_channel_id: "owner",
-          im_token: "fixture",
+          im_token: randomUUID(),
           ws_url: `ws://127.0.0.1:${http.address().port}`
         })
       );
@@ -113,6 +117,7 @@ export async function recoveryImFixture(t) {
       ]).toString(decrypt ? "utf8" : "base64");
     };
     socket.on("message", (data) => {
+      if (blackhole) return;
       const kind = data[0] >> 4;
       if (kind === 7) {
         socket.send(Buffer.from([0x80]));
@@ -175,24 +180,49 @@ export async function recoveryImFixture(t) {
     });
   });
   await new Promise((resolve) => http.listen(0, "127.0.0.1", resolve));
+  const port = http.address().port;
   t.after(async () => {
     for (const socket of ws.clients) socket.terminate();
     ws.close();
     http.closeAllConnections();
-    await new Promise((resolve) => http.close(resolve));
+    if (http.listening) await new Promise((resolve) => http.close(resolve));
   });
   return {
-    url: `http://127.0.0.1:${http.address().port}`,
+    url: `http://127.0.0.1:${port}`,
     replies,
     cards,
     online() {
       offline = false;
     },
+    setBlackhole(value) {
+      blackhole = value;
+    },
+    // 只停止本 fixture 的监听和连接；恢复时复用同一端口，Gateway 配置与进程保持。
+    async stopServer() {
+      for (const socket of ws.clients) socket.terminate();
+      http.closeAllConnections();
+      await new Promise((resolve, reject) =>
+        http.close((error) => (error ? reject(error) : resolve()))
+      );
+    },
+    async startServer() {
+      await new Promise((resolve, reject) => {
+        http.once("error", reject);
+        http.listen(port, "127.0.0.1", () => {
+          http.off("error", reject);
+          resolve();
+        });
+      });
+    },
+    get activeConnections() {
+      return ws.clients.size;
+    },
     get connections() {
       return connections;
     },
-    disconnect() {
-      current.socket.terminate();
+    disconnect(reason) {
+      if (reason === undefined) current.socket.terminate();
+      else current.socket.send(pack(0x90, Buffer.concat([Buffer.from([reason]), str("")])));
     },
     send(content) {
       const n = ++sequence,

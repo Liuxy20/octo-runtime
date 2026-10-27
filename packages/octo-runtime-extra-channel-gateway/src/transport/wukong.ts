@@ -19,7 +19,8 @@ import {
   connectionFetch,
   connectionJson,
   httpConnectionFailure,
-  ImConnectionError
+  ImConnectionError,
+  wukongConnectionFailure
 } from "./connection-error.js";
 
 export interface ImMessage {
@@ -50,7 +51,8 @@ export async function registerBot(
     `${apiUrl.replace(/\/$/, "")}/v1/bot/register`,
     {
       method: "POST",
-      redirect: "error",
+      // 返回重定向状态供统一分类，不跟随到新地址，也不将其折叠成网络暂态。
+      redirect: "manual",
       signal: signal
         ? AbortSignal.any([signal, AbortSignal.timeout(15_000)])
         : AbortSignal.timeout(15_000),
@@ -297,7 +299,7 @@ export class WukongConnection {
               if (header & 1) this.#version = reader.byte();
               reader.u64();
               const reason = reader.byte();
-              if (reason !== 1) throw new ImConnectionError(`IM_CONNECT_REJECTED_${reason}`, false);
+              if (reason !== 1) throw wukongConnectionFailure("CONNECT_REJECTED", reason);
               const remoteKey = reader.string();
               const salt = reader.string();
               if (this.#version >= 4) reader.u64();
@@ -329,6 +331,9 @@ export class WukongConnection {
               }, 25_000);
               this.#heartbeat.unref();
               resolve();
+            } else if (kind === 9) {
+              // 滚动更新也可能在 CONNACK 前关闭连接；先按断开原因分类，不能误报握手协议错误。
+              throw wukongConnectionFailure("SERVER_DISCONNECTED", reader.byte());
             } else if (!ready) throw new Error("IM_HANDSHAKE_REQUIRED");
             else if (kind === 5) this.#receive(reader, registration.robot_id);
             else if (kind === 4) {
@@ -347,8 +352,7 @@ export class WukongConnection {
                 }
                 pending.operation.ack(id, reason);
               }
-            } else if (kind === 9)
-              throw new ImConnectionError(`IM_SERVER_DISCONNECTED_${reader.byte()}`, false);
+            }
           }
         } catch (error) {
           this.#ready = false;

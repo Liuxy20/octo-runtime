@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { generateKeyPairSync } from "node:crypto";
+import { generateKeyPairSync, randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import load from "../packages/octo-runtime-extra-channel-gateway/dist/extra.js";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/application/im-channel.js";
@@ -18,7 +18,7 @@ import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gatewa
 const bot = (patch = {}) => ({
   bot_id: "state-machine-bot",
   api_url: "https://im-test.deepminer.com.cn/api",
-  bf_token: "bf_fixture",
+  bf_token: `bf_${randomUUID()}`,
   adapter: { adapter_type: "codex", workdir: process.cwd() },
   ...patch
 });
@@ -72,7 +72,7 @@ function fixture(t, options = {}) {
 for (const code of [
   "IM_CREDENTIALS_REQUIRED",
   "IM_AUTH_HTTP_401",
-  "IM_REGISTER_HTTP_409",
+  "IM_REGISTER_HTTP_403",
   "IM_CONNECT_REJECTED_2"
 ]) {
   test(`initial terminal failure ${code} never retries`, async (t) => {
@@ -103,6 +103,50 @@ for (const code of ["IM_CONNECT_TIMEOUT", "IM_AUTH_NETWORK_ERROR", "IM_REGISTER_
     await f.tick(1);
     snapshot(f.runtime, "online");
     assert.equal(f.attempts.length, 2);
+  });
+}
+
+for (const error of [
+  new Error("dependency unavailable"),
+  new Error("IM_SERVICE_UNAVAILABLE"),
+  undefined
+]) {
+  test(`unclassified connection dependency failure ${error?.message ?? "undefined"} recovers`, async (t) => {
+    const f = fixture(t);
+    f.behavior(async () => {
+      throw error;
+    });
+    await f.runtime.start();
+    snapshot(
+      f.runtime,
+      "retrying",
+      error?.message === "IM_SERVICE_UNAVAILABLE" ? error.message : "IM_CONNECTION_FAILED"
+    );
+    f.behavior(async () => {});
+    await f.tick(5000);
+    snapshot(f.runtime, "online");
+    assert.equal(f.attempts.length, 2);
+  });
+}
+
+for (const code of [
+  "IM_CREDENTIALS_REQUIRED",
+  "IM_BOT_TOKEN_INVALID",
+  "IM_BOT_IDENTITY_MISMATCH",
+  "IM_TENANT_NOT_ACTIVE",
+  "IM_AUTH_IDENTITY_INVALID",
+  "IM_REGISTRATION_INVALID",
+  "IM_WS_TLS_REQUIRED"
+]) {
+  test(`confirmed local rejection ${code} remains terminal`, async (t) => {
+    const f = fixture(t);
+    f.behavior(async () => {
+      throw new Error(code);
+    });
+    await f.runtime.start();
+    snapshot(f.runtime, "failed", code);
+    await f.tick(300000);
+    assert.equal(f.attempts.length, 1);
   });
 }
 
@@ -180,8 +224,8 @@ test("a disconnect during the first handshake cannot be overwritten by late succ
 test("terminal disconnects and unknown protocol failures stop recovery", async (t) => {
   const f = fixture(t);
   await f.runtime.start();
-  f.drop("IM_SERVER_DISCONNECTED_12", false);
-  snapshot(f.runtime, "failed", "IM_SERVER_DISCONNECTED_12");
+  f.drop("IM_SERVER_DISCONNECTED_2", false);
+  snapshot(f.runtime, "failed", "IM_SERVER_DISCONNECTED_2");
   await settle();
   await f.tick(30000);
   assert.equal(f.attempts.length, 1);
@@ -376,7 +420,7 @@ test("stopping an in-flight recovery suppresses its late result and old callback
   await closing;
   f.behavior(async () => {});
   await f.runtime.start();
-  old.callbacks.onDisconnect("IM_SERVER_DISCONNECTED_12", false);
+  old.callbacks.onDisconnect("IM_SERVER_DISCONNECTED_12", true);
   old.callbacks.onDiagnostic("IM_DELIVERY_FAILED");
   snapshot(f.runtime, "online");
   await f.tick(60000);
@@ -387,7 +431,7 @@ async function server(t) {
   let status = 200;
   const http = createServer((_req, res) => {
     res.writeHead(status);
-    res.end("private response bf_secret");
+    res.end("private response");
   });
   const ws = new WebSocketServer({ server: http });
   http.listen(0, "127.0.0.1");
@@ -402,7 +446,7 @@ async function server(t) {
     http,
     ws,
     url: `http://127.0.0.1:${port}`,
-    registration: { robot_id: "bot", im_token: "secret", ws_url: `ws://127.0.0.1:${port}` },
+    registration: { robot_id: "bot", im_token: randomUUID(), ws_url: `ws://127.0.0.1:${port}` },
     status: (value) => {
       status = value;
     }
@@ -428,7 +472,7 @@ function handshake() {
   return Buffer.concat([Buffer.from([0x20, body.length]), body]);
 }
 
-test("real WS protocol preserves kick reason and cannot report a closed socket as connected", async (t) => {
+test("real WS protocol preserves reconnectable reason 12 and cannot report a closed socket as connected", async (t) => {
   const s = await server(t);
   const disconnected = [];
   const client = new WukongConnection(
@@ -449,8 +493,48 @@ test("real WS protocol preserves kick reason and cannot report a closed socket a
   assert.equal(client.connected, false);
   assert.equal(disconnected.length, 1);
   assert.equal(disconnected[0].message, "IM_SERVER_DISCONNECTED_12");
-  assert.equal(disconnected[0].retryable, false);
+  assert.equal(disconnected[0].retryable, true);
 });
+
+// 按真实二进制帧核对两条入口，防止只改状态机 mock 而漏掉传输分类。
+for (const reason of [0, 2, 4, 8, 9, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 22, 23, 27, 255]) {
+  for (const phase of ["handshake", "disconnect", "early-disconnect"]) {
+    test(`${phase} reason ${reason} preserves recovery eligibility`, async (t) => {
+      const s = await server(t);
+      const retryable = ![2, 4, 8, 9, 11, 13, 19, 20, 21, 23, 27].includes(reason);
+      let reportDisconnect;
+      const disconnected = new Promise((resolve) => {
+        reportDisconnect = resolve;
+      });
+      const client = new WukongConnection(() => {}, reportDisconnect);
+      t.after(() => client.close());
+      s.ws.on("connection", (peer) =>
+        peer.once("message", () => {
+          if (phase === "handshake") {
+            peer.send(
+              Buffer.concat([Buffer.from([0x20, 9]), Buffer.alloc(8), Buffer.from([reason])])
+            );
+          } else if (phase === "early-disconnect") {
+            peer.send(Buffer.from([0x90, 3, reason, 0, 0]));
+          } else {
+            peer.send(handshake());
+          }
+        })
+      );
+      const code = `IM_${phase === "handshake" ? "CONNECT_REJECTED" : "SERVER_DISCONNECTED"}_${reason}`;
+      if (phase !== "disconnect") {
+        await assert.rejects(client.connect(s.registration), { message: code, retryable });
+      } else {
+        await client.connect(s.registration);
+        for (const peer of s.ws.clients) peer.send(Buffer.from([0x90, 3, reason, 0, 0]));
+        const error = await disconnected;
+        assert.equal(error.message, code);
+        assert.equal(error.retryable, retryable);
+      }
+      assert.equal(client.connected, false);
+    });
+  }
+}
 
 test("real handshake rejection preserves reason even without optional success fields", async (t) => {
   const s = await server(t);
@@ -487,7 +571,7 @@ test("missing heartbeat packets reports a retryable timeout and releases pending
   assert.equal(client.connected, false);
 });
 
-test("a success and terminal disconnect in the same WS packet cannot resolve a healthy connection", async (t) => {
+test("a success and reconnectable disconnect in the same WS packet cannot resolve a healthy connection", async (t) => {
   const s = await server(t);
   s.ws.on("connection", (peer) =>
     peer.once("message", () => {
@@ -496,24 +580,87 @@ test("a success and terminal disconnect in the same WS packet cannot resolve a h
   );
   const client = new WukongConnection(() => {});
   t.after(() => client.close());
-  await assert.rejects(client.connect(s.registration), { message: "IM_SERVER_DISCONNECTED_12" });
+  await assert.rejects(client.connect(s.registration), {
+    message: "IM_SERVER_DISCONNECTED_12",
+    retryable: true
+  });
   assert.equal(client.connected, false);
 });
 
 test("HTTP failures keep status and retry classification without exposing response bodies", async (t) => {
   const s = await server(t);
-  for (const status of [401, 403, 409, 429, 503]) {
+  const token = `bf_${randomUUID()}`;
+  for (const [status, retryable] of [
+    [302, false],
+    [400, false],
+    [401, false],
+    [403, false],
+    [404, false],
+    [405, false],
+    [408, true],
+    [409, true],
+    [410, false],
+    [415, false],
+    [421, true],
+    [422, false],
+    [423, true],
+    [425, true],
+    [426, false],
+    [429, true],
+    [451, false],
+    [499, true],
+    [500, true],
+    [502, true],
+    [503, true],
+    [504, true],
+    [599, true]
+  ]) {
     s.status(status);
-    await assert.rejects(registerBot(s.url, "bf_secret"), (error) => {
+    await assert.rejects(registerBot(s.url, token), (error) => {
       assert.equal(error.message, `IM_REGISTER_HTTP_${status}`);
-      assert.equal(error.retryable, status === 429 || status === 503);
-      assert.doesNotMatch(JSON.stringify(error), /bf_secret|private response/);
+      assert.equal(error.retryable, retryable);
+      assert.equal(JSON.stringify(error).includes(token), false);
+      assert.doesNotMatch(JSON.stringify(error), /private response/);
       return true;
     });
-    await assert.rejects(verifyBotIdentity(s.url, "bf_secret", AbortSignal.timeout(1000)), {
-      message: `IM_AUTH_HTTP_${status}`
+    await assert.rejects(verifyBotIdentity(s.url, token, AbortSignal.timeout(1000)), {
+      message: `IM_AUTH_HTTP_${status}`,
+      retryable
     });
   }
+});
+
+test("authentication and registration redirects stay terminal without forwarding credentials", async (t) => {
+  let forwarded = 0;
+  const target = createServer((_req, res) => {
+    forwarded++;
+    res.end("{}");
+  });
+  target.listen(0, "127.0.0.1");
+  await once(target, "listening");
+  const source = createServer((_req, res) => {
+    res.writeHead(307, { Location: `http://127.0.0.1:${target.address().port}/redirected` });
+    res.end();
+  });
+  source.listen(0, "127.0.0.1");
+  await once(source, "listening");
+  t.after(async () => {
+    for (const server of [source, target]) {
+      server.closeAllConnections();
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+  const url = `http://127.0.0.1:${source.address().port}`;
+  const token = `bf_${randomUUID()}`;
+  await assert.rejects(registerBot(url, token), {
+    message: "IM_REGISTER_HTTP_307",
+    retryable: false
+  });
+  await assert.rejects(verifyBotIdentity(url, token, AbortSignal.timeout(1000)), {
+    message: "IM_AUTH_HTTP_307",
+    retryable: false
+  });
+  assert.equal(forwarded, 0);
 });
 
 test("HTTP body interruptions remain retryable while malformed JSON is terminal", async (t) => {
@@ -535,11 +682,11 @@ test("HTTP body interruptions remain retryable while malformed JSON is terminal"
   const url = `http://127.0.0.1:${http.address().port}`;
   for (const invalid of [false, true]) {
     malformed = invalid;
-    await assert.rejects(registerBot(url, "bf_fixture"), {
+    await assert.rejects(registerBot(url, `bf_${randomUUID()}`), {
       message: invalid ? "IM_REGISTRATION_INVALID" : "IM_REGISTER_NETWORK_ERROR",
       retryable: !invalid
     });
-    await assert.rejects(verifyBotIdentity(url, "bf_fixture", AbortSignal.timeout(1000)), {
+    await assert.rejects(verifyBotIdentity(url, `bf_${randomUUID()}`, AbortSignal.timeout(1000)), {
       message: invalid ? "IM_AUTH_IDENTITY_INVALID" : "IM_AUTH_NETWORK_ERROR",
       retryable: !invalid
     });

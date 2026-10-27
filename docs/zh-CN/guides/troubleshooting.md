@@ -8,7 +8,7 @@
 
 使用 `octo-runtime channel-gateway logs --lines 200 --json` 读取服务状态，添加 `--follow` 观察连接和重试转换，Ctrl+C退出。仅包含Extra生命周期、Kernel可用性和连接状态，不含聊天正文、session/run/message标识、模型输出、工具参数或凭据。命令只读 `<home>/logs/extras/<extra>-status-<UTC小时>.log`，Kernel离线或模块配置损坏时仍可读取；最多读取最近三份中的4MiB，每份上限100MiB。空日志成功并向stderr提示。
 
-CLI Extra同时将状态写stdout。原生SDK默认静默，可在绝对路径 `logging.directory` 旁提供 `logging.statusOutput(record)`；文件与有界stdout均尽力诊断，不阻塞恢复。Gateway首次暂态离线及后续暂态断线等待5、10、15秒，之后每15秒；Retry-After可延长。认证失败和包含reason12的终端踢线需诊断，不自动争抢。IM在线不证明执行或投递成功。
+CLI Extra同时将状态写stdout。原生SDK默认静默，可在绝对路径 `logging.directory` 旁提供 `logging.statusOutput(record)`；文件与有界stdout均尽力诊断，不阻塞恢复。Gateway首次暂态离线及后续暂态断线等待5、10、15秒，之后每15秒；Retry-After可延长。合法服务端 DISCONNECT 默认重连，包含 reason 12、滚动更新和未知断开码；明确认证、权限、封禁及协议错误仍停止。握手未知服务端原因、HTTP 超时/冲突/限流/5xx 及未知服务故障默认重试，只有明确认证/配置/协议错误停止。5/10/15 秒仅是旧连接回收后的等待；静默断网每 25 秒检查、超过 90 秒无包才发现，还需鉴权握手，不能保证 20 秒内上线。IM在线不证明执行或投递成功。
 
 | 现象或错误码                    | 处理步骤                                                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |

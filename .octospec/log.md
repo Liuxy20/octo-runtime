@@ -1,5 +1,11 @@
 # 工程知识变更记录
 
+## 2026-10-27
+
+- [#198 本地长时模拟](tasks/198-gateway-reconnect/local-simulation.md)：CLI/SDK 真实时钟验证监听端口停机/恢复和静默丢包，各约 170 秒通过；停机时持续 5/10/15 秒退避，静默检测约 100 秒，恢复流量后约 5 秒上线并回复。验证默认重试修复，保留静默检测非 20 秒的限制。
+
+- [Issue 198](journal/shared/2026-10-27-198-gateway-reconnect.md)：按用户明确的单实例断网、滚动更新与服务 SLA 默认重试要求，修正 Gateway 的 DISCONNECT、CONNACK、HTTP 和未分类连接异常；只有明确永久拒绝停止。独立 worktree 实施，按后续授权提交 PR 到 main，未部署；自动化证据与实际断网未验范围分别记录。
+
 ## 2026-10-26
 
 - [PR #187 P2](journal/shared/2026-10-26-182-channel-artifact-delivery.md#pr-187-p2展示收尾期间的停止空窗)：用户确认最终交付完成前 stop 仍有效，保留已确认模型终态；提前注册交付取消控制器，补上 presentation finish 等待空窗。旧实现 2 条 stop 用例失败，修复后 5/5 通过，全量 Node 1868 通过、54 跳过；产品决策见[设计](tasks/182-channel-artifact-delivery/design.md#pr-187完成后的停止行为)。
