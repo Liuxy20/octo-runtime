@@ -1,0 +1,23 @@
+baseline: f0bacb01590084523c21dc9996d05738c9a06a44
+initial_baseline: a7c33b64064b8a54f59f70178873983ba143c1b3
+rules:
+  - architecture
+  - protocol-design
+  - extras
+  - runtime-lifecycle
+  - engineering
+  - collaboration
+  - channel-integration
+  - context-input
+  - invoke-input
+  - local-execution
+  - openclaw
+  - output-protocol
+  - session-reset
+  - stateless-execution
+sources:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/194
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/185
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/196
+  - .octospec/tasks/192-global-extra-discovery/brief.md
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/197#pullrequestreview-5661276320

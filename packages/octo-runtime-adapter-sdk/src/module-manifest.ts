@@ -12,6 +12,8 @@ export interface AdapterModuleEntry {
   sourceManifest: string;
 }
 export interface ExtraModuleEntry {
+  /** 可选独立命令入口；与服务模块使用同一个清单来源解析。 */
+  commands?: string;
   name: string;
   module: string;
   sourceManifest: string;
@@ -52,7 +54,12 @@ export function parseModuleManifest(
     const entry = record(value, `extras[${index}]`);
     const name = text(entry.name, "extra.name");
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new TypeError("extra.name is invalid");
-    return { name, module: text(entry.module, "extra.module"), sourceManifest };
+    return {
+      name,
+      module: text(entry.module, "extra.module"),
+      sourceManifest,
+      ...(entry.commands === undefined ? {} : { commands: text(entry.commands, "extra.commands") })
+    };
   });
   unique(adapters, (entry) => entry.type, "adapter.type");
   unique(extraEntries, (entry) => entry.name, "extra.name");

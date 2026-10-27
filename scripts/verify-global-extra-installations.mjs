@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -51,7 +51,10 @@ async function packExtra(name, suffix) {
       name,
       version: "1.0.0",
       type: "module",
-      exports: { ".": { import: "./entry.js", require: "./never.cjs" } }
+      exports: {
+        ".": { import: "./entry.js", require: "./never.cjs" },
+        "./commands": "./commands.js"
+      }
     })
   );
   await writeFile(
@@ -65,6 +68,17 @@ export default function extra(ctx, config) { return () => {
 `
   );
   await writeFile(join(directory, "never.cjs"), "throw new Error('WRONG_EXPORT_CONDITION');");
+  await writeFile(
+    join(directory, "commands.js"),
+    `export default { apiVersion: 1, commands: [{
+  name: 'configure', description: 'Save fixture configuration',
+  options: [{ name: 'marker', type: 'string', required: true, description: 'Fixture output' }],
+  async run(ctx, input) {
+    const snapshot = await ctx.readConfig();
+    return { value: { ...await ctx.saveConfig({ marker: input.options.marker }, snapshot.revision) } };
+  }
+}] };`
+  );
   const packed = JSON.parse(
     command(npmCli, ["pack", "--json", "--ignore-scripts"], { cwd: directory })
   );
@@ -73,9 +87,15 @@ export default function extra(ctx, config) { return () => {
 async function exercise(entry, label, name, launcher) {
   const home = join(root, `${label}-home`),
     marker = join(root, `${label}-${name}.json`);
-  command(entry, ["extraset", name, "--home", home], {
-    input: JSON.stringify({ config: { marker } })
-  });
+  assert.match(command(entry, ["--home", home, "--help"]), new RegExp(name));
+  assert.match(command(entry, ["--home", home, name, "configure", "--help"]), /--marker/);
+  const saved = JSON.parse(
+    command(entry, ["--home", home, name, "configure", "--marker", marker, "--json"])
+  );
+  assert.equal(saved.saved, true);
+  assert.equal(saved.reload_required, true);
+  const stored = JSON.parse(command(entry, ["extraget", name, "--home", home]));
+  assert.deepEqual(stored.config, { marker });
   let output;
   try {
     const args = [name, "run", "--json", "--home", home];
@@ -97,10 +117,20 @@ async function exercise(entry, label, name, launcher) {
   assert.equal(loaded.name, name);
   assert.match(output, new RegExp(`Discovered global Extra "${name}"`));
   assert.ok(loaded.origin.includes("entry.js"));
-  const expectedOrigin = join(root, label.startsWith("npm") ? "npm-custom" : "pnpm-store");
-  assert.ok(fileURLToPath(loaded.origin).startsWith(expectedOrigin), loaded.origin);
+  // pnpm 可从共享 store 链接，也可在活动安装组中物化包；两种位置都属于本测试环境。
+  // 使用目录边界比较，不能让相同字符串前缀或另一个包管理器的环境蒙混过关。
+  const expectedOrigins = label.startsWith("npm")
+    ? [join(root, "npm-custom")]
+    : [join(root, "pnpm-store"), join(env.PNPM_HOME, "global", "v11")];
+  assert.ok(
+    expectedOrigins.some((directory) => {
+      const inside = relative(directory, fileURLToPath(loaded.origin));
+      return inside.split(sep)[0] !== ".." && !isAbsolute(inside);
+    }),
+    loaded.origin
+  );
   // 名称和工厂都通过正式 CLI 验证，fixture 随后主动失败，避免管理器或后台进程副作用。
-  console.log(`${label}: ${name} discovered, ESM imported and initializer reached`);
+  console.log(`${label}: ${name} discovered, commands saved config, ESM initializer reached`);
   return loaded.cliEntry;
 }
 try {

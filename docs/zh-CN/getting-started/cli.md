@@ -74,11 +74,92 @@ octo-runtime executor-kernel uninstall
 
 全局参数包括 `--home <path>`、`--profile <name>` 和 `--manifest <path>`。操作同一个服务时使用相同的 Home；profile 选择该 Home 内的配置，不会另建一个 Kernel 服务。默认 Home 在 macOS/Linux 上为 `~/.octo-runtime`；Windows 设置了 `LOCALAPPDATA` 时为 `%LOCALAPPDATA%\OctoRuntime`，也可以通过 `OCTO_RUNTIME_HOME` 覆盖。
 
-CLI 从内置清单加 `<Home>/manifest.json` 选择 Adapter 和 Extra。两份均含 `adapters` 和 `extras`；声明 Extra 不等于启用或启动。`--manifest` 完整替换两份来源。格式、解析锚点和旧 Extra `module` 字段迁移见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
+CLI 从内置清单和 `<Home>/manifest.json` 选择 Adapter 与 Extra，还会发现当前 CLI 同一全局安装环境中的 Extra；优先级为内置 > Home > 全局。声明或发现 Extra 不等于启用或启动。`--manifest` 完整替换这些来源。格式、解析锚点和旧 Extra `module` 字段迁移见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
 
-## 配置 Octo IM Gateway
+## 配置三个内置 Extra
 
-Bot 通过 `channel-gateway` Extra 接入。保存声明时把占位值全部替换掉：
+首选 `configure`，无需手动拼 JSON。以下示例替换占位值后使用；业务参数和配置字段同名。
+
+### channel-gateway
+
+```sh
+octo-runtime channel-gateway configure \
+  --bot_id assistant \
+  --api_url https://im.example.com/api \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --bf_token "<BOT_TOKEN>"
+```
+
+每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
+
+可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。
+
+### channel-wecom
+
+```sh
+octo-runtime channel-wecom configure \
+  --bot_id assistant \
+  --ws_url wss://openws.work.weixin.qq.com \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --app_secret "<APP_SECRET>"
+```
+
+每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
+
+可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。 `--ws_url` 可省略：更新保留旧地址，新 Bot 使用官方默认地址。
+
+### webui
+
+```sh
+octo-runtime webui configure \
+  --port 13888
+```
+
+`configure` 只接收 `--port`。首次会话文件为 `<home>/extras/webui/sessions.json`，已有路径和项目设置保留；同一 Home 只保存一份 WebUI 配置。自定义路径使用下方进阶 JSON 配置，字段仍为 `sessionStorePath`、`defaultProjectPath`。
+
+### 启动与帮助
+
+配置命令只保存，不自动启动、启用或重载。首次按需启动各组件；已有服务改配置后改用对应的 `restart`。
+
+```sh
+octo-runtime executor-kernel start
+octo-runtime channel-gateway start
+octo-runtime channel-wecom start
+octo-runtime webui start
+```
+
+```sh
+octo-runtime -h
+octo-runtime channel-gateway -h
+octo-runtime channel-gateway configure \
+  --help
+octo-runtime channel-wecom configure \
+  --help
+octo-runtime webui configure \
+  --help
+```
+
+根帮助只列 Extra 名称；进入 Extra 后查看其命令和参数。`--home`、`--manifest` 始终是全局参数，配置命令前后均可使用；Extra 配置属于 Home，不接受 `--profile`。完整用法见 [Extra 自有命令](../guides/extra-commands.md)。
+
+### 进阶：手动拼 JSON
+
+进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+
+```sh
+octo-runtime channel-gateway config set \
+  < channel-gateway-business.json
+octo-runtime channel-gateway config get
+
+octo-runtime extraset channel-gateway \
+  < channel-gateway-declaration.json
+octo-runtime extraget channel-gateway
+```
+
+`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+
+将上面命令中的名称换为 `channel-wecom` 或 `webui` 即可操作对应 Extra。完整声明示例：
 
 ```bash
 octo-runtime extraset channel-gateway <<'JSON'
@@ -90,7 +171,7 @@ octo-runtime extraset channel-gateway <<'JSON'
         "api_url": "https://im-test.deepminer.com.cn/api",
         "bot_id": "<OCTO_BOT_ID>",
         "bot_name": "local-assistant",
-        "bf_token": "bf_REPLACE_WITH_REAL_BOT_TOKEN",
+        "bf_token": "<BOT_TOKEN>",
         "adapter": {
           "adapter_type": "codex",
           "workdir": "/absolute/workspace"
@@ -112,16 +193,7 @@ octo-runtime extraset channel-gateway <<'JSON'
 JSON
 ```
 
-保存不会连接 Bot、不会安装插件，也不会重启组件。每次 `extraset` 都整体替换声明，不按 `bot_id` 合并，多个 Bot 要放进同一个 `config.bots` 数组。`module` 可以省略；写了就必须和有效 manifest 一致。POSIX 配置文件权限为 `0600`。
-
-后台 Gateway 正在运行时，改完配置执行：
-
-```bash
-octo-runtime channel-gateway restart
-octo-runtime status
-```
-
-`extraget channel-gateway` 会返回含凭据的完整配置，输出不要贴进日志。
+`module` 可省略；提供时必须与有效清单一致。多个 Bot 必须全部写在 `config.bots` 中；`extraset` 不做 configure 的按 ID 更新。POSIX 文件权限为 `0600`。
 
 ### Provider 与准入
 
@@ -137,7 +209,7 @@ octo-runtime status
 octo-runtime <extra-name> install|start|restart|stop|status|uninstall|logs
 ```
 
-`<extra-name>` 可以是 `channel-gateway`、`channel-wecom`、`webui`，或通过 `extraset` 保存的名称。这些动作沿用 Kernel 的自启与就绪规则；Extra 可以先于 Kernel 启动，此时报告 Kernel 不可用，Kernel 上线后自动恢复。
+`<extra-name>` 可以是 `channel-gateway`、`channel-wecom`、`webui`，或有效模块清单/全局发现中的其他名称。这些动作沿用 Kernel 的自启与就绪规则；Extra 可以先于 Kernel 启动，此时报告 Kernel 不可用，Kernel 上线后自动恢复。
 
 ```bash
 octo-runtime channel-gateway logs --lines 200

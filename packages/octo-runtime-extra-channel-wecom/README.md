@@ -10,6 +10,34 @@ The optional `channel-wecom` Extra: connects WeCom bots over their own WebSocket
 - Your SDK host owns the Extra lifecycle and Kernel endpoint.
 - You want CLI deployment: save a `channel-wecom` declaration, then use `octo-runtime channel-wecom start`; its service is independent of `channel-gateway`.
 
+## Common CLI commands
+
+Replace the placeholders, configure the Extra, then start its independent service as needed:
+
+```sh
+octo-runtime channel-wecom configure \
+  --bot_id assistant \
+  --ws_url wss://openws.work.weixin.qq.com \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --app_secret "<APP_SECRET>"
+```
+
+Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
+
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
+
+```sh
+octo-runtime channel-wecom start
+octo-runtime channel-wecom status
+octo-runtime channel-wecom restart
+octo-runtime channel-wecom stop
+octo-runtime channel-wecom configure \
+  --help
+```
+
+Configuration only saves the file; it does not start or reload services. Use `start` for first use and `restart` after changing a running service. Agent execution also requires a separately started `executor-kernel`.
+
 ## Host it
 
 ```ts
@@ -26,7 +54,21 @@ export async function startWeCom(endpoint: string, config: JsonObject) {
 
 Stable Extra name: `channel-wecom`.
 
-## Configuration
+## Advanced: JSON configuration and SDK fields
+
+Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+
+```sh
+octo-runtime channel-wecom config set \
+  < channel-wecom-business.json
+octo-runtime channel-wecom config get
+
+octo-runtime extraset channel-wecom \
+  < channel-wecom-declaration.json
+octo-runtime extraget channel-wecom
+```
+
+`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
 ```json
 {

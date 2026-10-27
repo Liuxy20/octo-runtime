@@ -10,3 +10,4 @@ export * from "./extra-service.js";
 export * from "./endpoint.js";
 export * from "./home.js";
 export * from "./identity.js";
+export * from "./extra-commands.js";

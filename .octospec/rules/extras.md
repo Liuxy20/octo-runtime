@@ -84,3 +84,11 @@ Issue93新增组件状态专用白名单：可选非JSON `logging.statusOutput(r
 三个内置插件为 channel-gateway、channel-wecom 和 webui，都从主包 /extras/<name> 公开模块导入，并复用函数式入口。公开配置 Schema 从主包 /extras/<name>/config-schema.json 获取。没有 Extra 也可执行本地请求。
 
 验证：[生命周期](../../test/host-sdk-lifecycle.test.js)、[实际依赖与启动](../../test/extra-startup.test.js)、[插件加载器](../../test/extras.test.js)、[SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。真实 IM 与平台证据单独记录。
+
+## Extra 自有命令
+
+CLI 可选加载所选模块的 `/commands`（apiVersion:1）；文件模块通过同一 manifest 条目的 commands 指定入口。全局发现的命令与服务复用同一安装身份校验，包被移除或替换后拒绝回退到祖先同名包。根帮助只读目录，详细帮助不运行 handler、不启动服务。业务参数、认证、校验与身份去重由 Extra 决定；CLI 负责 Home、IO、取消和持久化，SDK 原生服务不加载命令模块。生命周期名称与宿主选项保留；--home/--manifest 即使位于子命令后，也由 CLI 全局解析并在加载命令前选定来源，Extra 不声明同名参数。重复参数拒绝，-- 后只解释为字面位置参数。损坏扩展不阻断其他 Extra 或普通离线生命周期。
+
+命令只更新现有存储外壳内的 config，保留 enabled/module。交互在锁外进行，保存在与 extraset 相同的锁中比对整份声明修订，冲突拒绝，原子写入保持原权限。锁与回收锁均须原子发布可验证的所有者，进程退出后可恢复；不得按时间或无所有者标记删除活跃写入者的锁。保存必须报告重启才能应用，不隐式启用或启动。Gateway/WeCom configure 按 bot_id 更新或追加，改 endpoint 仍更新原项；旧跨 endpoint 同 ID 项合并为一项并保留首项省略字段。WeCom 更新省略 ws_url 保留原值，新 Bot 省略才使用官方地址；完整 config set 拒绝重复身份，WebUI 按 Home 内 webui 单例更新。去重不进入通用宿主层。内置 configure 的参数与存储字段同名（渠道字段使用 snake_case），adapter_type 等执行字段写入 Bot 的 adapter 对象；bf_token/app_secret 直接接收原文，省略保留已有值，不保留 credential-stdin 或旧业务参数别名。WebUI configure 只暴露 port，首次会话路径取 `<home>/extras/webui/sessions.json`，已有路径保留；高级 config set 维持原 JSON 字段。用法及开发合同见 [命令指南](../../docs/zh-CN/guides/extra-commands.md)。
+
+CLI 用户文档与各 Extra README 优先展示 configure 的核心参数和独立启停；手写业务 JSON 的 config set/get 与手写完整声明的 extraset/extraget 放进阶说明，明确两种整体替换均不执行 configure 的按 ID 更新。

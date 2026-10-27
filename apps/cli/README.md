@@ -13,12 +13,12 @@ octo-runtime status [--json]
 octo-runtime doctor
 octo-runtime adapter list
 octo-runtime adapter probe <type>
-octo-runtime extraset <name> < config.json
-octo-runtime extraget <name>
+octo-runtime <extra-name> configure [options]
+octo-runtime <extra-name> config get
 octo-runtime playboard < request.json
 ```
 
-通用参数：`--home PATH`、`--profile NAME`、`--manifest PATH`、`--json`。裸组件命令显示帮助，也可使用 `octo-runtime executor-kernel --help`。Extra 名称可为 channel-gateway、channel-wecom、webui 或 extraset 保存的名称。Extra 配置属于 Home，extraset/extraget 不接受 --profile。
+通用参数：`--home PATH`、`--profile NAME`、`--manifest PATH`、`--json`。裸组件命令显示帮助，也可使用 `octo-runtime executor-kernel --help`。Extra 名称可为 channel-gateway、channel-wecom、webui 或有效模块清单/全局发现中的其他名称。Extra 配置属于 Home，extraset/extraget 不接受 --profile。
 
 | 动作                           | 行为                                                                            |
 | ------------------------------ | ------------------------------------------------------------------------------- |
@@ -43,15 +43,58 @@ status/doctor/服务操作默认输出便于阅读的文本，`--json` 输出缩
 
 服务名包含规范化 Home 的 SHA-256 前 16 位及组件名。POSIX 端点在 Home/sockets 下；Windows 使用 Home hash 命名管道。不同 Home 和组件不共用服务 ID。
 
-## Extra 配置
+## Extra 配置（常用）
 
-```bash
-octo-runtime extraset channel-gateway < gateway.json
-octo-runtime channel-gateway restart
+核心配置直接使用参数，无需拼 JSON：
+
+```sh
+octo-runtime channel-gateway configure \
+  --bot_id assistant \
+  --api_url https://im.example.com/api \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --bf_token "<BOT_TOKEN>"
+
+octo-runtime channel-wecom configure \
+  --bot_id assistant \
+  --ws_url wss://openws.work.weixin.qq.com \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --app_secret "<APP_SECRET>"
+
+octo-runtime webui configure \
+  --port 13888
+```
+
+Gateway/WeCom 每次配置一个 Bot：同 bot_id 更新，新 ID 追加到 config.bots，省略字段和其他 Bot 保留；改变地址不新增同 ID。WeCom 省略 ws_url 时更新保留旧地址，新 Bot 使用官方默认。WebUI 只暴露 port，首次会话文件为 `<home>/extras/webui/sessions.json`，已有路径保留。
+
+渠道另支持 `--model`、`--effort`；OpenClaw 使用 `--adapter_type openclaw --provider_agent_id main`，不传 workdir。配置保存不自动启用、启动或重载；首次用 start，已运行服务改配置后用 restart。
+
+```sh
+octo-runtime channel-gateway start
+octo-runtime channel-wecom start
+octo-runtime webui start
+```
+
+根 `-h` 列出 Extra 名称，`<extra> -h` 查看命令，`<extra> configure -h` 查看参数。全局 --home/--manifest 可放在自有命令前后，不属于 Extra 业务参数。详细说明见 [Extra 自有命令](../../docs/zh-CN/guides/extra-commands.md)。
+
+## 进阶：手动拼 JSON
+
+进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+
+```sh
+octo-runtime channel-gateway config set \
+  < channel-gateway-business.json
+octo-runtime channel-gateway config get
+
+octo-runtime extraset channel-gateway \
+  < channel-gateway-declaration.json
 octo-runtime extraget channel-gateway
 ```
 
-gateway.json 可使用 `{ "config": { "bots": [] } }`，模块由 manifest 声明。旧 `module` 可保留，但必须与有效清单文字完全一致；自定义 Extra 可安装在同一全局环境，或加入 Home 清单，冲突明确提示迁移。每次整份替换，保存文件权限为 POSIX 0600。extraset 不打印凭据；extraget 按显式请求返回完整配置，路径写入 stderr。
+`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+
+`channel-gateway-business.json` 是业务对象，例如 `{ "bots": [] }`；`channel-gateway-declaration.json` 包含外壳，例如 `{ "config": { "bots": [] } }`。把名称换为 channel-wecom/webui 即可管理对应 Extra。模块通常由 manifest 提供；手写 module 时须与有效清单一致。配置文件保存为 POSIX 0600。
 
 ## 临时执行
 

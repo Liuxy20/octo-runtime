@@ -74,9 +74,90 @@ octo-runtime executor-kernel uninstall
 
 Global options are `--home <path>`, `--profile <name>`, and `--manifest <path>`. Use the same Home for commands targeting one service. A profile selects configuration within that Home; it does not create another Kernel service. The default Home is `~/.octo-runtime` on macOS/Linux and `%LOCALAPPDATA%\OctoRuntime` on Windows when `LOCALAPPDATA` is set; `OCTO_RUNTIME_HOME` overrides it.
 
-## Configure Octo IM Gateway
+## Configure the three built-in Extras
 
-A bot runs through the `channel-gateway` Extra. Save its declaration, replacing every placeholder:
+Use `configure` without constructing JSON manually. Replace the placeholders below; business options match configuration field names.
+
+### channel-gateway
+
+```sh
+octo-runtime channel-gateway configure \
+  --bot_id assistant \
+  --api_url https://im.example.com/api \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --bf_token "<BOT_TOKEN>"
+```
+
+Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
+
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`.
+
+### channel-wecom
+
+```sh
+octo-runtime channel-wecom configure \
+  --bot_id assistant \
+  --ws_url wss://openws.work.weixin.qq.com \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --app_secret "<APP_SECRET>"
+```
+
+Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
+
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
+
+### webui
+
+```sh
+octo-runtime webui configure \
+  --port 13888
+```
+
+`configure` accepts only `--port`. The initial session file is `<home>/extras/webui/sessions.json`; existing paths and project settings are preserved. There is one WebUI configuration per Home. Custom paths use the advanced JSON interface below, with the existing `sessionStorePath` and `defaultProjectPath` fields.
+
+### Start services and inspect help
+
+Configuration only saves; it does not start, enable, or reload services. Start each component as needed for first use; use its `restart` after changing a running service.
+
+```sh
+octo-runtime executor-kernel start
+octo-runtime channel-gateway start
+octo-runtime channel-wecom start
+octo-runtime webui start
+```
+
+```sh
+octo-runtime -h
+octo-runtime channel-gateway -h
+octo-runtime channel-gateway configure \
+  --help
+octo-runtime channel-wecom configure \
+  --help
+octo-runtime webui configure \
+  --help
+```
+
+Root help lists Extra namespaces; select an Extra to inspect its commands and options. `--home` and `--manifest` remain global and work before or after configuration commands. Extra configuration belongs to Home and does not accept `--profile`. See [Extra-owned commands](../guides/extra-commands.md).
+
+### Advanced: write JSON manually
+
+Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+
+```sh
+octo-runtime channel-gateway config set \
+  < channel-gateway-business.json
+octo-runtime channel-gateway config get
+
+octo-runtime extraset channel-gateway \
+  < channel-gateway-declaration.json
+octo-runtime extraget channel-gateway
+```
+
+`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
+
+Replace the name with `channel-wecom` or `webui` to manage those Extras. Example full declaration:
 
 ```bash
 octo-runtime extraset channel-gateway <<'JSON'
@@ -88,7 +169,7 @@ octo-runtime extraset channel-gateway <<'JSON'
         "api_url": "https://im-test.deepminer.com.cn/api",
         "bot_id": "<OCTO_BOT_ID>",
         "bot_name": "local-assistant",
-        "bf_token": "bf_REPLACE_WITH_REAL_BOT_TOKEN",
+        "bf_token": "<BOT_TOKEN>",
         "adapter": {
           "adapter_type": "codex",
           "workdir": "/absolute/workspace"
@@ -110,16 +191,7 @@ octo-runtime extraset channel-gateway <<'JSON'
 JSON
 ```
 
-Saving does not connect the bot, install the plugin, or restart the component. Every `extraset` replaces the whole declaration and never merges by `bot_id`, so all bots go into one `config.bots` array. `module` may be omitted, and when present it must match the effective manifest. On POSIX the file mode is `0600`.
-
-With a background Gateway running, apply the change and check the result:
-
-```bash
-octo-runtime channel-gateway restart
-octo-runtime status
-```
-
-`extraget channel-gateway` returns the full configuration including credentials; never paste its output into logs.
+`module` may be omitted; when provided, it must match the effective manifest. Include every Bot in `config.bots`; `extraset` does not perform configure’s ID-based updates. POSIX file permissions are `0600`.
 
 ### Provider and admission settings
 
@@ -135,7 +207,7 @@ octo-runtime status
 octo-runtime <extra-name> install|start|restart|stop|status|uninstall|logs
 ```
 
-`<extra-name>` is `channel-gateway`, `channel-wecom`, `webui`, or a name saved through `extraset`. These actions follow the same autostart and readiness rules as Kernel, and Extras may start before Kernel: they report Kernel unavailable and recover once it is up.
+`<extra-name>` is `channel-gateway`, `channel-wecom`, `webui`, or another name in the effective module catalog. These actions follow the same autostart and readiness rules as Kernel, and Extras may start before Kernel: they report Kernel unavailable and recover once it is up.
 
 ```bash
 octo-runtime channel-gateway logs --lines 200
@@ -162,7 +234,7 @@ Recovery acknowledges one manifest archive; it never kills unknown processes and
 
 ## Try One Invocation
 
-The CLI selects Adapters and Extras from its built-in manifest plus `<Home>/manifest.json`. Both have `adapters` and `extras`; declaring an Extra does not enable or start it. `--manifest` replaces both sources completely. See [Adapter and Extra Loading](../concepts/module-loading.md) for examples, resolution anchors and migration of legacy Extra `module` settings.
+The CLI selects Adapters and Extras from its built-in manifest and `<Home>/manifest.json`, and discovers Extras in the current CLI’s global installation environment. Priority is built-in > Home > global. Declaring or discovering an Extra does not enable or start it. `--manifest` replaces these sources completely. See [Adapter and Extra Loading](../concepts/module-loading.md) for examples, resolution anchors and migration of legacy Extra `module` settings.
 
 Create `request.json` with this content:
 

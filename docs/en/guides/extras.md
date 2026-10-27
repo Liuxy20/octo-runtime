@@ -1,5 +1,7 @@
 # Integrate Extras
 
+For CLI setup, use `<extra> configure` or `<extra> config set`. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
+
 [简体中文](../../zh-CN/guides/extras.md) | [Documentation](../README.md)
 
 An Extra connects a business system to Kernel. For example, an IM Extra receives chat messages, prepares invocation parameters, calls Kernel, and sends Agent replies back to chat. Direct SDK calls to Kernel do not need an Extra.

@@ -10,7 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./config-schema.json": "./config-schema.json"
+    "./config-schema.json": "./config-schema.json",
+    "./commands": {
+      "types": "./dist/commands.d.ts",
+      "import": "./dist/commands.js"
+    }
   },
   "files": [
     "dist",

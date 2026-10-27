@@ -1,5 +1,7 @@
 # 接入 Extra
 
+CLI 首选 `<extra> configure` 配置核心参数，或 `<extra> config set` 导入业务 JSON；用法、去重与重启语义见 [Extra 自有命令](extra-commands.md)。`extraset`/`extraget` 用于进阶的手写完整 JSON 声明。
+
 [English](../../en/guides/extras.md) | [文档目录](../README.md)
 
 Extra 用于把业务系统接到 Kernel。例如，IM Extra 接收聊天消息、准备调用参数、调用 Kernel，再把 Agent 回复发回聊天。直接使用 SDK 调用 Kernel 时，不需要 Extra。

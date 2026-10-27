@@ -121,6 +121,24 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
       "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home.",
     SERVICE_NOT_INSTALLED: "Run this component's install command, then start it.",
     NOT_INSTALLED: "Run this component's install command, then start it.",
+    EXTRA_COMMAND_FAILED:
+      "The Extra command failed. No private backend error is printed; check its input and configuration, then retry.",
+    EXTRA_CONFIG_CONFLICT:
+      "Configuration changed after this command read it. Read the latest configuration and retry.",
+    EXTRA_COMMAND_LOAD_FAILED:
+      "The selected Extra command module or one of its dependencies is broken. Check its package and commands export; lifecycle commands remain available.",
+    EXTRA_COMMAND_API_UNSUPPORTED:
+      "This CLI supports Extra command apiVersion 1. Install a compatible command extension.",
+    EXTRA_COMMAND_DEFINITION_INVALID:
+      "Command definitions must have unique names and valid options; lifecycle and host option names are reserved.",
+    EXTRA_COMMAND_NAMESPACE_CONFLICT:
+      "An Extra name conflicts with a Runtime command. Rename its manifest entry.",
+    EXTRA_COMMAND_NOT_FOUND:
+      "Unknown Extra command. Use <extra-name> --help to see available commands.",
+    EXTRA_COMMAND_CANCELLED:
+      "The command was cancelled. Any save that already completed remains persisted.",
+    EXTRA_COMMAND_STDIN_REQUIRED:
+      "Pipe the required input through stdin; do not put credentials in command arguments.",
     EXTRA_NOT_REGISTERED: "Save this Extra's declaration with extraset before starting it.",
     EXTRA_MANIFEST_DECLARATION_REQUIRED:
       "Install this Extra alongside the global Runtime, or add its name and module to the selected Home manifest.json (extras array), then retry.",

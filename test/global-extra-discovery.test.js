@@ -13,6 +13,7 @@ import { cliEntrypoint } from "../apps/cli/dist/cli-entrypoint.js";
 import { readExtra, setExtra } from "../apps/cli/dist/extras.js";
 import { runtimePaths } from "../apps/cli/dist/state.js";
 import { loadCliManifest } from "../apps/cli/dist/module-manifest.js";
+import { loadExtraCommands } from "../apps/cli/dist/extra-commands.js";
 import {
   parseModuleManifest,
   resolveAdapterModules
@@ -288,6 +289,38 @@ test("selected invalid exports/name and removed packages fail; discovery remains
     (error) =>
       error.message === "EXTRA_MODULE_LOAD_FAILED" &&
       error.cause.code === "ERR_PACKAGE_PATH_NOT_EXPORTED"
+  );
+});
+
+test("commands use the discovered installation without importing services or falling back after removal", async (t) => {
+  const root = await fixture(t),
+    { modules, entry } = await npm(join(root, "npm"));
+  const module = "octo-runtime-extra-command-source";
+  const metadata = { exports: { ".": "./import.js", "./commands": "./commands.js" } };
+  const directory = await extra(modules, module, {
+    body: 'throw new Error("service must not import")',
+    metadata
+  });
+  await writeFile(
+    join(directory, "commands.js"),
+    'export default { apiVersion: 1, commands: [{ name: "login", description: "Login", run: () => ({ value: "selected" }) }] };'
+  );
+  const [found] = await discoverGlobalExtras(() => {}, entry);
+  const extension = await loadExtraCommands(found);
+  assert.deepEqual(await extension.commands[0].run(), { value: "selected" });
+  await rm(directory, { recursive: true });
+  const ancestor = await extra(join(root, "node_modules"), module, { metadata });
+  await writeFile(join(ancestor, "commands.js"), 'throw new Error("ancestor must not import")');
+  await assert.rejects(
+    loadExtraCommands(found),
+    (error) => error.message === "EXTRA_COMMAND_LOAD_FAILED" && error.cause.code === "ENOENT"
+  );
+  await linkDir(ancestor, directory);
+  await assert.rejects(
+    loadExtraCommands(found),
+    (error) =>
+      error.message === "EXTRA_COMMAND_LOAD_FAILED" &&
+      error.cause.message === "GLOBAL_EXTRA_INSTALLATION_CHANGED"
   );
 });
 

@@ -59,6 +59,7 @@
 - [Issue 156：CLI 与 Extra 操作文档收敛](tasks/156-cli-docs/brief.md)：基于 PR #191 后的 main 修复 Extra 指南与 Skill 的安装、自启和组件路由说明；双语 CLI 入门补齐禁用与未安装行为。验证边界见[本轮记录](journal/shared/2026-10-27-156-cli-docs.md)。
 
 - [Issue 192：CLI 全局 Extra 自动发现](tasks/192-global-extra-discovery/brief.md)：独立 worktree 从最新 main 规划并实施，可执行性 97/100；npm/pnpm 来源隔离、延迟加载和包外安装验证，交付 PR 到 main，不自动合并。
+- [Issue 194：Extra 自有命令](tasks/194-extra-commands/brief.md)：独立 worktree 实现命令扩展与三个内置 Extra 核心配置，去重归业务、写盘归 CLI；[验证与边界](tasks/194-extra-commands/validation.md)及[verified-review](tasks/194-extra-commands/review.md)记录全量、发行包和审查修复。
 
 - [Issue 58：Windows CLI 兼容修复](tasks/58-windows-cli-signals/brief.md)：修复 foreground/module-loading/Playboard 的真实控制台测试、worker 关闭竞态及 Playboard 清理覆盖主结果；SDK 公共接口保持。验证结果见[实施记录](tasks/58-windows-cli-signals/implementation.md)。
 

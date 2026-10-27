@@ -16,6 +16,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./extra-commands": {
+      "types": "./dist/extra-commands.d.ts",
+      "import": "./dist/extra-commands.js"
     }
   },
   "dependencies": {

@@ -10,6 +10,34 @@ The Extra that puts an Octo IM bot in front of a running Kernel: bot credentials
 - You need private chat, groups and topics, interactive cards, or file delivery.
 - You are connecting WeCom instead: use [WeCom Channel](../octo-runtime-extra-channel-wecom/README.md).
 
+## Common CLI commands
+
+Replace the placeholders, configure the Extra, then start its independent service as needed:
+
+```sh
+octo-runtime channel-gateway configure \
+  --bot_id assistant \
+  --api_url https://im.example.com/api \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --bf_token "<BOT_TOKEN>"
+```
+
+Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
+
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`.
+
+```sh
+octo-runtime channel-gateway start
+octo-runtime channel-gateway status
+octo-runtime channel-gateway restart
+octo-runtime channel-gateway stop
+octo-runtime channel-gateway configure \
+  --help
+```
+
+Configuration only saves the file; it does not start or reload services. Use `start` for first use and `restart` after changing a running service. Agent execution also requires a separately started `executor-kernel`.
+
 ## Host it
 
 ```ts
@@ -26,7 +54,21 @@ export async function startGateway(endpoint: string, config: JsonObject) {
 
 `endpoint` is an existing Kernel endpoint; the Gateway never constructs or stops Kernel. Pass `dependencies.loadContexts` when you want per-turn business Context, and `dependencies.createSessionStore` when chat-to-session bindings must survive a restart.
 
-## Configuration
+## Advanced: JSON configuration and SDK fields
+
+Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+
+```sh
+octo-runtime channel-gateway config set \
+  < channel-gateway-business.json
+octo-runtime channel-gateway config get
+
+octo-runtime extraset channel-gateway \
+  < channel-gateway-declaration.json
+octo-runtime extraget channel-gateway
+```
+
+`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
 ```json
 {

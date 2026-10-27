@@ -394,7 +394,7 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 5. **合并先于加载。** Adapter 按 type、Extra 按 name，各自内置优先、用户追加；报告忽略的同名扩展且不解析、不导入、不调用其工厂。同一文件的重复键报错，空数组不触发全量回退。显式 --manifest 继续是完整替换，不隐式叠加默认与 Home 来源。
 6. **保留来源锚点。** 每个保留条目的相对路径和裸包名都以其原始 manifest 文件位置解析，不能在合并后改用另一来源的目录。裸包遵守默认 ESM node/import 条件及 exports；查找失败不再尝试 cwd、Kernel 或全局包目录。SDK 的直接 import 使用调用文件的 Node 原生解析，不经过此 CLI 清单逻辑。
 7. **依赖归装配入口。** Kernel、Core、Host SDK 的生产闭包不得反向引入具体 Provider 或业务 Extra；Adapter SDK、Protocol、共享传输等框架依赖可以保留。完整默认模块由 App/CLI 显式依赖。新增模块不能自动进入未选择它的 SDK 产品。
-8. **加载与激活分别定义。** Kernel 仅使用 adapters，不加载或管理 Extra；对应 Extra 显式启动且启用时才 import/initialize。未选模块不加载、不 probe，未启动 Extra 的缺包不阻塞 Kernel。已选 Adapter 保持现有探测合同，不因本约束新增另一套握手或能力目录。
+8. **加载与激活分别定义。** Kernel 仅使用 adapters，不加载或管理 Extra；对应 Extra 的服务入口显式启动且启用时才 import/initialize。CLI 可为选中 Extra 的帮助或自有命令单独导入无初始化副作用的 `/commands` 扩展；根帮助只读模块目录，命令执行不隐式启动服务。未选模块不加载、不 probe，未启动 Extra 的缺包不阻塞 Kernel。已选 Adapter 保持现有探测合同，不因本约束新增另一套握手或能力目录。
 9. **业务配置独立。** manifest 只声明模块，不存业务凭据、config、enabled、自启或函数依赖。CLI 的 Extra 配置仍由 `<Home>/extras/<name>/config.json` 管理。旧 module 声明与统一 manifest 的迁移必须明确报冲突，不能静默换实现、改写用户配置或重置身份。
 10. **两种接入共享执行和生命周期。** 保留 invoke、取消、排空、错误、Extra 独立关闭及资源所有权；不自动安装、不运行时热加载、不重放业务 Run。装配代码、双语文档和真实发行验证同步维护，不能以 workspace 导入成功替代包外验证。
 

@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { access, chmod, mkdir, open, readFile, rename, rm, rmdir } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { access, chmod, link, mkdir, open, readFile, rename, rm, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
@@ -330,36 +330,62 @@ async function writeFileAtomic(path: string, value: string): Promise<void> {
   }
 }
 
+/**
+ * 主锁和回收锁使用同一协议：先完整写入独占临时文件，再用硬链接原子发布 PID/随机身份。
+ * 发布前退出只留下不参与互斥的临时文件；发布后退出可按 PID 回收，不存在无 owner 窗口。
+ * 回收前先持有该锁自己的回收锁，并再次核对原记录，防止删除后来取得的锁。
+ * 回收者也可能退出，因此回收锁递归遵循同一协议；固定长度哈希避免路径随层级增长。
+ */
 async function acquireProcessLock(path: string): Promise<() => Promise<void>> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const record = `${JSON.stringify({ pid: process.pid, id: randomUUID() })}\n`;
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const handle = await open(temporary, "wx", 0o600);
+  try {
     try {
-      const handle = await open(path, "wx", 0o600);
-      await handle.writeFile(
-        `${JSON.stringify({ pid: process.pid, created_at: new Date().toISOString() })}\n`,
-        "utf8"
-      );
+      await handle.writeFile(record, "utf8");
+    } finally {
       await handle.close();
-      return async () => {
-        const owner = await readLockOwner(path);
-        if (owner === process.pid) await rm(path, { force: true });
-      };
-    } catch (error) {
-      if (!isNodeError(error, "EEXIST")) throw error;
-      const owner = await readLockOwner(path);
-      if (owner !== undefined && processAlive(owner)) {
-        throw new Error("SETUP_IN_PROGRESS", { cause: error });
-      }
-      await rm(path, { force: true });
     }
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await link(temporary, path);
+        return async () => {
+          if ((await readLockOwner(path))?.record === record) await rm(path, { force: true });
+        };
+      } catch (error) {
+        if (!isNodeError(error, "EEXIST")) throw error;
+        const owner = await readLockOwner(path);
+        // 旧格式的不完整记录仍需保守拒绝；不能根据时间猜测它已失效。
+        if (!owner || processAlive(owner.pid))
+          throw new Error("SETUP_IN_PROGRESS", { cause: error });
+        // 只哈希文件名，使同一 Home 的不同符号链接路径仍争用同一个回收锁。
+        const reclaim = join(
+          dirname(path),
+          `.reclaim-${createHash("sha256").update(basename(path)).digest("hex")}`
+        );
+        const release = await acquireProcessLock(reclaim);
+        try {
+          const current = await readLockOwner(path);
+          if (!current || current.record !== owner.record || processAlive(current.pid))
+            throw new Error("SETUP_IN_PROGRESS", { cause: error });
+          await rm(path, { force: true });
+        } finally {
+          await release();
+        }
+      }
+    }
+    throw new Error("could not acquire setup lock");
+  } finally {
+    await rm(temporary, { force: true });
   }
-  throw new Error("could not acquire setup lock");
 }
 
-async function readLockOwner(path: string): Promise<number | undefined> {
+async function readLockOwner(path: string): Promise<{ pid: number; record: string } | undefined> {
   try {
-    const value = JSON.parse(await readFile(path, "utf8")) as { pid?: unknown };
+    const record = await readFile(path, "utf8");
+    const value = JSON.parse(record) as { pid?: unknown };
     return typeof value.pid === "number" && Number.isSafeInteger(value.pid) && value.pid > 0
-      ? value.pid
+      ? { pid: value.pid, record }
       : undefined;
   } catch {
     return undefined;

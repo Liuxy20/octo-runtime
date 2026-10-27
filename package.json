@@ -47,6 +47,18 @@
     "./protocol": {
       "types": "./dist/public/protocol.d.ts",
       "import": "./dist/public/protocol.js"
+    },
+    "./extras/channel-gateway/commands": {
+      "types": "./dist/public/channel-gateway-commands.d.ts",
+      "import": "./dist/public/channel-gateway-commands.js"
+    },
+    "./extras/channel-wecom/commands": {
+      "types": "./dist/public/channel-wecom-commands.d.ts",
+      "import": "./dist/public/channel-wecom-commands.js"
+    },
+    "./extras/webui/commands": {
+      "types": "./dist/public/webui-commands.d.ts",
+      "import": "./dist/public/webui-commands.js"
     }
   },
   "bin": {

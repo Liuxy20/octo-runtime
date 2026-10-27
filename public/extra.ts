@@ -18,3 +18,4 @@ export type {
   ExtraDescriptor,
   StoredExtra
 } from "@mininglamp-oss/octo-runtime-host-sdk/extra-config";
+export * from "@mininglamp-oss/octo-runtime-host-sdk/extra-commands";

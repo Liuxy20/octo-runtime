@@ -1,3 +1,4 @@
+import { routeExtraCommand, commandError } from "./extra-commands.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -51,6 +52,8 @@ export interface CliDependencies extends ServiceControlOptions {
   /** CLI 入口选择前台组件的退出策略；仅确认命令类型，不表示服务 ready。 */
   onComponentRun?: () => void;
   logsSignal?: AbortSignal;
+  /** 自有命令的取消；不启动或停止任何服务。 */
+  commandSignal?: AbortSignal;
 }
 const components = ["executor-kernel", "channel-gateway"] as const;
 const builtinComponents: readonly string[] = [...components, "channel-wecom", "webui"];
@@ -61,6 +64,10 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
   let runningComponent: string | undefined;
   let statusOutput: StatusOutput | undefined;
   try {
+    const extraResult = await routeExtraCommand(args, dependencies, (value) => {
+      json = value;
+    });
+    if (extraResult !== undefined) return extraResult;
     const { flags, positional } = parse(args);
     if (
       flags["acknowledge-orphan-cleanup"] !== undefined &&
@@ -447,7 +454,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
   } catch (error) {
     if (runningComponent && context.logs)
       await recordStartupFailure(context.logs, runningComponent, error);
-    const failure = { ...describeError(error), ...context };
+    const failure = { ...(commandError(error) ?? describeError(error)), ...context };
     const code = failure.code;
     if (json)
       output(JSON.stringify({ error: failure }, null, context.action === "logs" ? undefined : 2));
@@ -455,15 +462,17 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
         `${[context.component, context.action].filter(Boolean).join(" ") || "octo-runtime"}: ${code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${failure.message}${context.logs ? `\nLogs: ${context.logs}` : ""}`
       );
-    return ["SERVICE_NOT_INSTALLED", "NOT_INSTALLED"].includes(code)
-      ? 3
-      : /INVALID|REQUIRED/.test(code)
-        ? 2
-        : /INCOMPLETE/.test(code)
-          ? 5
-          : /UNAVAILABLE|SERVICE_PROCESS_EXITED/.test(code)
-            ? 4
-            : 1;
+    return code === "EXTRA_COMMAND_CANCELLED"
+      ? 130
+      : ["SERVICE_NOT_INSTALLED", "NOT_INSTALLED"].includes(code)
+        ? 3
+        : /INVALID|REQUIRED|COMMAND_NOT_FOUND/.test(code)
+          ? 2
+          : /INCOMPLETE/.test(code)
+            ? 5
+            : /UNAVAILABLE|SERVICE_PROCESS_EXITED/.test(code)
+              ? 4
+              : 1;
   } finally {
     statusOutput?.close();
   }

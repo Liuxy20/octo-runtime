@@ -10,6 +10,28 @@ A local browser workbench as the optional `webui` Extra. It serves the UI, calls
 - You need a quick way to inspect sessions, adapters, directories, and streaming output.
 - You are building the actual product: use the SDK, not this.
 
+## Common CLI commands
+
+Replace the placeholders, configure the Extra, then start its independent service as needed:
+
+```sh
+octo-runtime webui configure \
+  --port 13888
+```
+
+`configure` accepts only `--port`. The initial session file is `<home>/extras/webui/sessions.json`; existing paths and project settings are preserved. There is one WebUI configuration per Home. Custom paths use the advanced JSON interface below, with the existing `sessionStorePath` and `defaultProjectPath` fields.
+
+```sh
+octo-runtime webui start
+octo-runtime webui status
+octo-runtime webui restart
+octo-runtime webui stop
+octo-runtime webui configure \
+  --help
+```
+
+Configuration only saves the file; it does not start or reload services. Use `start` for first use and `restart` after changing a running service. Agent execution also requires a separately started `executor-kernel`.
+
 ## Host it
 
 ```ts
@@ -26,16 +48,30 @@ export async function startWebUI(endpoint: string, config: JsonObject) {
 
 No React on the host side: the browser assets ship prebuilt in `dist/web`.
 
-## Configuration
+## Advanced: JSON configuration and SDK fields
+
+Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+
+```sh
+octo-runtime webui config set \
+  < webui-business.json
+octo-runtime webui config get
+
+octo-runtime extraset webui \
+  < webui-declaration.json
+octo-runtime extraget webui
+```
+
+`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without preserving omitted fields. Read commands return their complete JSON. Restart a running Extra after saving.
 
 | Field                | Notes                                                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `port`               | Defaults to `13888`. The listener is fixed to `127.0.0.1`.                                                         |
-| `sessionStorePath`   | Required and absolute. This is the one JSON file the Extra owns.                                                   |
+| `sessionStorePath`   | Required and absolute in SDK/manual JSON; CLI configure derives it on first use.                                                   |
 | `defaultProjectPath` | Defaults to `~/octo-runtime-workspace`. Projects are real directories on the service machine, not browser uploads. |
 | `context`            | Merged with each request's Context by namespace/name; request items replace the whole configured item.             |
 
-The CLI wraps these fields as `{ "module": "@mininglamp-oss/octo-runtime-extra-webui", "enabled": true, "config": { ... } }`; the SDK passes only `config`. Full declaration: [config-schema.json](config-schema.json). Save the declaration with `octo-runtime extraset webui`, then run the independent `octo-runtime webui start` service. Apply configuration changes with `octo-runtime webui restart`.
+The CLI wraps these fields as `{ "module": "@mininglamp-oss/octo-runtime-extra-webui", "enabled": true, "config": { ... } }`; the SDK passes only `config`. Full declaration: [config-schema.json](config-schema.json). Normally use `configure` above to construct the declaration; use `extraset` when managing JSON manually.
 
 ## Sessions
 
