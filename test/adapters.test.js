@@ -414,11 +414,62 @@ test("Codex command starts app-server over stdio", async (t) => {
     import.meta.url
   );
   const cases = [
-    { name: "absent CODEX_HOME with different HOME and USERPROFILE" },
     { name: "explicit CODEX_HOME", codexHome: explicitHome },
+    { name: "absent CODEX_HOME with different HOME and USERPROFILE" },
     { name: "empty CODEX_HOME", codexHome: "" },
     { name: "absent HOME on native Windows", unsetHome: true }
   ];
+  // 一个子进程隔离全部环境变化；每轮重置 HOME/CODEX_HOME，避免覆盖值泄漏到下一轮。
+  const env = { ...process.env };
+  for (const key of Object.keys(env)) {
+    if (["HOME", "USERPROFILE", "CODEX_HOME", "OCTO_TEST_SENTINEL"].includes(key.toUpperCase())) {
+      delete env[key];
+    }
+  }
+  env.USERPROFILE = profile;
+  env.HOME = home;
+  env.OCTO_TEST_SENTINEL = root;
+  const completed = JSON.parse(
+    execFileSync(
+      process.execPath,
+      [
+        "--input-type=module",
+        "--eval",
+        `import assert from "node:assert/strict";
+         import { homedir } from "node:os";
+         import { buildCodexCommand } from ${JSON.stringify(adapterUrl.href)};
+         const request = ${JSON.stringify({ ...request, workdir: root })};
+         const cases = ${JSON.stringify(
+           cases.map((scenario) => ({
+             ...scenario,
+             expectedHome: scenario.codexHome || join(nativeHome, ".codex")
+           }))
+         )};
+         const completed = [];
+         for (const scenario of cases) {
+           if (scenario.unsetHome && process.platform !== "win32") continue;
+           delete process.env.HOME;
+           delete process.env.CODEX_HOME;
+           if (!scenario.unsetHome) process.env.HOME = ${JSON.stringify(home)};
+           if (scenario.codexHome !== undefined) process.env.CODEX_HOME = scenario.codexHome;
+           assert.equal(homedir(), ${JSON.stringify(nativeHome)}, scenario.name);
+           const command = await buildCodexCommand(request);
+           try {
+             assert.equal(command.command, "codex", scenario.name);
+             assert.deepEqual(command.args, ["app-server", "--listen", "stdio://"], scenario.name);
+             assert.equal(command.cwd, request.workdir, scenario.name);
+             assert.equal(command.env.CODEX_HOME, scenario.expectedHome, scenario.name);
+             assert.equal(command.env.OCTO_TEST_SENTINEL, ${JSON.stringify(root)}, scenario.name);
+           } finally {
+             await command.cleanup();
+           }
+           completed.push(scenario.name);
+         }
+         console.log(JSON.stringify(completed));`
+      ],
+      { env, encoding: "utf8" }
+    )
+  );
   for (const scenario of cases) {
     await t.test(
       scenario.name,
@@ -426,41 +477,7 @@ test("Codex command starts app-server over stdio", async (t) => {
         skip:
           scenario.unsetHome && process.platform !== "win32" && "Windows native-profile fallback"
       },
-      () => {
-        // 原生 Home 取决于子进程环境；不能改全局环境或把 HOME/profile 合并来掩盖差异。
-        const env = { ...process.env };
-        for (const key of Object.keys(env)) {
-          if (["HOME", "USERPROFILE", "CODEX_HOME"].includes(key.toUpperCase())) delete env[key];
-        }
-        env.USERPROFILE = profile;
-        if (!scenario.unsetHome) env.HOME = home;
-        if (scenario.codexHome !== undefined) env.CODEX_HOME = scenario.codexHome;
-        const expectedHome = scenario.codexHome || join(nativeHome, ".codex");
-        execFileSync(
-          process.execPath,
-          [
-            "--input-type=module",
-            "--eval",
-            `import assert from "node:assert/strict";
-             import { homedir } from "node:os";
-             import { buildCodexCommand } from ${JSON.stringify(adapterUrl.href)};
-             const request = ${JSON.stringify({ ...request, workdir: root })};
-             assert.equal(homedir(), ${JSON.stringify(nativeHome)});
-             const command = await buildCodexCommand(request);
-             try {
-               assert.equal(command.command, "codex");
-               assert.deepEqual(command.args, ["app-server", "--listen", "stdio://"]);
-               assert.equal(command.cwd, request.workdir);
-               assert.equal(command.env.CODEX_HOME, ${JSON.stringify(expectedHome)});
-               assert.equal(command.env.HOME, process.env.HOME);
-               assert.equal(command.env.USERPROFILE, process.env.USERPROFILE);
-             } finally {
-               await command.cleanup();
-             }`
-          ],
-          { env, encoding: "utf8" }
-        );
-      }
+      () => assert.ok(completed.includes(scenario.name), scenario.name)
     );
   }
 });
