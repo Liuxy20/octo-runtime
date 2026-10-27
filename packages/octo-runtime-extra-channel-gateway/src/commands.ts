@@ -1,6 +1,5 @@
 import {
   ExtraCommandError,
-  configCommands,
   savedConfigResult,
   type ExtraCommandExtension,
   type JsonObject
@@ -45,7 +44,7 @@ function validate(config: JsonObject): void {
         "Each Bot requires an adapter object; configure maps --adapter_type/--workdir to it.",
       IM_WORKDIR_ABSOLUTE_REQUIRED: "Provide an absolute --workdir for a local adapter.",
       IM_OPENCLAW_WORKDIR_UNSUPPORTED:
-        "OpenClaw uses its own workspace; remove adapter.workdir using config set.",
+        "OpenClaw uses its own workspace; remove config.bots[].adapter.workdir using extraset.",
       IM_PROVIDER_AGENT_ID_UNSUPPORTED: "--provider_agent_id is supported only by OpenClaw.",
       IM_API_URL_INVALID:
         "Use a valid endpoint URL without credentials, query or fragment; insecure URLs are loopback-only.",
@@ -62,7 +61,7 @@ function validate(config: JsonObject): void {
     throw new ExtraCommandError(
       code,
       hints[code] ??
-        "Invalid Bot configuration. Check config set --help and this Extra's configuration schema."
+        "Invalid Bot configuration. Check configure --help and this Extra's configuration schema."
     );
   }
 }
@@ -143,8 +142,7 @@ const extension: ExtraCommandExtension = {
         validate(config);
         return savedConfigResult(await context.saveConfig(config, snapshot.revision));
       }
-    },
-    configCommands(validate)
+    }
   ]
 };
 export default extension;

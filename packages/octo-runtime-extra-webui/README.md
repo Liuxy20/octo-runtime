@@ -50,19 +50,15 @@ No React on the host side: the browser assets ship prebuilt in `dist/web`.
 
 ## Advanced: JSON configuration and SDK fields
 
-Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+Advanced usage: use the Extra’s `extraset/extraget` subcommands for a complete JSON declaration containing `config` and optional `module`/`enabled`. Business commands are defined by each Extra; built-in Extras no longer provide `config set/get`.
 
 ```sh
-octo-runtime webui config set \
-  < webui-business.json
-octo-runtime webui config get
-
-octo-runtime extraset webui \
+octo-runtime webui extraset \
   < webui-declaration.json
-octo-runtime extraget webui
+octo-runtime webui extraget
 ```
 
-`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without preserving omitted fields. Read commands return their complete JSON. Restart a running Extra after saving.
+`extraset` replaces the entire declaration without preserving omitted fields. Read commands return their complete JSON. Restart a running Extra after saving.
 
 | Field                | Notes                                                                                                              |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------ |

@@ -25,7 +25,7 @@ octo-runtime channel-wecom configure \
 
 Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
 
-Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
+On first configuration, omit `--model` and `--effort` to use the selected Harness framework's own defaults. Effort accepts low/medium/high/xhigh, subject to Harness support. Updates preserve existing values when these options are omitted; to restore defaults, remove the fields from the full declaration and save it with `extraset`. For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, also remove its old workdir through `extraset`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
 
 ```sh
 octo-runtime channel-wecom start
@@ -56,32 +56,39 @@ Stable Extra name: `channel-wecom`.
 
 ## Advanced: JSON configuration and SDK fields
 
-Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+Advanced usage: use the Extra’s `extraset/extraget` subcommands for a complete JSON declaration containing `config` and optional `module`/`enabled`. Business commands are defined by each Extra; built-in Extras no longer provide `config set/get`.
 
 ```sh
-octo-runtime channel-wecom config set \
-  < channel-wecom-business.json
-octo-runtime channel-wecom config get
-
-octo-runtime extraset channel-wecom \
+octo-runtime channel-wecom extraset \
   < channel-wecom-declaration.json
-octo-runtime extraget channel-wecom
+octo-runtime channel-wecom extraget
 ```
 
-`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
+`extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
 ```json
 {
-  "bots": [
-    {
-      "bot_id": "<BOT_ID>",
-      "app_secret": "<APP_SECRET>",
-      "adapter": { "adapter_type": "dsh", "workdir": "/absolute/workspace" },
-      "allowed_sender_ids": ["<USER_ID>"]
-    }
-  ]
+  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
+  "enabled": true,
+  "config": {
+    "bots": [
+      {
+        "bot_id": "<BOT_ID>",
+        "app_secret": "<APP_SECRET>",
+        "adapter": {
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
+        },
+        "allowed_sender_ids": ["<USER_ID>"]
+      }
+    ]
+  }
 }
 ```
+
+Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
 
 | Field                  | Notes                                                                                                                          |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -93,7 +100,7 @@ octo-runtime extraget channel-wecom
 | `allowed_sender_ids`   | Omitting it adds no sender restriction; `[]` denies everyone.                                                                  |
 | `authorized_space_ids` | Validated for shape only. It does not enforce Octo Space admission on WeCom messages — use WeCom's own sender policy.          |
 
-This block is the inner `config`. The CLI declaration wraps it as `{ "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom", "enabled": true, "config": { ... } }`; the SDK passes only `config`.
+This example is a complete CLI declaration for `channel-wecom-declaration.json`. The SDK receives only its inner `config` object.
 
 Full field list and limits: [config-schema.json](config-schema.json).
 

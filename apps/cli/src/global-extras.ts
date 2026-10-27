@@ -171,10 +171,13 @@ export async function discoverGlobalExtras(
       try {
         const name = match[1];
         assertExtraName(name);
-        if ((await metadata(path.join(directory, "package.json"))).name !== module)
-          throw new Error("PACKAGE_NAME_MISMATCH");
+        const packageInfo = await metadata(path.join(directory, "package.json"));
+        if (packageInfo.name !== module) throw new Error("PACKAGE_NAME_MISMATCH");
         found.push({
           name,
+          ...(typeof packageInfo.description === "string" && packageInfo.description.trim()
+            ? { description: packageInfo.description }
+            : {}),
           module,
           sourceManifest: path.join(path.dirname(modules), "package.json"),
           installation: { directory, realDirectory: await realpath(directory) }
@@ -221,7 +224,7 @@ export function mergeGlobalExtras(
     else {
       selected.set(entry.name, entry);
       report(
-        `Discovered global Extra "${entry.name}": selected ${origin(entry)}; configure with extraset, then start explicitly.`
+        `Discovered global Extra "${entry.name}": selected ${origin(entry)}; configure with "octo-runtime ${entry.name} extraset", then start explicitly.`
       );
     }
   }

@@ -72,55 +72,6 @@ export class ExtraCommandError extends Error {
   }
 }
 
-/** 共享 JSON 传输外壳；业务校验回调由各 Extra 提供，宿主不解释业务字段。 */
-export function configCommands(validate: (value: JsonObject) => void): ExtraCommand {
-  return {
-    name: "config",
-    description: "Read or replace business configuration (advanced JSON interface)",
-    commands: [
-      {
-        name: "set",
-        description:
-          "Replace business config from stdin JSON; preserves host fields; restart to apply",
-        async run(context) {
-          const snapshot = await context.readConfig();
-          let value: unknown;
-          try {
-            value = JSON.parse(await context.readStdin());
-          } catch (error) {
-            if (!(error instanceof SyntaxError)) throw error;
-            throw new ExtraCommandError(
-              "EXTRA_CONFIG_INVALID",
-              "stdin must contain one business JSON object, without the extraset envelope."
-            );
-          }
-          if (
-            !value ||
-            typeof value !== "object" ||
-            Array.isArray(value) ||
-            Object.hasOwn(value, "config")
-          )
-            throw new ExtraCommandError(
-              "EXTRA_CONFIG_INVALID",
-              "Expected a business JSON object, without the extraset envelope."
-            );
-          const config = value as JsonObject;
-          validate(config);
-          return savedConfigResult(await context.saveConfig(config, snapshot.revision));
-        }
-      },
-      {
-        name: "get",
-        description:
-          "Print business JSON INCLUDING CREDENTIALS; use only with a trusted destination",
-        async run(context) {
-          return { value: (await context.readConfig()).config };
-        }
-      }
-    ]
-  };
-}
-
 export type { JsonObject, JsonValue } from "./extras.js";
 
 /** 将宿主保存回执转换为明确的文本/JSON 输出；业务对象不参与回执识别。 */

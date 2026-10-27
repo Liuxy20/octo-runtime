@@ -1,3 +1,11 @@
+---
+type: Task
+title: DSH SDK 上游反馈
+description: 记录向 DSH 上游提交的进程生命周期与资源限制能力反馈。
+tags: [adapter, dsh, sdk, upstream]
+timestamp: 2026-10-26T00:00:00Z
+---
+
 ## Request
 
 Could the TypeScript SDK expose supported process-lifecycle ownership and configurable resource limits, so embedding applications can use the official SDK without downstream patches?

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-The Extra that puts an Octo IM bot in front of a running Kernel: bot credentials, the Wukong WebSocket, message admission, per-conversation sessions, `ctx.kernel.invoke`, and streaming replies back to the chat. It owns Octo IM only — WeCom is a separate Extra with its own lifecycle.
+The Extra that connects an Octo IM bot to local Agent execution: bot credentials, the Wukong WebSocket, message admission, per-conversation sessions, `ctx.kernel.invoke`, and streaming replies back to the chat. Gateway and Executor Kernel start independently. Gateway stays running while Kernel is unavailable and waits for recovery; Agent execution requires a reachable Kernel. WeCom uses a separate Extra.
 
 ## When to use it
 
@@ -11,6 +11,13 @@ The Extra that puts an Octo IM bot in front of a running Kernel: bot credentials
 - You are connecting WeCom instead: use [WeCom Channel](../octo-runtime-extra-channel-wecom/README.md).
 
 ## Common CLI commands
+
+Inspect the commands and examples provided by the installed version:
+
+```sh
+octo-runtime channel-gateway --help
+octo-runtime channel-gateway configure --help
+```
 
 Replace the placeholders, configure the Extra, then start its independent service as needed:
 
@@ -25,18 +32,33 @@ octo-runtime channel-gateway configure \
 
 Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
 
-Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`.
+On first configuration, omit `--model` and `--effort` to use the selected Harness framework's own defaults. Effort accepts low/medium/high/xhigh, subject to Harness support. Updates preserve existing values when these options are omitted; to restore defaults, remove the fields from the full declaration and save it with `extraset`. For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, also remove its old workdir through `extraset`.
 
 ```sh
 octo-runtime channel-gateway start
 octo-runtime channel-gateway status
 octo-runtime channel-gateway restart
 octo-runtime channel-gateway stop
-octo-runtime channel-gateway configure \
-  --help
+octo-runtime channel-gateway logs --lines 200
 ```
 
 Configuration only saves the file; it does not start or reload services. Use `start` for first use and `restart` after changing a running service. Agent execution also requires a separately started `executor-kernel`.
+
+Help lists shared commands before extension-owned commands:
+
+| Command     | Purpose                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `install`   | Register this service with autostart enabled by default; use `--autostart=false` to disable it. |
+| `uninstall` | Remove the service, preserving configuration and data.                                          |
+| `start`     | Install if needed, then start and wait for readiness.                                           |
+| `stop`      | Stop this service, preserving its autostart setting.                                            |
+| `restart`   | Restart an installed service and wait for readiness; does not install it.                       |
+| `run`       | Run in the foreground without registering a system service.                                     |
+| `status`    | Inspect service state and Gateway's public business status.                                     |
+| `logs`      | Read component status logs; supports `--follow`.                                                |
+| `extraset`  | Read and replace the complete JSON declaration from stdin.                                      |
+| `extraget`  | Print the complete JSON declaration, including credentials.                                     |
+| `configure` | Gateway-owned command to add or update one Bot by `bot_id`.                                     |
 
 ## Host it
 
@@ -56,19 +78,15 @@ export async function startGateway(endpoint: string, config: JsonObject) {
 
 ## Advanced: JSON configuration and SDK fields
 
-Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+Advanced usage: use the Extra’s `extraset/extraget` subcommands for a complete JSON declaration containing `config` and optional `module`/`enabled`. Business commands are defined by each Extra; built-in Extras no longer provide `config set/get`.
 
 ```sh
-octo-runtime channel-gateway config set \
-  < channel-gateway-business.json
-octo-runtime channel-gateway config get
-
-octo-runtime extraset channel-gateway \
+octo-runtime channel-gateway extraset \
   < channel-gateway-declaration.json
-octo-runtime extraget channel-gateway
+octo-runtime channel-gateway extraget
 ```
 
-`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
+`extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
 ```json
 {
@@ -85,11 +103,11 @@ octo-runtime extraget channel-gateway
         "adapter": {
           "adapter_type": "codex",
           "workdir": "/absolute/workspace",
-          "model": "gpt-6.1-sol",
+          "model": "<MODEL_ID>",
           "effort": "medium"
         },
         "approval_mode": "full_access",
-        "run_timeout_ms": 600000,
+        "run_timeout_ms": 86400000,
         "context": {
           "schema": "octo.context-envelope/v3",
           "items": [
@@ -116,7 +134,9 @@ octo-runtime extraget channel-gateway
 }
 ```
 
-This is the complete CLI declaration: `module`, `enabled`, and the plugin's own `config`. The SDK takes the inner object — `createExtraService({ endpoint, module, config: declaration.config, dependencies })` — and ignores `enabled`, which only decides whether the CLI service starts the plugin.
+Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
+
+This is the complete CLI declaration: required `config` and optional `module`/`enabled`. The effective module manifest normally provides `module`; an explicit value must match the selected module. The SDK receives only the business configuration: `createExtraService({ endpoint, module: gateway, config: declaration.config, dependencies })`. The CLI handles top-level `enabled`, while Gateway handles each Bot's `enabled`; they belong to different configuration levels.
 
 One bot is still `bots: [bot]`; there is no single-object form. Each `extraset` replaces the whole declaration — omitted fields are not carried over, and bots are not merged by `bot_id`. Limits: 64 bots, 64 in-flight management operations, 256 KiB per declaration.
 
@@ -126,7 +146,7 @@ One bot is still `bots: [bot]`; there is no single-object form. Each `extraset` 
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `api_url`, `bot_id`           | Required. `api_url` points at Octo IM, for example `https://im-test.deepminer.com.cn/api`.                                                                         |
 | `bf_token`                    | Bot token supplied by the host. The plugin never reads credential files or a config center.                                                                        |
-| `adapter`                     | Required execution settings: `adapter_type`, `workdir`, `model`, and Provider-specific options.                                                                    |
+| `adapter`                     | Execution settings: `adapter_type`, `workdir`, and Provider-specific options. `model` and `effort` are optional Harness overrides.                                 |
 | `context`                     | Optional Context v3 envelope; empty `items` is legal.                                                                                                              |
 | `approval_mode`               | Defaults to `full_access`; the allowed range follows the selected Adapter.                                                                                         |
 | `groups_enabled`, `group_ids` | Groups and topics. Omitting `groups_enabled` or setting `true` enables them; private chat is never affected.                                                       |
@@ -140,7 +160,7 @@ Full field list, defaults, and limits: [config-schema.json](config-schema.json).
 ## Sessions and delivery
 
 - Chat-to-session bindings live in an `ImSessionStore`. The default `MemoryImSessionStore` is bounded and does not survive a restart; provide `createSessionStore(botConfig)` to persist them. The store never holds full Provider history and cannot resume an unfinished Run.
-- The plugin decides this turn's Context content and order. An empty Context is allowed; the host only validates, forwards, and renders it, and never backfills from chat history.
+- Gateway prepares this turn's Context before model execution. A new logical session may include recent chat preceding the trigger; group/topic history gaps are filled under fixed rules, capped at 15 messages and 1500 Unicode code points. Failure does not block the current task. Host/Adapter do not fetch chat history themselves; additional business investigation remains the Agent's task.
 - Files referenced in a successful final are uploaded as IM attachments: 20 MiB per file, 50 MiB per turn, 16 distinct files, 30 seconds of preparation. Partial failures keep the successful links and name the files that were not delivered.
 - A `session.update` from the Adapter is opaque Provider binding data, not application history.
 
@@ -152,7 +172,7 @@ Full field list, defaults, and limits: [config-schema.json](config-schema.json).
 
 ## CLI deployment
 
-Saved declarations live at `<home>/extras/channel-gateway/config.json` (POSIX `0600`). After editing one, run `octo-runtime channel-gateway restart` on a device with the background service installed, or `octo-runtime channel-gateway run` in the foreground. `octo-runtime status` reports the lifecycle, again not per-bot connectivity. Writing config does not install packages, connect immediately, or mutate a running instance.
+Saved declarations live at `<home>/extras/channel-gateway/config.json` (POSIX `0600`). After editing a running background service, use `octo-runtime channel-gateway restart`. For foreground operation, stop the old process before running `octo-runtime channel-gateway run` again. Both `octo-runtime status` and `octo-runtime channel-gateway status` show system service state, Kernel availability, and the Bot/task summaries returned by Gateway; add `--json` for the full public status. Service readiness and each Bot's connectivity remain separate facts. Saving configuration does not install packages, connect immediately, or change the running instance.
 
 ## Import and distribution
 

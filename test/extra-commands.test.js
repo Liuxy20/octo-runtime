@@ -50,12 +50,12 @@ test("Home options work before, between and after custom command arguments", asy
     assert.equal((await stored(home, "webui")).config.sessionStorePath, sessions);
   }
   for (const args of [
-    ["webui", "config", "--home", home, "get"],
-    ["webui", "config", "get", "--home", home]
+    ["webui", "--home", home, "extraget"],
+    ["webui", "extraget", "--home", home]
   ]) {
     const result = await rawCli(args);
     assert.equal(result.code, 0, result.errors);
-    assert.equal(JSON.parse(result.output).port, 13889);
+    assert.equal(JSON.parse(result.output).config.port, 13889);
   }
 });
 
@@ -251,14 +251,14 @@ for (const name of ["channel-gateway", "channel-wecom", "webui"]) {
   test(`${name}: all help levels are offline and do not create configuration`, async (t) => {
     const home = await fixture(t);
     for (const flag of ["-h", "--help"]) {
-      for (const path of [[], ["config"], ["config", "set"], ["configure"]]) {
+      for (const path of [[], ["extraset"], ["extraget"], ["configure"]]) {
         const result = await cli(home, [name, ...path, flag]);
         assert.equal(result.code, 0, result.errors);
         assert.match(result.output, /Usage:/);
       }
     }
     assert.match((await cli(home, [name, "--help"])).output, /configure/);
-    assert.match((await cli(home, [name, "config", "get", "-h"])).output, /INCLUDING CREDENTIALS/);
+    assert.match((await cli(home, [name, "extraget", "-h"])).output, /INCLUDING CREDENTIALS/);
     await assert.rejects(access(join(home, "extras")));
   });
 }
@@ -397,7 +397,10 @@ test("Legacy business aliases and WebUI path flags are rejected; advanced JSON k
     defaultProjectPath: home,
     port: 13890
   };
-  assert.equal((await cli(home, ["webui", "config", "set"], JSON.stringify(advanced))).code, 0);
+  assert.equal(
+    (await cli(home, ["webui", "extraset"], JSON.stringify({ config: advanced }))).code,
+    0
+  );
   assert.equal((await cli(home, ["webui", "configure", "--port", "13891"])).code, 0);
   assert.deepEqual((await stored(home, "webui")).config, { ...advanced, port: 13891 });
   const help = await cli(home, ["webui", "configure", "-h"]);
@@ -462,7 +465,7 @@ for (const name of ["channel-gateway", "channel-wecom"]) {
         { ...after[0], [endpointField]: `${scheme}://legacy.example.com/api` }
       ]
     };
-    assert.equal((await cli(home, [name, "config", "set"], JSON.stringify(legacy))).code, 0);
+    assert.equal((await cli(home, [name, "extraset"], JSON.stringify({ config: legacy }))).code, 0);
     assert.equal((await configure("one", `${scheme}://final.example.com/api`)).code, 0);
     const final = (await stored(home, name)).config.bots;
     assert.equal(final.length, 2);
@@ -493,8 +496,13 @@ test("WebUI keeps one configuration and supports JSON replacement/get and legacy
   const envelope = await cli(home, ["extraget", "webui"]);
   assert.deepEqual(JSON.parse(envelope.output), await stored(home, "webui"));
   const business = { sessionStorePath: join(home, "second.json"), port: 15555 };
-  assert.equal((await cli(home, ["webui", "config", "set"], JSON.stringify(business))).code, 0);
-  assert.deepEqual(JSON.parse((await cli(home, ["webui", "config", "get"])).output), business);
+  assert.equal(
+    (await cli(home, ["webui", "extraset"], JSON.stringify({ config: business }))).code,
+    0
+  );
+  assert.deepEqual(JSON.parse((await cli(home, ["webui", "extraget"])).output), {
+    config: business
+  });
   assert.equal((await cli(home, ["webui", "configure", "--port", "65536"])).code, 2);
   assert.deepEqual((await stored(home, "webui")).config, business);
 });
@@ -509,26 +517,27 @@ test("Invalid input, duplicates, profile, oversized input and credentials never 
     bf_token: token
   };
   assert.equal(
-    (await cli(home, ["channel-gateway", "config", "set"], JSON.stringify({ bots: [bot] }))).code,
+    (await cli(home, ["channel-gateway", "extraset"], JSON.stringify({ config: { bots: [bot] } })))
+      .code,
     0
   );
   const before = await readFile(configPath(home, "channel-gateway"), "utf8");
   for (const body of [
-    JSON.stringify({ bots: [bot, bot] }),
-    JSON.stringify({ bots: [{ ...bot, api_url: token }] }),
-    JSON.stringify({ config: { bots: [bot] } }),
+    JSON.stringify({ bots: [bot] }),
+    JSON.stringify({ config: [], enabled: true }),
+    JSON.stringify({ config: {}, enabled: token }),
     token,
     "x".repeat(1024 * 1024 + 1)
   ]) {
-    const result = await cli(home, ["channel-gateway", "config", "set", "--json"], body);
+    const result = await cli(home, ["channel-gateway", "extraset", "--json"], body);
     assert.notEqual(result.code, 0);
     assert.ok(!result.output.includes(token));
     assert.ok(!result.errors.includes(token));
     assert.equal(await readFile(configPath(home, "channel-gateway"), "utf8"), before);
   }
   for (const args of [
-    ["--profile", "work", "channel-gateway", "config", "set"],
-    ["channel-gateway", "config", "set", "--profile", "work"],
+    ["--profile", "work", "channel-gateway", "extraset"],
+    ["channel-gateway", "extraset", "--profile", "work"],
     [
       "channel-gateway",
       "configure",
@@ -570,12 +579,15 @@ test("CAS preserves concurrent extraset updates; cancellation preserves config; 
   assert.equal(await readFile(paths.setupLock, "utf8"), "");
 });
 
-test("Cancellation while waiting on config stdin releases the command without saving", async (t) => {
-  const home = await fixture(t);
+test("Cancellation while waiting on custom command stdin releases it without saving", async (t) => {
+  const home = await external(
+    t,
+    'export default {apiVersion:1,commands:[{name:"read",description:"Read input",async run(ctx){await ctx.readStdin();}}]};'
+  );
   const input = new PassThrough(),
     controller = new AbortController();
   t.after(() => input.destroy());
-  const pending = cli(home, ["channel-gateway", "config", "set"], "", {
+  const pending = cli(home, ["loop-daemon", "read"], "", {
     input,
     commandSignal: controller.signal
   });
@@ -852,12 +864,12 @@ test("A custom command named json is not mistaken for a host flag", async (t) =>
   assert.deepEqual(JSON.parse(result.output), { ok: true });
 });
 
-test("config get always returns business JSON even when it contains a saved field", async (t) => {
+test("extraget returns the full declaration even when business JSON contains a saved field", async (t) => {
   const home = await fixture(t);
   const config = { sessionStorePath: join(home, "sessions.json"), saved: true };
-  assert.equal((await cli(home, ["webui", "config", "set"], JSON.stringify(config))).code, 0);
-  const result = await cli(home, ["webui", "config", "get"]);
-  assert.deepEqual(JSON.parse(result.output), config);
+  assert.equal((await cli(home, ["webui", "extraset"], JSON.stringify({ config }))).code, 0);
+  const result = await cli(home, ["webui", "extraget"]);
+  assert.deepEqual(JSON.parse(result.output), { config });
 });
 
 test("Concurrent stale-lock recovery cannot delete a newly acquired writer lock", async (t) => {

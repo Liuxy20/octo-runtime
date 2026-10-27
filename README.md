@@ -48,29 +48,54 @@ octo-runtime --help
 
 ### 2. Configure
 
-To use an Octo IM Bot, save its Gateway configuration. Replace the API URL, Bot ID and token with values for your environment. This example uses an authenticated Codex installation; use `claude-code` for Claude Code.
+To use an Octo IM Bot, choose either configuration method below. Replace the API URL, Bot ID, token and absolute workspace path with values for your environment. Both examples use an installed, authenticated Codex Provider; use `claude-code` for Claude Code.
+
+#### Option A: configure one Bot
+
+`configure` adds a new Bot or updates the matching `bot_id`. It preserves omitted fields and other Bots.
 
 ```bash
-octo-runtime extraset channel-gateway <<'JSON'
-{
+octo-runtime channel-gateway configure \
+  --api_url https://im.example.com/api \
+  --bot_id '<BOT_ID>' \
+  --bf_token '<BOT_TOKEN>' \
+  --adapter_type codex \
+  --workdir /absolute/workspace \
+  --model '<MODEL_ID>' \
+  --effort medium
+```
+
+`--model` and `--effort` are optional. On first configuration, omit them to use the selected Harness framework's own defaults; updates preserve existing values when these flags are omitted.
+
+#### Option B: save a complete JSON declaration
+
+`extraset` replaces the whole declaration. Include every Bot and setting you want to retain; it does not merge by `bot_id` or preserve omitted fields. This `<<<` example works in Bash and Zsh.
+
+```bash
+octo-runtime channel-gateway extraset <<< '{
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
+  "enabled": true,
   "config": {
     "bots": [
       {
-        "api_url": "https://YOUR_OCTO_IM_HOST/api",
-        "bot_id": "YOUR_BOT_ID",
-        "bf_token": "bf_REPLACE_WITH_REAL_BOT_TOKEN",
+        "api_url": "https://im.example.com/api",
+        "bot_id": "<BOT_ID>",
+        "bf_token": "<BOT_TOKEN>",
         "adapter": {
-          "adapter_type": "codex"
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
         }
       }
     ]
   }
-}
-JSON
+}'
 ```
 
-Configuration is saved under your Runtime Home, normally `~/.octo-runtime` (`%LOCALAPPDATA%\OctoRuntime` on Windows). Bot workspaces default to `~/octo-runtime/channels/{bot_id}`. See the [Gateway guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/octo-runtime-extra-channel-gateway/README.md) for multiple Bots, permissions and other Provider settings. For a browser workspace or WeCom, use the [Extra configuration guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/.octospec/guides/extra-configuration.md).
+`model` and `effort` are optional: remove either field to use the selected Harness framework's own default. Replace `<MODEL_ID>` with a model supported by that Harness; supported effort values depend on the Harness. You can also use `octo-runtime channel-gateway extraset < channel-gateway.json` with the same complete JSON in a file. `octo-runtime channel-gateway extraget` returns the complete declaration, including credentials.
+
+Both methods save configuration without starting or reloading services. Configuration is saved under your Runtime Home, normally `~/.octo-runtime` (`%LOCALAPPDATA%\OctoRuntime` on Windows). If you omit `workdir`, Gateway defaults to `~/octo-runtime/channels/{bot_id}`. See the [Gateway guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/octo-runtime-extra-channel-gateway/README.md) for multiple Bots, permissions and other Provider settings. For a browser workspace or WeCom, use the [Extra configuration guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/.octospec/guides/extra-configuration.md).
 
 ### 3. Start
 

@@ -74,6 +74,8 @@ octo-runtime executor-kernel uninstall
 
 Global options are `--home <path>`, `--profile <name>`, and `--manifest <path>`. Use the same Home for commands targeting one service. A profile selects configuration within that Home; it does not create another Kernel service. The default Home is `~/.octo-runtime` on macOS/Linux and `%LOCALAPPDATA%\OctoRuntime` on Windows when `LOCALAPPDATA` is set; `OCTO_RUNTIME_HOME` overrides it.
 
+The global `--version` / `-v` flag prints the installed artifact's version, commit and build time. It works before or after commands, including Extra subcommands, without loading modules or requiring valid configuration. After `--`, it remains a literal argument.
+
 ## Configure the three built-in Extras
 
 Use `configure` without constructing JSON manually. Replace the placeholders below; business options match configuration field names.
@@ -91,7 +93,7 @@ octo-runtime channel-gateway configure \
 
 Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
 
-Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`.
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through the Extra’s `extraset`.
 
 ### channel-wecom
 
@@ -106,7 +108,7 @@ octo-runtime channel-wecom configure \
 
 Each call configures one Bot. Repeat it to update an existing `bot_id`, including its endpoint, or append a new ID to `config.bots`. Omitted fields and other Bots are preserved. Legacy entries sharing an ID across endpoints collapse into the first matching entry, preserving its omitted fields. Business option names match configuration fields; credentials are passed directly as strings.
 
-Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through `config set`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
+Optional options: `--model` and `--effort` (low/medium/high/xhigh). For OpenClaw use `--adapter_type openclaw` and `--provider_agent_id main`, without `--workdir`; when switching an existing local adapter, remove its old workdir through the Extra’s `extraset`. `--ws_url` is optional: updates preserve the existing endpoint; new Bots use the official default.
 
 ### webui
 
@@ -139,28 +141,24 @@ octo-runtime webui configure \
   --help
 ```
 
-Root help lists Extra namespaces; select an Extra to inspect its commands and options. `--home` and `--manifest` remain global and work before or after configuration commands. Extra configuration belongs to Home and does not accept `--profile`. See [Extra-owned commands](../guides/extra-commands.md).
+Root help retains the version, commit, and build time at the top. Commands prioritize `executor-kernel`, `channel-gateway`, `channel-wecom`, and `webui` when present, followed by other effective commands sorted by name. Extra help lists shared lifecycle and full JSON commands before extension-owned commands. A separate `Examples` section follows `Usage`. `--home` and `--manifest` remain global and work before or after configuration commands. Extra configuration belongs to Home and does not accept `--profile`. See [Extra-owned commands](../guides/extra-commands.md).
 
 ### Advanced: write JSON manually
 
-Advanced usage: use `config set/get` for manually written business JSON without an envelope, or `extraset/extraget` for a complete declaration containing `config` and optional `module`/`enabled`.
+Advanced usage: use the Extra’s `extraset/extraget` subcommands for a complete JSON declaration containing `config` and optional `module`/`enabled`. Business commands are defined by each Extra; built-in Extras no longer provide `config set/get`.
 
 ```sh
-octo-runtime channel-gateway config set \
-  < channel-gateway-business.json
-octo-runtime channel-gateway config get
-
-octo-runtime extraset channel-gateway \
+octo-runtime channel-gateway extraset \
   < channel-gateway-declaration.json
-octo-runtime extraget channel-gateway
+octo-runtime channel-gateway extraget
 ```
 
-`config set` validates and replaces all business configuration while preserving host fields. `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
+`extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
-Replace the name with `channel-wecom` or `webui` to manage those Extras. Example full declaration:
+Each Extra has its own configuration schema. Complete Octo Gateway declaration:
 
 ```bash
-octo-runtime extraset channel-gateway <<'JSON'
+octo-runtime channel-gateway extraset <<'JSON'
 {
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
   "config": {
@@ -172,7 +170,9 @@ octo-runtime extraset channel-gateway <<'JSON'
         "bf_token": "<BOT_TOKEN>",
         "adapter": {
           "adapter_type": "codex",
-          "workdir": "/absolute/workspace"
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
         },
         "context": {
           "schema": "octo.context-envelope/v3",
@@ -190,6 +190,35 @@ octo-runtime extraset channel-gateway <<'JSON'
 }
 JSON
 ```
+
+Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
+
+Complete WeCom declaration:
+
+```bash
+octo-runtime channel-wecom extraset <<'JSON'
+{
+  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
+  "enabled": true,
+  "config": {
+    "bots": [
+      {
+        "bot_id": "<WECOM_BOT_ID>",
+        "app_secret": "<APP_SECRET>",
+        "adapter": {
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
+        }
+      }
+    ]
+  }
+}
+JSON
+```
+
+Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
 
 `module` may be omitted; when provided, it must match the effective manifest. Include every Bot in `config.bots`; `extraset` does not perform configure’s ID-based updates. POSIX file permissions are `0600`.
 

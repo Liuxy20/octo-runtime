@@ -134,12 +134,13 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     EXTRA_COMMAND_NAMESPACE_CONFLICT:
       "An Extra name conflicts with a Runtime command. Rename its manifest entry.",
     EXTRA_COMMAND_NOT_FOUND:
-      "Unknown Extra command. Use <extra-name> --help to see available commands.",
+      "Unknown command. Use --help on the service command to see available subcommands.",
     EXTRA_COMMAND_CANCELLED:
       "The command was cancelled. Any save that already completed remains persisted.",
     EXTRA_COMMAND_STDIN_REQUIRED:
       "Pipe the required input through stdin; do not put credentials in command arguments.",
-    EXTRA_NOT_REGISTERED: "Save this Extra's declaration with extraset before starting it.",
+    EXTRA_NOT_REGISTERED:
+      "Save the service configuration using its configure or extraset subcommand before starting it.",
     EXTRA_MANIFEST_DECLARATION_REQUIRED:
       "Install this Extra alongside the global Runtime, or add its name and module to the selected Home manifest.json (extras array), then retry.",
     EXTRA_NAME_MISMATCH:

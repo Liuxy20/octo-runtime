@@ -1,4 +1,4 @@
-import { routeExtraCommand, commandError } from "./extra-commands.js";
+import { runExtraCommand, commandError } from "./extra-commands.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
@@ -19,7 +19,8 @@ import {
   type ExtraService
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { getExtra, readExtra, setExtra } from "./extras.js";
-import { cliVersionInfo, helpText } from "./help.js";
+import { cliVersionInfo } from "./help.js";
+import { parseCliCommand } from "./command-tree.js";
 import { runForegroundService } from "./foreground.js";
 import { showExtraLogs } from "./logs.js";
 import { StatusOutput } from "./status-output.js";
@@ -59,16 +60,23 @@ const components = ["executor-kernel", "channel-gateway"] as const;
 const builtinComponents: readonly string[] = [...components, "channel-wecom", "webui"];
 export async function runCli(args: string[], dependencies: CliDependencies = {}): Promise<number> {
   const output = dependencies.output ?? ((line: string) => process.stdout.write(`${line}\n`));
-  let json = args.includes("--json");
+  // 参数解析失败也按宿主布尔标记输出 JSON；-- 后的字面位置参数不选择输出格式。
+  const literalIndex = args.indexOf("--");
+  let json = (literalIndex < 0 ? args : args.slice(0, literalIndex)).some(
+    (arg) => arg === "--json" || arg.startsWith("--json=")
+  );
   let context: { component?: string; action?: string; logs?: string } = {};
   let runningComponent: string | undefined;
   let statusOutput: StatusOutput | undefined;
   try {
-    const extraResult = await routeExtraCommand(args, dependencies, (value) => {
-      json = value;
-    });
-    if (extraResult !== undefined) return extraResult;
-    const { flags, positional } = parse(args);
+    const parsed = await parseCliCommand(args, dependencies);
+    if (parsed.help !== undefined) {
+      output(parsed.help);
+      return 0;
+    }
+    const { flags, positional } = parsed;
+    json = Boolean(flags.json);
+    if (parsed.extra) return await runExtraCommand(parsed, dependencies);
     if (
       flags["acknowledge-orphan-cleanup"] !== undefined &&
       !(positional[0] === "executor-kernel" && positional[1] === "recover")
@@ -79,15 +87,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     json = Boolean(flags.json);
     if (flags.version || positional[0] === "version") {
       output(cliVersionInfo);
-      return 0;
-    }
-    if (flags.help || !positional.length || positional[0] === "help") {
-      output(helpText(builtinComponents.includes(positional[0]) ? positional[0] : undefined));
-      return 0;
-    }
-    // 裸组件帮助仅做词法校验，不读取配置或创建服务管理器。
-    if (positional.length === 1 && builtinComponents.includes(positional[0])) {
-      output(helpText(positional[0]));
       return 0;
     }
     const home = resolve(flags.home ?? defaultRuntimeHome(dependencies.env, dependencies.platform));
@@ -188,10 +187,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       builtinComponents.includes(name) ||
       registrations.some((entry) => entry.name === name) ||
       manifest?.extras.some((entry) => entry.name === name) === true;
-    if (positional.length === 1 && isComponent(positional[0])) {
-      output(helpText(positional[0]));
-      return 0;
-    }
     const service = resolveServiceControl(dependencies);
     const input = dependencies.input ?? process.stdin;
     const publish = (value: unknown, human?: string) =>
@@ -542,45 +537,3 @@ async function componentStatus(
   });
 }
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-function parse(args: string[]) {
-  const flags: Record<string, string> = {},
-    positional: string[] = [];
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i] === "-h" ? "--help" : args[i] === "-v" ? "--version" : args[i];
-    if (!arg.startsWith("-")) {
-      positional.push(arg);
-      continue;
-    }
-    const match = /^--([a-z-]+)(?:=(.*))?$/.exec(arg);
-    if (
-      !match ||
-      ![
-        "home",
-        "profile",
-        "manifest",
-        "json",
-        "help",
-        "version",
-        "autostart",
-        "lines",
-        "follow",
-        "acknowledge-orphan-cleanup"
-      ].includes(match[1]) ||
-      Object.hasOwn(flags, match[1])
-    )
-      throw new Error("INVALID_ARGUMENTS");
-    const key = match[1];
-    flags[key] = ["json", "help", "version", "follow", "acknowledge-orphan-cleanup"].includes(key)
-      ? "true"
-      : (match[2] ?? args[++i]);
-    if (key === "acknowledge-orphan-cleanup" && match[2] !== undefined)
-      throw new Error("INVALID_ARGUMENTS");
-    if (
-      !flags[key] ||
-      flags[key].startsWith("--") ||
-      (key === "autostart" && !["true", "false"].includes(flags[key]))
-    )
-      throw new Error("INVALID_ARGUMENTS");
-  }
-  return { flags, positional };
-}

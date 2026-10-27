@@ -83,6 +83,9 @@ importers:
       '@mininglamp-oss/octo-runtime-protocol':
         specifier: workspace:*
         version: link:packages/octo-runtime-protocol
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
       ws:
         specifier: ^8.22.0
         version: 8.22.0
@@ -186,6 +189,9 @@ importers:
       '@mininglamp-oss/octo-runtime-protocol':
         specifier: workspace:*
         version: link:../../packages/octo-runtime-protocol
+      commander:
+        specifier: ^15.0.0
+        version: 15.0.0
       json5:
         specifier: ^2.2.3
         version: 2.2.3

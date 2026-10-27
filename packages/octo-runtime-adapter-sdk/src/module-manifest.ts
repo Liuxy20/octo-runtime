@@ -12,6 +12,10 @@ export interface AdapterModuleEntry {
   sourceManifest: string;
 }
 export interface ExtraModuleEntry {
+  /** CLI 目录的静态用途说明；根帮助读取此字段，不导入服务或命令模块。 */
+  description?: string;
+  /** 公开的业务配置示例，仅供 CLI 帮助展示；不得包含真实凭据，不参与运行时默认值。 */
+  configExample?: Record<string, unknown>;
   /** 可选独立命令入口；与服务模块使用同一个清单来源解析。 */
   commands?: string;
   name: string;
@@ -56,6 +60,12 @@ export function parseModuleManifest(
     if (!/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new TypeError("extra.name is invalid");
     return {
       name,
+      ...(entry.description === undefined
+        ? {}
+        : { description: text(entry.description, "extra.description") }),
+      ...(entry.configExample === undefined
+        ? {}
+        : { configExample: record(entry.configExample, "extra.configExample") }),
       module: text(entry.module, "extra.module"),
       sourceManifest,
       ...(entry.commands === undefined ? {} : { commands: text(entry.commands, "extra.commands") })

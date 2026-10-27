@@ -50,19 +50,15 @@ export async function startWebUI(endpoint: string, config: JsonObject) {
 
 ## 进阶：JSON 配置与 SDK 字段
 
-进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准。
 
 ```sh
-octo-runtime webui config set \
-  < webui-business.json
-octo-runtime webui config get
-
-octo-runtime extraset webui \
+octo-runtime webui extraset \
   < webui-declaration.json
-octo-runtime extraget webui
+octo-runtime webui extraget
 ```
 
-`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不保留省略字段。读取命令返回完整对应 JSON。保存后仍需重启已运行的 Extra。
+`extraset` 直接替换整份声明，不保留省略字段。读取命令返回完整对应 JSON。保存后仍需重启已运行的 Extra。
 
 | 字段                 | 说明                                                                          |
 | -------------------- | ----------------------------------------------------------------------------- |

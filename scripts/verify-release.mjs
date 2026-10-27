@@ -254,14 +254,25 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const version = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;
     for (const args of [["--version"], ["-v"], ["version"]])
       assert.equal((await run(args)).stdout.trim(), version);
-    for (const args of [[], ["--help"], ["-h"], ["help"]])
-      assert.match((await run(args)).stdout, /executor-kernel|channel-gateway/);
+    for (const args of [[], ["--help"], ["-h"], ["help"]]) {
+      const help = (await run(args)).stdout;
+      assert.ok(
+        help.startsWith(
+          `Octo Runtime CLI (${metadata.version})\n${version.split("\n").slice(1).join("\n")}\n`
+        )
+      );
+      assert.match(help, /Examples:\n  octo-runtime executor-kernel start/);
+      assert.match(
+        help,
+        /Available Commands:\n  executor-kernel[^\n]*\n  channel-gateway[^\n]*\n  channel-wecom[^\n]*\n  webui/
+      );
+    }
     await assert.rejects(
       run(["daemon"]),
       (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stderr)
     );
     for (const component of ["executor-kernel", "channel-gateway"]) {
-      assert.match((await run([component])).stdout, /Usage:.*<command>/);
+      assert.match((await run([component])).stdout, /Usage:\s+octo-runtime .+\[command\]/);
       await assert.rejects(
         run([component, "restart", "--json"]),
         (error) =>
@@ -276,7 +287,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     assert.match(
       (await execute(command, ["--help"], { cwd: consumer, shell: process.platform === "win32" }))
         .stdout,
-      /Octo Runtime CLI/
+      /Manage the local Octo Agent runtime and independent services/
     );
     await assert.rejects(
       access(

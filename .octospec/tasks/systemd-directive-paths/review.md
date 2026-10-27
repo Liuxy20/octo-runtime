@@ -1,3 +1,11 @@
+---
+type: Task
+title: Issue 113 双轴审查
+description: 记录 systemd 路径指令修复的规范审查、需求审查和复核结论。
+tags: [linux, systemd, review]
+timestamp: 2026-10-23T00:00:00Z
+---
+
 # Issue #113 双轴审查
 
 - 固定基线：`fe19d350431534da4ed3a76f3466add4ced86d81`，已 fetch 并 rebase 最新 main。

@@ -45,7 +45,7 @@ Adapter/Extra 的装配方式统一遵守[基础架构中的 CLI 与 SDK 约束]
 
 宿主选择配置来源、持久化和凭据保护，SDK 只消费已解析的 JSON 值。JSON 不允许函数、循环引用、非 JSON 值。SDK 不读取宿主数据库或云端配置中心。配置、模块或函数引用变化时按“停止旧 Extra并确认完整 → 保存完整配置 → 创建新 Extra”处理，不恢复 onConfigure、局部 reconcile 或业务对象控制。
 
-CLI extraset 整份替换 <home>/extras/<name>/config.json，POSIX 0600；extraget 显式返回完整配置。配置属于 Home，不能以 profile 分区。应用使用 SDK 时无需这个文件。CLI 以注册名称独立管理各 Extra 服务；例如 channel-gateway/channel-wecom/webui，各自 install/start/restart/stop/status/run，自启也按组件设置。重启只影响对应 Extra，Kernel 和其他 Extra 不变。全局 status 逐个查询已配置 Extra 自身公开状态，不只查询进程或 Kernel。
+CLI `<extra> extraset` 整份替换 <home>/extras/<name>/config.json，POSIX 0600；`<extra> extraget` 显式返回完整配置。旧顶层 extraset/extraget 为隐藏兼容入口。配置属于 Home，不能以 profile 分区。应用使用 SDK 时无需这个文件。CLI 以注册名称独立管理各 Extra 服务；例如 channel-gateway/channel-wecom/webui，各自 install/start/restart/stop/status/run，自启也按组件设置。重启只影响对应 Extra，Kernel 和其他 Extra 不变。全局 status 逐个查询已配置 Extra 自身公开状态，不只查询进程或 Kernel。
 
 CLI 安装、自启、未安装与显式禁用的行为统一遵循[本地生命周期合同](runtime-lifecycle.md#cli)；Extra 操作指南和仓库 Skill 的示例须与该合同一致。SDK 原生装配不继承 CLI 的系统服务安装要求。
 
@@ -89,6 +89,14 @@ Issue93新增组件状态专用白名单：可选非JSON `logging.statusOutput(r
 
 CLI 可选加载所选模块的 `/commands`（apiVersion:1）；文件模块通过同一 manifest 条目的 commands 指定入口。全局发现的命令与服务复用同一安装身份校验，包被移除或替换后拒绝回退到祖先同名包。根帮助只读目录，详细帮助不运行 handler、不启动服务。业务参数、认证、校验与身份去重由 Extra 决定；CLI 负责 Home、IO、取消和持久化，SDK 原生服务不加载命令模块。生命周期名称与宿主选项保留；--home/--manifest 即使位于子命令后，也由 CLI 全局解析并在加载命令前选定来源，Extra 不声明同名参数。重复参数拒绝，-- 后只解释为字面位置参数。损坏扩展不阻断其他 Extra 或普通离线生命周期。
 
-命令只更新现有存储外壳内的 config，保留 enabled/module。交互在锁外进行，保存在与 extraset 相同的锁中比对整份声明修订，冲突拒绝，原子写入保持原权限。锁与回收锁均须原子发布可验证的所有者，进程退出后可恢复；不得按时间或无所有者标记删除活跃写入者的锁。保存必须报告重启才能应用，不隐式启用或启动。Gateway/WeCom configure 按 bot_id 更新或追加，改 endpoint 仍更新原项；旧跨 endpoint 同 ID 项合并为一项并保留首项省略字段。WeCom 更新省略 ws_url 保留原值，新 Bot 省略才使用官方地址；完整 config set 拒绝重复身份，WebUI 按 Home 内 webui 单例更新。去重不进入通用宿主层。内置 configure 的参数与存储字段同名（渠道字段使用 snake_case），adapter_type 等执行字段写入 Bot 的 adapter 对象；bf_token/app_secret 直接接收原文，省略保留已有值，不保留 credential-stdin 或旧业务参数别名。WebUI configure 只暴露 port，首次会话路径取 `<home>/extras/webui/sessions.json`，已有路径保留；高级 config set 维持原 JSON 字段。用法及开发合同见 [命令指南](../../docs/zh-CN/guides/extra-commands.md)。
+命令只更新现有存储外壳内的 config，保留 enabled/module。交互在锁外进行，保存在与 extraset 相同的锁中比对整份声明修订，冲突拒绝，原子写入保持原权限。锁与回收锁均须原子发布可验证的所有者，进程退出后可恢复；不得按时间或无所有者标记删除活跃写入者的锁。保存必须报告重启才能应用，不隐式启用或启动。Gateway/WeCom configure 按 bot_id 更新或追加，改 endpoint 仍更新原项；旧跨 endpoint 同 ID 项合并为一项并保留首项省略字段。WeCom 更新省略 ws_url 保留原值，新 Bot 省略才使用官方地址；完整 extraset 仅校验声明外壳，业务校验留给 Extra 加载，WebUI 按 Home 内 webui 单例更新。去重不进入通用宿主层。内置 configure 的参数与存储字段同名（渠道字段使用 snake_case），adapter_type 等执行字段写入 Bot 的 adapter 对象；bf_token/app_secret 直接接收原文，省略保留已有值，不保留 credential-stdin 或旧业务参数别名。WebUI configure 只暴露 port，首次会话路径取 `<home>/extras/webui/sessions.json`，已有路径保留；高级 extraset 将原业务 JSON 放在完整声明的 config 字段。用法及开发合同见 [命令指南](../../docs/zh-CN/guides/extra-commands.md)。
 
-CLI 用户文档与各 Extra README 优先展示 configure 的核心参数和独立启停；手写业务 JSON 的 config set/get 与手写完整声明的 extraset/extraget 放进阶说明，明确两种整体替换均不执行 configure 的按 ID 更新。
+CLI 用户文档与各 Extra README 优先展示 configure 的核心参数和独立启停；手写完整声明的 `<extra> extraset/extraget` 放进阶说明，明确整体替换不执行 configure 的按 ID 更新。内置 config set/get 与 configCommands 生成器已删除；业务子命令以 Extra 自己的声明为准。
+
+### CLI 命令展示
+
+CLI 使用 Commander 统一命令树、参数解析与帮助。根帮助只列有效目录中的实际命令及用途，不单独列 Extra namespace、Components 或占位路径。manifest 条目可提供 description，全局发现取 package.json.description；旧条目缺省时用通用说明。根帮助不导入模块，选择 Extra 后才导入其 commands，生命周期与 extraset/extraget 离线可用。每层仅一份 Usage 与命令列表，help 路径与 --help 共用定义。旧顶层 extraset/extraget 隐藏兼容，带目标名称的旧帮助指向组件下的路径。根帮助和 version/--version 均展示版本、commit、build；全局 -v/--version 在命令前后均有效，不依赖目录或插件，-- 后仍为字面参数。
+
+根命令优先显示 executor-kernel、channel-gateway、channel-wecom、webui，缺席的条目不补入目录，其余按名称排序。Extra 内先列公共命令，前六项为 install、uninstall、start、stop、restart、run，再列 status/logs/extraset/extraget，最后按声明顺序展示自有命令。Usage 后提供独立 Examples 区块；根示例只用有效目录和通用动作，插件示例来自已选命令的 examples，不能为根示例导入插件。
+
+组件与 extraset 帮助用 Bash/Zsh `<<<` 展示完整 JSON 声明，包含有效目录中对应的 module，便于识别配置用途；目录不可用时不猜造 module。相对模块路径不满足旧配置外壳合同，示例继续省略此可选字段。manifest 条目的可选 configExample 为公开业务配置示例，由 CLI 包入 config，不能作为运行时默认值或包含真实凭据。渲染器不按 Extra 名称拼业务字段，不读已存配置；离线 extraset 帮助尽量读目录元数据，目录损坏时退回通用声明外壳，动作仍不依赖目录或业务命令模块。

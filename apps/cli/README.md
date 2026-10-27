@@ -14,7 +14,8 @@ octo-runtime doctor
 octo-runtime adapter list
 octo-runtime adapter probe <type>
 octo-runtime <extra-name> configure [options]
-octo-runtime <extra-name> config get
+octo-runtime <extra-name> extraset < declaration.json
+octo-runtime <extra-name> extraget
 octo-runtime playboard < request.json
 ```
 
@@ -80,21 +81,17 @@ octo-runtime webui start
 
 ## 进阶：手动拼 JSON
 
-进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准；内置 Extra 不再提供 `config set/get`。
 
 ```sh
-octo-runtime channel-gateway config set \
-  < channel-gateway-business.json
-octo-runtime channel-gateway config get
-
-octo-runtime extraset channel-gateway \
+octo-runtime channel-gateway extraset \
   < channel-gateway-declaration.json
-octo-runtime extraget channel-gateway
+octo-runtime channel-gateway extraget
 ```
 
-`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
 
-`channel-gateway-business.json` 是业务对象，例如 `{ "bots": [] }`；`channel-gateway-declaration.json` 包含外壳，例如 `{ "config": { "bots": [] } }`。把名称换为 channel-wecom/webui 即可管理对应 Extra。模块通常由 manifest 提供；手写 module 时须与有效清单一致。配置文件保存为 POSIX 0600。
+`channel-gateway-declaration.json` 包含外壳，例如 `{ "config": { "bots": [] } }`。把名称换为 channel-wecom/webui 即可管理对应 Extra。模块通常由 manifest 提供；手写 module 时须与有效清单一致。配置文件保存为 POSIX 0600。
 
 ## 临时执行
 

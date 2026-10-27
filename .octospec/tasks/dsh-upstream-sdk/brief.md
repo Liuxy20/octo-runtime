@@ -1,3 +1,11 @@
+---
+type: Task
+title: DSH 改用未修改的官方 SDK
+description: 移除 DSH 下游 SDK 补丁，记录官方 SDK 接入边界与验收要求。
+tags: [adapter, dsh, sdk]
+timestamp: 2026-10-26T00:00:00Z
+---
+
 # DSH 改用未修改的官方 SDK
 
 ## 目标与授权

@@ -1,0 +1,25 @@
+baseline: aa16c894b2b2
+integration_baseline: f421f0e
+rules:
+  - architecture
+  - protocol-design
+  - adapter-metadata
+  - extras
+  - runtime-lifecycle
+  - invoke-input
+  - local-execution
+  - openclaw
+  - engineering
+  - collaboration
+  - context-input
+  - channel-integration
+  - output-protocol
+sources:
+  - apps/cli/src/help.ts
+  - apps/cli/src/extra-commands.ts
+  - packages/octo-runtime-host-sdk/src/extra-commands.ts
+  - https://github.com/tj/commander.js
+  - https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/octo-runtime-extra-channel-gateway/README.zh.md
+  - packages/octo-runtime-extra-channel-gateway/README.zh.md
+  - packages/octo-runtime-extra-channel-gateway/config-schema.json
+  - packages/octo-runtime-extra-channel-wecom/config-schema.json

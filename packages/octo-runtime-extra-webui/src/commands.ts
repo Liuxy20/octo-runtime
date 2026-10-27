@@ -2,7 +2,6 @@ import { isAbsolute, join } from "node:path";
 import { assertContextEnvelope } from "@mininglamp-oss/octo-runtime-protocol";
 import {
   ExtraCommandError,
-  configCommands,
   savedConfigResult,
   type ExtraCommandExtension,
   type JsonObject
@@ -16,7 +15,7 @@ function validate(config: JsonObject): void {
   if (typeof config.sessionStorePath !== "string" || !isAbsolute(config.sessionStorePath))
     throw new ExtraCommandError(
       "WEBUI_STORE_PATH_REQUIRED",
-      "config set requires sessionStorePath to be an absolute session JSON file path."
+      "config.sessionStorePath must refer to an absolute session JSON file path."
     );
   if (config.defaultProjectPath !== undefined && typeof config.defaultProjectPath !== "string")
     throw new ExtraCommandError(
@@ -48,7 +47,7 @@ const extension: ExtraCommandExtension = {
         const snapshot = await context.readConfig();
         const config = { ...snapshot.config };
         // 简化入口只暴露端口；首次会话存储从宿主 Home 推导，已有路径和项目配置保持。
-        // 高级 config set 仍按原 JSON 合同完整替换，不改存储字段名或隐式迁移数据。
+        // 高级 extraset 仍按完整声明的 JSON 合同替换，不改存储字段名或隐式迁移数据。
         if (config.sessionStorePath === undefined)
           config.sessionStorePath = join(context.home, "extras", context.name, "sessions.json");
         const port = input.options.port;
@@ -63,8 +62,7 @@ const extension: ExtraCommandExtension = {
         validate(config);
         return savedConfigResult(await context.saveConfig(config, snapshot.revision));
       }
-    },
-    configCommands(validate)
+    }
   ]
 };
 export default extension;

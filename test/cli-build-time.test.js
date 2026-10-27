@@ -6,7 +6,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
 
-test("artifact help metadata is stable across cwd/timezones and tolerates legacy or invalid build times", async (t) => {
+test("artifact version metadata is stable across cwd/timezones and tolerates legacy or invalid build times", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "octo-cli-build-time-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const dist = join(directory, "apps/cli/dist");
@@ -27,7 +27,7 @@ test("artifact help metadata is stable across cwd/timezones and tolerates legacy
         [
           "--input-type=module",
           "-e",
-          `const help = await import(${JSON.stringify(pathToFileURL(join(dist, "help.js")).href)}); console.log(JSON.stringify([help.cliVersionInfo, help.helpText()]));`
+          `const help = await import(${JSON.stringify(pathToFileURL(join(dist, "help.js")).href)}); console.log(JSON.stringify([help.cliVersionInfo, help.cliHelpHeader]));`
         ],
         { cwd: tmpdir(), env: { ...process.env, TZ: timezone }, encoding: "utf8" }
       )
@@ -37,9 +37,12 @@ test("artifact help metadata is stable across cwd/timezones and tolerates legacy
     await writeFile(metadataPath, JSON.stringify({ commit, dirty: true, buildTime }));
     const expected = `1.0.1\ncommit:${commit.slice(0, 12)} (dirty)\nbuild:${buildTime}`;
     for (const timezone of ["Asia/Shanghai", "Pacific/Honolulu"]) {
-      const [versionInfo, help] = readInfo(timezone);
+      const [versionInfo, helpHeader] = readInfo(timezone);
       assert.equal(versionInfo, expected);
-      assert.ok(help.includes(`\nbuild:${buildTime}\n`));
+      assert.equal(
+        helpHeader,
+        `Octo Runtime CLI (1.0.1)\ncommit:${commit.slice(0, 12)} (dirty)\nbuild:${buildTime}`
+      );
     }
   }
   for (const buildTime of [
@@ -53,6 +56,10 @@ test("artifact help metadata is stable across cwd/timezones and tolerates legacy
   ]) {
     await writeFile(metadataPath, JSON.stringify({ commit, dirty: false, buildTime }));
     assert.equal(readInfo("UTC")[0], `1.0.1\ncommit:${commit.slice(0, 12)}\nbuild:unknown`);
+    assert.equal(
+      readInfo("UTC")[1],
+      `Octo Runtime CLI (1.0.1)\ncommit:${commit.slice(0, 12)}\nbuild:unknown`
+    );
   }
   for (const content of ["{invalid", "null", "[]", "true", '{"commit":42}']) {
     await writeFile(metadataPath, content);
@@ -60,4 +67,5 @@ test("artifact help metadata is stable across cwd/timezones and tolerates legacy
   }
   await rm(metadataPath);
   assert.equal(readInfo("UTC")[0], "1.0.1\ncommit:unknown\nbuild:unknown");
+  assert.equal(readInfo("UTC")[1], "Octo Runtime CLI (1.0.1)\ncommit:unknown\nbuild:unknown");
 });

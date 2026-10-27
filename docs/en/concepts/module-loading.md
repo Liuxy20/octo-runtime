@@ -98,7 +98,7 @@ Install Runtime and the Extra with the same npm prefix or pnpm global environmen
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
 npm install -g @mininglamp-enterprise/octo-runtime-extra-loop-daemon
-octo-runtime extraset loop-daemon < loop-daemon.json
+octo-runtime loop-daemon extraset < loop-daemon.json
 octo-runtime loop-daemon start
 ```
 

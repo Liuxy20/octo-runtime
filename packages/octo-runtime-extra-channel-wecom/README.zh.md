@@ -25,7 +25,7 @@ octo-runtime channel-wecom configure \
 
 每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
 
-可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。 `--ws_url` 可省略：更新保留旧地址，新 Bot 使用官方默认地址。
+首次配置可省略 `--model`、`--effort`，使用所选 Harness 框架本身的默认值；`effort` 可选 low/medium/high/xhigh，实际支持由 Harness 决定。更新时省略这两项会保留旧值；恢复默认值需从完整声明中删除对应字段，再执行 `extraset`。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，同样通过 `extraset` 移除旧 workdir。`--ws_url` 可省略：更新保留旧地址，新 Bot 使用官方默认地址。
 
 ```sh
 octo-runtime channel-wecom start
@@ -56,32 +56,39 @@ export async function startWeCom(endpoint: string, config: JsonObject) {
 
 ## 进阶：JSON 配置与 SDK 字段
 
-进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准。
 
 ```sh
-octo-runtime channel-wecom config set \
-  < channel-wecom-business.json
-octo-runtime channel-wecom config get
-
-octo-runtime extraset channel-wecom \
+octo-runtime channel-wecom extraset \
   < channel-wecom-declaration.json
-octo-runtime extraget channel-wecom
+octo-runtime channel-wecom extraget
 ```
 
-`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
 
 ```json
 {
-  "bots": [
-    {
-      "bot_id": "<BOT_ID>",
-      "app_secret": "<APP_SECRET>",
-      "adapter": { "adapter_type": "dsh", "workdir": "/absolute/workspace" },
-      "allowed_sender_ids": ["<USER_ID>"]
-    }
-  ]
+  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
+  "enabled": true,
+  "config": {
+    "bots": [
+      {
+        "bot_id": "<BOT_ID>",
+        "app_secret": "<APP_SECRET>",
+        "adapter": {
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
+        },
+        "allowed_sender_ids": ["<USER_ID>"]
+      }
+    ]
+  }
 }
 ```
+
+`model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。
 
 | 字段                   | 说明                                                                                             |
 | ---------------------- | ------------------------------------------------------------------------------------------------ |
@@ -93,7 +100,7 @@ octo-runtime extraget channel-wecom
 | `allowed_sender_ids`   | 省略表示不限发送者；`[]` 表示全部拒绝。                                                          |
 | `authorized_space_ids` | 只校验形状，不对企业微信消息执行 Octo Space 准入——发送者策略用企业微信自己的。                   |
 
-这段是里层的 `config`。CLI 声明会包成 `{ "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom", "enabled": true, "config": { ... } }`；SDK 只传 `config`。
+上例是写入 `channel-wecom-declaration.json` 的完整 CLI 声明；SDK 只接收其中的 `config` 对象。
 
 完整字段与限制见 [config-schema.json](config-schema.json)。
 

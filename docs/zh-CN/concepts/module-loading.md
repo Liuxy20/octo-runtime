@@ -98,7 +98,7 @@ Runtime 与插件使用同一个 npm prefix 或 pnpm 全局环境安装。以下
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
 npm install -g @mininglamp-enterprise/octo-runtime-extra-loop-daemon
-octo-runtime extraset loop-daemon < loop-daemon.json
+octo-runtime loop-daemon extraset < loop-daemon.json
 octo-runtime loop-daemon start
 ```
 

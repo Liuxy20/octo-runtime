@@ -324,9 +324,10 @@ test("CLI recover requires acknowledgement and doctor exposes the manifest path"
   };
   for (const args of [["--help"], ["executor-kernel", "--help"]]) {
     assert.equal(await runCli(args, capture), 0);
-    assert.match(output, /--manifest selects Provider\/Extra modules/);
-    assert.match(output, /invocation state stays in --home\/run/);
+    assert.match(output, /Available Commands:/);
+    assert.doesNotMatch(output, /--manifest/);
   }
+  assert.match(output, /recover\s+Acknowledge orphan cleanup/);
   assert.equal(
     await runCli(["doctor", "--home", home, "--manifest", modules, "--json"], {
       ...capture,

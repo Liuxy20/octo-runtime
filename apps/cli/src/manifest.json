@@ -73,8 +73,53 @@
     }
   ],
   "extras": [
-    { "name": "channel-gateway", "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway" },
-    { "name": "channel-wecom", "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom" },
-    { "name": "webui", "module": "@mininglamp-oss/octo-runtime-extra-webui" }
+    {
+      "name": "channel-gateway",
+      "description": "Connect Octo IM Bots to local Agent execution",
+      "configExample": {
+        "bots": [
+          {
+            "api_url": "https://im.example.com/api",
+            "bot_id": "<BOT_ID>",
+            "bf_token": "<BOT_TOKEN>",
+            "adapter": {
+              "adapter_type": "codex",
+              "workdir": "/absolute/workspace",
+              "model": "<MODEL_ID>",
+              "effort": "medium"
+            }
+          }
+        ]
+      },
+      "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway"
+    },
+    {
+      "name": "channel-wecom",
+      "description": "Connect WeCom Bots to local Agent execution",
+      "configExample": {
+        "bots": [
+          {
+            "bot_id": "<BOT_ID>",
+            "app_secret": "<APP_SECRET>",
+            "adapter": {
+              "adapter_type": "codex",
+              "workdir": "/absolute/workspace",
+              "model": "<MODEL_ID>",
+              "effort": "medium"
+            }
+          }
+        ]
+      },
+      "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom"
+    },
+    {
+      "name": "webui",
+      "description": "Open a local browser workspace for Agent conversations",
+      "configExample": {
+        "port": 13888,
+        "sessionStorePath": "/absolute/host-home/extras/webui/sessions.json"
+      },
+      "module": "@mininglamp-oss/octo-runtime-extra-webui"
+    }
   ]
 }

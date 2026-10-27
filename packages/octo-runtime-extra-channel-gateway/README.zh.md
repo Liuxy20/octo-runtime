@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-把 Octo IM 机器人接到已有 Kernel 上的 Extra：Bot 凭据、悟空 WebSocket、消息准入、按会话维护的 session、`ctx.kernel.invoke`，以及把回复流式发回聊天。它只管 Octo IM——企业微信是另一个 Extra，生命周期也各管各的。
+把 Octo IM 机器人接到本地 Agent 执行服务的 Extra：负责 Bot 凭据、悟空 WebSocket、消息准入、按会话维护的 session、`ctx.kernel.invoke`，以及把回复流式发回聊天。Gateway 与 Executor Kernel 独立启动；Kernel 暂不可用时 Gateway 保持运行并等待恢复，执行 Agent 任务时才需要 Kernel 可达。企业微信使用独立的 WeCom Extra。
 
 ## 什么时候用它
 
@@ -12,7 +12,14 @@
 
 ## CLI 常用命令
 
-先替换占位值并配置，再按需启动独立服务：
+先查看当前安装版本的命令和示例：
+
+```sh
+octo-runtime channel-gateway --help
+octo-runtime channel-gateway configure --help
+```
+
+替换占位值并配置，再按需启动独立服务：
 
 ```sh
 octo-runtime channel-gateway configure \
@@ -25,18 +32,33 @@ octo-runtime channel-gateway configure \
 
 每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
 
-可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。
+首次配置可省略 `--model`、`--effort`，使用所选 Harness 框架本身的默认值；`effort` 可选 low/medium/high/xhigh，实际支持由 Harness 决定。更新时省略这两项会保留旧值；恢复默认值需从完整声明中删除对应字段，再执行 `extraset`。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，同样通过 `extraset` 移除旧 workdir。
 
 ```sh
 octo-runtime channel-gateway start
 octo-runtime channel-gateway status
 octo-runtime channel-gateway restart
 octo-runtime channel-gateway stop
-octo-runtime channel-gateway configure \
-  --help
+octo-runtime channel-gateway logs --lines 200
 ```
 
 配置只保存文件，不自动启动或重载。首次使用 `start`；已运行服务修改配置后用 `restart`。执行 Agent 任务还需单独启动 `executor-kernel`。
+
+帮助中的公共命令在前，自有命令在后：
+
+| 命令        | 用途                                                       |
+| ----------- | ---------------------------------------------------------- |
+| `install`   | 注册当前服务，默认开启自启；`--autostart=false` 显式禁用。 |
+| `uninstall` | 卸载服务，保留配置和数据。                                 |
+| `start`     | 未安装时自动安装，再启动并等待就绪。                       |
+| `stop`      | 停止当前服务，保留自启设置。                               |
+| `restart`   | 重启已安装的服务并等待就绪，不自动安装。                   |
+| `run`       | 前台运行，不注册系统服务。                                 |
+| `status`    | 查看服务状态及 Gateway 公开的业务状态。                    |
+| `logs`      | 查看组件状态日志，支持 `--follow`。                        |
+| `extraset`  | 从 stdin 读取并替换完整 JSON 声明。                        |
+| `extraget`  | 输出完整 JSON 声明，包含凭据。                             |
+| `configure` | Gateway 自有命令，按 `bot_id` 新增或更新 Bot。             |
 
 ## 托管它
 
@@ -56,19 +78,15 @@ export async function startGateway(endpoint: string, config: JsonObject) {
 
 ## 进阶：JSON 配置与 SDK 字段
 
-进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准。
 
 ```sh
-octo-runtime channel-gateway config set \
-  < channel-gateway-business.json
-octo-runtime channel-gateway config get
-
-octo-runtime extraset channel-gateway \
+octo-runtime channel-gateway extraset \
   < channel-gateway-declaration.json
-octo-runtime extraget channel-gateway
+octo-runtime channel-gateway extraget
 ```
 
-`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
 
 ```json
 {
@@ -85,11 +103,11 @@ octo-runtime extraget channel-gateway
         "adapter": {
           "adapter_type": "codex",
           "workdir": "/absolute/workspace",
-          "model": "gpt-6.1-sol",
+          "model": "<MODEL_ID>",
           "effort": "medium"
         },
         "approval_mode": "full_access",
-        "run_timeout_ms": 600000,
+        "run_timeout_ms": 86400000,
         "context": {
           "schema": "octo.context-envelope/v3",
           "items": [
@@ -116,7 +134,9 @@ octo-runtime extraget channel-gateway
 }
 ```
 
-这是完整的 CLI 声明：`module`、`enabled`，以及插件自己的 `config`。SDK 只取里面那层——`createExtraService({ endpoint, module, config: declaration.config, dependencies })`——不看 `enabled`，后者只决定 CLI 服务是否启动这个插件。
+`model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。
+
+这是完整的 CLI 声明：必填 `config`，以及可选的 `module`、`enabled`。通常由有效模块清单提供 `module`；显式填写时必须与选中的模块一致。SDK 只取其中的业务配置：`createExtraService({ endpoint, module: gateway, config: declaration.config, dependencies })`。顶层 `enabled` 由 CLI 处理，Bot 内的 `enabled` 由 Gateway 处理，两者不是同一层配置。
 
 只有一个 Bot 也写 `bots: [bot]`，没有单对象格式。每次 `extraset` 都整体替换声明——省略的字段不会从旧配置继承，也不会按 `bot_id` 合并。上限：64 个 Bot、64 个在途管理操作、单份声明 256 KiB。
 
@@ -126,7 +146,7 @@ octo-runtime extraget channel-gateway
 | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | `api_url`、`bot_id`           | 必填。`api_url` 指向 Octo IM，例如 `https://im-test.deepminer.com.cn/api`。                                                                  |
 | `bf_token`                    | 宿主提供的 Bot Token。插件不读凭据文件，也不读配置中心。                                                                                     |
-| `adapter`                     | 必填的执行设置：`adapter_type`、`workdir`、`model`，以及 Provider 专有选项。                                                                 |
+| `adapter`                     | 执行设置：`adapter_type`、`workdir` 及 Provider 专有选项；`model`、`effort` 可省略，使用 Harness 默认值。                                    |
 | `context`                     | 可选 Context v3 envelope，空 `items` 合法。                                                                                                  |
 | `approval_mode`               | 默认 `full_access`；允许范围跟随所选 Adapter。                                                                                               |
 | `groups_enabled`、`group_ids` | 群与话题。省略 `groups_enabled` 或设为 `true` 即开启；不影响私聊。                                                                           |
@@ -140,7 +160,7 @@ octo-runtime extraget channel-gateway
 ## 会话与投递
 
 - 聊天到会话的绑定放在 `ImSessionStore`。默认的 `MemoryImSessionStore` 有界、不跨重启；要持久化就提供 `createSessionStore(botConfig)`。store 不保存完整 Provider 历史，也恢复不了未结束的 Run。
-- 本轮 Context 的内容和顺序由插件决定。允许空 Context；宿主只做校验、转发和固定渲染，绝不从聊天历史补齐。
+- Gateway 在模型执行前准备本轮 Context。新逻辑会话可补充当前触发之前的最近聊天；群/话题存在历史缺口时按固定规则补齐，最多 15 条、1500 Unicode 码点，失败不阻断当前任务。Host/Adapter 不自行读取聊天历史，额外业务调查仍由 Agent 按任务执行。
 - 成功 final 里引用的文件会作为 IM 附件上传：单文件 20 MiB、单轮 50 MiB、最多 16 个不同文件、准备时间 30 秒。部分失败保留成功的链接，并写明哪些没投递。
 - Adapter 发来的 `session.update` 是不透明的 Provider 绑定数据，不是应用历史。
 
@@ -152,7 +172,7 @@ octo-runtime extraget channel-gateway
 
 ## CLI 部署
 
-保存后的声明在 `<home>/extras/channel-gateway/config.json`（POSIX `0600`）。改完之后，装了后台服务的设备执行 `octo-runtime channel-gateway restart`，前台运行用 `octo-runtime channel-gateway run`。`octo-runtime status` 报的是生命周期，同样不是每个 Bot 的连通性。写配置不会装包、不会立即建连，也不会改动运行中的实例。
+保存后的声明在 `<home>/extras/channel-gateway/config.json`（POSIX `0600`）。已运行的后台服务修改配置后执行 `octo-runtime channel-gateway restart`；前台运行需结束旧进程，再执行 `octo-runtime channel-gateway run`。`octo-runtime status` 和 `octo-runtime channel-gateway status` 会显示系统服务、Kernel 可用性及 Gateway 返回的 Bot/任务等业务摘要；需要完整公开状态时添加 `--json`。服务就绪和每个 Bot 在线仍需分别判断。写配置不会装包、不会立即建连，也不会改动运行中的实例。
 
 ## 导入与分发
 

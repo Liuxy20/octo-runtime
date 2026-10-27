@@ -1,61 +1,31 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { describeError } from "./output.js";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import {
   ExtraCommandError,
   type ExtraCommand,
   type ExtraCommandContext,
-  type ExtraCommandExtension,
-  type ExtraCommandOption
+  type ExtraCommandExtension
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   resolveModuleSpecifier,
   type ExtraModuleEntry
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import { commandConfig } from "./extra-command-config.js";
-import { defaultRuntimeHome, runtimePaths } from "./state.js";
-import { loadCliManifest } from "./module-manifest.js";
+import { runtimePaths } from "./state.js";
 import { resolveExtraModule } from "./global-extras.js";
-import { helpText } from "./help.js";
+import { lifecycleCommands } from "./help.js";
+import type { ParsedCliCommand } from "./command-tree.js";
 import type { CliDependencies } from "./main.js";
 
-const lifecycle = new Set([
-  "install",
-  "uninstall",
-  "start",
-  "stop",
-  "restart",
-  "status",
-  "run",
-  "logs"
-]);
-const roots = new Set([
-  "executor-kernel",
-  "status",
-  "adapter",
-  "doctor",
-  "extraset",
-  "extraget",
-  "playboard",
-  "version",
-  "help"
-]);
-const hostOptions: ExtraCommandOption[] = [
-  ...["home", "manifest", "profile"].map((name) => ({
-    name,
-    type: "string" as const,
-    description: "Host option"
-  })),
-  ...["json", "help"].map((name) => ({
-    name,
-    type: "boolean" as const,
-    description: "Host option"
-  }))
-];
 const reservedOptions = new Set([
-  ...hostOptions.map((option) => option.name),
+  "home",
+  "manifest",
+  "profile",
+  "json",
+  "help",
   "version",
   "autostart",
   "lines",
@@ -65,100 +35,19 @@ const reservedOptions = new Set([
 const validName = /^[a-z][a-z0-9-]{0,63}$/;
 const validOptionName = /^[a-z][a-z0-9_-]{0,63}$/;
 
-/** 根目录只读元数据；只有选中命令才导入扩展，生命周期始终走原有离线路由。 */
-export async function routeExtraCommand(
-  args: string[],
-  dependencies: CliDependencies,
-  onOutputMode: (json: boolean) => void = () => {}
-): Promise<number | undefined> {
+/** 仅执行已解析的自有命令；CLI 持有 IO、取消与配置锁，业务 handler 不管理宿主服务。 */
+export async function runExtraCommand(
+  parsed: ParsedCliCommand,
+  dependencies: CliDependencies
+): Promise<number> {
+  const { entry, command, input: commandInput, home: commandHome } = parsed.extra!;
+  const { flags } = parsed;
+  const name = entry.name;
   const output =
     dependencies.output ??
     ((line: string) => {
       process.stdout.write(`${line}\n`);
     });
-  const flags: Record<string, string | boolean> = Object.create(null) as Record<
-    string,
-    string | boolean
-  >;
-  let index = 0;
-  while (index < args.length && args[index].startsWith("-")) {
-    // 保持旧命令的 version、安装等语法，由原解析器负责诊断。
-    if (!hostOptions.some((option) => option.name === optionName(args[index]))) return undefined;
-    index = parseOption(args, index, hostOptions, flags);
-  }
-  const name = args[index++];
-  if (name && roots.has(name) && name !== "help") return undefined;
-  const home = resolve(
-    typeof flags.home === "string"
-      ? flags.home
-      : defaultRuntimeHome(dependencies.env, dependencies.platform)
-  );
-  const manifestPath = typeof flags.manifest === "string" ? flags.manifest : undefined;
-  const report =
-    dependencies.errorOutput ??
-    ((line: string) => {
-      process.stderr.write(`${line}\n`);
-    });
-  if (!name || name === "help") {
-    if (name === "help" && index < args.length) return undefined;
-    const manifest = await loadCliManifest(home, manifestPath, report);
-    if (manifest.extras.some((item) => roots.has(item.name)))
-      throw new Error("EXTRA_COMMAND_NAMESPACE_CONFLICT");
-    output(
-      `${helpText()}\n\nAvailable Extra namespaces:\n${manifest.extras.map((entry) => `  ${entry.name}`).join("\n")}`
-    );
-    return 0;
-  }
-  if (!validName.test(name)) return undefined;
-  const tail = args.slice(index);
-  // 只越过已知宿主选项确定动作；不能猜测 Extra 参数的值。
-  let actionIndex = 0;
-  while (
-    actionIndex < tail.length &&
-    hostOptions.some((option) => option.name === optionName(tail[actionIndex]))
-  )
-    actionIndex = parseOption(tail, actionIndex, hostOptions, flags);
-  if (lifecycle.has(tail[actionIndex])) return undefined;
-  // 先选择来源，再加载命令声明：宿主选项可位于子命令后，但 -- 后不再扫描。
-  // 业务字符串中以 - 开头的值要求使用 =，因此不会把合法业务值误当成宿主选项。
-  // 保留原 argv 给完整解析器，避免移除宿主选项后把业务缺值错误拼成有效输入。
-  const selectionFlags = { ...flags };
-  for (let cursor = actionIndex; cursor < tail.length;) {
-    if (tail[cursor] === "--") break;
-    const option = optionName(tail[cursor]);
-    cursor =
-      option === "home" || option === "manifest"
-        ? parseOption(tail, cursor, hostOptions, selectionFlags)
-        : cursor + 1;
-  }
-  const selectedHome = resolve(
-    typeof selectionFlags.home === "string" ? selectionFlags.home : home
-  );
-  const manifest = await loadCliManifest(
-    selectedHome,
-    typeof selectionFlags.manifest === "string" ? selectionFlags.manifest : manifestPath,
-    report
-  );
-  const entry = manifest.extras.find((item) => item.name === name);
-  if (!entry) return undefined;
-  if (manifest.extras.some((item) => roots.has(item.name)))
-    throw new Error("EXTRA_COMMAND_NAMESPACE_CONFLICT");
-  const extension = await loadExtraCommands(entry);
-  if (!extension) {
-    if (actionIndex < tail.length) throw new Error("EXTRA_COMMAND_NOT_FOUND");
-    output(helpText(name));
-    return 0;
-  }
-  validateCommands(extension);
-  const parsed = parseCommand(tail.slice(actionIndex), extension.commands, flags);
-  onOutputMode(Boolean(flags.json));
-  if (flags.profile !== undefined) throw new Error("INVALID_ARGUMENTS");
-  if (!parsed.command || flags.help) {
-    output(commandHelp(name, parsed.path, parsed.command, extension.commands));
-    return 0;
-  }
-  if (!parsed.command.run) throw new Error("EXTRA_COMMAND_REQUIRED");
-  const commandHome = resolve(typeof flags.home === "string" ? flags.home : selectedHome);
   const controller = new AbortController();
   const cancel = () => controller.abort();
   const externalCancel = () => controller.abort();
@@ -199,10 +88,7 @@ export async function routeExtraCommand(
   };
   try {
     controller.signal.throwIfAborted();
-    const result = await parsed.command.run(context, {
-      options: parsed.options,
-      arguments: parsed.arguments
-    });
+    const result = await command.run!(context, commandInput);
     if (
       result?.exitCode !== undefined &&
       (!Number.isInteger(result.exitCode) || result.exitCode < 0 || result.exitCode > 255)
@@ -301,7 +187,7 @@ function isCommandArray(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
 }
 
-function validateCommands(extension: ExtraCommandExtension): void {
+export function validateCommands(extension: ExtraCommandExtension): void {
   let count = 0;
   const walk = (commands: readonly ExtraCommand[], depth: number) => {
     if (!isCommandArray(commands) || depth > 8 || commands.length === 0)
@@ -313,7 +199,7 @@ function validateCommands(extension: ExtraCommandExtension): void {
         !command ||
         !validName.test(command.name) ||
         names.has(command.name) ||
-        lifecycle.has(command.name) ||
+        lifecycleCommands.has(command.name) ||
         !command.description ||
         typeof command.description !== "string"
       )
@@ -360,101 +246,6 @@ function validateCommands(extension: ExtraCommandExtension): void {
   };
   walk(extension.commands, 0);
 }
-function optionName(token: string): string {
-  return token === "-h" ? "help" : token.startsWith("--") ? token.slice(2).split("=")[0] : "";
-}
-function parseOption(
-  args: string[],
-  index: number,
-  definitions: readonly ExtraCommandOption[],
-  values: Record<string, string | boolean>
-): number {
-  const token = args[index] === "-h" ? "--help" : args[index];
-  const match = /^--([a-z][a-z0-9_-]*)(?:=(.*))?$/s.exec(token);
-  const option = match && definitions.find((option) => option.name === match[1]);
-  if (!match || !option || Object.hasOwn(values, option.name)) throw new Error("INVALID_ARGUMENTS");
-  if (option.type === "boolean") {
-    // 宿主布尔参数沿用旧 CLI：存在即启用，接受 --json=true 等等号形式。
-    // Extra 的 typed boolean 仍只接受开关，不把任意字符串解释为业务布尔值。
-    if (match[2] !== undefined && definitions !== hostOptions) throw new Error("INVALID_ARGUMENTS");
-    values[option.name] = true;
-    return index + 1;
-  }
-  const value = match[2] ?? args[++index];
-  if (
-    value === undefined ||
-    value === "" ||
-    (match[2] === undefined && value.startsWith(definitions === hostOptions ? "--" : "-"))
-  )
-    throw new Error("INVALID_ARGUMENTS");
-  values[option.name] = value;
-  return index + 1;
-}
-function parseCommand(
-  args: string[],
-  commands: readonly ExtraCommand[],
-  flags: Record<string, string | boolean>
-) {
-  let command: ExtraCommand | undefined;
-  let children = commands;
-  const path: string[] = [],
-    positional: string[] = [];
-  const options: Record<string, string | boolean> = Object.create(null) as Record<
-    string,
-    string | boolean
-  >;
-  let literal = false;
-  for (let index = 0; index < args.length;) {
-    const token = args[index];
-    if (!literal && token === "--") {
-      literal = true;
-      index++;
-      continue;
-    }
-    if (!literal && token.startsWith("-")) {
-      const host = hostOptions.find((option) => option.name === optionName(token));
-      index = parseOption(
-        args,
-        index,
-        host ? hostOptions : (command?.options ?? []),
-        host ? flags : options
-      );
-      continue;
-    }
-    if (!literal && children.length) {
-      command = children.find((value) => value.name === token);
-      if (!command) throw new Error("EXTRA_COMMAND_NOT_FOUND");
-      path.push(token);
-      children = command.commands ?? [];
-      index++;
-      continue;
-    }
-    positional.push(token);
-    index++;
-  }
-  if (!flags.help) {
-    if (!command && positional.length) throw new Error("INVALID_ARGUMENTS");
-    const definitions = command?.arguments ?? [];
-    if (
-      positional.length > definitions.length ||
-      definitions.some((arg, index) => arg.required && positional[index] === undefined)
-    )
-      throw new Error("INVALID_ARGUMENTS");
-    if (command?.options?.some((option) => option.required && options[option.name] === undefined))
-      throw new Error("INVALID_ARGUMENTS");
-  }
-  return { command, path, options, arguments: positional };
-}
-function commandHelp(
-  name: string,
-  path: string[],
-  command: ExtraCommand | undefined,
-  commands: readonly ExtraCommand[]
-): string {
-  const children = command?.commands ?? (!command ? commands : []);
-  return `${path.length ? `Octo Runtime: ${name} ${path.join(" ")}\n\n${command?.description}` : helpText(name)}\n\nUsage: octo-runtime [--home <path>] [--manifest <path>] ${name}${path.length ? ` ${path.join(" ")}` : ""}${children.length ? " <command>" : ""}${(command?.arguments ?? []).map((arg) => ` ${arg.required ? `<${arg.name}>` : `[${arg.name}]`}`).join("")} [options]\n${children.length ? `\nExtra commands:\n${children.map((child) => `  ${child.name.padEnd(16)}${child.description}`).join("\n")}` : ""}\n${(command?.options ?? []).map((option) => `  --${option.name}${option.type === "string" ? " <value>" : ""}  ${option.description}${option.required ? " (required)" : ""}`).join("\n")}\nGlobal options (before or after the command): --home <path> --manifest <path> --json -h/--help.\nConfiguration is Home-scoped; --profile is not supported.\n${command?.examples?.length ? `\nExamples:\n${command.examples.join("\n")}` : ""}`;
-}
-
 /** 有界 stdin 读取；取消解除监听且不等待对端 EOF，不接管调用方 stream 的生命周期。 */
 function readInput(input: NodeJS.ReadableStream, signal: AbortSignal): Promise<string> {
   return new Promise((accept, reject) => {

@@ -1,3 +1,11 @@
+---
+type: Journal
+title: DSH 取消下游 SDK 补丁
+description: 记录移除 DSH SDK 补丁、上游反馈、接入限制及验证结果。
+tags: [adapter, dsh, sdk, testing]
+timestamp: 2026-10-26T00:00:00Z
+---
+
 # 2026-10-26 DSH 取消下游 SDK 补丁
 
 ## 决定与实施

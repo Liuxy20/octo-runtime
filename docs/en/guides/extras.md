@@ -1,6 +1,6 @@
 # Integrate Extras
 
-For CLI setup, use `<extra> configure` or `<extra> config set`. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
+For CLI setup, use `<extra> configure` or `<extra> extraset` for a complete JSON declaration. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
 
 [简体中文](../../zh-CN/guides/extras.md) | [Documentation](../README.md)
 

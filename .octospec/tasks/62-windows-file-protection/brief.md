@@ -1,3 +1,11 @@
+---
+type: Task
+title: Issue 62 文件保护测试的 Windows 兼容判据
+description: 定义 Windows 文件权限测试判据的修复范围、平台边界与验收要求。
+tags: [testing, windows, mcp]
+timestamp: 2026-10-27T00:00:00Z
+---
+
 # Issue 62：文件保护测试的 Windows 兼容判据
 
 ## 目标与证据

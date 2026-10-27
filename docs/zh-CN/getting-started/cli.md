@@ -74,6 +74,8 @@ octo-runtime executor-kernel uninstall
 
 全局参数包括 `--home <path>`、`--profile <name>` 和 `--manifest <path>`。操作同一个服务时使用相同的 Home；profile 选择该 Home 内的配置，不会另建一个 Kernel 服务。默认 Home 在 macOS/Linux 上为 `~/.octo-runtime`；Windows 设置了 `LOCALAPPDATA` 时为 `%LOCALAPPDATA%\OctoRuntime`，也可以通过 `OCTO_RUNTIME_HOME` 覆盖。
 
+全局 `--version` / `-v` 输出安装产物的版本、commit 和 build 时间，可放在命令前后，包括 Extra 自有子命令之后；查询不加载模块，也不要求配置可用。放在 `--` 后时仍是字面位置参数。
+
 CLI 从内置清单和 `<Home>/manifest.json` 选择 Adapter 与 Extra，还会发现当前 CLI 同一全局安装环境中的 Extra；优先级为内置 > Home > 全局。声明或发现 Extra 不等于启用或启动。`--manifest` 完整替换这些来源。格式、解析锚点和旧 Extra `module` 字段迁移见 [Adapter 与 Extra 载入](../concepts/module-loading.md)。
 
 ## 配置三个内置 Extra
@@ -93,7 +95,7 @@ octo-runtime channel-gateway configure \
 
 每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
 
-可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。
+可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过对应 Extra 的 `extraset` 移除旧 workdir。
 
 ### channel-wecom
 
@@ -108,7 +110,7 @@ octo-runtime channel-wecom configure \
 
 每次配置一个 Bot，可重复运行：相同 `bot_id` 更新原项（改地址也不追加），新 ID 追加到 `config.bots`；省略字段及其他 Bot 保留。旧 JSON 中跨地址的同 ID 多项会合并为首项，保留首项省略字段。业务参数与配置字段同名，凭据直接传原文。
 
-可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过 `config set` 移除旧 workdir。 `--ws_url` 可省略：更新保留旧地址，新 Bot 使用官方默认地址。
+可选 `--model`、`--effort`（low/medium/high/xhigh）。使用 OpenClaw 时改为 `--adapter_type openclaw`、`--provider_agent_id main`，不传 `--workdir`；从已有本地 Adapter 切换时，通过对应 Extra 的 `extraset` 移除旧 workdir。 `--ws_url` 可省略：更新保留旧地址，新 Bot 使用官方默认地址。
 
 ### webui
 
@@ -141,28 +143,24 @@ octo-runtime webui configure \
   --help
 ```
 
-根帮助只列 Extra 名称；进入 Extra 后查看其命令和参数。`--home`、`--manifest` 始终是全局参数，配置命令前后均可使用；Extra 配置属于 Home，不接受 `--profile`。完整用法见 [Extra 自有命令](../guides/extra-commands.md)。
+根帮助顶部保留版本、commit 和 build 信息，命令依次优先展示 `executor-kernel`、`channel-gateway`、`channel-wecom`、`webui`，有效目录内的其他命令随后按名称排列。进入 Extra 后，先列公共生命周期和完整 JSON 读写命令，再列插件自有命令；`Usage` 后有独立的 `Examples` 区块。`--home`、`--manifest` 始终是全局参数，配置命令前后均可使用；Extra 配置属于 Home，不接受 `--profile`。完整用法见 [Extra 自有命令](../guides/extra-commands.md)。
 
 ### 进阶：手动拼 JSON
 
-进阶用法：手动编写业务 JSON（不含外壳）时，用 `config set/get`；手动管理含 `config`、可选 `module`/`enabled` 的整份声明时，用 `extraset/extraget`。
+进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准；内置 Extra 不再提供 `config set/get`。
 
 ```sh
-octo-runtime channel-gateway config set \
-  < channel-gateway-business.json
-octo-runtime channel-gateway config get
-
-octo-runtime extraset channel-gateway \
+octo-runtime channel-gateway extraset \
   < channel-gateway-declaration.json
-octo-runtime extraget channel-gateway
+octo-runtime channel-gateway extraget
 ```
 
-`config set` 经业务校验后替换全部业务配置，保留宿主字段；`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
+`extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
 
-将上面命令中的名称换为 `channel-wecom` 或 `webui` 即可操作对应 Extra。完整声明示例：
+各 Extra 使用各自的配置结构。Octo Gateway 完整声明示例：
 
 ```bash
-octo-runtime extraset channel-gateway <<'JSON'
+octo-runtime channel-gateway extraset <<'JSON'
 {
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
   "config": {
@@ -174,7 +172,9 @@ octo-runtime extraset channel-gateway <<'JSON'
         "bf_token": "<BOT_TOKEN>",
         "adapter": {
           "adapter_type": "codex",
-          "workdir": "/absolute/workspace"
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
         },
         "context": {
           "schema": "octo.context-envelope/v3",
@@ -192,6 +192,35 @@ octo-runtime extraset channel-gateway <<'JSON'
 }
 JSON
 ```
+
+`model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。
+
+WeCom 完整声明示例：
+
+```bash
+octo-runtime channel-wecom extraset <<'JSON'
+{
+  "module": "@mininglamp-oss/octo-runtime-extra-channel-wecom",
+  "enabled": true,
+  "config": {
+    "bots": [
+      {
+        "bot_id": "<WECOM_BOT_ID>",
+        "app_secret": "<APP_SECRET>",
+        "adapter": {
+          "adapter_type": "codex",
+          "workdir": "/absolute/workspace",
+          "model": "<MODEL_ID>",
+          "effort": "medium"
+        }
+      }
+    ]
+  }
+}
+JSON
+```
+
+`model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。
 
 `module` 可省略；提供时必须与有效清单一致。多个 Bot 必须全部写在 `config.bots` 中；`extraset` 不做 configure 的按 ID 更新。POSIX 文件权限为 `0600`。
 

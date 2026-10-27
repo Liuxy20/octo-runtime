@@ -1,3 +1,11 @@
+---
+type: Journal
+title: PR 124 Sass 构建修复
+description: 记录 Sass 空值属性选择器构建错误的复现、依赖修复和验证。
+tags: [webui, dependencies, build, testing]
+timestamp: 2026-10-24T00:00:00Z
+---
+
 # PR 124 Sass 构建修复
 
 - 用户要求先更新 main 再修复 Dependabot PR；原 PR head 为 `84ddba9`，已合入 `origin/main@5eca151`，无冲突。

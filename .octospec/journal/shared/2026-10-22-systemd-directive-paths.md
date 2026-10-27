@@ -1,3 +1,11 @@
+---
+type: Journal
+title: Linux systemd 路径指令修复与原生验证
+description: 记录 systemd 路径序列化修复、原生 Linux 验证及未覆盖边界。
+tags: [linux, systemd, lifecycle, testing]
+timestamp: 2026-10-22T00:00:00Z
+---
+
 # Linux systemd 路径指令修复与原生验证
 
 工作于 2026-10-22 开始，最终复验于 2026-10-23（Asia/Shanghai）完成。

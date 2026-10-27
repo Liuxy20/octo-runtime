@@ -1,3 +1,11 @@
+---
+type: Task
+title: 修复 Linux systemd 路径指令序列化
+description: 定义 systemd 工作目录与日志路径指令修复的范围和验收要求。
+tags: [linux, systemd, lifecycle]
+timestamp: 2026-10-22T00:00:00Z
+---
+
 # 修复 Linux systemd 路径指令序列化
 
 ## 目标与责任归属

@@ -12,6 +12,7 @@
   },
   "types": "./dist/index.d.ts",
   "dependencies": {
+    "commander": "^15.0.0",
     "@mininglamp-oss/octo-runtime-adapter-dsh": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
     "json5": "^2.2.3",

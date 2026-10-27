@@ -135,7 +135,9 @@ test("npm discovers only the running installation, follows scoped links and load
   const a = await npm(join(root, "npm-a"));
   const b = await npm(join(root, "npm-b"));
   await extra(b.modules, "octo-runtime-extra-unrelated");
-  await extra(a.modules, "octo-runtime-extra-plain");
+  await extra(a.modules, "octo-runtime-extra-plain", {
+    metadata: { description: "Run plain workflows" }
+  });
   const source = await extra(join(root, "external"), "@enterprise/octo-runtime-extra-loop-daemon");
   await mkdir(join(a.modules, "@enterprise"));
   await linkDir(source, join(a.modules, "@enterprise/octo-runtime-extra-loop-daemon"));
@@ -149,6 +151,7 @@ test("npm discovers only the running installation, follows scoped links and load
     found.map((x) => x.name),
     ["loop-daemon", "plain", "unused"]
   );
+  assert.equal(found.find((item) => item.name === "plain").description, "Run plain workflows");
   await assert.rejects(readFile(marker), { code: "ENOENT" });
   const registration = await selected(join(root, "home"), found[0]);
   assert.equal((await registration.load()).origin, source);

@@ -56,7 +56,7 @@ test("CLI owns the complete Extra catalog while generic configuration and Kernel
     }
   });
   assert.doesNotMatch(help, /channel configure/);
-  assert.match(help, /extraset/);
+  assert.doesNotMatch(help, /extraset|extraget/);
 });
 
 test("extraset without workdir can be loaded by channel-gateway", async (t) => {
