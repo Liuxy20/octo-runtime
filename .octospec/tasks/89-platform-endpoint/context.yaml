@@ -1,0 +1,30 @@
+brief: .octospec/tasks/89-platform-endpoint/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 平台差异在现有公共实现内部处理，不向宿主增加职责或接口
+  - id: runtime-protocol-design
+    source: repo
+    reason: 共享 Host SDK 路径辅助函数不改变协议或执行拓扑
+  - id: runtime-lifecycle
+    source: repo
+    reason: 保持原 Home/组件端点和服务身份合同
+  - id: runtime-local-execution
+    source: repo
+    reason: 保持 Windows Pipe 与 POSIX socket 传输及资源边界
+  - id: runtime-invoke-input
+    source: repo
+    reason: 核对调用输入合同不受辅助函数修复影响
+  - id: runtime-output-protocol
+    source: repo
+    reason: 核对修复不改变事件或返回合同
+  - id: runtime-stateless
+    source: repo
+    reason: 不增加文件、状态迁移或业务持久化
+  - id: runtime-engineering
+    source: repo
+    reason: 中文就近合同注释、确定性 fixture 和原生 Windows 验证证据
+files_expected:
+  - packages/octo-runtime-host-sdk/src/endpoint.ts
+  - test/runtime-endpoint.test.js
+updated_at: 2026-10-27T10:56:26Z
