@@ -1,0 +1,79 @@
+task: 198-gateway-reconnect
+baseline: f0bacb0
+branch: codex/198-gateway-reconnect
+loaded_rules:
+  - path: .octospec/rules/architecture.md
+    sha256: 30881bbe01186a70607e377b5d776257e17a9fb1bf24ebc46b08ab225e6c0f8d
+  - path: .octospec/rules/protocol-design.md
+    sha256: 5b2abad6e825bce94701e3378ee33a4b027b6f30a3ca4a4bf4231d8f1351d578
+  - path: .octospec/rules/channel-integration.md
+    sha256: c1732b4f8086f7b3d691b11ac92cea1422ff48b579486db40c590411e7ceccc2
+  - path: .octospec/rules/context-input.md
+    sha256: daa885435517be857baf4791ac663072e47d1e048f752efc8bb5e31960386cea
+  - path: .octospec/rules/extras.md
+    sha256: 755ca002d0953be832312dcfa930da58b4e7306f7034ef2946b06c7435cc678f
+  - path: .octospec/rules/invoke-input.md
+    sha256: 9a3e9300666879256065e6b825aa8705a66e9bf20afce91ad0457d5eafe2dc9d
+  - path: .octospec/rules/session-reset.md
+    sha256: 7530e07a487158aa73a4296bf723726ac3cb2df02054652ad028feaefcc429c9
+  - path: .octospec/rules/stateless-execution.md
+    sha256: 1bd283b6728c70529ef9680114b46925be15e4399d43f86152c9ff4c59816c1b
+  - path: .octospec/rules/engineering.md
+    sha256: 2ee121ab3de5a51d0893a5688c3fa40fbba69cad042d2619f04038e138c7d98d
+  - path: .octospec/rules/collaboration.md
+    sha256: fe77443e68003d2c93506ee8fa4f2fd376145d57ace4d7e1b6034a4dbb7785f3
+workflow: .claude/skills/octospec-workflow/SKILL.md
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/198
+external_source:
+  repository: octo-im
+  commit: 613fc2b2b3a4c23054385ee3f8238fc44a8f68e7
+  scope: local source only; deployed revision and incident trigger not verified
+authorization:
+  new_worktree: true
+  implementation_and_local_tests: true
+  commits_push_pr: true
+  pr_base: main
+  authorization_source: User requested a PR to main after readiness checks
+  deployment: false
+  external_messages: false
+decisions:
+  - Direct network loss is the reported trigger; do not assume another owner from reason 12.
+  - Service SLA failures and unknown server reasons retry by default in DISCONNECT and CONNACK.
+  - Only explicit permanent authentication, permission, configuration, protocol or ownership failures stop.
+  - Keep local cleanup-before-retry and existing 5/10/15-second backoff; no universal 20-second guarantee.
+source_reads:
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/auth.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connector.ts
+  - packages/octo-runtime-extra-channel-gateway/src/extra.ts
+  - packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts
+  - test/im-connection-state-machine.test.js
+  - test/recovery-im-fixture.js
+  - test/recovery-dual-mode.test.js
+source_read_scope: Full files or targeted excerpts; not a whole-repository review.
+validation:
+  focused_protocol_tests: 93 passed
+  related_regression_tests: 402 passed, zero failures or skips
+  typecheck: passed
+  lint: passed after completing build
+  naming: passed
+  formatting: passed
+  developer_docs: passed
+  okf: seven unchanged baseline frontmatter failures; no new unit or link errors
+  full_suites: UI 35 passed; Node 1946 passed, 54 conditional skips, zero failures
+  live_network_or_deployment: not performed
+journal: ../../journal/shared/2026-10-27-198-gateway-reconnect.md
+
+local_outage_simulation:
+  entry: OCTO_RECOVERY_OUTAGE=1 node --test --test-name-pattern='<cli|sdk>:' test/recovery-dual-mode.test.js
+  modes: [cli, sdk]
+  timing: real clocks, unchanged product heartbeat and backoff
+  outcome: both passed; approximately 170 seconds per mode
+  socket_and_service_restore: verified on loopback
+  silent_loss_detection_ms: [99957, 99963]
+  silent_loss_restore_and_reply_ms: [5050, 5062]
+  adjacent_regression: 95 passed
+  report: local-simulation.md

@@ -57,3 +57,7 @@ ACP、ZCode、Grok 三个测试文件以 node:url 的 fileURLToPath 转换自己
 用户后续明确授权提交、通过已有 SSH 身份普通 push，并创建关联 #60 的 PR。目标 Mininglamp-OSS/octo-runtime，base=main，head=fix/60-windows-fixture-paths；不合并或发布安装包。交付前 origin/main=596e28c39219064040200ab0d30ce15e28ff4e8b，相比验证基线仅新增无关 Gateway 重连提交，未修改本次三个测试或其 ACP/ZCode/Grok/Core/Kernel 依赖。PR 使用共同祖先的三点差异核对，避免将目标分支新增内容误当成本分支删除。
 
 本地最后一次三个完整文件复测仍为 41 通过、1 失败、2 超时取消。重复验证和独立范围核验没有修改生产代码，已确认三处路径缺陷消失。所有未通过项和完整构建限制均须保留在 PR Validation，不宣称全仓或跨平台通过。远端分支 SHA 和 CI/冲突状态以提交后实际查询为准。
+
+修复提交 1d4468b955e305bd5f84ab1e68e5260bd82d9084 已通过 SSH 普通 push 到 Liuxy20/octo-runtime 的同名分支，git ls-remote 与 GitHub 分支 ref 两次核对均与本地完全一致。[PR #200](https://github.com/Mininglamp-OSS/octo-runtime/pull/200) 已创建，Fixes #60、Refs #14，正文与 body-file 核对一致。上游仅有读取权限，沿用现有 fork 的管理权限和已登录身份，不要求新增 workflow scope。
+
+GitHub 核对发现任务目录索引与 main@596e28c 同位置插入导致文档冲突。通过普通 merge 保留 Issue 60 与 Issue 198 两条记录，不 rebase 或改写已推送提交；主线合入的 Gateway 变化不属于 PR 相对 main 的差异，最终仍只交付三处测试路径与本任务记录。相关测试和 ACP/ZCode/Grok/Core/Kernel 依赖均未被此次主线更新修改，保留既有验证结果；CI 状态单独查询，不冒称合并后的全仓检查已通过。

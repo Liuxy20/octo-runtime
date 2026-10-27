@@ -1,7 +1,7 @@
 import { connectionFetch, connectionJson, httpConnectionFailure } from "./connection-error.js";
 import { trimTrailingSlashes } from "./api/url.js";
 
-/** Resolve tenant scope through the octo-auth verify-bot contract. */
+/** 建联前用调用方提供的 Bot 凭据解析身份与租户；取消由调用方持有，不跟随重定向转发凭据。 */
 export async function verifyBotIdentity(
   apiUrl: string,
   token: string,
@@ -11,7 +11,7 @@ export async function verifyBotIdentity(
     `${trimTrailingSlashes(apiUrl)}/v1/auth/verify-bot`,
     {
       method: "POST",
-      redirect: "error",
+      redirect: "manual",
       signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bot_token: token })
