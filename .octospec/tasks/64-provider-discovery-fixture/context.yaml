@@ -1,0 +1,15 @@
+brief: .octospec/tasks/64-provider-discovery-fixture/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 产品责任归属与测试原生工具隔离
+  - id: runtime-adapter-metadata
+    source: repo
+    reason: 真实 probe 与 describe 元数据合同保持不变
+  - id: runtime-engineering
+    source: repo
+    reason: 测试、构建缓存和临时资源清理
+files_expected:
+  - test/provider-discovery.test.js
+  - test-support/provider-discovery.cs
+updated_at: 2026-10-27T09:00:00Z

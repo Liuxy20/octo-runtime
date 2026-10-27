@@ -54,6 +54,8 @@
 
 - [CLI 与 Extra 命令统一展示](tasks/cli-extra-display/brief.md)：以 Commander 统一有效命令目录、分层帮助与 Extra 自有命令；完整声明读写收进 Extra，顶层旧入口隐藏兼容，删除内置 config set/get；[验证记录](journal/shared/2026-10-27-cli-extra-display.md)。
 
+- [Issue 64：Windows discovery 夹具](tasks/64-provider-discovery-fixture/brief.md)：仅修复测试专用可执行夹具，SDK/probe 与产品实现保持不变；原整文件 2 项、相关 Windows 回归 22 项通过，见[验证记录](journal/shared/2026-10-27-64-provider-discovery-fixture.md)。macOS/Linux 未验证。
+
 - [Issue 63：模拟 Unix 服务 fixture](tasks/63-unix-service-fixtures/brief.md)：仅修复测试路径与存储映射；Windows 原有 50 项及新增 8 项全部通过，相关服务回归 73 项通过。范围与未验证项见[验证记录](journal/shared/2026-10-27-63-unix-service-fixtures.md)。
 
 - [Issue 60：Windows fixture 路径兼容](tasks/60-windows-fixture-paths/brief.md)：三个测试启动边界使用 fileURLToPath，SDK 与生产代码不变。普通/特殊字符路径复测均为 41 通过、1 失败、2 超时取消；独立实验确认剩余项来自 Core 清理确认和 fixture 断流模拟，未扩入路径修复。完整构建受原生可选依赖阻塞。用户已授权提交与 PR，见[验证记录](journal/shared/2026-10-27-60-windows-fixture-paths.md)。
