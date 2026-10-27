@@ -1,7 +1,8 @@
 import { preparedFrames } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, readdir, writeFile, stat, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from "node:fs/promises";
+import { assertPrivateFile } from "../test-support/file-protection.mjs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
@@ -283,10 +284,7 @@ test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot 
   assert.ok(content.startsWith("# Keep this comment\n"));
   assert.equal((content.match(/OCTO_BOT_TOKEN=/g) ?? []).length, 1);
   assert.equal((content.match(/OCTO_TOKEN=/g) ?? []).length, 1);
-  const info = await stat(file);
-  assert.ok(info.isFile());
-  // Windows 不提供 POSIX 权限位；正文和普通文件断言仍在所有平台执行。
-  if (process.platform !== "win32") assert.equal(info.mode & 0o777, 0o600);
+  await assertPrivateFile(file);
   assert.deepEqual(await syncCliOpenClawToolEnvironment(profile, configs), {
     file,
     written: false,

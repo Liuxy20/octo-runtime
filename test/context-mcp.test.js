@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFile, stat } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
+import { assertPrivateFile } from "../test-support/file-protection.mjs";
 import {
   assertContextEnvelope,
   assertFrozenContextPlan,
@@ -147,7 +148,7 @@ test("Codex carries private header references; Claude writes a private temporary
   const claude = await buildClaudeCommand(req);
   const file = claude.args[claude.args.indexOf("--mcp-config") + 1];
   try {
-    assert.equal((await stat(file)).mode & 0o777, 0o600);
+    await assertPrivateFile(file);
     const payload = JSON.parse(await readFile(file, "utf8"));
     assert.deepEqual(payload.mcpServers.business, {
       type: "http",
