@@ -38,6 +38,8 @@
 
 ## 操作指南
 
+- [Issue 88：Codex 原生 Home 测试](tasks/88-native-codex-home/brief.md)：仅修正隔离测试断言；[Windows 验证记录](journal/shared/2026-10-27-88-native-codex-home.md)。
+
 - [为什么统一设备](../ARCHITECTURE.md)：新旧对比、Home 级设备实例、本地 IPC / 异地云端寻址目标及移动端 Buddy 的价值。
 - [工作区与开发组织](guides/workspace.md)：目录、依赖、构建及新增包。
 - [Adapter 开发](guides/adapter-authoring.md)：接口示例和验收。
