@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnGrokBuildAcpClient as spawnAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";
 import { spawnAcpClient as spawnStandardAcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
@@ -13,7 +14,7 @@ import {
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { preparedFrames, invokeRequest } from "./runtime-fixture.js";
 
-const fixturePath = new URL("./fixtures/grok-build-acp-host.mjs", import.meta.url).pathname;
+const fixturePath = fileURLToPath(new URL("./fixtures/grok-build-acp-host.mjs", import.meta.url));
 const base = () =>
   invokeRequest({
     approvalMode: "ask",

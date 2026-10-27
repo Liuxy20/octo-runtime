@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 import { AcpClient, spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
 
 function fixture() {
@@ -57,7 +58,7 @@ test(
     const { spawnWorker } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
     const { preparedFrames, invokeRequest } = await import("./runtime-fixture.js");
     const host = await spawnWorker({
-      entrypoint: new URL("./fixtures/acp-failure-host.js", import.meta.url).pathname
+      entrypoint: fileURLToPath(new URL("./fixtures/acp-failure-host.js", import.meta.url))
     });
     const collect = async (type, id, ready = () => {}) => {
       const frames = [];
