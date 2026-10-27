@@ -6,7 +6,9 @@ import {
   type ModuleManifest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 
-/** CLI 独占默认目录与 Home 扩展策略；SDK 原生装配不读取这两份文件。 */
+import { discoverGlobalExtras, mergeGlobalExtras } from "./global-extras.js";
+
+/** CLI 独占内置、Home 与全局 Extra 目录；SDK 不扫描，显式清单完全替换。 */
 export async function loadCliManifest(
   home: string,
   override?: string,
@@ -17,5 +19,9 @@ export async function loadCliManifest(
     fileURLToPath(new URL("./manifest.json", import.meta.url))
   );
   const extension = await readModuleManifest(join(home, "manifest.json"), { optional: true });
-  return mergeModuleManifests(builtin, extension, report);
+  return mergeGlobalExtras(
+    mergeModuleManifests(builtin, extension, report),
+    await discoverGlobalExtras(report),
+    report
+  );
 }

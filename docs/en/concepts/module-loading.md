@@ -2,13 +2,13 @@
 
 [简体中文](../../zh-CN/concepts/module-loading.md) | [Documentation](../README.md)
 
-This page describes the loading mechanism implemented for [issue #85](https://github.com/Mininglamp-OSS/octo-runtime/issues/85), including Extras and user extensions. The CLI combines its built-in `manifest.json` with an optional Runtime Home manifest. SDK hosts compose native modules directly using the existing service factories.
+This page describes the loading mechanism implemented for [issue #85](https://github.com/Mininglamp-OSS/octo-runtime/issues/85), including Extras and user extensions. The CLI combines its built-in `manifest.json`, an optional Runtime Home manifest, and globally installed Extras. SDK hosts compose native modules directly using the existing service factories.
 
 ## CLI and SDK Responsibilities
 
 | Integration | Adapter selection | Extra selection |
 | --- | --- | --- |
-| CLI | Built-in manifest plus a user-extension manifest | The same manifests declare modules; explicit component startup and business configuration control activation |
+| CLI | Built-in manifest plus a user-extension manifest | Built-in, Home and same-environment global packages; explicit component startup and business configuration control activation |
 | SDK, including Electron | Host code imports selected Adapters and registers them in its worker entry | Host code imports selected Extra modules and passes them to `createExtraService` |
 | FDE delivery | The business team copies the code it needs and handles dependencies | The business team chooses its own dependencies and deployment |
 
@@ -22,6 +22,7 @@ Kernel, Core, and Host SDK must not depend on concrete Provider Adapters or busi
 | --- | --- | --- |
 | Built-in | `apps/cli/src/manifest.json`, copied to CLI `dist/manifest.json` | Full default Adapter and Extra catalog |
 | User extension | `<Runtime Home>/manifest.json`, normally `~/.octo-runtime/manifest.json` on macOS/Linux | Additional Adapter and Extra modules |
+| Global Extras | The running CLI’s verified npm/pnpm global environment | Additional matching Extra packages, without manifest edits |
 
 The former default Adapter JSON is consolidated into this built-in manifest. Both manifests contain `version: 1`, `adapters`, and `extras`. Selecting `--home` also changes the user-extension path; platform defaults and `OCTO_RUNTIME_HOME` follow the existing Home selection rules.
 
@@ -55,7 +56,7 @@ An Adapter entry uses `type`, `module`, `export`, and the existing optional `fac
 3. Append user entries after built-ins. Built-ins win on a matching Adapter `type` or Extra `name`; report ignored entries without resolving, importing, or calling them.
 4. Preserve each retained entry's source manifest. Resolve relative paths and bare package names from that original file, following ESM `node`/`import` conditions and package `exports`. Absolute paths and file URLs retain their explicit locations.
 5. Do not retry resolution from the process working directory, Kernel package, another manifest, or a global package location.
-6. Empty arrays contribute no entries. A CLI `--manifest` override remains a complete replacement, without automatically merging built-in or Home files; a legacy Adapter-only override is normalized to an empty Extra array.
+6. Empty arrays contribute no entries. A CLI `--manifest` override remains a complete replacement, without automatically merging built-in, Home or global sources; a legacy Adapter-only override is normalized to an empty Extra array.
 
 Legacy explicit manifests also allow an Adapter to omit `type`. The CLI-owned execution worker instantiates each selected module once and uses its actual `metadata.type` to perform OpenClaw connection discovery and credential refresh before the existing readiness handshake. CLI Kernel and Playboard share this order. It does not infer types from package names or import unselected Providers to identify the selection.
 
@@ -69,7 +70,7 @@ An Extra is imported and initialized only when its own service is explicitly sta
 
 Extra business settings and `enabled` remain in `<Home>/extras/<name>/config.json`. Host functions remain native SDK dependencies. Each Extra retains independent startup, status, shutdown, and cleanup, and cannot close a shared Kernel or host database.
 
-A per-Extra configuration may omit `module` because the manifest declares it:
+A per-Extra configuration may omit `module` because the catalog declares it:
 
 ```json
 {
@@ -87,3 +88,26 @@ There is no automatic module installation or live module reloading. Preserve the
 SDK code must not use an external Node process to load modules or start a top-level Kernel/Extra service. There is no `startOwnedKernel` integration. The host imports Extra modules in its own process, and its own worker entry imports selected Adapters before calling `serveWorker`. See the [isolated native SDK fixture](../../../test/fixtures/native-loading-host.mts) for invocation, cancellation, caller PID and cleanup checks without CLI or unselected packages.
 
 Implementation and verification are tracked in [OctoSpec](../../../.octospec/tasks/85-provider-decoupling/brief.md). The normative ownership constraints live in the [architecture rules](../../../.octospec/rules/architecture.md).
+
+## Globally Installed Extras
+
+The CLI also discovers `octo-runtime-extra-<name>` and `@<scope>/octo-runtime-extra-<name>` packages installed in its own global package-manager environment. For example, `@mininglamp-enterprise/octo-runtime-extra-loop-daemon` registers as `loop-daemon`. Its `package.json` name must match its installed name, and its exported `name` must match the suffix. No enterprise scope or dependency is built into Runtime.
+
+Install Runtime and the Extra with the same npm prefix or pnpm global environment. Use the actual private package available to your organization; registry authentication and installation remain your responsibility:
+
+```sh
+npm install -g @mininglamp-oss/octo-runtime
+npm install -g @mininglamp-enterprise/octo-runtime-extra-loop-daemon
+octo-runtime extraset loop-daemon < loop-daemon.json
+octo-runtime loop-daemon start
+```
+
+`loop-daemon.json` contains `{"enabled":true,"config":{...}}` with the plugin's required business settings. Discovery never enables or starts a package. Each Home keeps its own configuration and autostart settings. For foreground diagnostics, use `octo-runtime loop-daemon run`; source and collision diagnostics go to stderr, including with `--json`.
+
+The CLI identifies its installation from its entry path and filesystem evidence, without running whichever npm/pnpm is first on `PATH`. npm uses that prefix's `lib/node_modules` (Windows: `node_modules`) and checks the installed CLI launcher. pnpm supports the version-5 global layout and version-11 active isolated installation groups, including symlinks and custom global locations. Only direct global packages participate; bundled dependencies, hoisted transitive packages, stale pnpm groups and other global environments do not. Newer unrecognized layouts fall back to explicit manifests.
+
+Precedence is **built-in > Home > global** by logical Extra name. Global ties use ascending package name, then installation path, compared by Unicode code units rather than locale or filesystem enumeration order. Reports identify both selected and ignored origins. Deduplication happens before entry-point resolution or import; discovery reads metadata only. Selected packages load from their recorded installation anchor using ESM import conditions and package exports, even when `package.json` is not exported. A removed or redirected installation fails instead of falling back to an ancestor's same-name package. A selected load failure reports `EXTRA_MODULE_LOAD_FAILED`; an exported-name mismatch reports `EXTRA_NAME_MISMATCH`.
+
+Local/source checkouts, missing or unverifiable global origins, and direct execution from pnpm's shared real store use manifest-only discovery and explain that fallback. Invoke the installed pnpm command or its installation-group path; CLI-created service definitions preserve that verified path across restarts. An unreadable discovery location or invalid package metadata is reported and skipped, so it does not block Kernel or explicit manifests. This tolerance does not relax validation of the two manifest files.
+
+Each catalog read scans again. Installations and removals become visible on the next CLI invocation; updates never hot-swap an active Extra. Restart that Extra after an update. `--manifest` completely bypasses global discovery. SDK hosts continue to use explicit native imports, and failed ordinary manifest resolution never searches global directories.

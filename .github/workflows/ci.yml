@@ -95,6 +95,10 @@ jobs:
             VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
           fi
           echo "archive=dist/release/mininglamp-oss-octo-runtime-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+      - name: Verify isolated npm and pnpm global Extra installations
+        env:
+          ARCHIVE: ${{ steps.pack.outputs.archive }}
+        run: pnpm run test:global-extras "$ARCHIVE"
       - name: Verify offline installation and public API
         shell: bash
         env:
@@ -142,6 +146,8 @@ jobs:
         run: pnpm docs:check
       - name: Verify OpenCode native executable selection on Windows
         run: node --unhandled-rejections=strict --test test/opencode-v2.test.js
+      - name: Verify global Extra discovery on Windows
+        run: node --unhandled-rejections=strict --test test/global-extra-discovery.test.js
       - name: Verify naming fixtures without external ripgrep on Windows
         run: node --unhandled-rejections=strict --test test/name-lint.test.js
       - name: Verify Playboard temporary IPC with long Unicode paths on Windows
@@ -196,6 +202,11 @@ jobs:
             VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
           fi
           echo "archive=dist/release/mininglamp-oss-octo-runtime-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+      - name: Verify isolated npm and pnpm global Extra installations on Windows
+        shell: bash
+        env:
+          ARCHIVE: ${{ steps.pack.outputs.archive }}
+        run: pnpm run test:global-extras "$ARCHIVE"
       - name: Verify Windows installation and independent component cleanup
         shell: bash
         env:

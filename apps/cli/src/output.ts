@@ -123,7 +123,11 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     NOT_INSTALLED: "Run this component's install command, then start it.",
     EXTRA_NOT_REGISTERED: "Save this Extra's declaration with extraset before starting it.",
     EXTRA_MANIFEST_DECLARATION_REQUIRED:
-      "Add this Extra's name and module to the selected Home manifest.json (extras array), then retry.",
+      "Install this Extra alongside the global Runtime, or add its name and module to the selected Home manifest.json (extras array), then retry.",
+    EXTRA_NAME_MISMATCH:
+      "The selected Extra must export the same name as its catalog entry. Check the reported package origin.",
+    EXTRA_MODULE_LOAD_FAILED:
+      "Check the selected catalog declaration, discovery diagnostics, installation and ESM exports; reinstall it or select a valid Home manifest entry, then retry.",
     EXTRA_MODULE_MIGRATION_REQUIRED:
       "The saved module differs from manifest.json. Review both declarations, then save matching module text or omit module from the Extra configuration.",
     MANIFEST_INVALID:

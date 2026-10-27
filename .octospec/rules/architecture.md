@@ -385,7 +385,7 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 #### CLI 与 SDK 的 Adapter/Extra 装配约束
 
-2026-10-21 用户明确：本节同时约束 Adapter 和 Extra，取代此前“仅 Adapter 默认清单”和 SDK 可继承 CLI 文件的解释。以下要求已在本工作树实现；具体实现与验证范围见 [Issue 85](../tasks/85-provider-decoupling/brief.md)。SDK 原生 import 与 CLI 内部 runner 必须保持两种独立装配路径，禁止恢复 startOwnedKernel 或外部 Node 顶层服务加载器。
+2026-10-21 用户明确：本节同时约束 Adapter 和 Extra，取代此前“仅 Adapter 默认清单”和 SDK 可继承 CLI 文件的解释。Issue #192 增加 CLI 独占的同环境全局 Extra 发现，详见本节补充。以下要求已在本工作树实现；具体实现与验证范围见 [Issue 85](../tasks/85-provider-decoupling/brief.md)。SDK 原生 import 与 CLI 内部 runner 必须保持两种独立装配路径，禁止恢复 startOwnedKernel 或外部 Node 顶层服务加载器。
 
 1. **SDK 原生装配。** Electron 及其他 SDK 宿主在接入代码中直接 import 所需 Adapter 和 Extra。SDK 不要求、读取、复制或生成永久或临时 manifest，不扫描 CLI Home 或默认集合。宿主 App 选择模块、配置、函数依赖和部署；FDE 如何复制代码与处理依赖由业务方负责。
 2. **保持执行位置。** Kernel 服务在宿主调用进程原生构造；Adapter 在宿主选择的内部 worker 入口 import 并注册到唯一 AgentExecutor。Extra 在宿主服务进程 import 后传给 createExtraService，函数依赖直接注入。跨进程只传 worker 入口和必要可序列化启动信息，不传实例或函数，不以外部 Node 或 CLI 代启顶层服务。
@@ -399,6 +399,10 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 10. **两种接入共享执行和生命周期。** 保留 invoke、取消、排空、错误、Extra 独立关闭及资源所有权；不自动安装、不运行时热加载、不重放业务 Run。装配代码、双语文档和真实发行验证同步维护，不能以 workspace 导入成功替代包外验证。
 
 双语设计和实施状态见 [中文](../../docs/zh-CN/concepts/module-loading.md) / [English](../../docs/en/concepts/module-loading.md)。本节是整体架构责任的唯一规范正文；旧任务中 default_adapters.json、extra_adapters.json 和 owned launcher 的描述按其历史状态理解，不作为本次新接口要求。
+
+2026-10-27 / Issue #192：CLI 模块目录增加独立的全局 Extra 来源，优先级为内置 manifest > Home manifest > 全局包，逻辑名称取 `octo-runtime-extra-` 后缀，scope 不限。全局同名按完整包名、安装路径的 Unicode 码元升序取首项；所有冲突先去重再解析/import，诊断保留两方来源。普通 manifest 解析锚点与禁止全局兜底的要求保持；显式 --manifest 完全替换三个来源。
+
+全局环境必须由当前 CLI 安装入口与包/启动器/活动安装组证据确定，不按 PATH 选择包管理器，不合并多个环境。npm 对应 prefix 的 node_modules；pnpm 支持全局版本 5 和版本 11 活动独立安装组，只发现直接包，不扫描共享 store、陈旧 target 或传递依赖。源码或无法确认来源时诊断并保留 manifest 路径。CLI 服务定义保留经 realpath 验证的安装入口，使 pnpm 安装组来源跨启动保持。发现只读元数据且不导入；异常候选诊断跳过，已选模块加载时须核对原安装与导出 name。发现不启用、不自启、不安装；每次目录读取更新候选，运行实例不热更。SDK、Adapter 和业务配置合同不变。操作及支持限制见[模块载入](../../docs/zh-CN/concepts/module-loading.md#全局安装的-extra)。
 
 旧式显式 --manifest 允许省略 Adapter type。CLI 自有执行 worker 先仅装配所选实例，再根据其真实 metadata.type 完成 OpenClaw 连接准备，之后进入既有 serveWorker/list 就绪链；不得按包名猜测、省略初始化或在父进程重复实例化工厂。CLI Kernel 与 Playboard 共享此顺序；通用清单 runner 不包含产品准备逻辑，SDK 保持宿主自有 worker 的原生 import。
 

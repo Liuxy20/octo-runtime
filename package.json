@@ -81,6 +81,7 @@
     "clean": "node scripts/clean-dist.mjs",
     "prebuild": "pnpm run clean",
     "test": "pnpm build && pnpm test:suites",
+    "test:global-extras": "node scripts/verify-global-extra-installations.mjs",
     "test:suites": "pnpm --filter @mininglamp-oss/octo-runtime-extra-webui test:ui && node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
     "docs:check": "tsc -p docs/examples/tsconfig.json && node scripts/check-developer-docs.mjs && node --test docs/checks/*.test.mjs",
     "cli": "pnpm build && node apps/cli/dist/index.js",

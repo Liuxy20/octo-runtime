@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { resolveExtraModule } from "./global-extras.js";
 import {
   assertExtraName,
   assertStoredExtra,
@@ -8,10 +9,7 @@ import {
   type StoredExtra
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { withSetupLock, writeJsonAtomic, type RuntimePaths } from "./state.js";
-import {
-  resolveModuleSpecifier,
-  type ModuleManifest
-} from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
+import { type ModuleManifest } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 
 /** Generic full replacement: no platform-specific CLI fields or validation. */
 export async function setExtra(
@@ -61,10 +59,16 @@ export async function readExtra(
     module: entry.module,
     config: stored.config,
     enabled: stored.enabled,
-    load: () =>
-      import(
-        resolveModuleSpecifier(entry.module, entry.sourceManifest)
-      ) as Promise<ExtraPluginModule>
+    load: async () => {
+      try {
+        const plugin = (await import(await resolveExtraModule(entry))) as ExtraPluginModule;
+        if (plugin.name !== name) throw new Error("EXTRA_NAME_MISMATCH");
+        return plugin;
+      } catch (error) {
+        if (error instanceof Error && error.message === "EXTRA_NAME_MISMATCH") throw error;
+        throw new Error("EXTRA_MODULE_LOAD_FAILED", { cause: error });
+      }
+    }
   };
 }
 

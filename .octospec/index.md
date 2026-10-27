@@ -54,6 +54,8 @@
 
 - [Issue 156：CLI 与 Extra 操作文档收敛](tasks/156-cli-docs/brief.md)：基于 PR #191 后的 main 修复 Extra 指南与 Skill 的安装、自启和组件路由说明；双语 CLI 入门补齐禁用与未安装行为。验证边界见[本轮记录](journal/shared/2026-10-27-156-cli-docs.md)。
 
+- [Issue 192：CLI 全局 Extra 自动发现](tasks/192-global-extra-discovery/brief.md)：独立 worktree 从最新 main 规划并实施，可执行性 97/100；npm/pnpm 来源隔离、延迟加载和包外安装验证，交付 PR 到 main，不自动合并。
+
 - [Issue 58：Windows CLI 兼容修复](tasks/58-windows-cli-signals/brief.md)：修复 foreground/module-loading/Playboard 的真实控制台测试、worker 关闭竞态及 Playboard 清理覆盖主结果；SDK 公共接口保持。验证结果见[实施记录](tasks/58-windows-cli-signals/implementation.md)。
 
 - [Issue 184：Playboard 短临时 IPC 与测试竞态](tasks/184-ci-ipc-reliability/brief.md)：常驻 Home 和端点保持现状；Unix Playboard 使用固定短 `/tmp` 私有目录，并修复 ready JSON 发布与 DSH 后代清理时序。实施准备度见 [97/100 评估](tasks/184-ci-ipc-reliability/assessment.md)。

@@ -144,6 +144,7 @@ test("merge ignores collisions before resolution and keeps Adapter/Extra keys se
   assert.equal(result.adapters.length, 1);
   assert.equal(result.extras.length, 2);
   assert.equal(diagnostics.length, 2);
+  assert.match(diagnostics[1], /selected.*builtin.json.*ignored.*home.json/);
   assert.equal(
     resolveAdapterModules(result)[0].module,
     pathToFileURL(join(root, "valid.mjs")).href

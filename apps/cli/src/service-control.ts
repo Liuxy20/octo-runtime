@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { cliEntrypoint } from "./cli-entrypoint.js";
 import { componentServiceId } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   createServiceBackend,
@@ -32,7 +32,7 @@ export function resolveServiceControl(options: ServiceControlOptions = {}) {
         description: `Octo Runtime ${component}`,
         command: resolve(options.nodeExecutable ?? process.execPath),
         args: [
-          resolve(options.cliEntrypoint ?? fileURLToPath(new URL("./index.js", import.meta.url))),
+          resolve(options.cliEntrypoint ?? cliEntrypoint()),
           component,
           "run",
           "--home",

@@ -91,17 +91,24 @@ export function mergeModuleManifests(
   extension: ModuleManifest,
   report: (message: string) => void = () => {}
 ): ModuleManifest {
-  function merge<T>(first: T[], second: T[], key: (entry: T) => string | undefined): T[] {
-    const seen = new Set(first.map(key).filter((value) => value !== undefined));
+  function merge<T extends { module: string; sourceManifest: string }>(
+    first: T[],
+    second: T[],
+    key: (entry: T) => string | undefined
+  ): T[] {
+    const seen = new Map(first.map((entry) => [key(entry), entry]));
     return [
       ...first,
       ...second.filter((entry) => {
         const name = key(entry);
         if (name !== undefined && seen.has(name)) {
-          report(`Ignoring extension module "${name}": built-in declaration takes precedence`);
+          const selected = seen.get(name)!;
+          report(
+            `Ignoring extension module "${name}": built-in declaration takes precedence; selected ${JSON.stringify({ module: selected.module, source: selected.sourceManifest })}; ignored ${JSON.stringify({ module: entry.module, source: entry.sourceManifest })}`
+          );
           return false;
         }
-        if (name !== undefined) seen.add(name);
+        if (name !== undefined) seen.set(name, entry);
         return true;
       })
     ];

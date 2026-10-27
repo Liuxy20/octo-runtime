@@ -41,7 +41,7 @@ export default function extra(ctx: ExtraContext, config: JsonObject) {
 
 ## 配置和重载
 
-Adapter/Extra 的装配方式统一遵守[基础架构中的 CLI 与 SDK 约束](architecture.md#cli-与-sdk-的-adapterextra-装配约束)：SDK 原生 import 并注入模块，不依赖 manifest；CLI 将模块目录统一到内置和用户 Home 两份 manifest 的 adapters、extras 字段。统一清单与旧 module 字段迁移已接通；新 CLI 配置可省略 module，保留时须与有效清单文字一致，冲突明确失败。本规则下文的配置路径和现有生命周期保持。设计说明见[中文](../../docs/zh-CN/concepts/module-loading.md) / [English](../../docs/en/concepts/module-loading.md)。
+Adapter/Extra 的装配方式统一遵守[基础架构中的 CLI 与 SDK 约束](architecture.md#cli-与-sdk-的-adapterextra-装配约束)：SDK 原生 import 并注入模块，不依赖 manifest；CLI 将模块目录统一到内置和用户 Home 两份 manifest 的 adapters、extras 字段，并为 Extra 增加当前 CLI 同一全局安装环境的发现来源（内置 > Home > 全局）。发现只读元数据，不启用/启动，不影响 SDK 原生装配；具体环境识别、冲突和回退以架构规则为准。统一清单与旧 module 字段迁移已接通；新 CLI 配置可省略 module，保留时须与有效清单文字一致，冲突明确失败。本规则下文的配置路径和现有生命周期保持。设计说明见[中文](../../docs/zh-CN/concepts/module-loading.md) / [English](../../docs/en/concepts/module-loading.md)。
 
 宿主选择配置来源、持久化和凭据保护，SDK 只消费已解析的 JSON 值。JSON 不允许函数、循环引用、非 JSON 值。SDK 不读取宿主数据库或云端配置中心。配置、模块或函数引用变化时按“停止旧 Extra并确认完整 → 保存完整配置 → 创建新 Extra”处理，不恢复 onConfigure、局部 reconcile 或业务对象控制。
 
