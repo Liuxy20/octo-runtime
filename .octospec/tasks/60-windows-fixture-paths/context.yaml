@@ -1,0 +1,17 @@
+brief: .octospec/tasks/60-windows-fixture-paths/brief.md
+baseline: f0bacb01590084523c21dc9996d05738c9a06a44
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "保持 SDK 与执行责任边界，测试承担自己生成路径的转换。"
+  - id: runtime-engineering
+    source: repo
+    reason: "测试使用真实 fake Provider，保留失败事实和资源清理证据。"
+  - id: commit
+    source: repo
+    reason: "内部任务记录；公开说明语言优先遵循 CONTRIBUTING.md。"
+files_expected:
+  - test/acp-transport-failure.test.js
+  - test/provider-buffer-limits.test.js
+  - test/grok-build-adapter.test.js
+updated_at: 2026-10-27T00:00:00Z

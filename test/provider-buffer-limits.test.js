@@ -4,6 +4,7 @@ import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import { fileURLToPath } from "node:url";
 import { AcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
 import { createZcodeGuiAdapter } from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
 import { resolveStreamLimitPolicy } from "@mininglamp-oss/octo-runtime-protocol";
@@ -110,7 +111,9 @@ for (const mode of ["count", "bytes", "line", "complete"]) {
         },
         command: process.execPath,
         appServerArgs: [
-          new URL("../test-support/zcode/fake-zcode-buffer-flood.mjs", import.meta.url).pathname,
+          fileURLToPath(
+            new URL("../test-support/zcode/fake-zcode-buffer-flood.mjs", import.meta.url)
+          ),
           mode
         ]
       });
