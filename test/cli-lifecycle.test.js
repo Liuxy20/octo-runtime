@@ -9,10 +9,12 @@ import { runCli } from "../apps/cli/dist/main.js";
 import { componentEndpoint, componentServiceId } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { LaunchdUserBackend, ServiceError } from "@mininglamp-oss/octo-runtime-cross-service";
 import { describeError, formatStatus, readStartupFailure } from "../apps/cli/dist/output.js";
+import {
+  createUnixServiceFixture,
+  mapCliServiceToUnix
+} from "../test-support/unix-service-fixture.js";
 
 test("CLI start installs a missing service with progress on stderr and queries the Extra's own status", async (t) => {
-  const home = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "oc75-"));
-  t.after(() => rm(home, { recursive: true, force: true }));
   let loaded = false;
   let disabled = false;
   let queries = 0;
@@ -21,6 +23,11 @@ test("CLI start installs a missing service with progress on stderr and queries t
   t.after(async () => {
     if (server?.listening) await new Promise((resolve) => server.close(resolve));
   });
+  const { home, unixHome } = await createUnixServiceFixture(
+    t,
+    "oc75-",
+    process.platform === "darwin" ? "/tmp" : tmpdir()
+  );
   const backend = new LaunchdUserBackend({
     platform: "darwin",
     homeDirectory: home,
@@ -42,8 +49,20 @@ test("CLI start installs a missing service with progress on stderr and queries t
         }
         if (args[0] === "bootstrap") {
           assert.equal(disabled, false);
-          assert.match(args[2], /Library\/LaunchAgents/);
-          assert.match(await readFile(args[2], "utf8"), /channel-wecom/);
+          assert.equal(
+            args[2],
+            join(
+              home,
+              "Library",
+              "LaunchAgents",
+              `${componentServiceId(home, "channel-wecom")}.plist`
+            )
+          );
+          const plist = await readFile(args[2], "utf8");
+          assert.match(plist, /channel-wecom/);
+          assert.ok(plist.includes("<string>/usr/bin/node</string>"));
+          assert.ok(plist.includes("<string>/opt/octo-runtime/cli.js</string>"));
+          assert.ok(plist.includes(`<key>WorkingDirectory</key>\n  <string>${unixHome}</string>`));
           await mkdir(join(home, "sockets"), { recursive: true });
           server = net.createServer((socket) =>
             socket.once("data", (bytes) => {
@@ -83,6 +102,7 @@ test("CLI start installs a missing service with progress on stderr and queries t
       }
     }
   });
+  mapCliServiceToUnix(t, backend, home, unixHome);
   const call = async (...args) => {
     let output = "";
     const progress = [];

@@ -1,0 +1,17 @@
+brief: .octospec/tasks/63-unix-service-fixtures/brief.md
+baseline: 5c0d2c635b6af214c7347249264bffaff2ac469d
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 保持产品责任边界和 SDK 接口，修复测试输入
+  - id: runtime-engineering
+    source: repo
+    reason: 测试隔离、fake runner、实际断言及验证证据
+  - id: runtime-lifecycle
+    source: repo
+    reason: 保留服务安装和启停合同
+files_expected:
+  - test/cross-service.test.js
+  - test/cli-lifecycle.test.js
+  - test-support/unix-service-fixture.js
+updated_at: 2026-10-27T00:00:00Z
