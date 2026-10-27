@@ -1,5 +1,9 @@
 # 工程知识变更记录
 
+## 2026-10-28
+
+- [OCTO-2 / #213](tasks/octo-2-history-intent/brief.md)：从 main@b3fba8f 新建 worktree，方案与 96/100 实施准备度先上传 Loop。先冻结基线门槛，再运行中英 16 类真实 Codex A/B；主矩阵 232 条，意图正确从 79/116 提升到 109/116，保留候选 7 条失败。另 64 条共目录配对确认输入及真实续接。只改三处 Channel 历史指引，不改检索、准入、游标、reset 或权限；真实 IM、自动化及未部署边界见[验证](tasks/octo-2-history-intent/validation.md)。
+
 ## 2026-10-27
 
 - [#198 本地长时模拟](tasks/198-gateway-reconnect/local-simulation.md)：CLI/SDK 真实时钟验证监听端口停机/恢复和静默丢包，各约 170 秒通过；停机时持续 5/10/15 秒退避，静默检测约 100 秒，恢复流量后约 5 秒上线并回复。验证默认重试修复，保留静默检测非 20 秒的限制。

@@ -1,0 +1,62 @@
+{
+  "date": "2026-10-28",
+  "analysisType": "post-hoc-user-feedback-sensitivity",
+  "participatesInAcceptanceGate": false,
+  "acceptanceCriteriaSource": "assessment.md",
+  "acceptanceMetricsSource": "metrics.json",
+  "scope": "All overrides and revisedMetrics below are non-gating sensitivity analysis only; they do not replace original judgments or the frozen acceptance verdict.",
+  "basis": "User feedback after reviewing the recorded replies; this analysis was not frozen before evaluation and is not used to establish acceptance.",
+  "criterion": "A setup reply that retains the destination, day and trip duration and asks a relevant follow-up about departure or preferences is acceptable without immediately producing an itinerary.",
+  "originalRecords": "evaluation.jsonl",
+  "originalMetrics": "metrics.json",
+  "overrides": [
+    {
+      "key": "baseline/02-setup-zh/full/0",
+      "originalIntentCorrect": false,
+      "intentCorrect": true,
+      "reason": "Retains Saturday, Hangzhou and day-trip intent; asks relevant departure and preference questions."
+    },
+    {
+      "key": "baseline/02-setup-zh/compact/0",
+      "originalIntentCorrect": false,
+      "intentCorrect": true,
+      "reason": "Retains Saturday, Hangzhou and day-trip intent; asks relevant departure and preference questions."
+    },
+    {
+      "key": "baseline/02-setup-en/full/0",
+      "originalIntentCorrect": false,
+      "intentCorrect": true,
+      "reason": "Retains Saturday, Hangzhou and day-trip intent; asks relevant departure and preference questions."
+    },
+    {
+      "key": "baseline/02-setup-en/compact/0",
+      "originalIntentCorrect": false,
+      "intentCorrect": true,
+      "reason": "Retains Saturday, Hangzhou and day-trip intent; asks relevant departure, travel-mode and preference questions."
+    },
+    {
+      "key": "candidate/02-setup-en/compact/1",
+      "originalIntentCorrect": false,
+      "intentCorrect": true,
+      "reason": "Retains Saturday, Hangzhou and day-trip intent; asks relevant departure and preference questions."
+    }
+  ],
+  "revisedMetrics": {
+    "baseline": {
+      "n": 116,
+      "intentCorrect": 83,
+      "positiveN": 44,
+      "positiveCorrect": 19,
+      "setupN": 8,
+      "setupCorrect": 4
+    },
+    "candidate": {
+      "n": 116,
+      "intentCorrect": 110,
+      "positiveN": 44,
+      "positiveCorrect": 44,
+      "setupN": 8,
+      "setupCorrect": 8
+    }
+  }
+}

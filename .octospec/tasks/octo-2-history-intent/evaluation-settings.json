@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-28 Asia/Shanghai",
+  "codexCli": "0.164.0",
+  "node": "24.19.0",
+  "baseline": {
+    "adapter": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "low",
+    "repetitions": 2,
+    "promptHash": "f9536c145b5107dd7c2ef13f82c7d8d9d011c067080a04037e9dbbc0feb3ee3e",
+    "tools": "forbidden by host instruction",
+    "temperature": "provider default (not exposed)"
+  },
+  "candidate": {
+    "adapter": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "low",
+    "repetitions": 2,
+    "promptHash": "5e106fe95e4eec129a3b83b6a8ebaef4a3e9c195bf0eefb07a2891451e16e680",
+    "tools": "forbidden by host instruction",
+    "temperature": "provider default (not exposed)"
+  },
+  "sampleCount": 232,
+  "pairedConfirmation": 64,
+  "neutralSeedCalls": 148
+}

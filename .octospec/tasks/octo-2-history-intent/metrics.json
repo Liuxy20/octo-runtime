@@ -1,0 +1,150 @@
+{
+  "baseline": {
+    "n": 116,
+    "intentCorrect": 79,
+    "positiveN": 44,
+    "positiveCorrect": 15,
+    "tools": 0,
+    "errors": 0,
+    "byCategory": {
+      "01-pending": {
+        "correct": 0,
+        "n": 8
+      },
+      "03-supplement": {
+        "correct": 8,
+        "n": 8
+      },
+      "05-reference": {
+        "correct": 4,
+        "n": 4
+      },
+      "07-social": {
+        "correct": 8,
+        "n": 8
+      },
+      "09-speakers": {
+        "correct": 8,
+        "n": 8
+      },
+      "11-reset": {
+        "correct": 8,
+        "n": 8
+      },
+      "13-missing": {
+        "correct": 8,
+        "n": 8
+      },
+      "15-completed": {
+        "correct": 4,
+        "n": 4
+      },
+      "02-setup": {
+        "correct": 0,
+        "n": 8
+      },
+      "04-correction": {
+        "correct": 3,
+        "n": 8
+      },
+      "06-topic": {
+        "correct": 8,
+        "n": 8
+      },
+      "08-ambiguous": {
+        "correct": 4,
+        "n": 8
+      },
+      "10-cancelled": {
+        "correct": 0,
+        "n": 4
+      },
+      "12-injection": {
+        "correct": 8,
+        "n": 8
+      },
+      "14-scope": {
+        "correct": 8,
+        "n": 8
+      },
+      "16-budget": {
+        "correct": 0,
+        "n": 8
+      }
+    }
+  },
+  "candidate": {
+    "n": 116,
+    "intentCorrect": 109,
+    "positiveN": 44,
+    "positiveCorrect": 43,
+    "tools": 0,
+    "errors": 0,
+    "byCategory": {
+      "01-pending": {
+        "correct": 8,
+        "n": 8
+      },
+      "03-supplement": {
+        "correct": 8,
+        "n": 8
+      },
+      "05-reference": {
+        "correct": 4,
+        "n": 4
+      },
+      "07-social": {
+        "correct": 8,
+        "n": 8
+      },
+      "09-speakers": {
+        "correct": 8,
+        "n": 8
+      },
+      "11-reset": {
+        "correct": 8,
+        "n": 8
+      },
+      "13-missing": {
+        "correct": 8,
+        "n": 8
+      },
+      "15-completed": {
+        "correct": 4,
+        "n": 4
+      },
+      "02-setup": {
+        "correct": 7,
+        "n": 8
+      },
+      "04-correction": {
+        "correct": 8,
+        "n": 8
+      },
+      "06-topic": {
+        "correct": 8,
+        "n": 8
+      },
+      "08-ambiguous": {
+        "correct": 4,
+        "n": 8
+      },
+      "10-cancelled": {
+        "correct": 2,
+        "n": 4
+      },
+      "12-injection": {
+        "correct": 8,
+        "n": 8
+      },
+      "14-scope": {
+        "correct": 8,
+        "n": 8
+      },
+      "16-budget": {
+        "correct": 8,
+        "n": 8
+      }
+    }
+  }
+}

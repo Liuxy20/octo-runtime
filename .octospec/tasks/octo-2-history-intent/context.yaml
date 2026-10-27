@@ -1,0 +1,21 @@
+task: octo-2-history-intent
+baseline: b3fba8f8e96f08bddde38449962ae4006811feca
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+workflow: .claude/skills/octospec-workflow/SKILL.md
+overrides:
+  - 用户及 CONTRIBUTING.md 要求 OSS commit 与 PR 使用英文
+  - 用户已授权方案上传、任务评论、实现测试、提交及创建 PR
+verification:
+  controlled_provider: codex
+  live_im: completed_with_external_protected_test_accounts

@@ -1,0 +1,84 @@
+{
+  "baseline": {
+    "endpoint": "https://im-test.deepminer.com.cn",
+    "adapter": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "low",
+    "cases": [
+      {
+        "category": "pending",
+        "answer": "在，请说。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": false,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      },
+      {
+        "category": "supplement",
+        "answer": "HTTP 重试测试清单（含超时）：\n\n- 首次成功：不重试。\n- 连接失败、连接超时、读取超时：按策略重试。\n- 429、可重试的 5xx：正确处理 `Retry-After`。\n- 不可重试的错误：立即失败。\n- 验证重试次数、退避、抖动及间隔上限。\n- 总超时耗尽或主动取消：停止重试。\n- 非幂等请求：验证防重复机制。\n- 最终成功或失败：结果与日志正确。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": true,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      },
+      {
+        "category": "correction",
+        "answer": "确认，以最新更正为准：最多重试 8 次，加上首次请求，最多共 9 次尝试；总超时耗尽或主动取消时提前停止。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": true,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      }
+    ]
+  },
+  "candidate": {
+    "endpoint": "https://im-test.deepminer.com.cn",
+    "adapter": "codex",
+    "model": "gpt-6.1-sol",
+    "effort": "low",
+    "cases": [
+      {
+        "category": "pending",
+        "answer": "7 + 5 = 12。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": false,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      },
+      {
+        "category": "supplement",
+        "answer": "HTTP 重试测试清单（含超时）：\n\n- 首次成功：不重试。\n- 连接失败、连接超时、读取超时：按策略重试。\n- 429、可重试的 5xx：正确处理 `Retry-After`。\n- 不可重试错误：立即失败。\n- 验证重试次数、退避、抖动和间隔上限。\n- 总超时耗尽或主动取消：停止重试。\n- 非幂等请求：验证防重复机制。\n- 最终成功或失败：结果和日志正确。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": true,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      },
+      {
+        "category": "correction",
+        "answer": "确认，以最新更正为准：最多重试 8 次，加上首次请求，最多共 9 次尝试；总超时耗尽或主动取消时提前停止。",
+        "toolEvents": 0,
+        "historyPresent": true,
+        "resumed": true,
+        "terminal": "run.completed",
+        "finished": true,
+        "finalReadBack": true,
+        "unmentionedDidNotInvoke": true
+      }
+    ]
+  }
+}
