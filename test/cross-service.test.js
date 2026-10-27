@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, posix } from "node:path";
 import test from "node:test";
+import { createUnixServiceFixture } from "../test-support/unix-service-fixture.js";
 import {
   LaunchdUserBackend,
   ServiceError,
@@ -59,6 +60,17 @@ test("service specs reject relative paths, multiline text, and likely credential
   );
 });
 
+for (const platform of ["linux", "darwin"]) {
+  for (const field of ["command", "workingDirectory", "stdoutPath", "stderrPath"]) {
+    test(`${platform} service specs reject Windows drive paths in ${field}`, () => {
+      assert.throws(
+        () => normalizeServiceSpec({ ...unixSpec, [field]: "C:\\Runtime\\fixture" }, platform),
+        (error) => error instanceof ServiceError && error.code === "INVALID_SPEC"
+      );
+    });
+  }
+}
+
 test("launchd renderer keeps executable and argv structured and escapes XML", () => {
   const plist = renderLaunchdPlist(unixSpec);
   assert.match(plist, /<key>ProgramArguments<\/key>\s*<array>/);
@@ -111,8 +123,8 @@ for (const directory of [
     const spec = {
       ...unixSpec,
       workingDirectory: directory,
-      stdoutPath: join(directory, 'out "quoted" %n.log'),
-      stderrPath: join(directory, "err \\literal %h.log"),
+      stdoutPath: posix.join(directory, 'out "quoted" %n.log'),
+      stderrPath: posix.join(directory, "err \\literal %h.log"),
       args: ["with spaces", 'with "quotes"', "100%", "\\literal"],
       environment: { OCTO_PROFILE: 'with "quotes" \\literal 100%' }
     };
@@ -189,8 +201,7 @@ test("Windows backend rejects fields Task Scheduler cannot preserve", () => {
 });
 
 test("systemd install is idempotent and does not start a new service", async (t) => {
-  const home = await mkdtemp(join(tmpdir(), "octo-cross-service-systemd-"));
-  t.after(() => rm(home, { recursive: true, force: true }));
+  const { home, unixHome } = await createUnixServiceFixture(t, "octo-cross-service-systemd-");
   const runner = new FakeRunner((_command, args) => {
     if (args.includes("show")) {
       return result(
@@ -208,9 +219,9 @@ test("systemd install is idempotent and does not start a new service", async (t)
   });
   const localSpec = {
     ...unixSpec,
-    workingDirectory: home,
-    stdoutPath: join(home, "logs", "service.out.log"),
-    stderrPath: join(home, "logs", "service.err.log")
+    workingDirectory: unixHome,
+    stdoutPath: posix.join(unixHome, "logs", "service.out.log"),
+    stderrPath: posix.join(unixHome, "logs", "service.err.log")
   };
 
   await backend.install(localSpec);
@@ -218,6 +229,7 @@ test("systemd install is idempotent and does not start a new service", async (t)
 
   const unitPath = join(home, ".config", "systemd", "user", `${unixSpec.id}.service`);
   assert.equal(await readFile(unitPath, "utf8"), renderSystemdUnit(localSpec));
+  assert.ok((await stat(join(home, "logs"))).isDirectory());
   assert.equal(runner.calls.filter((call) => call.args.includes("daemon-reload")).length, 1);
   assert.equal(runner.calls.filter((call) => call.args.includes("enable")).length, 2);
   assert.equal(runner.calls.filter((call) => call.args.includes("start")).length, 0);
@@ -226,16 +238,18 @@ test("systemd install is idempotent and does not start a new service", async (t)
 
 for (const useXdg of [false, true]) {
   test(`systemd reinstall repairs quoted path directives in ${useXdg ? "XDG" : "default"} config and reloads before starting`, async (t) => {
-    const home = await mkdtemp(join(tmpdir(), "octo-systemd-reinstall-"));
-    t.after(() => rm(home, { recursive: true, force: true }));
+    const { home, unixHome, nativePath } = await createUnixServiceFixture(
+      t,
+      "octo-systemd-reinstall-"
+    );
     const spec = {
       ...unixSpec,
-      workingDirectory: home,
-      stdoutPath: join(home, "stdout.log"),
-      stderrPath: join(home, "stderr.log")
+      workingDirectory: unixHome,
+      stdoutPath: posix.join(unixHome, "stdout.log"),
+      stderrPath: posix.join(unixHome, "stderr.log")
     };
     const configHome = join(home, useXdg ? "xdg-config" : ".config");
-    const environment = useXdg ? { XDG_CONFIG_HOME: configHome } : {};
+    const environment = useXdg ? { XDG_CONFIG_HOME: posix.join(unixHome, "xdg-config") } : {};
     const unitPath = join(configHome, "systemd", "user", `${spec.id}.service`);
     const repaired = renderSystemdUnit(spec);
     await mkdir(dirname(unitPath), { recursive: true });
@@ -263,7 +277,7 @@ for (const useXdg of [false, true]) {
       environment
     });
     const previous = await backend.inspect(spec);
-    assert.equal(previous.definitionPath, unitPath);
+    assert.equal(nativePath(previous.definitionPath), unitPath);
     assert.deepEqual(previous.drift, ["definition_content"]);
     await backend.install(spec);
     assert.equal(await readFile(unitPath, "utf8"), repaired);
@@ -278,8 +292,7 @@ for (const useXdg of [false, true]) {
 }
 
 test("launchd install then start bootstraps the current user's LaunchAgent", async (t) => {
-  const home = await mkdtemp(join(tmpdir(), "octo-cross-service-launchd-"));
-  t.after(() => rm(home, { recursive: true, force: true }));
+  const { home, unixHome } = await createUnixServiceFixture(t, "octo-cross-service-launchd-");
   const runner = new FakeRunner((_command, args) => {
     if (args[0] === "print-disabled") return result(0, "disabled services = {\n}\n");
     if (args[0] === "print") return result(113, "", "Could not find service");
@@ -294,9 +307,9 @@ test("launchd install then start bootstraps the current user's LaunchAgent", asy
   });
   const localSpec = {
     ...unixSpec,
-    workingDirectory: home,
-    stdoutPath: join(home, "logs", "service.out.log"),
-    stderrPath: join(home, "logs", "service.err.log")
+    workingDirectory: unixHome,
+    stdoutPath: posix.join(unixHome, "logs", "service.out.log"),
+    stderrPath: posix.join(unixHome, "logs", "service.err.log")
   };
 
   await backend.install(localSpec);
@@ -308,10 +321,11 @@ test("launchd install then start bootstraps the current user's LaunchAgent", asy
 
   const bootstrap = runner.calls.find((call) => call.args[0] === "bootstrap");
   assert.deepEqual(bootstrap?.args.slice(0, 2), ["bootstrap", "gui/501"]);
-  assert.match(
+  assert.equal(
     bootstrap?.args[2] ?? "",
-    /Library\/LaunchAgents\/cn\.mininglamp\.octo-runtime\.daemon\.plist$/
+    join(home, "Library", "LaunchAgents", `${unixSpec.id}.plist`)
   );
+  assert.ok((await stat(join(home, "logs"))).isDirectory());
 });
 
 test("Windows install registers structured XML and inspect detects no drift", async (t) => {
@@ -401,8 +415,7 @@ test("backend factory selects the native user manager and rejects unsupported pl
 });
 
 test("launchd stop waits for asynchronous bootout before a subsequent start", async (t) => {
-  const home = await mkdtemp(join(tmpdir(), "oc75-launchd-stop-"));
-  t.after(() => rm(home, { recursive: true, force: true }));
+  const { home, unixHome } = await createUnixServiceFixture(t, "oc75-launchd-stop-");
   let state = "absent";
   let pendingPrints = 0;
   const runner = new FakeRunner((_command, args) => {
@@ -431,7 +444,7 @@ test("launchd stop waits for asynchronous bootout before a subsequent start", as
   });
   const spec = {
     ...unixSpec,
-    workingDirectory: home,
+    workingDirectory: unixHome,
     stdoutPath: undefined,
     stderrPath: undefined
   };
@@ -445,8 +458,7 @@ test("launchd stop waits for asynchronous bootout before a subsequent start", as
 
 for (const value of ["true", "disabled", "false", "enabled"]) {
   test(`launchd recognizes the ${value} override format`, async (t) => {
-    const home = await mkdtemp(join(tmpdir(), "oc75-launchd-format-"));
-    t.after(() => rm(home, { recursive: true, force: true }));
+    const { home, unixHome } = await createUnixServiceFixture(t, "oc75-launchd-format-");
     const runner = new FakeRunner((_command, args) => {
       if (args[0] === "print-disabled") return result(0, `"${unixSpec.id}" => ${value}`);
       if (args[0] === "print") return result(113);
@@ -460,7 +472,7 @@ for (const value of ["true", "disabled", "false", "enabled"]) {
     });
     const spec = {
       ...unixSpec,
-      workingDirectory: home,
+      workingDirectory: unixHome,
       stdoutPath: undefined,
       stderrPath: undefined
     };
