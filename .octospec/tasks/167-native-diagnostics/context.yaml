@@ -1,0 +1,22 @@
+brief: .octospec/tasks/167-native-diagnostics/brief.md
+base: 064f56a25ff431f5fc1c001b2830ba79d45ec951
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 原生命令适配与责任边界；公共 API、纯 Node 实现及 CI 范围约束
+  - id: runtime-lifecycle
+    source: repo
+    reason: 保留 Windows 服务查询、XML、SID 和失败事实合同
+  - id: runtime-engineering
+    source: repo
+    reason: TypeScript、真实 Windows 证据、相关回归与测试隔离
+  - id: commit
+    source: repo
+    reason: 内部中文记录；若后续交付则以 CONTRIBUTING 的公开英文约定为准
+files_expected:
+  - packages/octo-runtime-cross-service/src/runner.ts
+  - packages/octo-runtime-cross-service/package.json
+  - pnpm-lock.yaml
+  - test/cross-service-runner.test.js
+  - .octospec/rules/runtime-lifecycle.md
+updated_at: 2026-10-28T09:08:00Z
