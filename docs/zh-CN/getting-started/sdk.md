@@ -63,6 +63,8 @@ serveWorker([selectedAdapter]);
 
 创建服务后，等待 `initialize()` 成功，再使用 `kernel.client`。退出时，先关闭应用创建的 Extra，等待结果消费、投递和存储操作结束，再关闭应用创建的 Kernel 和数据库。检查清理结果的 `complete` 字段；为 `false` 时，还需要处理返回的待清理资源。
 
+DSH 由宿主安装并选择 npm `@deepseek-ai/dsh`，通过 `adapterConfigurations.dsh.providerOptions.dshBin` 传入 JS 入口的绝对路径。该配置同时用于 `kernel.client.list()` 和调用。参见 [dsh-service.mts](../../examples/dsh-service.mts)、[dsh-worker.mts](../../examples/dsh-worker.mts) 及含 Electron 版本要求的 [DSH 合同](../../../packages/octo-runtime-adapter-dsh/README.zh.md)。Adapter 不发现安装、不回退 Desktop/ASAR。
+
 ## 以源码 submodule 嵌入
 
 应用可以使用内部 workspace 包，替代已发布的发行包。首次添加 submodule 时使用最新远端 `main`：

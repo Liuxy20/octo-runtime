@@ -5,9 +5,9 @@ import {
   type ProfileConfiguration
 } from "./state.js";
 import { loadCliManifest } from "./module-manifest.js";
+import { readCliAdapterConfigurations } from "./adapter-configurations.js";
 import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import {
-  readAdapterConfigurations,
   createKernelService,
   type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
@@ -115,7 +115,12 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
         OCTO_RUNTIME_CLI_PROFILE_ROOT: paths.profileRoot,
         OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "0"
       },
-      adapterConfigurations: readAdapterConfigurations(paths.profileRoot, configuration?.adapters)
+      adapterConfigurations: await readCliAdapterConfigurations(
+        paths.profileRoot,
+        configuration?.adapters,
+        manifest,
+        options.env ?? process.env
+      )
     });
     await kernel.initialize({ signal: controller.signal });
     let exitCode = 1;

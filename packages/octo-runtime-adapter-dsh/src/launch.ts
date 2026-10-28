@@ -1,16 +1,12 @@
 import { spawn } from "node:child_process";
-import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
-import { delimiter, isAbsolute, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { realpath, stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
-import { processEnvironmentValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { mergeProcessEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { DSH_VERSION, DshError, dshError, nativeCode } from "./errors.js";
 
 const VERSION_PROBE_TIMEOUT_MS = 10_000;
 const VERSION_PROBE_MAX_BYTES = 4096;
-const MAX_LAUNCH_ARGS = 64;
-const MAX_LAUNCH_ARG_BYTES = 4096;
 const MAX_TIMEOUT_MS = 86_400_000;
 const MAX_OPTION_STRING_LENGTH = 4096;
 export const DSH_PROCESS_GRACE_MS = 1000;
@@ -22,128 +18,47 @@ export interface DshLaunch {
   dshBin: string;
 }
 
-/** 宿主选择已安装 Provider；Desktop 只作为发行载体，不控制 GUI 或改写用户 profile。 */
+/** 宿主维护 npm 安装的 JS 入口；这里只校验所选入口和版本，不发现或替换安装。 */
 export async function resolveDshLaunch(
   options: Record<string, unknown>,
   env: NodeJS.ProcessEnv,
   signal?: AbortSignal
 ): Promise<DshLaunch> {
-  if (options.args !== undefined && options.command === undefined)
+  if (["command", "args", "desktopPath"].some((key) => options[key] !== undefined))
     throw new DshError("DSH_CONFIG_INVALID");
-  if (options.command !== undefined && options.desktopPath !== undefined)
-    throw new DshError("DSH_CONFIG_INVALID");
-  let command: string | undefined;
-  let args: string[] = [];
-  let dshBin: string | undefined;
-  if (options.dshBin !== undefined) {
-    if (
-      options.command !== undefined ||
-      options.args !== undefined ||
-      options.desktopPath !== undefined
-    )
-      throw new DshError("DSH_CONFIG_INVALID");
-    dshBin = resolve(stringOption(options, "dshBin", ""));
-    try {
-      if (!(await stat(dshBin)).isFile()) throw new Error("not a file");
-    } catch {
-      throw new DshError("DSH_EXECUTABLE_NOT_FOUND");
-    }
-    command = process.execPath;
-    args = [dshBin];
-  } else if (options.command !== undefined) {
-    if (typeof options.command !== "string" || !options.command.trim())
-      throw new DshError("DSH_CONFIG_INVALID");
-    command = await executable(options.command, env);
-    if (!command) throw new DshError("DSH_EXECUTABLE_NOT_FOUND");
-    if (options.args !== undefined) {
-      if (
-        !Array.isArray(options.args) ||
-        options.args.length > MAX_LAUNCH_ARGS ||
-        options.args.some(
-          (value) =>
-            typeof value !== "string" ||
-            value.length > MAX_LAUNCH_ARG_BYTES ||
-            value.includes("\0") ||
-            Buffer.byteLength(value) > MAX_LAUNCH_ARG_BYTES
-        )
-      )
-        throw new DshError("DSH_CONFIG_INVALID");
-      args = (options.args as unknown[]).map((value) => value as string);
-    }
-  } else if (options.desktopPath === undefined) {
-    command = await executable("dsh", env);
+  const dshBin = stringOption(options, "dshBin", "");
+  assertModulePath(dshBin);
+  let physicalPath: string;
+  try {
+    physicalPath = await realpath(dshBin);
+    if (!(await stat(physicalPath)).isFile()) throw new Error("not a file");
+  } catch {
+    throw new DshError("DSH_EXECUTABLE_NOT_FOUND");
   }
-  if (!command) {
-    const desktop =
-      options.desktopPath ??
-      (process.platform === "darwin" ? "/Applications/DeepSeek Harness.app" : undefined);
-    if (typeof desktop !== "string" || !isAbsolute(desktop))
-      throw new DshError("DSH_EXECUTABLE_NOT_FOUND");
-    if (process.platform !== "darwin") throw new DshError("DSH_CONFIG_INVALID");
-    command = join(desktop, "Contents/MacOS/DeepSeek Harness");
-    const entry = join(
-      desktop,
-      "Contents/Resources/app.asar/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js"
-    );
-    // 普通 Node 不解析 asar 内路径；检查归档和 Electron，实际 CLI 由 Electron 解析。
-    try {
-      await access(command);
-      await access(join(desktop, "Contents/Resources/app.asar"));
-    } catch {
-      throw new DshError("DSH_EXECUTABLE_NOT_FOUND");
-    }
-    args = [entry];
-    dshBin = fileURLToPath(new URL("./desktop-entry.js", import.meta.url));
-    env = {
-      ...env,
-      ELECTRON_RUN_AS_NODE: "1",
-      OCTO_DSH_DESKTOP_BINARY: command,
-      OCTO_DSH_DESKTOP_ENTRY: entry
-    };
-  }
-  // Windows 不使用 shell 拼接；宿主可显式选择 Node executable 加 CLI module args。
-  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command))
-    throw new DshError("DSH_CONFIG_INVALID");
-  if (!dshBin) {
-    if (args.length === 0) dshBin = command;
-    // PATHEXT 常返回 .EXE；Windows 同一 Node 路径不能因大小写差异被拒绝为任意 launcher。
-    else if (
-      args.length === 1 &&
-      (process.platform === "win32"
-        ? command.toLowerCase() === process.execPath.toLowerCase()
-        : command === process.execPath)
-    )
-      dshBin = resolve(args[0]);
-    else throw new DshError("DSH_CONFIG_INVALID");
-  }
-  const launch = { command, args, env, dshBin };
+  // 符号链接也不能把 Desktop/ASAR 内嵌入口重新引入 npm 安装合同。
+  assertModulePath(physicalPath);
+  // 固定已校验的目标，避免宿主链接在校验后被替换；版本探针与官方 Client 共用该路径和环境。
+  const launch = {
+    command: process.execPath,
+    args: [physicalPath],
+    env: mergeProcessEnvironment(
+      env,
+      process.versions.electron ? { ELECTRON_RUN_AS_NODE: "1" } : {}
+    ),
+    dshBin: physicalPath
+  };
   await checkVersion(launch, signal);
   return launch;
 }
 
-async function executable(command: string, env: NodeJS.ProcessEnv): Promise<string | undefined> {
-  const candidates =
-    isAbsolute(command) || /[/\\]/.test(command)
-      ? [resolve(command)]
-      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter).flatMap((directory) => {
-          const extensions =
-            process.platform === "win32" && !/\.[^\\/]+$/.test(command)
-              ? [
-                  "",
-                  ...(processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
-                ]
-              : [""];
-          return extensions.map((extension) => resolve(directory, command + extension));
-        });
-  for (const candidate of candidates) {
-    try {
-      await access(candidate, constants.X_OK);
-      if ((await stat(candidate)).isFile()) return candidate;
-    } catch {
-      /* 只检查文件，不执行第二个无 args 的 Provider 探针。 */
-    }
-  }
-  return undefined;
+function assertModulePath(path: string): void {
+  if (
+    !isAbsolute(path) ||
+    !/\.(?:c|m)?js$/i.test(path) ||
+    /(?:^|[/\\])[^/\\]*\.asar(?:[/\\]|$)/i.test(path) ||
+    /\.app[/\\]Contents(?:[/\\]|$)/i.test(path)
+  )
+    throw new DshError("DSH_CONFIG_INVALID");
 }
 
 /** 版本探针同样拥有进程树；取消、超时和超量输出都必须先回收再返回。 */

@@ -14,7 +14,7 @@ const messages = {
   STREAM_QUEUE_ITEM_TOO_LARGE: "DeepSeek Harness event exceeded the configured queue item limit.",
   STREAM_QUEUE_BYTES_EXCEEDED: "DeepSeek Harness event queue exceeded the configured byte limit.",
   STREAM_QUEUE_ITEMS_EXCEEDED: "DeepSeek Harness event queue exceeded the configured item limit.",
-  DSH_EXECUTABLE_NOT_FOUND: "Install a compatible DeepSeek Harness or select its executable.",
+  DSH_EXECUTABLE_NOT_FOUND: "The host-configured DeepSeek Harness JavaScript entry is missing.",
   DSH_VERSION_UNSUPPORTED: "DeepSeek Harness version is incompatible with this adapter.",
   DSH_START_FAILED: "DeepSeek Harness could not start.",
   DSH_INITIALIZE_TIMEOUT: "DeepSeek Harness initialization timed out.",

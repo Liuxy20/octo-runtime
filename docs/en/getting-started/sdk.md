@@ -63,6 +63,8 @@ serveWorker([selectedAdapter]);
 
 After creating the service, await `initialize()` before using `kernel.client`. On exit, close the application's Extras and wait for result consumption, delivery, and storage operations to finish before closing its Kernel and database. Check the cleanup result's `complete` field. If it is `false`, handle the reported pending resources.
 
+For DSH, the host installs/selects npm `@deepseek-ai/dsh` and supplies its JavaScript entry's absolute path through `adapterConfigurations.dsh.providerOptions.dshBin`. This configuration is shared by `kernel.client.list()` and invocation. See [dsh-service.mts](../../examples/dsh-service.mts), [dsh-worker.mts](../../examples/dsh-worker.mts), and the [DSH contract](../../../packages/octo-runtime-adapter-dsh/README.md), including Electron version requirements. The adapter does not discover installations or use Desktop/ASAR fallbacks.
+
 ## Embed the Source as a Submodule
 
 An application may consume the internal workspace packages instead of the published package. Add the submodule from the latest remote `main`:

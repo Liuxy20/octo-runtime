@@ -17,6 +17,10 @@ supersedes: []
 
 # Octo Runtime 基础架构
 
+## GitHub CI 范围约束
+
+2026-10-28 用户明确：严禁擅自扩大 GitHub CI 范围。功能开发、修复、验证、review、解决冲突及交付 PR 不包含新增 CI 的授权。不得新增 workflow、job、矩阵维度、自动触发条件、必需状态或 CI Gate 依赖，也不得通过既有 job 的步骤、脚本和默认测试开关变相加入专项 CI。专项验证在本地或显式手动执行并记录；维护既有 CI 时保留原有范围，提交前核对相对目标分支的 workflow diff 与实际检查列表。
+
 ## 统一原生服务构造与部署边界
 
 2026-10-20，Issue #71 及用户补充明确以下强制架构原则。统一服务 API 在本 worktree 落实，见[实施记录](../tasks/unified-native-sdk-services/implementation.md)。`main@fae6333` 的 `startOwnedKernel`、`startExtra` 及 runner 绑定装配已移除，不能以历史验收为由恢复。

@@ -169,12 +169,12 @@ test(
     assert.equal((await probeCommand(basename(process.execPath, ".exe"), { env })).available, true);
     const launch = await resolveDshLaunch(
       {
-        command: basename(process.execPath, ".exe"),
-        args: [fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url))]
+        dshBin: fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url))
       },
       env
     );
     assert.equal(launch.command.toLowerCase(), process.execPath.toLowerCase());
+    assert.equal(processEnvironmentValue(launch.env, "PATH"), dirname(process.execPath));
   }
 );
 

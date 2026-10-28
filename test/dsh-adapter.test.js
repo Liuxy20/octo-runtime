@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRequire } from "node:module";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { createDshAdapter, dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 // Internal-module tests use the repository's built-artifact contract: pnpm test builds first.
 import { DshTrajectory } from "../packages/octo-runtime-adapter-dsh/dist/trajectory.js";
@@ -27,7 +27,7 @@ const { HarnessClient } = await import(
   pathToFileURL(adapterRequire.resolve("@deepseek-ai/dsh-sdk-client"))
 );
 
-const fixturePath = new URL("./fixtures/dsh-runtime.mjs", import.meta.url).pathname;
+const fixturePath = fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url));
 const terminals = (events) =>
   events.filter((e) => ["run.completed", "run.failed", "run.cancelled"].includes(e.type));
 const text = (events) =>
@@ -52,8 +52,7 @@ async function fixture(t, mode = "success") {
     controlInstructions: "control-only",
     agentConfig: {
       providerOptions: {
-        command: process.execPath,
-        args: [fixturePath],
+        dshBin: fixturePath,
         initializeTimeoutMs: 2000,
         requestTimeoutMs: 2000
       }
@@ -95,6 +94,14 @@ for (const [name, options] of [
   ["oversized arg", { command: process.execPath, args: ["x".repeat(512 * 1024)] }],
   ["oversized UTF-8 arg", { command: process.execPath, args: ["界".repeat(1366)] }],
   ["empty command", { command: "" }],
+  ["missing dshBin", {}],
+  ["relative dshBin", { dshBin: "./dsh.mjs" }],
+  ["empty dshBin", { dshBin: "" }],
+  ["null dshBin", { dshBin: null }],
+  ["Windows wrapper", { dshBin: join(tmpdir(), "dsh.cmd") }],
+  ["Desktop override", { desktopPath: join(tmpdir(), "DeepSeek Harness.app") }],
+  ["ASAR entry", { dshBin: join(tmpdir(), "app.asar", "dsh", "bin.js") }],
+  ["Desktop module", { dshBin: join(tmpdir(), "DSH.app", "Contents", "bin.js") }],
   ["invalid timeout", { dshBin: fixturePath, requestTimeoutMs: 0 }],
   ["invalid string", { dshBin: fixturePath, dshHome: "\0private-value" }]
 ])
@@ -389,7 +396,7 @@ test("DSH pre-abort, unsupported policy and missing executable do not invoke mod
   f.request.signal = AbortSignal.abort();
   assert.equal(terminals(await collect(f.request))[0].type, "run.cancelled");
   f.request.signal = undefined;
-  f.request.agentConfig.providerOptions.command = join(f.directory, "missing");
+  f.request.agentConfig.providerOptions.dshBin = join(f.directory, "missing.mjs");
   assert.equal(terminals(await collect(f.request))[0].payload.code, "DSH_EXECUTABLE_NOT_FOUND");
 });
 

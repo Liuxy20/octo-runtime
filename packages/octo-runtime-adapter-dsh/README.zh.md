@@ -6,7 +6,7 @@
 
 ## 什么时候用它
 
-- 机器上装了 DeepSeek Harness 并已登录，Desktop 或 CLI 都行。
+- 使用 `npm install -g @deepseek-ai/dsh@latest` 安装 Node 发行版，选择与下述 Client 兼容的版本。宿主维护该安装包 JS 入口的绝对路径，通过 `providerOptions.dshBin` 传入，并准备 DSH 认证。
 - Node.js 是 `^24` 或 `^26`——不是任意更高的主版本。
 - 你接受下面列出的上游限制。
 
@@ -23,6 +23,7 @@ const executor = new AgentExecutor();
 executor.register(dshAdapter);
 
 const input = InvokeInput.check({
+  agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   approvalMode: "full_access",
@@ -40,14 +41,20 @@ const input = InvokeInput.check({
 | Adapter 类型 | `dsh`                                                                               |
 | 导出         | `dshAdapter`、`createDshAdapter`                                                    |
 | 公开入口     | `@mininglamp-oss/octo-runtime/adapters/dsh`                                         |
-| 可执行文件   | 优先 PATH 里的 `dsh`，否则用 macOS Desktop 内置版本；`dshBin`、`desktopPath` 可覆盖 |
+| 可执行文件   | 必填：宿主选择的 JS 入口绝对路径 `dshBin`，通过 `process.execPath` 启动 |
 | 输出         | 仅 canonical 事件                                                                   |
 | 审批         | 只支持 `full_access`                                                                |
 | 默认值       | profile `sdk`、provider `deepseek-account`、model `deepseek-flash`                  |
 
 ## 兼容性
 
-Client 与 Provider 固定在 `0.2.1-rc.3`，wire 协议 `deepseek-harness-sdk-runtime/0.0.1`。记录在案的 macOS Desktop 版本是 commit `be72761ee1a6736ebcdf4f3739363b083ae53c98`；未知版本会校验失败。Desktop 启动依赖实验性的 `process.execve`，为的是保住官方 Client 的 PID 与 stdio 所有权。真实 Desktop 证据来自 Node 24；Windows 和 Linux 的原生发行版还没通过真实联调。
+Client 与 Provider 固定在 `0.2.1-rc.3`，wire 协议 `deepseek-harness-sdk-runtime/0.0.1`。所选安装版本不兼容时明确失败。Adapter 不发现 npm 安装、不搜索 PATH、不使用 Desktop/ASAR 代码。`command`、`args`、`desktopPath` 均拒绝；配置缺失或非法返回 `DSH_CONFIG_INVALID`，所选文件不存在返回 `DSH_EXECUTABLE_NOT_FOUND`。
+
+上述 `hostSelectedDshEntry` 由宿主管理，例如所选全局 `@deepseek-ai/dsh` 安装内的 `lib/bin.js` 绝对路径。不能传 `dsh.cmd`、`npx.cmd`、Desktop 可执行文件或相对路径。Kernel 宿主在 `createKernelService` 设置 `adapterConfigurations: { dsh: { providerOptions: { dshBin: hostSelectedDshEntry } } }`，使 `kernel.client.list()` 与调用使用同一入口。Runtime CLI 宿主通过 `<home>/<profile>/config.json` 的 `adapters.dsh.execution.provider_options.dshBin` 配置；不会自动迁移既有配置。
+
+Electron 宿主使用自带 runtime executable，无需另装 Node。Adapter 检测到 Electron 时仅在子进程环境中固定 `ELECTRON_RUN_AS_NODE=1`；宿主也须为 Kernel worker 开启 Node mode，且所选 Electron 构建须支持此模式。Windows 同样传入 JS 入口，不使用 shell wrapper。SDK profile 为 `sdk`；无需 Desktop 窗口或已有 Desktop 进程。
+
+DSH 本身还有原生 runtime 兼容要求。本地 macOS arm64 实测中，DSH `0.2.1-rc.3` 的 `--version` 成功，但 SDK 初始化以 `unsupported Electron runtime fingerprint` 拒绝 Electron `39.8.10`。此上游拒绝与安装发现不同，单独开启 Node mode 不会使该 Electron 构建兼容。同一验证在 Electron `44.7.0`（Node `24.21.0`）通过，CI 也选择此版本。
 
 ## 会话与限制
 
@@ -55,11 +62,12 @@ Client 与 Provider 固定在 `0.2.1-rc.3`，wire 协议 `deepseek-harness-sdk-r
 - 新会话的控制指令是独立的用户文本块，不是原生 system prompt。不重建任何应用历史。
 - 上游在预解析输入、stderr、session map 上没有 Runtime 追加的内存边界；上游的 close 只确认直接子进程，不覆盖所有工具后代。Kernel worker 隔离去不掉这些限制。
 - 用宿主自己的 API key 时要显式选 `deepseek-official`。环境变量缺失从来不作为原生登录状态的判断依据。
-- SDK 的 `args` 是字符串数组，和 CLI 的字符串选项不一样。
 
 ## 验证
 
-`node scripts/verify-dsh-live.mjs` 会调用配置好的真实 Provider 并写出验证文件；它是可选的，不在 CI 里跑。发行物打包的是官方 Client 与 Protocol 的 JavaScript，不含 Provider 安装和原生二进制，也没有下游 SDK 补丁。
+`OCTO_DSH_NATIVE_BIN=/absolute/path/to/lib/bin.js node --test test/dsh-native.test.js` 验证真实 npm 安装的版本与 SDK 初始化，不发模型请求。CI 在 Windows、macOS、Linux 的 Node 和 Electron Node mode 下运行此项；fixture 通过不能代替原生平台验证。
+
+`OCTO_DSH_NATIVE_BIN=/absolute/path/to/lib/bin.js node scripts/verify-dsh-live.mjs` 会调用配置好的真实 Provider 并写出验证文件；它是可选的，不在 CI 里跑。发行物打包的是官方 Client 与 Protocol 的 JavaScript，不含 Provider 安装和原生二进制，也没有下游 SDK 补丁。
 
 ## 延伸阅读
 

@@ -10,8 +10,7 @@ import {
   acknowledgeOrphanCleanup,
   inspectOrphanCleanup,
   createKernelService,
-  type KernelService,
-  readAdapterConfigurations
+  type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   componentEndpoint,
@@ -34,6 +33,7 @@ import {
 } from "./state.js";
 import { resolveServiceControl, type ServiceControlOptions } from "./service-control.js";
 import { loadCliManifest } from "./module-manifest.js";
+import { readCliAdapterConfigurations } from "./adapter-configurations.js";
 import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
@@ -253,7 +253,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         profile,
         manifest: flags.manifest,
         input,
-        output: dependencies.output
+        output: dependencies.output,
+        env: dependencies.env
       });
     }
     if (positional[0] === "adapter" && positional[1] === "list" && positional.length === 2) {
@@ -331,7 +332,12 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           stateDirectory: kernelStateDirectory,
           workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),
           adapterModules: resolveAdapterModules(manifest),
-          adapterConfigurations: readAdapterConfigurations(paths.profileRoot, config?.adapters),
+          adapterConfigurations: await readCliAdapterConfigurations(
+            paths.profileRoot,
+            config?.adapters,
+            manifest,
+            dependencies.env ?? process.env
+          ),
           env: {
             ...(dependencies.env ?? process.env),
             OCTO_RUNTIME_HOME: home,

@@ -1,17 +1,22 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { createKernelService } from "../packages/octo-runtime-executor-kernel/dist/index.js";
+import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { invocationInput } from "../packages/octo-runtime-protocol/dist/index.js";
 import { invokeRequest } from "../test/runtime-fixture.js";
 
 // 显式运行的真实 Provider 验收；只写临时工作目录，不输出认证或原始模型轨迹。
-const directory = await mkdtemp("/tmp/od-dsh-");
+const dshBin = process.env.OCTO_DSH_NATIVE_BIN;
+assert.ok(dshBin, "Host must supply OCTO_DSH_NATIVE_BIN: the npm-installed JavaScript entry");
+const directory = await mkdtemp(join(tmpdir(), "od-dsh-"));
 const kernel = createKernelService({
-  endpoint: join(directory, "k.sock"),
-  workerEntrypoint: fileURLToPath(new URL("../test/fixtures/dsh-worker.mjs", import.meta.url))
+  endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
+  workerEntrypoint: fileURLToPath(new URL("../test/fixtures/dsh-worker.mjs", import.meta.url)),
+  adapterConfigurations: { dsh: { providerOptions: { dshBin } } }
 });
 const report = { platform: process.platform, version: "0.2.1-rc.3" };
 const final = (events) =>

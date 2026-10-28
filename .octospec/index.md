@@ -55,6 +55,8 @@
 
 ## 当前任务
 
+- [Issue 205：宿主管理 DSH npm 入口](tasks/205-host-configured-dsh/brief.md)：宿主传入绝对路径 dshBin，删除安装发现及 Desktop/ASAR；官方 SDK 保持未修改，三平台 Node/Electron 验证分别记录。
+
 - [Issue 217：CodeBuddy 显式选模与续聊切模](tasks/217-codebuddy-model-selection/brief.md)：最新 main 独立 worktree，方案可执行性 96/100；prompt 前按原生目录设置并确认模型，未知模型和原生拒绝送达用户。真实 CodeBuddy/IM、自动化及本地 verified-review 见[验收记录](tasks/217-codebuddy-model-selection/validation.md)。
 
 - [Issue 188：模型静默反馈](tasks/188-model-wait/brief.md)：独立 worktree 基于 main@59cb21a，准备度 96/100；原卡片 footer 每 30 秒刷新，300 秒请求取消并区分真实终态与未知。实施与验证见[记录](tasks/188-model-wait/validation.md)。

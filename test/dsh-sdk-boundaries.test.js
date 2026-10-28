@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createRequire } from "node:module";
 import { PassThrough } from "node:stream";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const adapterRequire = createRequire(
   new URL("../packages/octo-runtime-adapter-dsh/package.json", import.meta.url)
@@ -48,7 +48,7 @@ test("official subscription close rejects a pending read immediately", async () 
 
 test("official false-filter subscription processes all notifications and keeps next pending until close", async () => {
   const client = new HarnessClient({
-    dshBin: new URL("./fixtures/dsh-runtime.mjs", import.meta.url).pathname,
+    dshBin: fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url)),
     initializeTimeoutMs: 2000,
     requestTimeoutMs: 2000,
     shutdownTimeoutMs: 500,
