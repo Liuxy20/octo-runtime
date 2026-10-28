@@ -1,0 +1,26 @@
+brief: .octospec/tasks/160-stateless-live-status/brief.md
+baseline: aac7ec7
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "状态文本默认值不变，探针显式选择 JSON，不扩展 SDK 或宿主责任。"
+  - id: runtime-engineering
+    source: repo
+    reason: "验证工具须保留原始失败，自动化与真实接口证据分开。"
+  - id: runtime-stateless
+    source: repo
+    reason: "保留已有无数据库写入及执行终态断言。"
+  - id: commit
+    source: repo
+    reason: "内部记录中文；用户指示及 CONTRIBUTING.md 优先要求公开 PR 与 commit 为英文。"
+additional_read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+files_expected:
+  - scripts/verify-stateless-live.mjs
+  - test-support/stateless-live-probes.mjs
+  - test/stateless-live-probe.test.js
+updated_at: 2026-10-28T00:00:00Z

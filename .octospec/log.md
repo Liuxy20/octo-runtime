@@ -2,6 +2,8 @@
 
 ## 2026-10-28
 
+- [Issue 160](journal/shared/2026-10-28-160-stateless-live-status.md)：独立 worktree 从 main@aac7ec7 开始，OctoSpec 准备度 97/100。无状态探针显式请求 JSON，返回码检查优先于解析，保留 CLI 原始诊断。真实 CLI 受控成功/失败及结构回归共 23 项通过；CLI/SDK 生产行为不变，未执行完整 live campaign。
+
 - [OCTO-2 / #213](tasks/octo-2-history-intent/brief.md)：从 main@b3fba8f 新建 worktree，方案与 96/100 实施准备度先上传 Loop。先冻结基线门槛，再运行中英 16 类真实 Codex A/B；主矩阵 232 条，意图正确从 79/116 提升到 109/116，保留候选 7 条失败。另 64 条共目录配对确认输入及真实续接。只改三处 Channel 历史指引，不改检索、准入、游标、reset 或权限；真实 IM、自动化及未部署边界见[验证](tasks/octo-2-history-intent/validation.md)。
 
 ## 2026-10-27

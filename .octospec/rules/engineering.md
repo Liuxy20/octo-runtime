@@ -36,6 +36,7 @@ supersedes: []
 - 协议 wire types 从 JSON Schema 生成。修改协议时同步 schema、生成类型、样例、调用端及测试，不手工只改生成文件。
 - CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
 - 自动化测试使用 fake Provider，不调用真实模型。真实接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录自动化检查与实际联调结果，不把 mock 结果当作线上证据。
+- 验证脚本消费 Runtime CLI 状态时显式传 `--json`；输出回调先收集完整 stdout/stderr，检查非零返回码并保留原始诊断后，再解析和校验状态结构。不能让 JSON 解析错误覆盖 CLI 失败，也不能把错误对象或缺失状态当作可继续验证的成功结果。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。
 - 生命周期测试从合同事件开始计时：进程启动/握手、失联发现、退避和清理分别对应各自预算；fixture 的人工延迟须放在被验证的真实预算内。子进程写出 PID 不等于父进程完成身份登记。
 - 前台 IPC/信号测试的原生服务管理器使用显式 fixture，避免把机器任务计划程序查询竞争计入组件关闭验收；管理器行为由对应集成测试覆盖。控制台事件投递进程也须等待退出。临时原生测试工具的 Windows 映像文件可能在进程结束后仍被系统保留，应放入独占测试构建缓存，不混入待验收的 Runtime Home；保留构建产物不能代替所属进程退出确认。

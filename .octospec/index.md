@@ -54,6 +54,8 @@
 
 ## 当前任务
 
+- [Issue 160：无状态探针的结构化状态与错误处理](tasks/160-stateless-live-status/brief.md)：可执行性 97/100 后实施；显式 JSON、先检查返回码、保留诊断并校验 Gateway 状态。23 项针对性测试及构建/类型/静态检查通过；完整 live campaign 未执行，见[验证记录](journal/shared/2026-10-28-160-stateless-live-status.md)。
+
 - [OCTO-2 / #213：历史意图指引](tasks/octo-2-history-intent/brief.md)：最新 main 独立 worktree，准备度 96/100；真实 Provider 主矩阵 232 条，语义正确率 79/116 → 109/116，另 64 条严格配对复测。三处指引统一支持连续意图并保留权限边界；样本失败及真实 IM/自动化证据见[验证记录](tasks/octo-2-history-intent/validation.md)。
 
 - [Issue 210：Codex worker 快速恢复与日志](tasks/210-kernel-recovery/brief.md)：独立 worktree 基于 main@005116e；[方案](tasks/210-kernel-recovery/design.md)定义暂态清理/manifest 故障持续重试、Kernel 独立日志和准确未提交反馈。[本地验收](tasks/210-kernel-recovery/validation.md)首轮故障解除后约 1.3–1.4 秒新请求成功，首个提交 Node 全量 2022 通过；[审查](tasks/210-kernel-recovery/review.md)两项 medium 与后续外部 Windows P1 已复现并修复。P1 专项通过，本轮全量未通过，Windows 原生结果待 CI。未部署，原事故退出原因仍未知。

@@ -6,6 +6,7 @@ import { isAbsolute, join } from "node:path";
 import { attachKernel } from "../packages/octo-runtime-executor-kernel/dist/index.js";
 import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
+import { readStatelessComponentStatus } from "../test-support/stateless-live-probes.mjs";
 
 // 此探针连接已启动的测试设备，不创建 Home，也不默认连接共享临时路径。
 const home = process.env.OCTO_STATELESS_LIVE_HOME;
@@ -50,12 +51,7 @@ try {
   const status = await client.status();
   assert.equal(status.execution_ready, true);
   assert.equal(status.storePath, undefined);
-  let componentStatus;
-  await runCli(["--home", home, "status"], {
-    output: (line) => {
-      componentStatus = JSON.parse(line);
-    }
-  });
+  const componentStatus = await readStatelessComponentStatus(home, runCli);
   const channels = componentStatus["channel-gateway"]?.runtime?.status?.bots ?? [];
   assert.ok(
     channels.some((channel) => channel.state === "online"),
