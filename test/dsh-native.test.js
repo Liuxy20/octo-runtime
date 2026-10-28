@@ -83,10 +83,9 @@ test(
         provider: "deepseek-account",
         model: "deepseek-flash"
       });
-      assert.deepEqual(result.serverInfo, {
-        name: "deepseek-harness-sdk-runtime",
-        version: "0.0.1"
-      });
+      assert.equal(result.serverInfo.name, "deepseek-harness-sdk-runtime");
+      assert.equal(typeof result.serverInfo.version, "string");
+      assert.ok(result.serverInfo.version.trim());
     } finally {
       await client?.close();
     }

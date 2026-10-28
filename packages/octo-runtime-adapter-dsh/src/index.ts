@@ -18,11 +18,11 @@ import {
   type NotificationSubscription,
   type SdkPromptContentBlock
 } from "@deepseek-ai/dsh-sdk-client";
-import { DshError, dshError, record, DSH_VERSION } from "./errors.js";
+import { DshError, dshError, record } from "./errors.js";
 import { resolveDshLaunch, timeoutOption, stringOption } from "./launch.js";
 import { DshTrajectory } from "./trajectory.js";
 
-export { DshError, DSH_VERSION } from "./errors.js";
+export { DshError, DSH_MIN_VERSION, DSH_VERSION } from "./errors.js";
 
 export interface DshAdapterOptions {
   /** 同一 RuntimeLog sink；只记录身份、阶段、时间和安全枚举，不记录原始轨迹。 */
@@ -62,7 +62,7 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
           const launch = await resolveDshLaunch(probeOptions?.providerOptions ?? {}, {
             ...process.env
           });
-          return { available: true, command: launch.command, version: DSH_VERSION };
+          return { available: true, command: launch.command, version: launch.version };
         } catch (error) {
           return {
             available: false,
@@ -231,13 +231,15 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
                     ? {}
                     : { maxTokens: timeoutOption(config, "maxTokens", 4096) })
                 });
+                // Provider 已通过最低版本检查；serverInfo.version 只作响应结构校验，不锁定发布版本。
                 if (
                   !record(initialization) ||
                   !record(initialization.serverInfo) ||
                   initialization.serverInfo.name !== "deepseek-harness-sdk-runtime" ||
-                  initialization.serverInfo.version !== "0.0.1"
+                  typeof initialization.serverInfo.version !== "string" ||
+                  !initialization.serverInfo.version.trim()
                 )
-                  throw new DshError("DSH_VERSION_UNSUPPORTED");
+                  throw new DshError("DSH_PROTOCOL_ERROR");
                 if (requestedId) {
                   phase = "resume";
                   try {

@@ -9,7 +9,11 @@ if (process.argv.includes("--version")) {
     setInterval(() => {}, 1000);
     await new Promise(() => {});
   }
-  console.log(process.env.OCTO_DSH_FIXTURE === "version" ? "0.0.0" : "0.2.1-rc.3");
+  console.log(
+    process.env.OCTO_DSH_FIXTURE === "version"
+      ? "0.0.0"
+      : (process.env.OCTO_DSH_FIXTURE_VERSION ?? "0.2.1-rc.4")
+  );
   process.exit(0);
 }
 const mode = process.env.OCTO_DSH_FIXTURE ?? "success";
@@ -127,7 +131,7 @@ const answer = () => {
           { type: "text", text: mode === "empty" ? "" : "hello 世界" }
         ]
       },
-      ...(mode === "legacy-chunk" || mode === "empty"
+      ...(mode === "legacy-chunk" || mode === "empty" || mode === "final-only"
         ? {}
         : {
             stream: [
@@ -186,7 +190,12 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     if (mode === "invalid-json") return process.stdout.write("invalid\n");
     if (mode === "start-error") return error(id);
     console.log("[llm-deepseek-account] fixture catalog info");
-    result(id, { serverInfo: { name: "deepseek-harness-sdk-runtime", version: "0.0.1" } });
+    result(id, {
+      serverInfo: {
+        name: process.env.OCTO_DSH_FIXTURE_SERVER_NAME ?? "deepseek-harness-sdk-runtime",
+        version: process.env.OCTO_DSH_FIXTURE_SERVER_VERSION ?? "0.0.1"
+      }
+    });
   } else if (method === "session/resume") {
     if (mode === "resume-error") error(id);
     else result(id);

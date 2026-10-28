@@ -166,9 +166,43 @@ Full field list, defaults, and limits: [config-schema.json](config-schema.json).
 
 During model silence, Gateway updates the original reasoning card's footer after 30 seconds and every 30 seconds thereafter. Assistant text or public reasoning clears the notice; tools, approvals, and user-input waits pause the clock. After 300 seconds of continuous model silence, Gateway requests cancellation without replaying the task. Stop remains available while cancellation is pending; Retry is offered only after the original execution has verifiably ended. This interval also applies after earlier output and after tools, rather than measuring only time to first output. Explicit execution limits can terminate a turn earlier.
 
+## Working capacity and per-session queues
+
+Each Bot has **64 working slots**. A slot serves one logical session, with one message being processed at a time. That session can also hold **4 queued messages**, which wait their turn and do not consume additional working slots. Preparation, model/tool/user waits, internal retries, and necessary delivery cleanup keep the slot occupied.
+
+A session is scoped to one Bot and one private chat, group, or topic. Different senders in the same group share its queue; a separate topic has its own queue.
+
+These examples assume authorized, distinct messages and a running Gateway. Each row describes one Bot:
+
+| Situation | Working slots | Queued messages | What happens next |
+| --- | --- | --- | --- |
+| Session A processes A1; A2/A3/A4/A5 wait | 1 | 4 | A6 is rejected because A's queue is full. |
+| 20 sessions each process 1 message and queue 4 | 20 | 80 | 100 messages are accepted; 44 working slots remain available for new or idle sessions. |
+| 64 sessions each process 1 message, with no queues | 64 | 0 | A can still queue A2/A3/A4/A5: working slots stay at 64 and queued messages become 4. |
+| All 64 slots are occupied and A already queues 4 | 64 | 4 | A6 is rejected for A's full queue; other working sessions can still fill their own queues. |
+| All 64 slots are occupied; new session Z sends Z1 | 64 | Unchanged | Z1 is rejected because it needs a working slot. An idle session with a historical binding also needs a slot. |
+
+When A1 finishes and cleanup completes, A2 takes over A's slot: its queue falls from 4 to 3 while working slots stay at 64. Only after A's last message and cleanup finish is that slot available to another session. A cancellation acknowledgement alone does not release it. Rejected messages are not retried automatically; send again after capacity becomes available. Bot slot exhaustion reports `OH-RUN-2003`; session queue exhaustion reports `OH-RUN-2004` and takes precedence when both limits apply. Neither rejection starts execution or marks the message read.
+
+Per-Bot status reports `workingTasks` for occupied slots and `queuedTasks` for waiting messages. Historical chat-to-session bindings are counted separately: they consume neither resource, and `sessions` lists only current scheduling entries. The default memory store has its own capacity and expiry; see the [session storage contract](../../.octospec/rules/session-reset.md#当前内置-im-存储). These Gateway limits do not specify daily session throughput, guarantee 64 simultaneous model executions, or apply to WeCom.
+
 ## Lifecycle and status
 
 `status()` returns `{ bots, errors }`: valid bots report connection, delivery, and session counts, while an invalid bot is reported by index and error code without blocking the others. `loaded` does not mean every bot is online.
+
+| Bot `state` | Meaning | `connected` / `error` |
+| --- | --- | --- |
+| `stopped` | Not started, disabled, or stopping/stopped | `false` / `null` |
+| `connecting` | Initial connection attempt | `false` / `null` |
+| `online` | Authentication, registration, and WebSocket handshake completed | `true` / `null` |
+| `retrying` | Recovering from a transient failure, including an initial failure; waiting or reconnecting | `false` / last connection error code |
+| `failed` | Missing credentials, a confirmed terminal rejection, or connection cleanup failure | `false` / connection error code; cleanup failures also emit a disposal diagnostic |
+
+Both an initial transient failure and a later transient disconnect recover automatically. After the failed connection is cleaned up, Gateway waits **5, 10, 15, then 15 seconds for each further failed attempt**. A server `Retry-After` can lengthen that attempt's wait. Connection attempts and cleanup take additional time, so these intervals are not an uptime guarantee. Full success clears `error` and resets the sequence: the next disconnect starts again at 5 seconds. Registration alone is not full success.
+
+For example, an initial HTTP 503 enters `retrying`. If the retry after 5 seconds fails again, the next wait is 10 seconds; after another failure it is 15 seconds, remaining at 15 seconds until recovery. Missing credentials and explicit authentication, permission, configuration, or protocol rejections enter `failed` instead. Gateway does not poll for missing credentials; fix the cause and restart the Extra. Valid server disconnects, including reason 12 and unknown disconnect reasons, normally retry. HTTP timeouts, conflicts, rate limits, and server failures also retry; an explicit terminal rejection still stops recovery.
+
+Stopping or unloading cancels pending reconnect timers and connection attempts. Provider execution, cards, and delivery have separate diagnostics: `online` proves connection health, not that a task completed or a reply was delivered.
 
 `close()` cancels the connection, execution, and delivery work the plugin owns. Await it and check `complete` before replacing the Extra; it does not stop Kernel or other Extras. Cleanup failures surface as `EXTRA_DISPOSE_FAILED`.
 

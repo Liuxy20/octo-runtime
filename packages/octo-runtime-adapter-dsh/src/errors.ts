@@ -5,7 +5,9 @@ import {
   TransportClosedError
 } from "@deepseek-ai/dsh-sdk-client";
 
-export const DSH_VERSION = "0.2.1-rc.3";
+export const DSH_MIN_VERSION = "0.2.1-rc.4";
+/** 保留原公开名称作为最低版本别名；实际安装版本由 probe 返回。 */
+export const DSH_VERSION = DSH_MIN_VERSION;
 
 const messages = {
   DSH_CONFIG_INVALID: "DeepSeek Harness configuration is invalid for this invocation.",
@@ -15,7 +17,7 @@ const messages = {
   STREAM_QUEUE_BYTES_EXCEEDED: "DeepSeek Harness event queue exceeded the configured byte limit.",
   STREAM_QUEUE_ITEMS_EXCEEDED: "DeepSeek Harness event queue exceeded the configured item limit.",
   DSH_EXECUTABLE_NOT_FOUND: "The host-configured DeepSeek Harness JavaScript entry is missing.",
-  DSH_VERSION_UNSUPPORTED: "DeepSeek Harness version is incompatible with this adapter.",
+  DSH_VERSION_UNSUPPORTED: `DeepSeek Harness requires version >= ${DSH_MIN_VERSION}. Please upgrade DeepSeek Harness.`,
   DSH_START_FAILED: "DeepSeek Harness could not start.",
   DSH_INITIALIZE_TIMEOUT: "DeepSeek Harness initialization timed out.",
   DSH_RPC_ERROR: "DeepSeek Harness rejected a protocol request.",
@@ -40,7 +42,10 @@ export class DshError extends Error {
     readonly diagnostics: Record<string, string | number | null> = {},
     options?: ErrorOptions
   ) {
-    super(`${code}: ${messages[code]}`, options);
+    super(
+      `${code}: ${messages[code]}${code === "DSH_VERSION_UNSUPPORTED" ? ` Detected version: ${diagnostics.detectedVersion ?? "unknown"}.` : ""}`,
+      options
+    );
     this.name = "DshError";
   }
 }

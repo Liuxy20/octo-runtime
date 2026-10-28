@@ -1,0 +1,26 @@
+brief: .octospec/tasks/150-171-gateway-capacity/brief.md
+baseline: 0ca12a03a055ccb766e6126716c51bb6cc6efe1c
+injected:
+  - { id: runtime-architecture, source: repo, reason: "遵循 Gateway 业务边界与 CI 范围约束。" }
+  - { id: runtime-protocol-design, source: repo, reason: "不改变 invoke、取消或事件协议。" }
+  - { id: runtime-channel, source: repo, reason: "F26 的工作、排队与恢复合同。" }
+  - { id: runtime-session-reset, source: repo, reason: "区分在途调度与历史 binding。" }
+  - { id: runtime-context-input, source: repo, reason: "排队仍在真正执行时准备 Context。" }
+  - { id: runtime-extras, source: repo, reason: "保持整体生命周期及所属资源清理。" }
+  - { id: runtime-invoke-input, source: repo, reason: "公共输入保持不变。" }
+  - { id: runtime-stateless, source: repo, reason: "不新增持久消息队列。" }
+  - { id: runtime-engineering, source: repo, reason: "本地回归、注释与验证事实分开记录。" }
+  - { id: commit, source: repo, reason: "内部记录中文；用户要求公开 commit/PR 使用英文并带 Codex trailer。" }
+additional_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+files_expected:
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - test/im-admission-capacity.test.js
+  - packages/octo-runtime-extra-channel-gateway/README.md
+  - packages/octo-runtime-extra-channel-gateway/README.zh.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/session-reset.md
+  - .octospec/index.md
+updated_at: 2026-10-28T00:00:00Z

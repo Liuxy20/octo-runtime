@@ -46,7 +46,9 @@ Octo 与 WeCom 的 `ImRuntime.#sessions` 只登记有排队或在途执行的调
 
 状态查询的 `sessions` 只返回上述在途条目。`/session` 从业务 store 恢复 binding 和最近 Run 元数据；回收调度对象不主动 reset 或删除业务 binding。卡片 cancel 按当前 key 与 invocation 查找；retry 重新进入当前队列，不能捕获并重新使用已经释放的调度对象。
 
-单设备每天一万个 Session 表示累计接待量，不等于一万个并发模型执行。已有每 Bot 64 条待处理消息限制继续约束在途消息，不随历史会话数量消耗；默认 store 的容量和期限仍是下述独立业务合同。此修复不代表 Kernel 的历史源窗口已经移除，也不承诺默认内存 store 保存一天内全部一万个 binding。
+单设备每天一万个 Session 表示累计接待量，不等于一万个并发模型执行。Octo Gateway 的容量分为每 Bot 最多 64 个工作槽、每逻辑 session 另有最多 4 条排队消息；不能合称“64 条待处理消息”。例如 20 个 session 各有 1 条工作和 4 条排队，共占 20 个工作槽、80 个排队位置，100 条已受理消息并未超过 Bot 工作上限。64 个工作槽占满时，已有工作 session 仍可补满自己的 4 条排队；新/空闲 session 需要工作槽，须等待槽位释放后重新发送。完整计数、释放和拒收例子见 [Channel 容量合同](channel-integration.md#容量例子)。该合同仅适用于 Octo Gateway，不推广到 WeCom。
+
+历史 binding 独立计数，不占工作槽或排队额度；即使恢复了旧 binding，空闲 session 的新消息仍须申请工作槽。默认 store 的容量和期限仍是下述独立业务合同。此修复不代表 Kernel 的历史源窗口已经移除，也不承诺默认内存 store 保存一天内全部一万个 binding。
 
 当前 [Octo 接入模块](../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 默认使用 [MemoryImSessionStore](../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)，不创建 `im-sessions.db`，默认内存不承诺跨进程恢复。宿主可显式提供同步 createSessionStore，按可信 Bot/账号/组织/助理等 scope 保存同一 ImSessionStore 合同的数据；真实持久性及 reset/patch 原子性由宿主保证。整个 Runtime 不依赖 SQLite、不提供数据库适配；WeCom 的默认实现不变。接线与所有权见 [Extra 规则](extras.md#gateway-专属存储依赖)。
 

@@ -18,7 +18,7 @@ const kernel = createKernelService({
   workerEntrypoint: fileURLToPath(new URL("../test/fixtures/dsh-worker.mjs", import.meta.url)),
   adapterConfigurations: { dsh: { providerOptions: { dshBin } } }
 });
-const report = { platform: process.platform, version: "0.2.1-rc.3" };
+const report = { platform: process.platform };
 const final = (events) =>
   events
     .filter((e) => e.type === "message.delta" && e.payload.channel === "final")
@@ -49,6 +49,9 @@ async function run(prompt, session, options) {
 }
 try {
   await kernel.initialize();
+  const detected = (await kernel.client.list()).find((entry) => entry.type === "dsh");
+  assert.equal(detected?.available, true, JSON.stringify(detected));
+  report.version = detected.providerVersion;
   const marker = `DSH_${randomUUID().replaceAll("-", "")}`;
   const first = await run(
     `Remember this exact verification marker for the next message: ${marker}. Reply only with the marker.`

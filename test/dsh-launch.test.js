@@ -5,13 +5,62 @@ import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
+import { dshAdapter, DSH_MIN_VERSION, DSH_VERSION } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 import { resolveDshLaunch } from "../packages/octo-runtime-adapter-dsh/dist/launch.js";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { kernelFixture } from "./kernel-fixture.js";
 import { invokeRequest } from "./runtime-fixture.js";
 
 const fixture = fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url));
+
+test("DSH exposes a minimum version while preserving the original constant", () => {
+  assert.equal(DSH_MIN_VERSION, "0.2.1-rc.4");
+  assert.equal(DSH_VERSION, DSH_MIN_VERSION);
+});
+
+for (const version of [
+  "0.2.1-rc.4",
+  "0.2.1-rc.4+build.1",
+  "0.2.1-rc.10",
+  "0.2.1",
+  "0.2.2-alpha.2",
+  "0.3.0",
+  "1.0.0-alpha.1"
+])
+  test(`DSH accepts and reports the detected version ${version}`, async () => {
+    const launch = await resolveDshLaunch(
+      { dshBin: fixture },
+      { ...process.env, OCTO_DSH_FIXTURE_VERSION: version }
+    );
+    assert.equal(launch.version, version);
+  });
+
+for (const version of [
+  "0.2.0",
+  "0.2.1-alpha.10",
+  "0.2.1-rc.3",
+  "0.2.1-rc.3+build.99",
+  "0.2.1-rc.04",
+  "",
+  "unparseable-private-output"
+])
+  test(`DSH rejects older or invalid version ${JSON.stringify(version)} with upgrade guidance`, async () => {
+    await assert.rejects(
+      resolveDshLaunch({ dshBin: fixture }, { ...process.env, OCTO_DSH_FIXTURE_VERSION: version }),
+      (error) => {
+        assert.equal(error.code, "DSH_VERSION_UNSUPPORTED");
+        assert.equal(error.diagnostics.minimumVersion, "0.2.1-rc.4");
+        assert.match(error.message, />= 0\.2\.1-rc\.4/);
+        assert.match(error.message, /Please upgrade DeepSeek Harness/);
+        if (version.includes("rc.3")) {
+          assert.equal(error.diagnostics.detectedVersion, version);
+          assert.ok(error.message.includes(version));
+        }
+        assert.doesNotMatch(error.message, /unparseable-private-output/);
+        return true;
+      }
+    );
+  });
 
 test("DSH requires host configuration regardless of PATH", async () => {
   await assert.rejects(resolveDshLaunch({}, { PATH: process.env.PATH }), {
@@ -108,6 +157,7 @@ for (const [mode, reason] of [
     const discovered = (await client.list()).find((entry) => entry.type === "dsh");
     assert.equal(discovered.available, reason === null);
     assert.equal(discovered.unavailableReason, reason);
+    if (reason === null) assert.equal(discovered.providerVersion, "0.2.1-rc.4");
     const events = await Array.fromAsync(
       client.invoke(
         invocationInput(
@@ -119,4 +169,11 @@ for (const [mode, reason] of [
     );
     assert.equal(events.at(-1).type, reason === null ? "run.completed" : "run.failed");
     if (reason) assert.equal(events.at(-1).payload.failure.reasonCode, reason);
+    if (reason === "DSH_VERSION_UNSUPPORTED") {
+      const { payload } = events.at(-1);
+      assert.equal(payload.failure.code, "OH-ADP-3005");
+      assert.match(payload.message, />= 0\.2\.1-rc\.4/);
+      assert.match(payload.message, /Please upgrade/);
+      assert.match(payload.message, /Detected version: 0\.0\.0/);
+    }
   });
