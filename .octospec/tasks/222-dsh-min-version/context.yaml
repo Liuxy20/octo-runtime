@@ -1,0 +1,17 @@
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-schema.md
+guides:
+  - .octospec/guides/provider-live-acceptance.md
+overrides:
+  - User explicitly requires DSH >= 0.2.1-rc.4 without an upper bound and accepts future compatibility risks.
+  - User prohibits expanding GitHub CI scope, including extra steps or default opt-in validation.
+  - User requires English GitHub issues, PRs and commit messages for Mininglamp-OSS repositories.

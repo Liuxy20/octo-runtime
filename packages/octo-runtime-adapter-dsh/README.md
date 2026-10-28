@@ -6,7 +6,7 @@ Runs one invocation through DeepSeek Harness's official Client SDK over its stdi
 
 ## When to use it
 
-- Install the Node distribution with `npm install -g @deepseek-ai/dsh@latest`; select a version compatible with the Client below. The host supplies the installed package's JavaScript CLI entry as an absolute `providerOptions.dshBin` path and prepares DSH authentication.
+- Install the Node distribution at version **`0.2.1-rc.4` or higher**, for example `npm install -g @deepseek-ai/dsh@0.2.1-rc.4`. Check `dsh --version`: npm's `latest` tag may point to an older release. The host supplies the installed package's JavaScript CLI entry as an absolute `providerOptions.dshBin` path and prepares DSH authentication.
 - You are on Node.js `^24` or `^26` — not an arbitrary higher major.
 - You accept the upstream limits listed below.
 
@@ -48,7 +48,11 @@ const input = InvokeInput.check({
 
 ## Compatibility
 
-The Client and Provider are pinned to `0.2.1-rc.3`, wire protocol `deepseek-harness-sdk-runtime/0.0.1`. An incompatible selected installation fails verification. The adapter does not discover npm installations, search PATH, or use Desktop/ASAR code. `command`, `args`, and `desktopPath` are rejected. Missing or invalid configuration returns `DSH_CONFIG_INVALID`; a missing selected file returns `DSH_EXECUTABLE_NOT_FOUND`.
+The unmodified official Client is pinned to `0.2.1-rc.3`; the selected DSH Provider must be **`>=0.2.1-rc.4`**, with no upper bound. SemVer precedence applies, including later prereleases; build metadata does not affect acceptance. Older or unparseable versions return `DSH_VERSION_UNSUPPORTED` (`OH-ADP-3005`) with the detected version (or `unknown`), minimum version, and an instruction to upgrade. `probe()` reports the actual installed version. `DSH_MIN_VERSION` is the minimum; the existing `DSH_VERSION` export remains an alias for it.
+
+Initialization validates the `deepseek-harness-sdk-runtime` service identity and response shape without pinning `serverInfo.version` to `0.0.1`. Passing the version check does not guarantee execution: actual SDK, protocol, and final-message conversion errors still fail explicitly. This policy accepts possible future incompatibilities rather than rejecting newer releases in advance.
+
+The adapter does not discover npm installations, search PATH, or use Desktop/ASAR code. `command`, `args`, and `desktopPath` are rejected. Missing or invalid configuration returns `DSH_CONFIG_INVALID`; a missing selected file returns `DSH_EXECUTABLE_NOT_FOUND`.
 
 The adapter resolves the configured module's real path, validates that target, and uses that canonical path for both version probing and the official SDK client. Replacing the original selection symlink after validation cannot redirect either launch.
 
@@ -58,7 +62,7 @@ The Runtime CLI is a host: before starting either its persistent Kernel or `play
 
 Electron hosts use their own runtime executable, without a separate Node installation. The adapter adds `ELECTRON_RUN_AS_NODE=1` only to its child environment when running in Electron; the host must also enable Node mode for its Kernel worker and use an Electron build that supports it. Windows uses the same JavaScript entry contract, without a shell wrapper. The SDK profile is `sdk`; no Desktop window or existing Desktop process is required.
 
-DSH also has native runtime compatibility requirements. A local macOS arm64 check found that DSH `0.2.1-rc.3` rejects Electron `39.8.10` during SDK initialization with `unsupported Electron runtime fingerprint`, even though `--version` succeeds. This upstream rejection is distinct from installation discovery; enabling Node mode alone does not make that Electron build compatible. The same check passed with Electron `44.7.0` (Node `24.21.0`), which CI also selects.
+DSH also has native runtime compatibility requirements. A previous local macOS arm64 check found that DSH `0.2.1-rc.3` rejects Electron `39.8.10` during SDK initialization with `unsupported Electron runtime fingerprint`, even though `--version` succeeds. This upstream rejection is distinct from installation discovery; enabling Node mode alone does not make that Electron build compatible. The same historical check passed with Electron `44.7.0` (Node `24.21.0`); it does not establish compatibility for later DSH releases.
 
 ## Sessions and limits
 
@@ -69,7 +73,7 @@ DSH also has native runtime compatibility requirements. A local macOS arm64 chec
 
 ## Verification
 
-`OCTO_DSH_NATIVE_BIN=/absolute/path/to/lib/bin.js node --test test/dsh-native.test.js` verifies a real npm installation's version and SDK initialization without a model request. CI runs this check on Windows, macOS, and Linux under Node and Electron Node mode; fixture tests alone do not establish native-platform support.
+`OCTO_DSH_NATIVE_BIN=/absolute/path/to/lib/bin.js node --test test/dsh-native.test.js` explicitly verifies a real npm installation's version and SDK initialization without a model request. This is an opt-in, non-gating check; fixture tests alone do not establish native-platform support.
 
 `OCTO_DSH_NATIVE_BIN=/absolute/path/to/lib/bin.js node scripts/verify-dsh-live.mjs` calls the configured real Provider and writes verification files; it is opt-in, not a CI check. The release bundles the imported official Client and Protocol JavaScript, not the Provider installation or native binaries, and applies no downstream SDK patches.
 

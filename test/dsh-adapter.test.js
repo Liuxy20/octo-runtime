@@ -79,6 +79,67 @@ async function fixture(t, mode = "success") {
 }
 const collect = (request, adapter = createDshAdapter()) => Array.fromAsync(adapter.invoke(request));
 
+for (const [version, serverVersion] of [
+  ["0.2.1-rc.4", "0.0.1"],
+  ["0.2.1-rc.10", "0.0.2"],
+  ["0.2.1", "0.1.0"],
+  ["0.2.2-alpha.2", "1.0.0"]
+])
+  test(`DSH ${version} converts the committed final message with server version ${serverVersion}`, async (t) => {
+    const f = await fixture(t, "final-only");
+    f.request.executionEnvOverrides.env_variables.push(
+      { key: "OCTO_DSH_FIXTURE_VERSION", value: version },
+      { key: "OCTO_DSH_FIXTURE_SERVER_VERSION", value: serverVersion }
+    );
+    const events = await collect(f.request);
+    assert.equal(text(events), "hello 世界");
+    assert.deepEqual(
+      terminals(events).map((event) => event.type),
+      ["run.completed"]
+    );
+  });
+
+test("DSH older versions reach Core as upgrade errors without sending input", async (t) => {
+  const f = await fixture(t);
+  f.request.executionEnvOverrides.env_variables.push({
+    key: "OCTO_DSH_FIXTURE_VERSION",
+    value: "0.2.1-rc.3"
+  });
+  const core = new AgentExecutor();
+  core.register(createDshAdapter());
+  try {
+    const events = await Array.fromAsync(
+      core.invoke(invocationInput(f.request, "canonical", "dsh"), {
+        executionEnvOverrides: f.request.executionEnvOverrides
+      })
+    );
+    const [failed] = terminals(events);
+    assert.equal(terminals(events).length, 1);
+    assert.equal(failed.type, "run.failed");
+    assert.equal(failed.payload.failure.reasonCode, "DSH_VERSION_UNSUPPORTED");
+    assert.equal(failed.payload.failure.code, "OH-ADP-3005");
+    assert.match(failed.payload.message, />= 0\.2\.1-rc\.4/);
+    assert.match(failed.payload.message, /Please upgrade DeepSeek Harness/);
+    assert.match(failed.payload.message, /Detected version: 0\.2\.1-rc\.3/);
+    assert.equal(failed.payload.diagnostics.minimumVersion, "0.2.1-rc.4");
+    await assert.rejects(f.trace(), { code: "ENOENT" });
+  } finally {
+    await core.shutdown();
+  }
+});
+
+for (const [key, value] of [
+  ["OCTO_DSH_FIXTURE_SERVER_NAME", "different-runtime"],
+  ["OCTO_DSH_FIXTURE_SERVER_VERSION", ""]
+])
+  test(`DSH rejects malformed initialization ${key} as a protocol error`, async (t) => {
+    const f = await fixture(t);
+    f.request.executionEnvOverrides.env_variables.push({ key, value });
+    const [failed] = terminals(await collect(f.request));
+    assert.equal(failed.payload.code, "DSH_PROTOCOL_ERROR");
+    assert.ok(!(await f.trace()).some((message) => message.method === "session/prompt"));
+  });
+
 test("DSH accepts the official dshBin module option and rejects conflicting launch inputs", async (t) => {
   const f = await fixture(t);
   f.request.agentConfig.providerOptions = { dshBin: fixturePath };

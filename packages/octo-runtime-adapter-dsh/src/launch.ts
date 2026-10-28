@@ -1,9 +1,10 @@
 import { spawn } from "node:child_process";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
+import { gte, parse } from "semver";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
 import { mergeProcessEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import { DSH_VERSION, DshError, dshError, nativeCode } from "./errors.js";
+import { DSH_MIN_VERSION, DshError, dshError, nativeCode } from "./errors.js";
 
 const VERSION_PROBE_TIMEOUT_MS = 10_000;
 const VERSION_PROBE_MAX_BYTES = 4096;
@@ -16,6 +17,7 @@ export interface DshLaunch {
   args: string[];
   env: NodeJS.ProcessEnv;
   dshBin: string;
+  version: string;
 }
 
 /** 宿主维护 npm 安装的 JS 入口；这里只校验所选入口和版本，不发现或替换安装。 */
@@ -47,8 +49,8 @@ export async function resolveDshLaunch(
     ),
     dshBin: physicalPath
   };
-  await checkVersion(launch, signal);
-  return launch;
+  const version = await checkVersion(launch, signal);
+  return { ...launch, version };
 }
 
 function assertModulePath(path: string): void {
@@ -62,7 +64,10 @@ function assertModulePath(path: string): void {
 }
 
 /** 版本探针同样拥有进程树；取消、超时和超量输出都必须先回收再返回。 */
-async function checkVersion(launch: DshLaunch, signal?: AbortSignal): Promise<void> {
+async function checkVersion(
+  launch: Omit<DshLaunch, "version">,
+  signal?: AbortSignal
+): Promise<string> {
   if (signal?.aborted) throw new DshError("DSH_START_FAILED", { phase: "version" });
   const child = spawn(launch.command, [...launch.args, "--version"], {
     env: launch.env,
@@ -84,6 +89,7 @@ async function checkVersion(launch: DshLaunch, signal?: AbortSignal): Promise<vo
   child.stderr.resume();
   child.stderr.on("error", () => {});
   let failure: unknown;
+  let version = "";
   try {
     await new Promise<void>((resolveVersion, reject) => {
       rejectPending = reject;
@@ -114,7 +120,14 @@ async function checkVersion(launch: DshLaunch, signal?: AbortSignal): Promise<vo
       signal?.addEventListener("abort", stop, { once: true });
       if (signal?.aborted) stop();
     });
-    if (output.trim() !== DSH_VERSION) throw new DshError("DSH_VERSION_UNSUPPORTED");
+    version = output.trim();
+    const parsed = parse(version);
+    // 用版本优先级比较允许后续预发布；普通 range 默认会排除不同版本号的预发布。
+    if (!parsed || !gte(parsed, DSH_MIN_VERSION))
+      throw new DshError("DSH_VERSION_UNSUPPORTED", {
+        detectedVersion: parsed ? version : "unknown",
+        minimumVersion: DSH_MIN_VERSION
+      });
   } catch (error) {
     failure = error;
   } finally {
@@ -148,6 +161,7 @@ async function checkVersion(launch: DshLaunch, signal?: AbortSignal): Promise<vo
   }
   if (failure instanceof Error) throw failure;
   if (failure !== undefined) throw new DshError("DSH_START_FAILED", { phase: "version" });
+  return version;
 }
 
 export function timeoutOption(

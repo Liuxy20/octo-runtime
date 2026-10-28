@@ -57,6 +57,8 @@
 
 - [Issue 150/171：Gateway 满载准入与容量文档](tasks/150-171-gateway-capacity/brief.md)：已有工作 session 的四条排队不申请新工作槽；同步工作、排队、历史 binding 的例子及首次/后续连接恢复说明。[本地验证与 review](journal/shared/2026-10-28-150-171-gateway-capacity.md)记录 435 项渠道回归、取消 ACK 补强及未验收边界。
 
+- [Issue 222：DSH 最低版本检查](tasks/222-dsh-min-version/brief.md)：独立 worktree 将 Provider 准入改为 `>=0.2.1-rc.4`，低版本明确要求升级，初始化不锁定 `0.0.1`；116 项离线回归、真实 rc.4 握手及 Kernel final、发行安装验证见[验收](tasks/222-dsh-min-version/validation.md)。后续审查及 PR 按用户授权交付，未发布。
+
 - [Issue 205：宿主管理 DSH npm 入口](tasks/205-host-configured-dsh/brief.md)：宿主传入绝对路径 dshBin，删除安装发现及 Desktop/ASAR；官方 SDK 保持未修改，三平台 Node/Electron 验证分别记录。
 
 - [Issue 217：CodeBuddy 显式选模与续聊切模](tasks/217-codebuddy-model-selection/brief.md)：最新 main 独立 worktree，方案可执行性 96/100；prompt 前按原生目录设置并确认模型，未知模型和原生拒绝送达用户。真实 CodeBuddy/IM、自动化及本地 verified-review 见[验收记录](tasks/217-codebuddy-model-selection/validation.md)。
