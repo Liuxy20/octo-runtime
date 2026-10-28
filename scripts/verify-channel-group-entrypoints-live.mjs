@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
-import { promisify } from "node:util";
+import { spawn } from "node:child_process";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import { once } from "node:events";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -34,7 +37,6 @@ for (const account of [receiver, sender]) {
   const identity = await verifyBotIdentity(account.api, account.token, AbortSignal.timeout(15000));
   assert.equal(identity.bot_uid, account.id);
 }
-const execute = promisify(execFile);
 async function cli(account, args, body) {
   const env = {
     ...process.env,
@@ -53,8 +55,8 @@ async function cli(account, args, body) {
     assert.equal(result.ok, true);
     assert.equal(result.identity.bot_kind, "user_bot");
     return result.data;
-  } catch {
-    throw new Error(`QA CLI failed: ${args.slice(0, 2).join(" ")}`);
+  } catch (error) {
+    throw verificationCommandError(error, `QA CLI failed: ${args.slice(0, 2).join(" ")}`);
   }
 }
 await cli(receiver, ["config", "show"]);

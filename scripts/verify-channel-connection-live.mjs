@@ -3,8 +3,10 @@ import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import WebSocket from "ws";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
 import {
@@ -57,7 +59,6 @@ const trace = () => {
   if (JSON.stringify(traces.at(-1)?.value) !== JSON.stringify(next))
     traces.push({ elapsedMs: Date.now() - started, value: next });
 };
-const execute = promisify(execFile);
 async function cli(account, args, body) {
   const env = {
     ...process.env,
@@ -75,8 +76,11 @@ async function cli(account, args, body) {
     const result = JSON.parse(stdout);
     assert.equal(result.ok, true);
     return result.data;
-  } catch {
-    throw Error(`Test CLI operation failed: ${args.slice(0, 2).join(" ")}`);
+  } catch (error) {
+    throw verificationCommandError(
+      error,
+      `Test CLI operation failed: ${args.slice(0, 2).join(" ")}`
+    );
   }
 }
 globalThis.fetch = async (url, init) => {

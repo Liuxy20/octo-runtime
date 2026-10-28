@@ -11,6 +11,7 @@ import {
   processEnvironmentValue
 } from "./environment.js";
 import { createProcessCleanup } from "./process-cleanup.js";
+import { resolveProcessLaunch } from "./process-launch.js";
 import { watchLineLimit } from "./line-limit.js";
 import { mapReasoningEffort, reasoningLevelMap, type ReasoningLevelMap } from "./reasoning.js";
 export type { AdapterInvocationContext, ProviderActivity } from "./activity.js";
@@ -237,9 +238,11 @@ export async function* spawnJsonLines<TNative>(
   options: SpawnJsonLinesOptions<TNative>
 ): AsyncGenerator<TNative> {
   const { command, args = [], cwd, env, input, signal, parseLine, onInputWritten } = options;
-  const child = spawn(command, args, {
+  const processEnv = mergeProcessEnvironment(process.env, env ?? {});
+  const launch = resolveProcessLaunch(command, args, { cwd, env: processEnv });
+  const child = spawn(launch.command, launch.args, {
     cwd,
-    env: mergeProcessEnvironment(process.env, env ?? {}),
+    env: processEnv,
     stdio: ["pipe", "pipe", "pipe"],
     detached: process.platform !== "win32"
   });
@@ -455,7 +458,8 @@ export async function probeCommand(
       if (!(await stat(candidate)).isFile()) continue;
       let version: string | null = null;
       try {
-        const { stdout } = await promisify(execFile)(resolve(candidate), ["--version"], {
+        const launch = resolveProcessLaunch(resolve(candidate), ["--version"], { env, cwd });
+        const { stdout } = await promisify(execFile)(launch.command, launch.args, {
           env,
           cwd,
           timeout: 2_000,

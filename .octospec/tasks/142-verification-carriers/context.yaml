@@ -1,0 +1,40 @@
+brief: .octospec/tasks/142-verification-carriers/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "按责任归属修复脚本，不扩展 SDK 或服务装配"
+  - id: runtime-engineering
+    source: repo
+    reason: "脚本验证、原始错误分类、凭据与参数边界"
+  - id: commit
+    source: repo
+    reason: "内部中文记录；贡献指南约束实际提交权限"
+  - id: runtime-adapter-metadata
+    source: repo
+    reason: "同一真实安装的 probe 与 Provider 启动，不改变宿主支持范围"
+  - id: runtime-environment
+    source: repo
+    reason: "载体查询使用本轮 env/cwd 和大小写规则，不修改宿主环境"
+  - id: runtime-protocol-design
+    source: repo
+    reason: "确认仅改变 Provider OS 启动载体，协议、调用时序和取消/清理合同不变"
+files_expected:
+  - scripts/verification-command.mjs
+  - scripts/verify-opencode-v1-rejection.mjs
+  - scripts/verify-channel-features-live.mjs
+  - scripts/verify-channel-group-entrypoints-live.mjs
+  - scripts/verify-channel-connection-live.mjs
+  - scripts/verify-im-context-live.mjs
+  - scripts/verify-gateway-drain-live.mjs
+  - scripts/verify-opencode-im-live.mjs
+  - scripts/verify-im-diagnostic-live.mjs
+  - test/verification-command.test.js
+  - packages/octo-runtime-adapter-sdk/src/process-launch.ts
+  - packages/octo-runtime-adapter-sdk/package.json
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+  - packages/octo-runtime-acp-client/src/index.ts
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - packages/octo-runtime-adapter-grok-build/src/client.ts
+  - test/windows-command-launch.test.js
+  - test/fixtures/windows-command-provider.mjs
+updated_at: 2026-10-28T05:00:00Z

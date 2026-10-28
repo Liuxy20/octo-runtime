@@ -19,6 +19,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { codexEnvironmentConfig } from "./environment.js";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
+import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 /**
  * Codex app-server transport and event adaptation layer.
  *
@@ -2117,7 +2118,8 @@ function defaultSpawn(
   args: readonly string[],
   options: { cwd: string; env: NodeJS.ProcessEnv }
 ): ChildProcessWithoutNullStreams {
-  const child = spawn(command, [...args], {
+  const launch = resolveProcessLaunch(command, args, options);
+  const child = spawn(launch.command, [...launch.args], {
     cwd: options.cwd,
     env: options.env,
     stdio: ["pipe", "pipe", "pipe"],

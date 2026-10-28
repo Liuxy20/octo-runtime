@@ -5,6 +5,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import { INVOKE_REQUEST_MAX_BYTES } from "@mininglamp-oss/octo-runtime-protocol";
 import { mergeProcessEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface } from "node:readline";
 
@@ -149,9 +150,14 @@ class GrokBuildAcpClient extends AcpClient {
 }
 
 export function spawnGrokBuildAcpClient(options: SpawnGrokBuildClientOptions): AcpClient {
-  const child = spawn(options.command, options.args ?? [], {
+  const env = mergeProcessEnvironment(process.env, options.env ?? {});
+  const launch = resolveProcessLaunch(options.command, options.args ?? [], {
     cwd: options.cwd,
-    env: mergeProcessEnvironment(process.env, options.env ?? {}),
+    env
+  });
+  const child = spawn(launch.command, launch.args, {
+    cwd: options.cwd,
+    env,
     stdio: ["pipe", "pipe", "pipe"],
     detached: process.platform !== "win32"
   });

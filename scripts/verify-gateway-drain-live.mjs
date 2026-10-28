@@ -1,6 +1,9 @@
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { Readable } from "node:stream";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import { mkdtemp, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -19,7 +22,6 @@ import { selectReasoningTemplate } from "../packages/octo-runtime-extra-channel-
 const directory = await mkdtemp(
   join(process.platform === "darwin" ? "/tmp" : tmpdir(), "od-live-")
 );
-const execute = promisify(execFile);
 const absolute = (path) => fileURLToPath(new URL(path, import.meta.url));
 const report = { endpoint: "https://im-test.deepminer.com.cn", platform: process.platform };
 const cliMode = process.argv.includes("--cli");
@@ -69,7 +71,7 @@ async function cli(account, args, body) {
       if (typeof candidate === "string" && /^[A-Za-z0-9_.-]+$/.test(candidate)) code = candidate;
       else if (Number.isSafeInteger(candidate)) code = `NATIVE_${candidate}`;
     } catch {}
-    throw new Error(`${args.slice(0, 2).join(".")}:${code}`);
+    throw verificationCommandError(error, `${args.slice(0, 2).join(".")}:${code}`);
   }
 }
 try {
