@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import { readFile, mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -37,7 +39,6 @@ for (const account of [receiver, sender]) {
   const identity = await verifyBotIdentity(account.api, account.token, AbortSignal.timeout(15000));
   assert.equal(identity.bot_uid, account.id);
 }
-const execute = promisify(execFile);
 async function cli(account, args, body) {
   const env = {
     ...process.env,
@@ -65,7 +66,7 @@ async function cli(account, args, body) {
     try {
       code = JSON.parse(error.stderr).error.code;
     } catch {}
-    throw new Error(`${args.slice(0, 2).join(" ")}: ${code}`);
+    throw verificationCommandError(error, `${args.slice(0, 2).join(" ")}: ${code}`);
   }
 }
 const directory = await mkdtemp(join(tmpdir(), "octo-channel-live-"));

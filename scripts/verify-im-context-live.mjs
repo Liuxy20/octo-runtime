@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile, mkdtemp, writeFile, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import {
   build_im_contexts,
   ImRuntime
@@ -57,7 +59,6 @@ for (const account of [receiver, sender]) {
   const identity = await verifyBotIdentity(account.api, account.token, AbortSignal.timeout(15000));
   assert.equal(identity.bot_uid, account.id);
 }
-const execute = promisify(execFile);
 const groups = await Promise.all(
   [receiver, sender].map((account) =>
     fetchBotGroups({ apiUrl: account.api, botToken: account.token })
@@ -701,8 +702,8 @@ if (process.argv.includes("--capacity")) {
           ],
           { env, timeout: 15000, maxBuffer: 1 << 20 }
         );
-      } catch {
-        throw Error("IM_CAPACITY_TEST_SEND_FAILED");
+      } catch (error) {
+        throw verificationCommandError(error, "IM_CAPACITY_TEST_SEND_FAILED");
       }
     }
     let busy, busyCard;
@@ -760,8 +761,8 @@ if (resourceTest) {
         maxBuffer: 1 << 20
       });
       upload = JSON.parse(stdout).data;
-    } catch {
-      throw Error("IM_TEST_UPLOAD_FAILED");
+    } catch (error) {
+      throw verificationCommandError(error, "IM_TEST_UPLOAD_FAILED");
     }
     const address = upload?.url ?? upload?.path;
     assert.equal(typeof address, "string", "Uploaded file must have a real address");
@@ -791,7 +792,8 @@ try {
   try {
     code = JSON.parse(error.stderr || error.stdout).error.code;
   } catch {}
-  throw new Error(
+  throw verificationCommandError(
+    error,
     `IM_TEST_SEND_FAILED:${String(code)
       .replace(/[^A-Z0-9_]/gi, "")
       .slice(0, 80)}`

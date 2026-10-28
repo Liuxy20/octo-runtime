@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,7 +30,6 @@ const receiver = accounts.find((a) => a.name === "orbtex-opencode");
 const sender = accounts.find((a) => a.name === "orbtex-codex");
 assert.ok(receiver && sender);
 const group = process.env.OCTO_CHANNEL_QA_GROUP;
-const execute = promisify(execFile);
 async function cli(account, args, body) {
   assert.equal(account.api, "https://im-test.deepminer.com.cn/api");
   const env = {
@@ -56,7 +57,10 @@ async function cli(account, args, body) {
         "[redacted]"
       );
     } catch {}
-    throw new Error(`Test CLI failed: ${args.slice(0, 2).join(" ")}: ${detail}`);
+    throw verificationCommandError(
+      error,
+      `Test CLI failed: ${args.slice(0, 2).join(" ")}: ${detail}`
+    );
   }
 }
 for (const account of [receiver, sender]) {

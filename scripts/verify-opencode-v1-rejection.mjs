@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { executeVerificationCommand as execute } from "./verification-command.mjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,7 +8,6 @@ import { invokeRequest } from "../test/runtime-fixture.js";
 
 // V1 仅解包到临时目录用于拒绝验收，绝不安装到全局或更改宿主 PATH。
 const directory = await mkdtemp(join(tmpdir(), "octo-opencode-v1-"));
-const execute = promisify(execFile);
 try {
   const platform = process.platform === "win32" ? "windows" : process.platform;
   const { stdout } = await execute(

@@ -6,6 +6,7 @@
   "exports": {
     ".": "./dist/index.js",
     "./process-cleanup": "./dist/process-cleanup.js",
+    "./process-launch": "./dist/process-launch.js",
     "./module-manifest": "./dist/module-manifest.js"
   },
   "dependencies": {

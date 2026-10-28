@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import {
+  executeVerificationCommand as execute,
+  verificationCommandError
+} from "./verification-command.mjs";
 import { readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -25,7 +27,6 @@ const accounts = (await readFile(process.env.OCTO_CHANNEL_QA_ACCOUNTS, "utf8"))
   .filter((a) => a.token?.startsWith("bf_"));
 const [receiver, sender] = accounts;
 assert.ok(receiver && sender);
-const execute = promisify(execFile);
 async function cli(account, args, body) {
   const env = {
     ...process.env,
@@ -44,8 +45,8 @@ async function cli(account, args, body) {
     assert.equal(result.ok, true);
     if (result.identity?.bot_kind) assert.equal(result.identity.bot_kind, "user_bot");
     return result.data;
-  } catch {
-    throw new Error(`Test CLI command failed: ${args.slice(0, 2).join(" ")}`);
+  } catch (error) {
+    throw verificationCommandError(error, `Test CLI command failed: ${args.slice(0, 2).join(" ")}`);
   }
 }
 for (const account of [receiver, sender]) {
