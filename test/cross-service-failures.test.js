@@ -22,6 +22,8 @@ async function fixture(t, platform) {
     fail: "",
     unavailable: false,
     queryFails: false,
+    unresolvedIdentity: "",
+    statusResponse: undefined,
     calls: []
   };
   const spec = {
@@ -50,13 +52,21 @@ async function fixture(t, platform) {
         if (command.endsWith("powershell.exe")) {
           if (args.at(-1).includes("Schedule.Service"))
             return reply(0, JSON.stringify({ exists: state.installed }));
+          if (state.statusResponse) {
+            const { exitCode = 0, stdout = "", stderr = "" } = state.statusResponse;
+            return reply(exitCode, stdout, stderr);
+          }
           advance();
           return reply(
             0,
             JSON.stringify({
               state: state.active ? "Running" : "Ready",
               enabled: true,
-              last_exit_code: 9
+              last_exit_code: 9,
+              principal_user_id: state.unresolvedIdentity === "principal" ? "short-test" : "test",
+              principal_user_matches: state.unresolvedIdentity === "principal" ? null : true,
+              trigger_user_id: state.unresolvedIdentity === "trigger" ? "short-test" : "test",
+              trigger_user_matches: state.unresolvedIdentity === "trigger" ? null : true
             })
           );
         }
@@ -219,3 +229,58 @@ test("Windows failed Query is checked against native existence instead of assume
   state.queryFails = true;
   assert.notEqual((await backend.inspect(spec)).state, "not_installed");
 });
+
+for (const identity of ["principal", "trigger"]) {
+  for (const active of [false, true]) {
+    test(`Windows uninstall confirms manager stop with unresolved ${identity}, active=${active}`, async (t) => {
+      const { state, spec, backend, definition } = await fixture(t, "win32");
+      state.unresolvedIdentity = identity;
+      state.active = active;
+      if (active) state.pending = 5;
+      const status = await backend.inspect(spec);
+      assert.equal(status.state, "unknown");
+      assert.match(status.detail, /identity could not be resolved/);
+      assert.ok(!status.drift.includes(`manager.${identity}_user`));
+      // 清理容忍身份未知，启动和重启仍必须保留拒绝边界。
+      for (const action of ["start", "restart"])
+        await assert.rejects(backend[action](spec), { code: "MANAGER_UNAVAILABLE" });
+      assert.ok(!state.calls.includes("/Run"));
+      await backend.uninstall(spec);
+      assert.equal(state.active, false);
+      assert.equal(state.installed, false);
+      assert.equal(state.calls.includes("/End"), active);
+      await assert.rejects(readFile(definition), { code: "ENOENT" });
+    });
+  }
+}
+
+for (const [name, response] of [
+  ["failed query", { exitCode: 5, stderr: "query denied" }],
+  ["invalid JSON", { stdout: "{" }],
+  ["unknown manager state", { stdout: JSON.stringify({ state: "Unexpected" }) }]
+]) {
+  test(`Windows identity cleanup preserves task and sidecar on ${name}`, async (t) => {
+    const { state, spec, backend, definition } = await fixture(t, "win32");
+    state.unresolvedIdentity = "principal";
+    state.statusResponse = response;
+    await assert.rejects(backend.uninstall(spec), { code: "MANAGER_UNAVAILABLE" });
+    assert.equal(state.installed, true);
+    assert.ok(await readFile(definition));
+    assert.ok(!state.calls.includes("/End"));
+    assert.ok(!state.calls.includes("/Delete"));
+  });
+}
+
+for (const failureMode of ["stop timeout", "/End", "/Delete"]) {
+  test(`Windows unresolved identity preserves task and sidecar on ${failureMode}`, async (t) => {
+    const { state, spec, backend, definition } = await fixture(t, "win32");
+    state.unresolvedIdentity = "principal";
+    state.active = true;
+    if (failureMode === "stop timeout") state.pending = Infinity;
+    else state.fail = failureMode;
+    await assert.rejects(backend.uninstall(spec), failure);
+    assert.equal(state.installed, true);
+    assert.ok(await readFile(definition));
+    if (failureMode !== "/Delete") assert.ok(!state.calls.includes("/Delete"));
+  });
+}

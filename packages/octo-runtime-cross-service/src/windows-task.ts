@@ -131,6 +131,11 @@ export class WindowsUserTaskBackend implements ServiceBackend {
 
   /** Return live scheduler state and exact drift from the desired XML/principal/action. */
   async inspect(spec: ServiceSpec): Promise<ServiceStatus> {
+    return this.#inspect(spec, true);
+  }
+
+  /** 公开查询要求身份可确认；清理只依赖管理器状态，保留诊断且不放宽查询失败。 */
+  async #inspect(spec: ServiceSpec, requireIdentity: boolean): Promise<ServiceStatus> {
     const normalized = this.#normalize(spec);
     const taskName = windowsTaskName(normalized);
     const definitionPath = this.#definitionPath(normalized);
@@ -184,7 +189,7 @@ export class WindowsUserTaskBackend implements ServiceBackend {
       ) === undefined;
     return {
       manager: this.kind,
-      state: identityUnknown ? "unknown" : windowsTaskState(task.state),
+      state: identityUnknown && requireIdentity ? "unknown" : windowsTaskState(task.state),
       enabled: task.enabled === true,
       lastExitCode: task.last_exit_code,
       definitionPath,
@@ -279,7 +284,8 @@ export class WindowsUserTaskBackend implements ServiceBackend {
   async stop(spec: ServiceSpec): Promise<void> {
     const normalized = await this.#installed(spec);
     const taskName = windowsTaskName(normalized);
-    const status = await this.inspect(spec);
+    // 账号翻译失败不代表任务仍在运行；停止不依赖账号匹配，权限仍由 Scheduler 校验。
+    const status = await this.#inspect(spec, false);
     if (status.state === "stopped" || status.state === "not_installed") return;
     if (status.state === "unknown")
       throw new ServiceError("MANAGER_UNAVAILABLE", "Windows task state is unavailable", {
@@ -291,7 +297,7 @@ export class WindowsUserTaskBackend implements ServiceBackend {
     // /End 仅表示请求受理；旧实例仍运行时不能 /Run（IgnoreNew 会吞掉重启）。
     const end = Date.now() + normalized.timeoutStopSeconds * 1000;
     while (true) {
-      const current = await this.inspect(spec);
+      const current = await this.#inspect(spec, false);
       if (current.state === "stopped" || current.state === "not_installed") return;
       if (current.state === "unknown")
         throw new ServiceError("MANAGER_UNAVAILABLE", "Windows task state is unavailable", {
