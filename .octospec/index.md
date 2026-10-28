@@ -54,6 +54,8 @@
 
 ## 当前任务
 
+- [Issue 202/203：CodeBuddy 默认模型与订阅错误](tasks/202-203-codebuddy/brief.md)：方案可执行性 96/100；JSON 安全回执、确认模型与空输出守卫。用户最新明确独立 ACP 失败码、公共消息直接拼原始 _meta 的 JSON，不解析、不脱敏、不筛字段；真实 Kernel worker/IPC fixture 覆盖，见[验证记录](tasks/202-203-codebuddy/validation.md)。
+
 - [Issue 160：无状态探针的结构化状态与错误处理](tasks/160-stateless-live-status/brief.md)：可执行性 97/100 后实施；显式 JSON、先检查返回码、保留诊断并校验 Gateway 状态。23 项针对性测试及构建/类型/静态检查通过；完整 live campaign 未执行，见[验证记录](journal/shared/2026-10-28-160-stateless-live-status.md)。
 
 - [OCTO-2 / #213：历史意图指引](tasks/octo-2-history-intent/brief.md)：最新 main 独立 worktree，准备度 96/100；真实 Provider 主矩阵 232 条，语义正确率 79/116 → 109/116，另 64 条严格配对复测。三处指引统一支持连续意图并保留权限边界；样本失败及真实 IM/自动化证据见[验证记录](tasks/octo-2-history-intent/validation.md)。

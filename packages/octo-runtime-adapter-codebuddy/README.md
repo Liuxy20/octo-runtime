@@ -49,6 +49,9 @@ const input = InvokeInput.check({
 - Image input is rejected outright, and the implementation does not declare MCP support.
 - Prompt and control text travel through the ACP text carrier, not a separate native system role.
 - The correlated `session/prompt` response decides completion; silence in updates does not.
+- Session receipts include a model only when the provider confirms it. An omitted model uses the provider default; a requested model on resume is not reported as applied.
+- Provider refusal or explicit failed-request metadata produces `run.failed` with `ACP_MODEL_REQUEST_FAILED` (public code `OH-PRV-4010`). The message is the catalog message followed by a newline and `JSON.stringify` of the original `_meta`, without parsing, redaction or field selection. Details do not change the error classification; successful responses may still carry metadata.
+- A turn without final assistant text fails with `ACP_NO_FINAL_OUTPUT`. Supported ACP result-body text supplies an answer only when there is no streamed final text or provider failure; reasoning and tool activity alone do not count as an answer.
 - Probe checks that the executable exists, not that the account or model is usable.
 
 ## Import and distribution

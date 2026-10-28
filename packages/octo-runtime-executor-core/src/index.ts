@@ -1145,10 +1145,16 @@ async function adapterFailurePayload(
     ...context,
     ...(detail !== input ? { defaultDomain: "adapter" as const } : {})
   });
-  const safe = sanitizePublicValue(detail) as Record<string, unknown>;
+  // 仅 ACP 消息保留原始 _meta；外层字段仍按公共错误规则脱敏，不能凭错误码整体绕过。
+  const { message: originalMessage, ...outerDetail } = detail;
+  const safe = sanitizePublicValue(outerDetail) as Record<string, unknown>;
+  const publicMessage =
+    detail.code === "ACP_MODEL_REQUEST_FAILED" && typeof originalMessage === "string"
+      ? originalMessage
+      : sanitizePublicValue(originalMessage);
   const message =
-    typeof safe.message === "string" && safe.message.trim()
-      ? safe.message
+    typeof publicMessage === "string" && publicMessage.trim()
+      ? publicMessage
       : typeof safe.error === "string"
         ? safe.error
         : safe.error && typeof safe.error === "object"

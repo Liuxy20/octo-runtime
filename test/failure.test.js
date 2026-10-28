@@ -4,10 +4,37 @@ import {
   assertCanonicalEvent,
   assertFailureEnvelope,
   classifyFailure,
+  failureMessage,
   failurePayload
 } from "../packages/octo-runtime-protocol/dist/index.js";
 
 const source = { component: "octo-runtime", adapter: "fixture" };
+
+test("explicit ACP failures have one catalog message regardless of diagnostic contents", () => {
+  for (const message of [
+    "quota exceeded",
+    "unauthorized",
+    "rpc error",
+    "rate limit",
+    "timeout",
+    "invalid json"
+  ]) {
+    const payload = failurePayload(
+      { code: "ACP_MODEL_REQUEST_FAILED", message },
+      {
+        stage: "adapter.invoke",
+        defaultDomain: "provider",
+        source
+      }
+    );
+    assert.equal(payload.failure.code, "OH-PRV-4010");
+    assert.equal(payload.failure.reasonCode, "ACP_MODEL_REQUEST_FAILED");
+    assert.equal(payload.failure.category, "provider_acp");
+    assert.equal(payload.failure.retryable, false);
+    assert.equal(payload.message, failureMessage("OH-PRV-4010"));
+    assertFailureEnvelope(payload.failure);
+  }
+});
 
 test("pre-execution channel codes require the matching stage and trusted admission evidence", () => {
   for (const [reason, stage, code, action] of [

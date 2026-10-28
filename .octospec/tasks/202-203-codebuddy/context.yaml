@@ -1,0 +1,33 @@
+task: 202-203-codebuddy
+baseline: aac7ec7765ec055eff02328babefcf5d719c0c6a
+branch: fix/codebuddy-202-203
+workflow: .claude/skills/octospec-workflow/SKILL.md
+issues: [202, 203]
+read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+updated_at: 2026-10-28T00:00:00Z
+revision:
+  decision: "用户要求公共错误消息直接拼 JSON.stringify(原始 _meta)，不解析、不脱敏、不筛字段；失败识别沿用 ACP 明确信号。原文例外仅限 message，外层错误字段仍执行既有公共脱敏。"
+  paths:
+    - packages/octo-runtime-adapter-codebuddy/src/index.ts
+    - packages/octo-runtime-protocol/src/failure.ts
+    - packages/octo-runtime-executor-core/src/index.ts
+    - test/codebuddy-outcomes.test.js
+    - test/fixtures/codebuddy-fixture.js
+    - test/failure.test.js
+    - test/adapter-failures.test.js

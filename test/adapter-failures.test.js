@@ -16,7 +16,7 @@ import { sanitizePublicValue } from "../packages/octo-runtime-adapter-sdk/dist/i
 import { ImRunProjector } from "../packages/octo-runtime-extra-channel-gateway/dist/presentation/run-projector.js";
 import { buildReasoningFrame } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/reasoning-frame.js";
 import { invokeRequest } from "./runtime-fixture.js";
-import { classifyFailure } from "@mininglamp-oss/octo-runtime-protocol";
+import { classifyFailure, failureMessage } from "@mininglamp-oss/octo-runtime-protocol";
 
 test("Codex structured upstream failures survive canonical normalization and catalog classification", () => {
   for (const [codexErrorInfo, expected] of [
@@ -138,6 +138,53 @@ test("Codex turn error objects and Claude result errors are retained", () => {
   const payload = claude.find((event) => event.type === "run.failed").payload;
   assert.equal(payload.message, "Invalid API key\nPlease run /login");
   assert.deepEqual(payload.error.errors, ["Invalid API key", "Please run /login"]);
+});
+
+test("ACP raw message preservation does not bypass sanitization of outer failure fields", async () => {
+  const value = randomUUID();
+  const metadata = {
+    authorization: `Bearer ${value}`,
+    token: value,
+    unknown: { original: `  ${JSON.stringify({ password: value })}  ` }
+  };
+  const message = `${failureMessage("OH-PRV-4010")}\n${JSON.stringify(metadata)}`;
+  for (const type of ["codebuddy", "custom-provider"]) {
+    const event = await failed({
+      metadata: {
+        type,
+        agentSources: ["provisioned"],
+        protocolSupport: { protocol: `${type}.canonical`, modes: ["canonical"], nativeMethods: [] }
+      },
+      async *invoke() {
+        yield {
+          protocolVersion: 2,
+          type: "run.failed",
+          payload: {
+            code: "ACP_MODEL_REQUEST_FAILED",
+            message,
+            executionEnvOverrides: { TEST_VALUE: value },
+            authorization: `Bearer ${value}`,
+            token: value,
+            error: { message: `Bearer ${value}`, nested: { password: value, reason: "rejected" } },
+            diagnostic: { token: value, reason: "provider failure" }
+          }
+        };
+      }
+    });
+    assert.equal(event.payload.message, message);
+    assert.equal(event.payload.failure.code, "OH-PRV-4010");
+    assert.equal(event.payload.executionEnvOverrides, "[REDACTED]");
+    assert.equal(event.payload.authorization, "[REDACTED]");
+    assert.equal(event.payload.token, "[REDACTED]");
+    assert.deepEqual(event.payload.error, {
+      message: "Bearer [REDACTED]",
+      nested: { password: "[REDACTED]", reason: "rejected" }
+    });
+    assert.deepEqual(event.payload.diagnostic, { token: "[REDACTED]", reason: "provider failure" });
+    const { message: rawMessage, ...outer } = event.payload;
+    assert.equal(rawMessage, message);
+    assert.ok(!JSON.stringify(outer).includes(value));
+  }
 });
 
 test("failure display retains useful reasons while redacting credentials", () => {

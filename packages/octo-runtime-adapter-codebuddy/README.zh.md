@@ -49,6 +49,9 @@ const input = InvokeInput.check({
 - 图片输入直接拒绝，当前实现也不声明 MCP 支持。
 - prompt 和控制文本走 ACP 的文本载体，不是独立的原生 system role。
 - 以关联的 `session/prompt` 响应判定完成；update 安静下来不算。
+- 会话回执只包含 Provider 确认的模型；省略模型沿用 Provider 默认，续聊时请求了模型不代表已经应用。
+- Provider 拒绝或明确声明请求失败时返回 `run.failed`，使用 `ACP_MODEL_REQUEST_FAILED`（公共码 `OH-PRV-4010`）。消息为公共目录消息加换行及 `JSON.stringify(原始 _meta)`，不解析、不脱敏、不筛字段；不根据详情另行分类，成功响应也可以携带 metadata。
+- 没有最终助手文本时以 `ACP_NO_FINAL_OUTPUT` 失败。仅在没有流式 final 且没有 Provider 失败时使用已支持的 ACP 结果正文；思考和工具活动本身不算回答。
 - 探测只确认可执行文件存在，不证明账号或模型可用。
 
 ## 导入与分发

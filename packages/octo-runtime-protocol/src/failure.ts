@@ -285,6 +285,13 @@ export const FAILURE_CATALOG = Object.freeze({
     false,
     "check_runtime"
   ),
+  "OH-PRV-4010": entry(
+    "provider_acp",
+    "ACP 模型请求失败。",
+    "error.provider.acp_request_failed",
+    false,
+    "contact_admin"
+  ),
   "OH-PRV-4099": entry(
     "provider_unknown",
     "模型服务调用失败，暂时无法识别具体原因。",
@@ -612,6 +619,8 @@ function classify(
 ): { code: PublicFailureCode; reasonCode: string } {
   const text = evidence.fingerprint;
   const explicit = evidence.explicitCode?.toUpperCase();
+  // ACP 已明确声明失败；meta 仅作诊断，不从其中的状态码或文字猜测其他类别。
+  if (explicit === "ACP_MODEL_REQUEST_FAILED") return result("OH-PRV-4010", explicit);
   for (const [reason, code] of Object.entries({
     UNSUPPORTED_INPUT_MODALITY: "OH-INP-5001",
     IMAGE_RECOVERY_INPUT_REQUIRED: "OH-INP-5001",

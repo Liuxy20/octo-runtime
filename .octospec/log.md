@@ -2,6 +2,12 @@
 
 ## 2026-10-28
 
+- [PR #216 消息原文例外范围修正](tasks/202-203-codebuddy/validation.md#acp-消息原文例外的范围修正)：修复整个 ACP 错误对象跳过脱敏的问题，只保留 message 中原始 _meta；外层字段恢复既有公共脱敏。新增回归先复现后通过，专项 67 项、全量 Node 2094 项与 WebUI 35 项通过。
+
+- [PR #216 评审与原始错误合同](tasks/202-203-codebuddy/validation.md#用户确认的原始-acp-错误详情与评审修复)：按用户要求独立 ACP 失败码加公共消息，后接 JSON.stringify(原始 _meta)，不解析、不脱敏、不筛字段；失败判定沿用明确信号。修复畸形 stopReason，66 项专项及全量 Node 2078/WebUI 35 通过，原始消息经 Core/worker/IPC 保真。
+
+- [Issue 202/203](journal/shared/2026-10-28-202-203-codebuddy.md)：最新 main 独立 worktree，先以 96/100 方案在两个 issue 评论；修复默认模型 JSON 回执、确认模型与 Provider 订阅失败转换，补齐空输出守卫。专项 37 项、全量 Node 2070 项及 WebUI 35 项通过，Kernel 公共入口使用真实 worker/IPC 与离线 ACP fixture，真实账号未测。
+
 - [Issue 160](journal/shared/2026-10-28-160-stateless-live-status.md)：独立 worktree 从 main@aac7ec7 开始，OctoSpec 准备度 97/100。无状态探针显式请求 JSON，返回码检查优先于解析，保留 CLI 原始诊断。真实 CLI 受控成功/失败及结构回归共 23 项通过；CLI/SDK 生产行为不变，未执行完整 live campaign。
 
 - [OCTO-2 / #213](tasks/octo-2-history-intent/brief.md)：从 main@b3fba8f 新建 worktree，方案与 96/100 实施准备度先上传 Loop。先冻结基线门槛，再运行中英 16 类真实 Codex A/B；主矩阵 232 条，意图正确从 79/116 提升到 109/116，保留候选 7 条失败。另 64 条共目录配对确认输入及真实续接。只改三处 Channel 历史指引，不改检索、准入、游标、reset 或权限；真实 IM、自动化及未部署边界见[验证](tasks/octo-2-history-intent/validation.md)。
