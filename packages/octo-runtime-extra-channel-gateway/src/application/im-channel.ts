@@ -589,10 +589,11 @@ export class ImRuntime {
       // Octospec F26: .octospec/tasks/gateway-august-feature-assessment/assessment.md
       // 每个非空 session 占一个工作槽位；结束清理后原子交给同 session 的下一条。
       // 排队另计四条，不把 Bot 的工作数与所有排队消息混加。
+      // 只有空闲 session 需要申请新槽；Bot 满载不阻止已有工作 session 排队。
       const full =
         session.pending >= 5
           ? "IM_SESSION_QUEUE_FULL"
-          : this.#working >= 64
+          : session.pending === 0 && this.#working >= 64
             ? "IM_BOT_WORKING_FULL"
             : undefined;
       if (full) {

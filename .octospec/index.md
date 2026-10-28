@@ -55,6 +55,8 @@
 
 ## 当前任务
 
+- [Issue 150/171：Gateway 满载准入与容量文档](tasks/150-171-gateway-capacity/brief.md)：已有工作 session 的四条排队不申请新工作槽；同步工作、排队、历史 binding 的例子及首次/后续连接恢复说明。[本地验证与 review](journal/shared/2026-10-28-150-171-gateway-capacity.md)记录 435 项渠道回归、取消 ACK 补强及未验收边界。
+
 - [Issue 205：宿主管理 DSH npm 入口](tasks/205-host-configured-dsh/brief.md)：宿主传入绝对路径 dshBin，删除安装发现及 Desktop/ASAR；官方 SDK 保持未修改，三平台 Node/Electron 验证分别记录。
 
 - [Issue 217：CodeBuddy 显式选模与续聊切模](tasks/217-codebuddy-model-selection/brief.md)：最新 main 独立 worktree，方案可执行性 96/100；prompt 前按原生目录设置并确认模型，未知模型和原生拒绝送达用户。真实 CodeBuddy/IM、自动化及本地 verified-review 见[验收记录](tasks/217-codebuddy-model-selection/validation.md)。
@@ -209,7 +211,7 @@
 
 - [Channel 六项决策实施与测试环境验收](journal/shared/2026-10-16-channel-features-delivery.md)：当前分支分批实现 Codex 独立图片、新会话一次历史、原生 Mention 与固定目录校验；全仓回归及 im-test 群/话题、真实 Codex 识图和客户端高亮通过，限制逐项记录。
 
-- [Channel Gateway Bot 连接状态机与断线恢复](tasks/channel-connection-state-machine/brief.md)：五态与首次失败不重试已实现，上线后按 5/10/20/30 秒恢复，成功清错误并重置计数。im-test 真实收发、重复连接踢旧、双 Bot 隔离及 CDP 显示通过；合盖待验，见[交付记录](journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)。
+- [Channel Gateway Bot 连接状态机与断线恢复](tasks/channel-connection-state-machine/brief.md)：首次暂态失败与后续暂态断线均按 5/10/15/15… 秒等待恢复，完整上线后清错误并重置计数；缺凭据或明确终端错误停止。当前合同见 [Channel 规则](rules/channel-integration.md#容量拒收与连接恢复)；[2026-10-16 交付记录](journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)仅代表当时的实现及 im-test/CDP 验证，首次失败、退避与断开分类以当前合同为准。
 
 - [协议责任与拒绝跨模块猜测兜底](journal/shared/2026-10-16-contract-responsibility-decision.md)：从业务与合同定位问题，在责任模块修复；发送端漏填 mention 不由接收端正文匹配补救，旧实现的兼容动机不是复制设计的理由。
 
