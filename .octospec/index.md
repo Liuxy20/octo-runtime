@@ -55,6 +55,8 @@
 
 ## 当前任务
 
+- [Issue 137：Adapter 协议元数据类型](tasks/137-adapter-protocol-support/brief.md)：区分编写与注册输入，保留 canonical-only 默认值及运行时校验；类型和针对性 30 项通过，全量两项失败及基线对照见[验证记录](journal/shared/2026-10-29-137-adapter-protocol-support.md)。
+
 - [Issue 163：REST 日期格式 Retry-After](tasks/163-http-date-retry-after/brief.md)：从 main@0ca12a0 独立 worktree，REST 与鉴权/注册共用解析，保留各层零等待及重试预算；手动专项、基线失败与 verified-review 处置见[记录](journal/shared/2026-10-28-163-http-date-retry-after.md)。
 
 - [Issue 150/171：Gateway 满载准入与容量文档](tasks/150-171-gateway-capacity/brief.md)：已有工作 session 的四条排队不申请新工作槽；同步工作、排队、历史 binding 的例子及首次/后续连接恢复说明。[本地验证与 review](journal/shared/2026-10-28-150-171-gateway-capacity.md)记录 435 项渠道回归、取消 ACK 补强及未验收边界。

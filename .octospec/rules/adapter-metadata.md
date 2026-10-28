@@ -51,6 +51,20 @@ OpenClaw 声明两种来源，Adapter 边界都要求有效目标；公共 `Invo
 - `protocolSupport`：native／canonical 输出模式及原生协议标识。
 - `mcp`、`workspace`：本地 MCP 配置支持和工作目录行为。
 
+### 编写输入与注册输入必须分层
+
+`protocolSupport` 是执行路径实际消费的协议描述，用于注册、输出模式接纳及流身份，不是业务功能标签目录。必须区分以下阶段，不得以同一份可选类型同时表达编写输入和完整注册输入：
+
+- 编写输入 `Adapter` / `AdapterMetadata` 允许省略 `protocolSupport`；这是工厂的输入约定，不表示注册时可缺失。
+- `defineAdapter()` 和 `createJsonCliAdapter()` 必须返回 `DefinedAdapter`，静态类型保证 `metadata.protocolSupport` 必有。工厂、派生工厂及接入代码不得以宽泛的编写输入类型重新注解返回值，丢失已经补齐的保证。
+- 工厂省略时仅沿用 `${type}.canonical`、`modes: ["canonical"]` 和空 `nativeMethods` 默认值；不得从缺省信息推断 native 支持，不得改变调用方的请求模式。
+- 注册输入 `HostedAdapterMetadata.protocolSupport` 必填。`AgentExecutor.register()` 和 `serveWorker()` 接收完整声明，不隐式补值；即使编译期已要求完整，运行时仍必须拒绝缺失或非法声明。
+- 修改相关类型或工厂时，必须显式验证：缺字段的直接注册在编译期拒绝、工厂默认值可直接注册、自定义字段保留，以及 canonical-only 不被误授 native 支持。专项验证在本地显式运行，不据此扩大 CI 范围。
+
+以上约束须同时维护于字段/工厂的就近代码注释和本规则；不得仅记录在 issue、PR 或历史 journal 中。
+
+### 业务标签与运行状态
+
 自有 `metadata.capabilities` 已删除。`react` 没有可检查的本地执行定义，不作为默认值、发现结果、注册要求或准入条件。业务标签及其匹配由业务方管理，不在 SDK、Kernel、Core 或 Adapter 内建立能力目录、AbilityProvider、Binding 或业务执行目标注册中心。
 
 Provider 的 `available`、认证、目标 Agent、当前输入可执行性与执行完成分别判断。可用性以实际 probe 为准，不证明当前输入可执行或执行成功。

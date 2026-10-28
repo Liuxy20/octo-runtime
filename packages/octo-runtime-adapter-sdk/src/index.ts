@@ -81,11 +81,13 @@ export {
   type ReasoningLevelMap
 } from "./reasoning.js";
 
+/** Adapter 的编写输入；defineAdapter 在省略协议声明时补 canonical-only 默认值。 */
 export interface AdapterMetadata {
   /** Local implementation support; not a remote runtime admission feature. */
   mcp?: boolean;
   /** False ignores octo.execution/workspace; the Provider owns its workspace. */
   workspace?: boolean;
+  /** 仅编写输入可省略；这是执行时消费的协议描述，不能作为业务能力标签。 */
   protocolSupport?: AdapterProtocolSupport;
   type: string;
   agentSources: ("preset" | "provisioned")[];
@@ -106,6 +108,7 @@ export interface ProbeResult {
   reason?: string;
 }
 
+/** 工厂的编写输入；直接交给 Core 注册时须满足完整的 HostedAdapter 合同。 */
 export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
   metadata: AdapterMetadata;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
@@ -118,6 +121,18 @@ export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
    */
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<TOutput>;
 }
+
+/**
+ * 工厂输出必须表达已补齐的协议声明，供宿主直接注册；保留作者扩展的字段和方法。
+ * 禁止与允许省略字段的编写输入混用，否则会把注册前的类型错误推迟到运行时。
+ */
+export type DefinedAdapter<TAdapter extends Adapter = Adapter> = Readonly<
+  Omit<TAdapter, "metadata"> & {
+    metadata: Omit<TAdapter["metadata"], "protocolSupport"> & {
+      protocolSupport: AdapterProtocolSupport;
+    };
+  }
+>;
 
 /** Provider objects and lifetime signals before the Host assigns stream identity. */
 export type DriverFrame =
@@ -163,18 +178,21 @@ interface ProcessExit {
 }
 
 /**
- * Validate and freeze an adapter definition. Freezing makes the metadata and
- * `invoke` reference immutable so a loaded adapter cannot be mutated at runtime.
+ * 接收编写输入并返回可注册的 Adapter，省略协议时仅补 canonical-only 声明。
+ * 返回类型必须保留字段必有的保证；不得根据缺省声明推断 native 支持。
+ * 冻结顶层对象以固定 metadata 和 invoke 引用；嵌套元数据不作深冻结。
+ * 工厂不注册或启动 Provider，宿主随后注册并负责执行与关闭。
  */
 export function defineAdapter<TAdapter extends Adapter>(
   adapter: TAdapter,
   levels: ReasoningLevelMap | null = reasoningLevelMap(adapter.metadata.type)
-): Readonly<TAdapter> {
+): DefinedAdapter<TAdapter> {
   if (!adapter?.metadata?.type || typeof adapter.invoke !== "function") {
     throw new TypeError("adapter requires metadata.type and invoke(req)");
   }
   const invoke = adapter.invoke.bind(adapter);
-  const protocolSupport: AdapterProtocolSupport = adapter.metadata.protocolSupport ?? {
+  const metadata: TAdapter["metadata"] = adapter.metadata;
+  const protocolSupport: AdapterProtocolSupport = metadata.protocolSupport ?? {
     protocol: `${adapter.metadata.type}.canonical`,
     modes: ["canonical"],
     nativeMethods: []
@@ -182,7 +200,7 @@ export function defineAdapter<TAdapter extends Adapter>(
   return Object.freeze({
     ...adapter,
     metadata: {
-      ...adapter.metadata,
+      ...metadata,
       protocolSupport
     },
     async *invoke(
@@ -381,7 +399,7 @@ export function parseJsonLine(line: string): Record<string, unknown> | null {
  */
 export function createJsonCliAdapter<TNative = Record<string, unknown>>(
   options: JsonCliAdapterOptions<TNative>
-): Readonly<Adapter<CanonicalEvent>> {
+): DefinedAdapter<Adapter<CanonicalEvent>> {
   const { metadata, buildCommand, normalize, probe, onSuccess } = options;
   return defineAdapter(
     {

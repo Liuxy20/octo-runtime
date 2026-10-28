@@ -18,6 +18,7 @@ import { assertHostFrame, isHostTerminal } from "../packages/octo-runtime-protoc
 import {
   DriverQueue,
   NativeInteractionBridge,
+  defineAdapter,
   watchLineLimit
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
@@ -39,6 +40,44 @@ function hostFor(adapter) {
 }
 const codexHost = () =>
   hostFor(createCodexAdapter({ command: process.execPath, appServerArgs: [codex] }));
+
+test("adapter authoring defaults register as canonical-only without granting native support", async () => {
+  const host = new AgentExecutor();
+  let invokes = 0;
+  const definition = {
+    metadata: { type: "custom-canonical", agentSources: ["provisioned"] },
+    async *invoke() {
+      invokes++;
+      yield { protocolVersion: 2, type: "run.completed", payload: {} };
+    }
+  };
+  try {
+    assert.throws(
+      () => host.register(definition),
+      (error) => error.code === "PROTOCOL_SUPPORT_INVALID"
+    );
+    const adapter = defineAdapter(definition);
+    host.register(adapter);
+    assert.deepEqual(host.list()[0].protocolSupport, {
+      protocol: "custom-canonical.canonical",
+      modes: ["canonical"],
+      nativeMethods: []
+    });
+    assert.equal(definition.metadata.protocolSupport, undefined);
+    await assert.rejects(
+      collect(preparedFrames(host, "custom-canonical", input(), { protocolMode: "native" })),
+      (error) => error.code === "PROTOCOL_MODE_UNSUPPORTED"
+    );
+    assert.equal(invokes, 0);
+    const frames = await collect(
+      preparedFrames(host, "custom-canonical", input(), { protocolMode: "canonical" })
+    );
+    assert.equal(invokes, 1);
+    assert.equal(frames.at(-1).control.state, "completed");
+  } finally {
+    assert.equal((await host.shutdown()).cleanup, "complete");
+  }
+});
 
 test("default native retains provider response and notification fields and never normalizes", async () => {
   const original = CodexEventNormalizer.prototype.normalize;

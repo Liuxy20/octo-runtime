@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-The toolkit for writing a Provider Adapter: the `Adapter` interface Core calls into, `defineAdapter` to validate and freeze a definition, and the machinery every Adapter would otherwise reimplement — subprocess streaming, bounded queues, ACP mapping, approval bridges, environment and MCP mapping, logging, cleanup. Core handles orchestration; an Adapter only translates one Provider.
+The toolkit for writing a Provider Adapter: the `Adapter` authoring interface, `defineAdapter` to validate and freeze a definition, and the machinery every Adapter would otherwise reimplement — subprocess streaming, bounded queues, ACP mapping, approval bridges, environment and MCP mapping, logging, cleanup. Core handles orchestration; an Adapter only translates one Provider.
 
 ## When to use it
 
@@ -33,6 +33,8 @@ export const echoAdapter = defineAdapter({
 ```
 
 Register it like any other Adapter: `serveWorker([echoAdapter])` inside a Kernel worker, or `executor.register(echoAdapter)` for direct Core.
+
+`Adapter` and `AdapterMetadata` describe authoring input, where `protocolSupport` is optional. `defineAdapter()` and `createJsonCliAdapter()` return `DefinedAdapter` with required protocol metadata. Omitting it defaults to protocol `${type}.canonical`, modes `["canonical"]`, and no native methods. Keep the inferred factory return type when passing the result to Core. A hand-written `HostedAdapter` must explicitly supply `protocolSupport`: registration validates it without adding defaults. Callers of canonical-only Adapters must explicitly select canonical mode.
 
 ## What the SDK gives you
 

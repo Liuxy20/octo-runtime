@@ -15,6 +15,8 @@ implementation_baseline: df63c8f
 
 一个 adapter 提供静态元数据 `metadata` 和 `invoke`。元数据包含 `type` 和 `agentSources`；`defineAdapter` 在未声明输出模式时补 canonical-only 的 `protocolSupport`。`probe` 是可选项；省略时 Host 返回 `available: false`、`unavailableReason: "probe_missing"`，不代表 Provider 已确认可用。
 
+`Adapter` / `AdapterMetadata` 是允许省略协议声明的编写输入，工厂返回 `DefinedAdapter`，其类型保证 `protocolSupport` 必有。直接实现 `HostedAdapter` 并调用 `register()` / `serveWorker()` 时必须显式填写协议声明；注册入口不补默认值。保留工厂推导出的返回类型，避免重新注解为编写输入而丢失完整性保证。canonical-only Adapter 的调用方须显式选择 canonical 模式。
+
 SDK 已删除 `executionFeatures` 自建能力声明机制，功能支持范围归宿主管理；不得恢复标签或设计替代能力表。Adapter 按明确执行合同适配转发，必要的校验与原生握手仍在执行边界处理。规则见 [Adapter 责任边界](../rules/adapter-metadata.md#宿主掌握支持范围adapter-适配转发)。
 
 ```js

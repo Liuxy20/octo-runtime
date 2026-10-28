@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-写 Provider Adapter 用的工具箱：Core 调用的 `Adapter` 接口、用来校验并冻结定义的 `defineAdapter`，以及每个 Adapter 本来都要重写一遍的机制——子进程流、有界队列、ACP 映射、审批桥、环境与 MCP 映射、日志、清理。编排归 Core，Adapter 只翻译一个 Provider。
+写 Provider Adapter 用的工具箱：编写输入 `Adapter` 接口、用来校验并冻结定义的 `defineAdapter`，以及每个 Adapter 本来都要重写一遍的机制——子进程流、有界队列、ACP 映射、审批桥、环境与 MCP 映射、日志、清理。编排归 Core，Adapter 只翻译一个 Provider。
 
 ## 什么时候用它
 
@@ -33,6 +33,8 @@ export const echoAdapter = defineAdapter({
 ```
 
 注册方式和别的 Adapter 一样：Kernel worker 里 `serveWorker([echoAdapter])`，直接 Core 里 `executor.register(echoAdapter)`。
+
+`Adapter` 和 `AdapterMetadata` 是编写输入，`protocolSupport` 可选。`defineAdapter()` 和 `createJsonCliAdapter()` 返回 `DefinedAdapter`，其类型保证协议声明必有；省略时默认协议为 `${type}.canonical`、模式仅 `["canonical"]`、原生方法为空。传给 Core 时保留工厂推导出的返回类型。手写 `HostedAdapter` 必须显式填写 `protocolSupport`，注册入口只校验，不补默认值。canonical-only Adapter 的调用方须显式选择 canonical 模式。
 
 ## SDK 提供了什么
 

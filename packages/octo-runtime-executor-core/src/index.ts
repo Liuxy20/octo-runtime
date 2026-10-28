@@ -60,11 +60,12 @@ export type {
   RuntimeLog
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
-/** Provider-neutral metadata the Host uses for registration and capability discovery. */
+/** 宿主注册及执行时使用的完整元数据；编写时的可选默认值须由 Adapter 工厂先补齐。 */
 export interface HostedAdapterMetadata {
   /** False skips Runtime workspace preparation for this Provider. */
   workspace?: boolean;
-  protocolSupport?: AdapterProtocolSupport;
+  /** 注册输入必须完整；不得因编写阶段可省略而将此字段改成可选或在注册时猜测支持范围。 */
+  protocolSupport: AdapterProtocolSupport;
   type: string;
   agentSources: ("preset" | "provisioned")[];
   processModel?: string;
@@ -158,7 +159,7 @@ export class AgentExecutor {
     }
   >();
   readonly #modes = new Map<string, "native" | "canonical">();
-  /** Register an adapter by `metadata.type`; the same type cannot be overwritten twice. */
+  /** 按 type 注册完整 Adapter 并校验协议声明，不补默认值或启动 Provider；同类型不可覆盖。 */
   register(adapter: HostedAdapter): void {
     this.#assertOpen();
     assertAdapterProtocolSupport(adapter.metadata.protocolSupport);

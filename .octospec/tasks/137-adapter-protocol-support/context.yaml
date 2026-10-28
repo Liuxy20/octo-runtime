@@ -1,0 +1,17 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/137
+baseline: dcca46fb0eaaa3be675432321f704de92dbdbce0
+branch: fix/issue-137-adapter-capability
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+references_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/guides/adapter-authoring.md
+  - packages/octo-runtime-adapter-sdk/README.md
+  - packages/octo-runtime-executor-core/README.md
