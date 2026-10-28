@@ -118,6 +118,157 @@ test("invalid activity cannot switch sources, create tools, or close an active t
   assert.equal(g.controller.signal.reason.timeoutReason, "tool_idle");
 });
 
+test("startup after a long interaction receives a fresh first-frame window", () => {
+  const f = fixture({ firstFrameTimeoutMs: 100, runTimeoutMs: 10000 });
+  f.tick(80);
+  f.watchdog.canonical(event("interaction.requested", { interactionId: "approval" }));
+  f.tick(1000);
+  assert.equal(f.controller.signal.aborted, false);
+  f.watchdog.canonical(event("interaction.resolved", { interactionId: "approval" }));
+  f.tick(99);
+  assert.equal(f.controller.signal.aborted, false);
+  f.tick(1);
+  assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
+});
+
+test("activity completion does not close a separately pending formal interaction", () => {
+  const f = fixture({ firstFrameTimeoutMs: 100, runTimeoutMs: 10000 });
+  f.watchdog.canonical(
+    event("activity.started", {
+      activityId: "approval",
+      kind: "waiting_approval",
+      subject: { type: "interaction", id: "question" }
+    })
+  );
+  f.watchdog.canonical(event("interaction.requested", { interactionId: "question" }));
+  f.watchdog.canonical(event("activity.finished", { activityId: "approval" }));
+  f.tick(1000);
+  assert.equal(f.controller.signal.aborted, false);
+  assert.equal(f.watchdog.snapshot().pendingInteractionCount, 1);
+  f.watchdog.canonical(event("interaction.resolved", { interactionId: "question" }));
+  f.tick(99);
+  assert.equal(f.controller.signal.aborted, false);
+  f.tick(1);
+  assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
+});
+
+for (const type of ["tool", "interaction"]) {
+  test(`formal ${type} completion clears its matching activity but not parallel activity`, () => {
+    const f = fixture({ firstFrameTimeoutMs: 100, modelIdleTimeoutMs: 100, runTimeoutMs: 10000 });
+    const start = (activityId, id) =>
+      event("activity.started", {
+        activityId,
+        kind: type === "tool" ? "executing_tool" : "waiting_input",
+        subject: { type, id }
+      });
+    f.watchdog.canonical(start("first", "subject"));
+    f.watchdog.canonical(start("parallel", "other"));
+    f.tick(1000);
+    f.watchdog.canonical(
+      type === "tool"
+        ? event("tool_call.update", { id: "subject", status: "completed" })
+        : event("interaction.resolved", { interactionId: "subject" })
+    );
+    assert.equal(f.watchdog.snapshot().openActivityCount, 1);
+    f.tick(1000);
+    assert.equal(f.controller.signal.aborted, false);
+    f.watchdog.canonical(event("activity.finished", { activityId: "parallel" }));
+    f.tick(99);
+    assert.equal(f.controller.signal.aborted, false);
+    f.tick(1);
+    assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
+  });
+}
+
+test("activity completion retains formal tool budgets and heartbeat cannot extend them", () => {
+  const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, runTimeoutMs: 10000 });
+  const activity = event("activity.started", {
+    activityId: "tool",
+    kind: "executing_tool",
+    subject: { type: "tool", id: "tool" }
+  });
+  f.watchdog.canonical(activity);
+  f.watchdog.canonical(event("tool_call.create", { id: "tool" }));
+  f.tick(90);
+  f.watchdog.canonical(activity);
+  f.watchdog.canonical(event("activity.updated", { activityId: "tool", info: {} }));
+  f.watchdog.canonical(event("activity.finished", { activityId: "tool" }));
+  assert.equal(f.watchdog.snapshot().openToolCount, 1);
+  f.tick(10);
+  assert.equal(f.controller.signal.reason.timeoutReason, "tool_idle");
+});
+
+test("activity-only tool idle budget ignores duplicate starts and heartbeats", () => {
+  const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, runTimeoutMs: 10000 });
+  const start = event("activity.started", {
+    activityId: "tool",
+    kind: "executing_tool",
+    subject: { type: "tool", id: "tool" }
+  });
+  f.watchdog.canonical(start);
+  f.tick(90);
+  f.watchdog.canonical(start);
+  f.watchdog.canonical(event("activity.updated", { activityId: "tool", info: {} }));
+  f.tick(10);
+  assert.equal(f.controller.signal.reason?.timeoutReason, "tool_idle");
+});
+
+test("activity-only tool progress renews idle but preserves wall budget", () => {
+  for (const native of [false, true]) {
+    const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, toolWallTimeoutMs: 250 });
+    f.watchdog.canonical(
+      event("activity.started", {
+        activityId: "tool",
+        kind: "executing_tool",
+        subject: { type: "tool", id: "tool" }
+      })
+    );
+    for (let i = 0; i < 2; i++) {
+      f.tick(90);
+      if (native)
+        f.watchdog.activity({ kind: "turn_progress", method: "tool_delta", toolCallId: "tool" });
+      else f.watchdog.canonical(event("tool_call.delta", { id: "tool", outputDelta: "output" }));
+      assert.equal(f.controller.signal.aborted, false);
+    }
+    f.tick(70);
+    assert.equal(f.controller.signal.reason?.timeoutReason, "tool_deadline");
+  }
+});
+
+test("human wait suspends activity-only tool budgets only for the overlapping time", () => {
+  const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, toolWallTimeoutMs: 150 });
+  f.watchdog.interaction("approval", true);
+  f.tick(1000);
+  f.watchdog.canonical(
+    event("activity.started", {
+      activityId: "tool",
+      kind: "executing_tool",
+      subject: { type: "tool", id: "tool" }
+    })
+  );
+  f.tick(1000);
+  f.watchdog.interaction("approval", false);
+  f.tick(99);
+  assert.equal(f.controller.signal.aborted, false);
+  f.tick(1);
+  assert.equal(f.controller.signal.reason?.timeoutReason, "tool_idle");
+});
+
+test("activity-only waits never suppress the overall resource deadline", () => {
+  for (const kind of ["executing_tool", "waiting_approval", "waiting_input"]) {
+    const f = fixture({ firstFrameTimeoutMs: 10, runTimeoutMs: 100 });
+    f.watchdog.canonical(
+      event("activity.started", {
+        activityId: "blocked",
+        kind,
+        subject: { type: kind === "executing_tool" ? "tool" : "interaction", id: "blocked" }
+      })
+    );
+    f.tick(100);
+    assert.equal(f.controller.signal.reason.timeoutReason, "run_deadline");
+  }
+});
+
 test("canonical bookkeeping and empty placeholders cannot escape startup deadline", () => {
   const f = fixture({ firstFrameTimeoutMs: 100 });
   const records = [

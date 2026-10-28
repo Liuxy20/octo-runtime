@@ -57,7 +57,15 @@ export class InvocationWatchdog {
   readonly limits: EffectiveLimits;
   readonly #startedAt: number;
   readonly #tools = new Map<string, { startedAt: number; progressAt: number }>();
-  readonly #interactions = new Set<string>();
+  readonly #interactions = new Set<string | symbol>();
+  readonly #activities = new Map<
+    string,
+    {
+      subject: { type: string; id?: string };
+      waitId?: symbol;
+      tool?: { startedAt: number; progressAt: number };
+    }
+  >();
   #waitingSince?: number;
   #nativeProgressSeen = false;
   #modelStarted = false;
@@ -160,6 +168,21 @@ export class InvocationWatchdog {
       this.dispose();
       return;
     }
+    // 统一活动补充执行阶段；与正式工具/交互分别持有暂停原因，不能互相提前解除。
+    if (
+      event.type === "activity.started" &&
+      ["executing_tool", "waiting_input", "waiting_approval"].includes(event.payload.kind) &&
+      !this.#activities.has(event.payload.activityId)
+    ) {
+      const waitId = event.payload.kind === "executing_tool" ? undefined : Symbol();
+      this.#activities.set(event.payload.activityId, {
+        subject: event.payload.subject,
+        waitId,
+        tool: waitId ? undefined : { startedAt: now, progressAt: now }
+      });
+      if (waitId) this.#interaction(waitId, true);
+    }
+    if (event.type === "activity.finished") this.#finishActivity(event.payload.activityId);
     const rawID = event.payload.toolCallId ?? event.payload.id ?? event.payload.itemId;
     const id = typeof rawID === "string" && rawID ? rawID : undefined;
     let toolChanged = false;
@@ -173,12 +196,14 @@ export class InvocationWatchdog {
       ["completed", "failed", "cancelled", "stopped"].includes(String(event.payload.status))
     ) {
       toolChanged = this.#tools.delete(id);
+      this.#finishSubjectActivities("tool", id);
     }
     if (event.type === "interaction.requested" && typeof event.payload.interactionId === "string") {
       this.#interaction(event.payload.interactionId, true);
     }
     if (event.type === "interaction.resolved" && typeof event.payload.interactionId === "string") {
       this.#interaction(event.payload.interactionId, false);
+      this.#finishSubjectActivities("interaction", event.payload.interactionId);
     }
     const hasText = (value: unknown): boolean => typeof value === "string" && value.length > 0;
     const toolProgress = event.payload.progress;
@@ -213,7 +238,25 @@ export class InvocationWatchdog {
     this.#arm();
   }
 
-  #interaction(id: string, pending: boolean): void {
+  #finishSubjectActivities(type: string, id: string): void {
+    for (const [activityId, activity] of this.#activities)
+      if (activity.subject.type === type && activity.subject.id === id)
+        this.#finishActivity(activityId);
+  }
+
+  #finishActivity(id: string): void {
+    const activity = this.#activities.get(id);
+    if (!activity) return;
+    this.#activities.delete(id);
+    if (activity.waitId) this.#interaction(activity.waitId, false);
+  }
+
+  *#toolClocks(): IterableIterator<{ startedAt: number; progressAt: number }> {
+    yield* this.#tools.values();
+    for (const activity of this.#activities.values()) if (activity.tool) yield activity.tool;
+  }
+
+  #interaction(id: string | symbol, pending: boolean): void {
     const now = this.time.now();
     if (pending) {
       if (!this.#interactions.size) this.#waitingSince = now;
@@ -223,7 +266,7 @@ export class InvocationWatchdog {
       if (!this.#interactions.size && this.#waitingSince !== undefined) {
         // Each timestamp is suspended only for its own overlap with the wait.
         this.#progressAt += now - Math.max(this.#waitingSince, this.#progressAt);
-        for (const tool of this.#tools.values()) {
+        for (const tool of this.#toolClocks()) {
           tool.startedAt += now - Math.max(this.#waitingSince, tool.startedAt);
           tool.progressAt += now - Math.max(this.#waitingSince, tool.progressAt);
         }
@@ -252,6 +295,7 @@ export class InvocationWatchdog {
       maxProgressGapMs: Math.floor(Math.max(this.#maxProgressGapMs, now - this.#progressAt)),
       openToolCount: this.#tools.size,
       pendingInteractionCount: this.#interactions.size,
+      openActivityCount: this.#activities.size,
       retryCount: this.#retryCount,
       lastMethod: this.#lastMethod,
       activitySupport: this.#nativeProgressSeen ? "native_progress" : "canonical_only",
@@ -286,6 +330,10 @@ export class InvocationWatchdog {
     this.#modelStarted = true;
     const tool = toolCallId ? this.#tools.get(toolCallId) : undefined;
     if (tool) tool.progressAt = now;
+    if (toolCallId)
+      for (const activity of this.#activities.values())
+        if (activity.tool && activity.subject.type === "tool" && activity.subject.id === toolCallId)
+          activity.tool.progressAt = now;
     if (this.#warned) {
       this.#warned = false;
       this.#emit("progress_resumed");
@@ -295,7 +343,7 @@ export class InvocationWatchdog {
   #syncPhase(): void {
     const phase = this.#interactions.size
       ? "waiting_approval"
-      : this.#tools.size
+      : this.#tools.size || this.#activities.size
         ? "tool_active"
         : this.#modelStarted
           ? "model_active"
@@ -321,7 +369,8 @@ export class InvocationWatchdog {
     ];
     if (this.#phase === "starting")
       deadlines.push({
-        at: this.#startedAt + this.limits.firstFrameTimeoutMs,
+        // 工具或人工等待结束后重新进入 starting，从此时重开首帧预算。
+        at: this.#phaseAt + this.limits.firstFrameTimeoutMs,
         reason: "first_frame",
         budget: this.limits.firstFrameTimeoutMs
       });
@@ -331,7 +380,7 @@ export class InvocationWatchdog {
         reason: "model_silence",
         budget: this.limits.modelIdleTimeoutMs
       });
-    for (const tool of this.#phase === "waiting_approval" ? [] : this.#tools.values()) {
+    for (const tool of this.#phase === "waiting_approval" ? [] : this.#toolClocks()) {
       deadlines.push({
         at: tool.progressAt + this.limits.toolTimeoutMs,
         reason: "tool_idle",

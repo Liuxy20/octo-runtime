@@ -34,6 +34,10 @@ Channel Gateway 是长期 IM Agent 的业务入口，管理固定 Agent workdir�
 
 ## 长任务与故障恢复改造状态
 
+2026-10-28 Issue #188：模型静默反馈策略由 Gateway 消费统一事件实现。连续模型等待 30/60/90…270 秒编辑原卡片底部 `progressText`，不另发进度消息或插入伪造阶段；助手正文及公开 reasoning 的新内容清除提示并重开间隔，ACK、心跳、重复快照不算输出。并行工具、审批、用户输入等待暂停，最后一项结束后重开间隔。300 秒只请求取消原执行并停止自动恢复，继续观察原流；取消 ACK 不是终态，未确认保留 Stop、禁止 Retry。只有原流正常耗尽并确认真实终态后才可重试，迟到 completed 保留真实成功。Gateway 默认 Core 模型空闲为 observe、首帧 310 秒，保留工具及整轮强制期限；显式 Context limits 优先。首次输出前的交互结束后，Core 首帧预算从重新进入 starting 起计。实现与验收边界见[任务](../tasks/188-model-wait/brief.md)。
+
+Core 的通用等待识别同时接受正式工具/交互与统一活动，两者独立持有生命周期；活动结束不提前解除正式等待，正式终态只移除 subject 匹配的活动，并行阻塞保留。仅活动工具也持有独立 idle/wall 时钟，真实工具进度只刷新 idle，重复开始与心跳不能续期；人工等待仅暂停各时钟的实际重叠部分，整轮期限始终运行。此合同防止 Core 首帧期限抢先取消 Gateway 已识别的等待，也不允许活动等待绕过原工具预算。
+
 2026-10-15 用户明确：Octo IM 的主要场景是长任务，约一分钟的短任务很少。Channel Gateway 已把默认总时限从 120 秒改为一天，Bot 配置范围与协议一致为 100..86400000 ms。任务总期限与连续故障恢复预算分开，业务重试由 Extra 决策，Adapter 提供结构化证据，Host 保持单次执行合同。首期针对 Codex，不自动扩展到其他 Extra。
 
 具体改造见 [IM 长任务与 Codex 重试方案](../tasks/im-long-running-retry/brief.md)。已实现工具或交互出现前、明确 Codex 暂态失败的有界重试；原生提示仍不触发第二次 invoke，但纳入 Extra 恢复预算。工具执行后的安全恢复与 Host 断流续流仍待实施，结果未知不盲目重跑。源码默认值不能作为已部署或真实持续一天运行的证据；验证范围见任务记录。
@@ -85,6 +89,8 @@ Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，
 2026-10-26 实现 Issue #117/#118：会话读取失败、执行前展示初始化失败及可信接纳前拒绝，通过共享 `failurePayload` / `FailureEnvelope`、标准错误投影和既有结构化日志链路反馈，公共码依次为 `OH-RUN-2010` / `2011` / `2012`。卡片、独立文本和日志关联同一个公共码及 diagnosticId，保留 reasonCode、stage 与实际 source，不在 Channel 或展示组件复制错误码目录。错误卡片不可用或发送失败不阻断安全文本；WeCom 沿自身回复协议消费同一错误对象。执行前错误不得伪造执行启动、向真实执行源注入失败事件或覆盖既有执行终态；真实未知继续保守处理。未提交证明由本地接纳检查或真实 Kernel 执行前拒绝产生，客户端仅接受实际 invoke 响应上匹配 instance 的专用证据；同名错误或手工重建对象不构成证明。展示故障禁用进度后继续观察原流，原流失败必须清除执行重试入口；finish 超时释放本轮但保留关闭 incomplete，排空期间的展示错误仍计入关闭失败。普通日志字段、状态日志隔离、not_submitted 尝试状态及固定策略见[实施合同](../tasks/117-118-turn-failure/implementation-plan.md)，实际验证边界见[验证记录](../tasks/117-118-turn-failure/validation.md)，Kernel 暂态拒绝补充见 [Issue 210](../tasks/210-kernel-recovery/design.md)。
 
 展示故障请求取消执行时，必须保留原 invoke 的观察 signal，并停止后续自动重试。公共 invoke 包装器在正常耗尽后会报告本地 signal 的取消原因；不能由展示层中止该 signal 再将其误判为真正源错误。Gateway 使用 `ImTask.cancelExecution` 请求取消并继续观察真实终态，不用取消 ACK 代替终态；缺终态和终态后源错误仍为 unknown。此边界须用真实 KernelClient/IPC 回归验证，仅 generator stub 不能覆盖公共包装器的尾部检查。
+
+运行中的用户文本 Stop 和卡片 Stop 同样保留原观察流；尚未执行或退避阶段立即中止本地等待。总期限和恢复预算仍强制中止，不因用户取消路径的修正而失效。该区别由真实 IPC 和真实 IM Stop 验证，避免执行已经取消但卡片误报结果未知。
 
 所有执行卡片（状态、工具进度及用户交互）必须由 CanonicalEvent 投影；不得解析助手正文、Provider 原始消息或自定义工具字段来替代统一事件与交互合同。AskUser 的既定接入路径是 interaction.requested → Channel 卡片 → 用户回答 → respondInteraction → 原模型继续执行，interaction.resolved 收敛卡片状态。交互卡片首版支持选项与自定义输入，核心注释引用 [F09 方案](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf09-统一用户交互的-im-呈现与响应)；特殊解析必须标注非标准，不作为默认替代。首版已接通，im-test 创建/收敛通过，真人回调未验；isSecret 不进入普通卡片或聊天回答回退，仅提示不支持安全输入并请求停止，宿主安全产品路径待决。
 

@@ -4,6 +4,7 @@
  */
 // Port of octo-agent-app-channel/internal/transport/progress.go display rules.
 import { failureMessage } from "@mininglamp-oss/octo-runtime-protocol";
+import { MODEL_WAIT_TIMEOUT_MESSAGE } from "../execution/model-wait.js";
 import type { CardTemplateRef } from "./api/cards.js";
 import {
   clampRunes,
@@ -360,6 +361,39 @@ export function buildReasoningFrame(
         ]
       }
     ];
+  }
+  const waiting = snapshot.modelWait;
+  if (waiting?.seconds && !snapshot.terminal && !snapshot.resultUnknown) {
+    // active 模板的 progressText 位于原卡片底部；不向 phases 插入伪造模型过程。
+    frame.progressText = `${waiting.hasOutput ? "模型暂无新输出" : "尚未收到模型输出"}，已连续等待 ${waiting.seconds} 秒。`;
+    frame.traceExpanded = true;
+    frame.traceCollapsed = false;
+  }
+  if (waiting?.timeout && snapshot.terminal !== "completed") {
+    const confirmed = waiting.timeout === "terminated" && !snapshot.resultUnknown;
+    const uncertain = snapshot.resultUnknown || waiting.timeout === "unconfirmed";
+    frame.state = confirmed ? "error" : snapshot.resultUnknown ? "stopped" : "reasoning";
+    frame.statusLabel = confirmed
+      ? "请求超时"
+      : uncertain
+        ? "超时 · 停止未确认"
+        : "超时 · 正在请求停止";
+    frame.statusTone = "Attention";
+    frame.collapsedSummary = MODEL_WAIT_TIMEOUT_MESSAGE;
+    const detail = confirmed
+      ? "已确认执行结束，可以重试。"
+      : uncertain
+        ? "尚未确认执行停止，请核查运行记录，避免重复执行。"
+        : "正在请求停止执行，等待结束确认。";
+    if (confirmed) {
+      frame.errorTitle = "请求超时";
+      frame.errorMessage = MODEL_WAIT_TIMEOUT_MESSAGE + detail;
+      delete frame.progressText;
+    } else if (!snapshot.resultUnknown) {
+      frame.traceExpanded = true;
+      frame.traceCollapsed = false;
+      frame.progressText = MODEL_WAIT_TIMEOUT_MESSAGE + detail;
+    } else frame.collapsedSummary += detail;
   }
   for (const phase of frame.phases) phase.thought = clampRunes(phase.thought, thoughtMax);
   let total = frame.phases.reduce((size, phase) => size + Array.from(phase.thought).length, 0);

@@ -10,6 +10,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvocationWatchdog } from "../packages/octo-runtime-executor-core/dist/watchdog.js";
+import { ImModelWait } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/model-wait.js";
 import {
   KernelError,
   attachKernel,
@@ -164,6 +165,8 @@ test("IM defaults to one day, accepts explicit long and short limits, validates 
   const f = fixture(async function* () {});
   assert.equal(f.request.runtimeLimits.runTimeoutMs, 86_400_000);
   assert.equal(f.request.runtimeLimits.toolTimeoutMs, 86_400_000);
+  assert.equal(f.request.runtimeLimits.firstFrameTimeoutMs, 310_000);
+  assert.equal(f.request.runtimeLimits.modelIdlePolicy, "observe");
   for (const ms of [100, 60_000, 86_400_000]) {
     validateImConfig({ ...config, run_timeout_ms: ms });
     assert.equal(
@@ -209,7 +212,9 @@ test("IM limits allow a quiet 15-minute tool and preserve explicit watchdog over
           name: "limits",
           payload: {
             run_timeout_ms: 60_000,
-            tool_timeout_ms: 10_000
+            tool_timeout_ms: 10_000,
+            first_frame_timeout_ms: 20_000,
+            model_idle_policy: "enforce"
           }
         }
       ]
@@ -217,10 +222,13 @@ test("IM limits allow a quiet 15-minute tool and preserve explicit watchdog over
   });
   assert.equal(explicit.request.runtimeLimits.runTimeoutMs, 60_000);
   assert.equal(explicit.request.runtimeLimits.toolTimeoutMs, 10_000);
+  assert.equal(explicit.request.runtimeLimits.firstFrameTimeoutMs, 20_000);
+  assert.equal(explicit.request.runtimeLimits.modelIdlePolicy, "enforce");
 });
 
-test("active tasks pass 120 seconds and ten minutes; one day cancels even with progress", async () => {
+test("active tools pass 120 seconds and ten minutes; one day still cancels", async () => {
   const f = fixture(async function* ({ time, signal }) {
+    yield event("tool_call.create", { id: "long-tool", name: "exec", args: {}, status: "running" });
     time.tick(900_000);
     assert.equal(signal.aborted, false);
     yield progress();
@@ -233,6 +241,43 @@ test("active tasks pass 120 seconds and ten minutes; one day cancels even with p
   assert.equal(f.cancellations.length, 1);
   assert.equal(f.timers.size, 0);
 });
+
+for (const kind of ["executing_tool", "waiting_approval", "waiting_input"]) {
+  test(`IM and Core exclude activity-only ${kind}, then allow a fresh model wait`, () => {
+    const f = fixture(async function* () {});
+    const controller = new AbortController();
+    const watchdog = new InvocationWatchdog(f.request.runtimeLimits, controller, () => {}, f.time);
+    let timeouts = 0;
+    const waiting = new ImModelWait(
+      f.time,
+      () => {},
+      () => timeouts++
+    );
+    waiting.start();
+    const started = event("activity.started", {
+      activityId: "blocking",
+      kind,
+      subject: { type: kind === "executing_tool" ? "tool" : "interaction", id: "subject" }
+    });
+    watchdog.canonical(started);
+    waiting.accept(started);
+    f.time.tick(900_000);
+    assert.equal(controller.signal.aborted, false);
+    assert.equal(timeouts, 0);
+    const finished = event("activity.finished", { activityId: "blocking" });
+    watchdog.canonical(finished);
+    waiting.accept(finished);
+    f.time.tick(299_999);
+    assert.equal(controller.signal.aborted, false);
+    assert.equal(timeouts, 0);
+    f.time.tick(1);
+    assert.equal(timeouts, 1);
+    assert.equal(controller.signal.aborted, false);
+    waiting.stop();
+    watchdog.finish();
+    assert.equal(f.timers.size, 0);
+  });
+}
 
 test("temporary Codex failure retries with frozen context, new identities and remaining deadline", async () => {
   const context = {

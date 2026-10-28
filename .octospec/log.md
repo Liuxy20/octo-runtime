@@ -6,6 +6,8 @@
 
 - [Issue 217](journal/shared/2026-10-28-217-codebuddy-model-selection.md)：方案准备度 96/100 后修复 CodeBuddy 新建选模与续聊切模，未知模型在 prompt 前失败；保持原生确认回执与 #216 订阅失败原文。真实 Provider 请求模型、Gateway IM 回读、自动检查及 verified-review 边界见[验收](tasks/217-codebuddy-model-selection/validation.md)。
 
+- 按 Issue #188 指定评论实施[模型静默反馈](tasks/188-model-wait/brief.md)：先建最新 main 独立 worktree 并评估 96/100，Gateway 复用原卡片 footer、统一事件与取消入口；补充长审批后首帧期限修正。用户后续授权本地双轴审查、修复与 PR，审查发现及处理见[审查记录](tasks/188-model-wait/review.md)；确定性、真实 IPC 与指定 im-test 账号验收的结果及范围见[验证记录](tasks/188-model-wait/validation.md)。未合并或部署。
+
 - [PR #216 消息原文例外范围修正](tasks/202-203-codebuddy/validation.md#acp-消息原文例外的范围修正)：修复整个 ACP 错误对象跳过脱敏的问题，只保留 message 中原始 _meta；外层字段恢复既有公共脱敏。新增回归先复现后通过，专项 67 项、全量 Node 2094 项与 WebUI 35 项通过。
 
 - [PR #216 评审与原始错误合同](tasks/202-203-codebuddy/validation.md#用户确认的原始-acp-错误详情与评审修复)：按用户要求独立 ACP 失败码加公共消息，后接 JSON.stringify(原始 _meta)，不解析、不脱敏、不筛字段；失败判定沿用明确信号。修复畸形 stopReason，66 项专项及全量 Node 2078/WebUI 35 通过，原始消息经 Core/worker/IPC 保真。

@@ -15,6 +15,7 @@ import {
   type InvokeEnvironment
 } from "@mininglamp-oss/octo-runtime-protocol";
 import type { ImBotConfig, ImTaskAttempt } from "../contracts.js";
+import { ImModelWait, MODEL_WAIT_TIMEOUT_MESSAGE } from "./model-wait.js";
 
 export const DEFAULT_CODEX_RETRY = Object.freeze({
   enabled: true,
@@ -54,6 +55,7 @@ interface ActiveAttempt {
 /** 预算内最多 101 次尝试；只保留身份和终态，不在此缓存模型历史。 */
 export class ImTask {
   readonly attempts: ImTaskAttempt[] = [];
+  readonly modelWait: ImModelWait;
   /** 与 Channel 展示、诊断共用的本次未提交事实；不注入执行源事件。 */
   notSubmittedFailure?: FailureEnvelope;
   readonly #policy;
@@ -77,13 +79,22 @@ export class ImTask {
     config: ImBotConfig,
     readonly environment: InvokeEnvironment,
     readonly onAttempt: (request: ImInvocationInput) => void,
-    readonly time: ImTaskClock = clock
+    readonly time: ImTaskClock = clock,
+    readonly onModelWaitChanged: () => void = () => {}
   ) {
     this.#policy = { ...DEFAULT_CODEX_RETRY, ...config.codex_retry };
     this.#signal = AbortSignal.any([
       this.#abort.signal,
       ...(environment.signal ? [environment.signal] : [])
     ]);
+    this.modelWait = new ImModelWait(time, onModelWaitChanged, () => {
+      this.stopReason = "IM_MODEL_SILENCE_TIMEOUT";
+      void this.cancelExecution(this.stopReason)
+        .then((accepted) => {
+          if (!accepted) this.modelWait.unconfirmed();
+        })
+        .catch(() => this.modelWait.unconfirmed());
+    });
   }
   /** reset 只阻止后续尝试，不把 reset 变成取消当前 Provider 执行。 */
   stopRetries(): void {
@@ -91,6 +102,8 @@ export class ImTask {
   }
   /** owner stop 只取消执行和后续尝试；当前订阅须继续消费真实终态。 */
   async drain(reason = "IM shutdown"): Promise<void> {
+    this.modelWait.stop();
+    this.onModelWaitChanged();
     this.#draining = true;
     this.stopRetries();
     const active = this.#active;
@@ -110,24 +123,38 @@ export class ImTask {
     }
   }
   async cancel(reason = "IM user stop"): Promise<boolean> {
-    this.#abort.abort(reason);
+    // 活动执行保留原流以确认真实终态；尚未执行或退避时仍立即打断本地等待。
+    if (!this.#active) this.#abort.abort(reason);
     return this.cancelExecution(reason);
   }
   /** 展示故障只请求停止执行及重试，保留观察 signal；返回取消受理结果，不代表执行终态。 */
   async cancelExecution(reason: string): Promise<boolean> {
+    // 超时自身还需保留取消确认宽限；其他停止来源立即清掉等待通知和全部计时。
+    if (reason !== "IM_MODEL_SILENCE_TIMEOUT") {
+      this.modelWait.stop();
+      this.onModelWaitChanged();
+    }
     this.stopRetries();
     if (!this.#active || this.#active.completion === "not_submitted") return true;
-    this.#cancelPending ??= this.kernel.cancelInvocation(this.#active.invocationId, reason);
+    const pending = (this.#cancelPending ??= this.kernel.cancelInvocation(
+      this.#active.invocationId,
+      reason
+    ));
     try {
-      return (await this.#cancelPending).accepted;
+      const { accepted } = await pending;
+      if (!accepted && this.#cancelPending === pending) this.#cancelPending = undefined;
+      return accepted;
     } catch (error) {
+      // 未受理/失败的取消不能永久占住 Stop；并发请求仍复用同一个真实在途调用。
+      if (this.#cancelPending === pending) this.#cancelPending = undefined;
       if (isInvocationNotSubmitted(error)) return true;
       throw error;
     }
   }
   #stop(reason: string): void {
     this.stopReason ??= reason;
-    void this.cancel(reason).catch(() => undefined);
+    this.#abort.abort(reason);
+    void this.cancelExecution(reason).catch(() => undefined);
   }
   async #settleCancellation(): Promise<void> {
     await this.#cancelPending?.catch(() => undefined);
@@ -159,6 +186,7 @@ export class ImTask {
     return true;
   }
   #observe(event: CanonicalEvent): void {
+    this.modelWait.accept(event);
     // 工具和交互可能产生外部副作用；首次出现后不再自动重放本轮。
     if (event.type.startsWith("tool_call.") || event.type === "interaction.requested")
       this.#replaySafe = false;
@@ -216,6 +244,11 @@ export class ImTask {
       () => this.#stop("IM_TASK_DEADLINE"),
       deadline - this.time.now()
     );
+    const stopWaiting = () => {
+      this.modelWait.stop();
+      this.onModelWaitChanged();
+    };
+    this.#signal.addEventListener("abort", stopWaiting, { once: true });
     let request = this.request;
     try {
       while (!this.#signal.aborted && !this.#draining) {
@@ -238,6 +271,7 @@ export class ImTask {
           })
         };
         this.#active = active;
+        this.modelWait.start();
         this.#cancelPending = undefined;
         const attempt: ImTask["attempts"][number] = {
           runId: request.runId,
@@ -266,6 +300,7 @@ export class ImTask {
           // 看到终态后仍须正常耗尽：终态后的传输/控制错误不能被 drain 当成成功。
           if (!terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
           completion = "terminal_confirmed";
+          this.modelWait.confirmTermination();
         } catch (error) {
           if (isInvocationNotSubmitted(error)) {
             completion = "not_submitted";
@@ -284,6 +319,7 @@ export class ImTask {
           } else attempt.outcome = "unknown";
           throw error;
         } finally {
+          this.modelWait.stop();
           // 必须等待消费结束及取消回执；未知结果不会进入下一次 invoke。
           await this.#settleCancellation();
           this.#active = undefined;
@@ -345,6 +381,8 @@ export class ImTask {
       }
       yield this.#stoppedEvent();
     } finally {
+      this.#signal.removeEventListener("abort", stopWaiting);
+      this.modelWait.stop();
       clearDeadline();
       this.#recoveryTimer?.();
     }
@@ -359,7 +397,9 @@ export class ImTask {
             message:
               this.stopReason === "IM_TASK_DEADLINE"
                 ? "本轮任务已达到总运行时限。"
-                : "模型服务连续故障，已达到自动恢复预算。"
+                : this.stopReason === "IM_MODEL_SILENCE_TIMEOUT"
+                  ? MODEL_WAIT_TIMEOUT_MESSAGE
+                  : "模型服务连续故障，已达到自动恢复预算。"
           }
         }
       : { protocolVersion: 2, type: "run.cancelled", payload: { reason: "IM user stop" } };

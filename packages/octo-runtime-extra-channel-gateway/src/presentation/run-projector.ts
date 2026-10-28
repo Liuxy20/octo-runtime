@@ -6,6 +6,7 @@ import type { CanonicalEvent, FailureEnvelope } from "@mininglamp-oss/octo-runti
 import { sanitizePublicValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import type { ImTaskAttempt } from "../contracts.js";
 import { fromMarkdown } from "mdast-util-from-markdown";
+import type { ModelWaitSnapshot } from "../execution/model-wait.js";
 
 export interface ProgressItem {
   id: string;
@@ -40,6 +41,7 @@ export interface RunPresentation {
   replyAssessment?: "ready" | "empty" | "needs_verification";
   providerDiagnostic?: { adapter: string; diagnosticId: string; category: string; message: string };
   retryNoticeCount?: number;
+  modelWait?: ModelWaitSnapshot;
 }
 
 const publicExposures = new Set(["public_reasoning", "public_summary", "public_plan"]);

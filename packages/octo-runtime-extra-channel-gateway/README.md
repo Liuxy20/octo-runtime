@@ -164,6 +164,8 @@ Full field list, defaults, and limits: [config-schema.json](config-schema.json).
 - Files referenced in a successful final are uploaded as IM attachments: 20 MiB per file, 50 MiB per turn, 16 distinct files, 30 seconds of preparation. Partial failures keep the successful links and name the files that were not delivered.
 - A `session.update` from the Adapter is opaque Provider binding data, not application history.
 
+During model silence, Gateway updates the original reasoning card's footer after 30 seconds and every 30 seconds thereafter. Assistant text or public reasoning clears the notice; tools, approvals, and user-input waits pause the clock. After 300 seconds of continuous model silence, Gateway requests cancellation without replaying the task. Stop remains available while cancellation is pending; Retry is offered only after the original execution has verifiably ended. This interval also applies after earlier output and after tools, rather than measuring only time to first output. Explicit execution limits can terminate a turn earlier.
+
 ## Lifecycle and status
 
 `status()` returns `{ bots, errors }`: valid bots report connection, delivery, and session counts, while an invalid bot is reported by index and error code without blocking the others. `loaded` does not mean every bot is online.
