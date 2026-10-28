@@ -60,6 +60,6 @@ CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json
 - 覆盖成功退出、非零退出码、缺少终态事件、清理失败和取消调用。
 - Provider 支持恢复 session 时，校验新建 session 与恢复 session 两种命令形态。
 - 使用文件承载私密 prompt 或控制配置时，文件权限必须是 `0600`，并在调用结束后删除。
-- 针对固定版本的 provider 执行只读在线冒烟测试。
+- 针对固定版本的 provider 执行独立真实验收，遵循[执行责任、专项入口与证据格式](provider-live-acceptance.md)。默认 CI 保留 fake Provider 回归，真实调用为 non-gating；未运行或缺环境明确记录。
 
 [`test/adapters.test.js`](../../test/adapters.test.js) 和 [`test/host.test.js`](../../test/host.test.js) 是基础契约的参考测试套件，并未自动覆盖上述每一种 provider 行为。新增或修改 adapter 时，需要在对应 package 测试、公共契约测试和固定版本在线冒烟测试之间补齐整张验收清单。

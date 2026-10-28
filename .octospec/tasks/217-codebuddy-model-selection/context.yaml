@@ -1,0 +1,23 @@
+task: 217-codebuddy-model-selection
+baseline: 59cb21a14259b6dc828f8791b8117ba1f3689f4c
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+references:
+  - .octospec/tasks/202-203-codebuddy/brief.md
+  - .octospec/tasks/202-203-codebuddy/validation.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/217
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/218#pullrequestreview-5677738129
+  - .octospec/guides/adapter-authoring.md
+  - .octospec/guides/providers.md
+  - CONTRIBUTING.md
+  - .github/CI.md

@@ -75,7 +75,9 @@ Host 按执行合同校验来源、输出模式和实际交互 responder；审�
 
 ### CodeBuddy 会话与终态
 
-CodeBuddy 的 `session.update.providerSession` 只回报 `session/new` / `session/load` 原生响应确认的模型；未知字段省略，禁止写入 undefined 或把请求值、旧 binding 当作实际应用值。续聊不新增模型切换动作。
+CodeBuddy 新建和恢复会话均在 prompt 前应用本轮显式模型：先按本次原生广告目录校验，优先使用 model config option 的实际 id（支持分组 options），无该项时使用 models.availableModels 与 session/set_model。未知模型、空/缺失目录、原生拒绝及缺失/不一致的切换确认必须失败，不得继续执行默认或旧模型。本次原生响应已确认所选模型时无需 setter；省略或空模型不设置，沿用原生选择。session/new.model 及旧 binding 都不能代替本次确认；真实 CodeBuddy 2.177.1 会在新进程 load 时重新给出原生默认，因此不能仅按 binding 的旧 model 跳过 setter。
+
+`session.update.providerSession` 只回报 session/new、session/load 或 setter 原生响应确认的模型；未知字段省略，禁止写入 undefined 或用请求值覆盖实际确认值。新建与恢复的选择失败沿既有 Core 和 Gateway 错误路径送达用户，finally 仍回收本轮 ACP transport；不切账号、不重置会话。真实请求模型、Host 终态与 IM 回读证据见 [#217 验收](../tasks/217-codebuddy-model-selection/validation.md)。
 `prompt_result` 中的拒绝、`codebuddy.ai/outcome` 失败或非空 `codebuddy.ai/errorMessage` 必须保留为失败事实，优先于部分文本与空输出检查。用户于 2026-10-28 明确：独立 `ACP_MODEL_REQUEST_FAILED` 映射 `OH-PRV-4010`，消息为公共目录消息加换行及 `JSON.stringify(原始 _meta)`。详情不解析、不脱敏、不筛字段，不从 quota/429/认证/超时等内容另行分类；Core 保留此消息原文。只读取既有 ACP 失败信号，不因成功结果携带 _meta 就判失败；错误正文损坏不改变已声明的失败。此原文合同仅用于 ACP 失败消息，其他错误的归一化与脱敏不变。
 原文例外仅限上述失败的 `message` 字符串。错误对象外层的 `executionEnvOverrides`、凭据字段、嵌套 `error` 等仍执行既有公共脱敏，不能凭 `ACP_MODEL_REQUEST_FAILED` 让整个 payload 绕过；不得反向解析 message 中的 _meta。
 成功必须有 final 文本；仅思考、仅工具或空输出以 `ACP_NO_FINAL_OUTPUT` 失败。支持的 ACP 结果正文只在没有流式 final、没有失败且未取消时补出。取消与失败都应关闭未结束工具/步骤，传输清理由原 invocation 拥有。对应实现与 Kernel 公共入口证据见 [#202/#203](../tasks/202-203-codebuddy/brief.md)。

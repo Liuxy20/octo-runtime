@@ -2,6 +2,10 @@
 
 ## 2026-10-28
 
+- [PR 218 验收边界补充](tasks/217-codebuddy-model-selection/validation.md#pr-218-评审补充独立非门禁验收)：按用户要求仅改文档，明确全部 adapter 的 fake 离线门禁与独立真实 non-gating 验收，补齐执行责任、重跑时机和证据要求；不修改测试或 CI 工作流。
+
+- [Issue 217](journal/shared/2026-10-28-217-codebuddy-model-selection.md)：方案准备度 96/100 后修复 CodeBuddy 新建选模与续聊切模，未知模型在 prompt 前失败；保持原生确认回执与 #216 订阅失败原文。真实 Provider 请求模型、Gateway IM 回读、自动检查及 verified-review 边界见[验收](tasks/217-codebuddy-model-selection/validation.md)。
+
 - [PR #216 消息原文例外范围修正](tasks/202-203-codebuddy/validation.md#acp-消息原文例外的范围修正)：修复整个 ACP 错误对象跳过脱敏的问题，只保留 message 中原始 _meta；外层字段恢复既有公共脱敏。新增回归先复现后通过，专项 67 项、全量 Node 2094 项与 WebUI 35 项通过。
 
 - [PR #216 评审与原始错误合同](tasks/202-203-codebuddy/validation.md#用户确认的原始-acp-错误详情与评审修复)：按用户要求独立 ACP 失败码加公共消息，后接 JSON.stringify(原始 _meta)，不解析、不脱敏、不筛字段；失败判定沿用明确信号。修复畸形 stopReason，66 项专项及全量 Node 2078/WebUI 35 通过，原始消息经 Core/worker/IPC 保真。

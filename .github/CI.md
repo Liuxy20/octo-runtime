@@ -24,7 +24,12 @@ naming check rather than relying on the runner image, then executes:
 
 The complete test entry point includes the existing local debugging WebUI plugin
 tests. No production UI or new browser end-to-end gate is introduced. Provider tests
-use fakes unless their existing live-test opt-in is explicitly enabled. A dedicated
+use fakes by default; required CI/release jobs do not enable native live-test opt-ins.
+For every adapter, real Provider/model/IM acceptance is a separate **non-gating**
+check, not a required GitHub status. CI success establishes offline regression
+coverage, not real Provider availability. The change author owns live execution
+and evidence archiving; see the [live acceptance guide](../.octospec/guides/provider-live-acceptance.md)
+for the command, rerun triggers and missing-environment reporting. A dedicated
 Windows matrix builds and packs the distribution on both majors, runs Core/Kernel/Host lifecycle and
 IPC contract tests, and verifies the installed CLI with independent Kernel and Extra
 processes before uninstalling the package. Readiness uses a bounded overall deadline

@@ -48,3 +48,5 @@ native 模式保留 Provider 原始消息结构，由独立 Host control 表达�
 `agentConfig.effort` 使用统一 `low / medium / high / xhigh`；缺省时保留 Provider 默认值。原生转换、降档及未应用提示见 [思考强度映射](../rules/reasoning.md)。MCP 通过 [本轮 Context 执行配置](../rules/mcp.md) 提供，不触发插件安装。
 
 新增 Adapter 按 [开发指南](adapter-authoring.md) 补齐声明、原生事件与成功／失败／取消／恢复测试。代码支持和 fixture 通过不能替代真实 Provider 与 im-test 验收；过往实测范围见 [历史验证摘要](../journal/shared/provider-validation-history.md)；这些记录不是当前版本的新验收。
+
+全部 adapter 的默认 CI 使用 fake Provider，真实原生与账号访问独立为 non-gating acceptance。现有专项入口、执行责任、重跑时机及证据要求见[Provider 独立真实验收](provider-live-acceptance.md)。

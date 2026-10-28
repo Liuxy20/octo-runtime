@@ -35,7 +35,7 @@ supersedes: []
 - 同一文件的 `buildTime` 为构建流程捕获的 UTC ISO 8601 时间，根帮助和版本命令显示 `build:`；旧或无效元数据显示 `build:unknown`，不得用运行、安装或 commit 时间代替。发行矩阵共用一次构建会话时间；同版本恢复必须校验并复用原发行物时间，仍以完整 archive integrity 阻止不可变版本内容漂移。
 - 协议 wire types 从 JSON Schema 生成。修改协议时同步 schema、生成类型、样例、调用端及测试，不手工只改生成文件。
 - CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
-- 自动化测试使用 fake Provider，不调用真实模型。真实接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录自动化检查与实际联调结果，不把 mock 结果当作线上证据。
+- 默认自动化测试使用 fake Provider，不调用真实模型。所有 adapter 的真实验收独立运行，见下文；IM 接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录离线回归与实际联调结果，不把 mock 结果当作线上证据。
 - 验证脚本消费 Runtime CLI 状态时显式传 `--json`；输出回调先收集完整 stdout/stderr，检查非零返回码并保留原始诊断后，再解析和校验状态结构。不能让 JSON 解析错误覆盖 CLI 失败，也不能把错误对象或缺失状态当作可继续验证的成功结果。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。
 - 生命周期测试从合同事件开始计时：进程启动/握手、失联发现、退避和清理分别对应各自预算；fixture 的人工延迟须放在被验证的真实预算内。子进程写出 PID 不等于父进程完成身份登记。
@@ -48,6 +48,15 @@ supersedes: []
 - UI 或真实桌面接口变更，还须通过 CDP 驱动真实 renderer，对着线上测试环境验证；具体方法遵循生态根目录的开发约束。
 - 凭据从受保护配置读取，不进入知识文件、模型上下文、日志、截图或提交。Provider workdir 不代表操作系统安全隔离。
 - 遵守[凭据禁止入库架构约束](architecture.md#凭据值严禁进入代码仓库)：测试及示例也不得硬编码固定凭据占位值，非功能性测试值仅在运行期内存生成；Secret Scan 通过不能替代来源与输出审查。
+
+## Provider 离线门禁与独立真实验收
+
+- 全部 adapter 共用此约定：默认 `pnpm test`、`pnpm test:suites`、PR 必需 CI、发行/打包检查使用 fake Provider，不请求真实模型或依赖真实账号、IM 与远端 Gateway。fixture、loopback 与发行安装测试继续作为门禁，不因名称含 live 就删减。CI 通过仅证明被测离线合同回归通过，不代表真实 Provider 可用。
+- 既有真实脚本和原生测试仅由执行者显式运行或 opt-in；必需 CI/发行任务不启用真实测试开关。即使不发模型 turn，依赖本机已安装 Provider CLI 的检查也应独立报告。本约定不要求迁移测试目录、调整既有离线断言或新增 CI job。
+- 真实验收明确标记 **non-gating**，不加入必需 CI/status。变更作者负责执行与归档，reviewer 核对范围；原生映射、确认、模型、会话、权限、工具、终态、清理或上游版本变化时，重跑受影响专项。缺环境写 blocked，未执行写 not run，不伪装通过；真实产品失败仍须跟踪处置。
+- 结果绑定源码 SHA/dirty、原生版本、平台、命令、测试环境、逐场景终态和清理事实；适用时附实际请求模型、会话和 IM 回读。独立写入任务 validation 和 PR，不将一次人工通过表述为默认 CI 保障。纯文档修改无需重新调用模型；引用旧实测时明确其版本和场景。
+
+现有命令、执行责任、重跑条件和证据模板见[Provider 独立真实验收指南](../guides/provider-live-acceptance.md)。本规则约束交付说明，不给 Runtime 增加产品策略，也不宣称全部 Provider 本轮已实测。
 
 ## 核心代码注释要求
 

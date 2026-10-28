@@ -139,6 +139,46 @@ function confirmedSessionModel(result: unknown): string | undefined {
   return undefined;
 }
 
+/** 只使用本次会话广告的目录与原生 setter，不把 session/new.model 当作选模确认。 */
+function modelSelection(session: unknown, sessionId: string, model: string) {
+  const result = isRecord(session) ? session : {};
+  const option: unknown = Array.isArray(result.configOptions)
+    ? result.configOptions.find(
+        (value) => isRecord(value) && (value.id === "model" || value.category === "model")
+      )
+    : undefined;
+  const config = isRecord(option) ? option : undefined;
+  const models = isRecord(result.models) ? result.models : {};
+  const entries: unknown[] = config
+    ? Array.isArray(config.options)
+      ? config.options.flatMap((value: unknown) =>
+          isRecord(value) && Array.isArray(value.options) ? (value.options as unknown[]) : [value]
+        )
+      : []
+    : Array.isArray(models.availableModels)
+      ? models.availableModels
+      : [];
+  const available = entries
+    .filter(isRecord)
+    .map((entry) => (config ? entry.value : entry.modelId))
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  if (!available.includes(model)) {
+    throw new Error(
+      `MODEL_NOT_FOUND: CodeBuddy does not offer model ${model}. Select a model from its advertised catalog.`
+    );
+  }
+  if (confirmedSessionModel(result) === model) return undefined;
+  if (config && (typeof config.id !== "string" || !config.id.trim())) {
+    throw new Error(`CodeBuddy cannot select model ${model}: the model config option has no id`);
+  }
+  return config
+    ? {
+        method: "session/set_config_option",
+        params: { sessionId, configId: config.id as string, value: model }
+      }
+    : { method: "session/set_model", params: { sessionId, modelId: model } };
+}
+
 /** ACP 失败详情按宿主要求原样序列化，不解析或筛选 Provider 的私有错误字段。 */
 function promptFailure(update: AcpUpdate): CanonicalEvent["payload"] | undefined {
   const meta = isRecord(update._meta) ? update._meta : {};
@@ -184,7 +224,7 @@ function promptResultText(update: AcpUpdate): string | undefined {
 /**
  * 创建 CodeBuddy adapter；每轮拥有独立 ACP client，先握手并创建或恢复显式会话，再发送 prompt。
  * adapter 将 Provider 结果映射为唯一终态并负责关闭 client；Core 独立确认清理完成。
- * 模型回执只取原生确认值，Provider 失败优先于部分输出及空输出检查。
+ * 显式模型在 prompt 前按本次原生目录设置并确认；回执只取确认值，Provider 失败优先于部分输出及空输出检查。
  */
 export function createCodeBuddyAdapter({
   acpClientFactory = spawnAcpClient,
@@ -233,7 +273,7 @@ export function createCodeBuddyAdapter({
           const sessionMethod = requestedSessionId ? "session/load" : "session/new";
           const sessionParams = requestedSessionId
             ? acpLoadSessionParams(requestedSessionId, { cwd: req.workdir })
-            : acpNewSessionParams({ cwd: req.workdir, model: req.agentConfig?.model });
+            : acpNewSessionParams({ cwd: req.workdir });
           const sessionRequestId = client.reserveRequestId();
           let session: { id: string };
 
@@ -252,7 +292,23 @@ export function createCodeBuddyAdapter({
             if (!sessionId) throw new Error("ACP session/new returned no sessionId");
             session = { id: sessionId };
           }
-          const model = confirmedSessionModel(sessionResult);
+          let model = confirmedSessionModel(sessionResult);
+          const requestedModel = req.agentConfig?.model;
+          if (requestedModel) {
+            const selection = modelSelection(sessionResult, session.id, requestedModel);
+            if (selection) {
+              const selected = await client.request(selection.method, selection.params, {
+                requestId: client.reserveRequestId()
+              });
+              // 空 ACK 或旧模型都不能证明切换生效；失败时不发送下一轮 prompt。
+              model = confirmedSessionModel(selected);
+              if (model !== requestedModel) {
+                throw new Error(
+                  `CodeBuddy did not confirm model ${requestedModel} after selection (confirmed: ${model ?? "unknown"}). Select a supported model and retry.`
+                );
+              }
+            }
+          }
           yield {
             protocolVersion: 2,
             type: "session.update",

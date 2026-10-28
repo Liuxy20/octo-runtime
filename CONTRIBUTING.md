@@ -90,8 +90,25 @@ The debugging plugin is not a production UI; this does not introduce a desktop o
 browser end-to-end acceptance requirement.
 
 Add focused regression coverage for behavior changes. Protocol and shared lifecycle
-changes require cross-package verification. Explicit live API debugging must use
-the IM test environment and report its evidence separately from fake-Provider tests.
+changes require cross-package verification. For every adapter, default tests and
+required CI/release checks use fake Providers. Native Provider CLI, real model,
+credentialed IM and remote Gateway checks are separate **non-gating live acceptance**.
+Run existing live scripts or opt-in tests explicitly outside required CI/release
+jobs. A green CI gate does not establish real Provider availability.
+
+The change author owns live execution and evidence archiving; reviewers verify scope
+and limitations. Rerun affected scenarios when native mappings, confirmations,
+sessions, permissions, tools, terminal/cleanup behavior or upstream versions change.
+Record source SHA/dirty state, native version, platform, command and per-scenario
+outcomes in the task and a separate **Non-gating live acceptance** PR paragraph.
+Report missing prerequisites as blocked and unexecuted checks as not run. A live
+product failure still needs investigation, but external service availability must
+not determine the default CI gate. Documentation-only changes do not require
+another model request.
+
+See the [live acceptance guide](.octospec/guides/provider-live-acceptance.md) for
+the CodeBuddy command, prerequisites and evidence fields shared by all adapters.
+Explicit IM API debugging must use the IM test environment.
 Never commit credentials or include them in logs, screenshots or test reports.
 
 Linux and macOS CI run the frozen dependency install, ESLint, naming checks, formatting,

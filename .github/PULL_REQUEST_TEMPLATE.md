@@ -12,6 +12,12 @@ changes to architecture or shared contracts.
 List checks actually performed, integration environments and evidence. Identify
 checks not performed. Never include credentials.
 
+Report fake-Provider/CI results separately from **Non-gating live acceptance**.
+For affected adapter behavior, the change author records the operator, source SHA/dirty
+state, native version, platform, command, scenario outcomes, cleanup and limitations.
+Mark unavailable live checks blocked or not run; real Provider/IM access is not a
+required CI gate. See the [live acceptance guide](../.octospec/guides/provider-live-acceptance.md).
+
 ## Architecture and Critical Paths
 
 For architecture, shared contracts or P0 changes, answer the following questions.

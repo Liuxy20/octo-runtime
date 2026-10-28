@@ -30,7 +30,7 @@ const selection = [
 ];
 const acpFailureMessage = (meta) => `${failureMessage("OH-PRV-4010")}\n${JSON.stringify(meta)}`;
 
-for (const fields of [{ agentConfig: {} }, { agentConfig: { model: "requested-model" } }]) {
+for (const fields of [{ agentConfig: {} }]) {
   for (const resume of [false, true]) {
     test(`CodeBuddy JSON-safe unknown model receipt (${JSON.stringify(fields)}, resume=${resume})`, async () => {
       const f = codeBuddyFixture();
@@ -64,7 +64,7 @@ for (const model of [
       const events = await collect(
         f.adapter.invoke(
           invokeRequest({
-            agentConfig: { model: "unapplied-request" },
+            agentConfig: {},
             ...(resume ? { providerSession: { sessionId: "resumed", model: "stale-model" } } : {})
           })
         )
@@ -401,7 +401,14 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
 
 test("CodeBuddy public default/empty/explicit model requests reach the prompt", async () => {
   for (const config of [{}, { agentConfig: {} }, { agentConfig: { model: "explicit-model" } }]) {
-    const f = codeBuddyFixture();
+    const f = codeBuddyFixture({
+      sessionResult: {
+        sessionId: "fixture-session",
+        configOptions: [
+          { id: "model", currentValue: "explicit-model", options: [{ value: "explicit-model" }] }
+        ]
+      }
+    });
     const executor = new AgentExecutor();
     executor.register(f.adapter);
     try {
