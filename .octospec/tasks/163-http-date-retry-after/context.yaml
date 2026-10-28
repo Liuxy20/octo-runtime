@@ -1,0 +1,53 @@
+brief: .octospec/tasks/163-http-date-retry-after/brief.md
+baseline: 0ca12a0
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "限于 Gateway 传输层；不扩大 CI，不改变业务意图和服务所有权。"
+  - id: runtime-protocol-design
+    source: repo
+    reason: "投递重试与模型执行、业务终态保持分离。"
+  - id: runtime-channel
+    source: repo
+    reason: "沿用既有 REST、dispatcher 退避和取消合同。"
+  - id: runtime-extras
+    source: repo
+    reason: "建联/投递属于 Extra，清理和资源所有权不变。"
+  - id: runtime-engineering
+    source: repo
+    reason: "严格 TS、中文合同注释、确定时钟与真实 loopback HTTP 分别验证。"
+  - id: runtime-stateless
+    source: repo
+    reason: "无新增投递账本、消息正文或 Context 持久化。"
+  - id: runtime-session-reset
+    source: repo
+    reason: "投递重试不重置会话、不修改 binding 与去重窗口。"
+  - id: runtime-context-input
+    source: repo
+    reason: "传输提示不改变模型输入和历史采集。"
+  - id: runtime-invoke-input
+    source: repo
+    reason: "重试不修改 InvokeInput 或执行协议。"
+  - id: commit
+    source: repo
+    reason: "内部记录中文；用户后续已授权 review 通过后提交 PR。OSS commit/PR 英文，保留 Git 作者并追加 Codex trailer。"
+additional_read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/channel-rate-limit-retry/brief.md
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/226#pullrequestreview-5681722244
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/226#pullrequestreview-5683996233
+  - https://github.com/Mininglamp-OSS/octo-runtime/pull/226#pullrequestreview-5686121494
+  - https://www.rfc-editor.org/rfc/rfc9110.html#section-5.6.7
+  - https://www.rfc-editor.org/rfc/rfc9110.html#section-10.2.3
+  - https://www.rfc-editor.org/rfc/rfc5322.html#section-3.3
+files_expected:
+  - packages/octo-runtime-extra-channel-gateway/src/transport/retry-after.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/api/errors.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts
+  - test/manual/gateway-retry-after.test.mjs
+updated_at: 2026-10-28T00:00:00Z

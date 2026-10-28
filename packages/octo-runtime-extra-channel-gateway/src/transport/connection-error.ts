@@ -1,3 +1,5 @@
+import { parseRetryAfterMs } from "./retry-after.js";
+
 /** 只携带连接协议事实；恢复策略由 Bot 编排决定，不保留响应正文或凭据。 */
 export class ImConnectionError extends Error {
   constructor(
@@ -78,10 +80,7 @@ export async function httpConnectionFailure(
   response: Response,
   phase: "AUTH" | "REGISTER"
 ): Promise<ImConnectionError> {
-  const retryAfter = response.headers.get("retry-after");
-  const seconds = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) : undefined;
-  const date = retryAfter ? Date.parse(retryAfter) : NaN;
-  const retryAfterMs = Math.max(0, seconds !== undefined ? seconds * 1000 : date - Date.now());
+  const retryAfterMs = parseRetryAfterMs(response.headers.get("retry-after")) ?? 0;
   await response.body?.cancel();
   // 仅明确认证、资源/请求或协议错误停止；服务超时、冲突、限流及未知服务故障默认重试。
   // 禁止重定向仍是接入约束，不能自动把凭据带到另一个地址。

@@ -1,6 +1,12 @@
 # 工程知识变更记录
 
+## 2026-10-29
+
+- [PR #226 同类排查](journal/shared/2026-10-28-163-http-date-retry-after.md#2026-10-29-jerry-xin-review-与输入解析同类排查)：处理 Jerry-Xin 的非十进制 Retry-After blocker，统一检查数字语法、三种 HTTP-date、日历顺延、星期及闰秒；改为格式和 UTC 分量校验。266 项相关回归通过，含手动专项 103 项；增加 400 年日历周期检查，保留 50 年窗口、溢出、兜底和预算。类型/构建、lint、命名、格式及知识检查通过，专项未扩大 CI，远端复审待确认。
+
 ## 2026-10-28
+
+- [Issue 163](journal/shared/2026-10-28-163-http-date-retry-after.md)：独立 worktree 修复 REST 对 HTTP-date Retry-After 的提前重试，复用建联解析并保留原有预算。PR #226 review 依次处理数值溢出兼容、Jerry-Xin 的 asctime 时区和 yujiawei 的 RFC850 两位年份窗口问题；UTC+8/UTC-7 独立子进程与最终 197 项回归通过。专项仅手动运行，未扩大 CI，按用户授权提交并 push。
 
 - [PR 218 验收边界补充](tasks/217-codebuddy-model-selection/validation.md#pr-218-评审补充独立非门禁验收)：按用户要求仅改文档，明确全部 adapter 的 fake 离线门禁与独立真实 non-gating 验收，补齐执行责任、重跑时机和证据要求；不修改测试或 CI 工作流。
 

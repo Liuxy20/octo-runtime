@@ -10,6 +10,7 @@
  * as fields while keeping the historical message wording, which an existing regex parser
  * and its callers still depend on.
  */
+import { parseRetryAfterMs } from "../retry-after.js";
 
 /** Fallback wait when the server rate-limits without a usable hint. */
 export const DEFAULT_RETRY_AFTER_MS = 1_000;
@@ -104,14 +105,15 @@ export class OctoApiError extends Error {
     const text = body || resp.statusText || "";
     const scope = header(resp, "X-RateLimit-Scope");
     const remaining = header(resp, "X-RateLimit-Remaining");
+    const headerDelayMs = parseRetryAfterMs(header(resp, "Retry-After"));
     return new OctoApiError({
       status: resp.status,
       path,
       body: text.length > MAX_ERROR_BODY_CHARS ? `${text.slice(0, MAX_ERROR_BODY_CHARS)}…` : text,
-      // Parsed from the untruncated body: a hint sitting past the cap must not be lost
-      // to a display concern.
+      // 正数 header 不裁剪；零等待沿用 body/default 兜底，避免连续立即重试。
+      // body 提示仍从未截断正文解析，展示长度限制不能丢失限流事实。
       retryAfterMs:
-        secondsToMs(header(resp, "Retry-After")) ??
+        (headerDelayMs !== undefined && headerDelayMs > 0 ? headerDelayMs : undefined) ??
         retryAfterFromBody(body) ??
         DEFAULT_RETRY_AFTER_MS,
       ...(scope !== undefined ? { rateLimitScope: scope } : {}),

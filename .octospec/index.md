@@ -55,6 +55,8 @@
 
 ## 当前任务
 
+- [Issue 163：REST 日期格式 Retry-After](tasks/163-http-date-retry-after/brief.md)：从 main@0ca12a0 独立 worktree，REST 与鉴权/注册共用解析，保留各层零等待及重试预算；手动专项、基线失败与 verified-review 处置见[记录](journal/shared/2026-10-28-163-http-date-retry-after.md)。
+
 - [Issue 150/171：Gateway 满载准入与容量文档](tasks/150-171-gateway-capacity/brief.md)：已有工作 session 的四条排队不申请新工作槽；同步工作、排队、历史 binding 的例子及首次/后续连接恢复说明。[本地验证与 review](journal/shared/2026-10-28-150-171-gateway-capacity.md)记录 435 项渠道回归、取消 ACK 补强及未验收边界。
 
 - [Issue 222：DSH 最低版本检查](tasks/222-dsh-min-version/brief.md)：独立 worktree 将 Provider 准入改为 `>=0.2.1-rc.4`，低版本明确要求升级，初始化不锁定 `0.0.1`；116 项离线回归、真实 rc.4 握手及 Kernel final、发行安装验证见[验收](tasks/222-dsh-min-version/validation.md)。后续审查及 PR 按用户授权交付，未发布。
