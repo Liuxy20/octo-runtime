@@ -83,6 +83,8 @@ systemd/Windows 的停止或删除失败不得静默视为成功；只有原生�
 
 Windows 计划任务 XML 使用 UTF-16 声明及带 BOM 的 UTF-16LE 原子写入，sidecar 读取兼容既有 UTF-8，drift 按解码后的正文比较。PowerShell 查询显式输出 UTF-8，保留中文路径与参数；principal/trigger 账号按系统 SID 核对，不能把同一账号的短名、域名或 SID 表示差异误报为 drift。原生 Create/Query/Delete 验证须使用独占任务名，覆盖 ASCII、Unicode/空格路径和 enabled 两种值，并确认最终删除。
 
+原生 schtasks 文本与受控 PowerShell JSON 的编码合同不同：在与 manager 相同的隐藏控制台启动条件下只读查询代码页，按该编码流式解码 stdout/stderr，不能固定为 UTF-8 或 GBK。内部查询与 manager 共用原超时预算，失败不得猜测编码；查询成功可在 runner 内缓存。原命令仍 shell=false 直接执行，保留 argv、退出码、错误 detail 与有界输出，不要求 SDK 调用方传编码。见 [Issue 167 验证](../tasks/167-native-diagnostics/validation.md)。
+
 SID 翻译失败为未知；原文账号相同仍可确认，否则服务状态 unknown 并说明身份查询失败，不报告确定的账号漂移，也不伪装身份匹配。公共 XML renderer 返回文本时必须说明 UTF-16LE BOM 序列化要求。
 
 systemd 的 WorkingDirectory 与 StandardOutput/StandardError 的 append 路径不采用 argv 式去引号或 C 反转义：路径原样写入，仅把字面量 `%` 编码为 `%%`；ExecStart/Environment 继续独立使用参数引号。内部空格、引号、反斜杠及 Unicode 保留；奇数个末尾反斜杠附加保护空格，避免续行，原生 strstrip 随后移除保护空格；偶数个原样保留。路径本身不可无损保留的末尾空格或制表符明确返回 UNSUPPORTED_SPEC，未被裁剪的垂直制表符与换页符保留。重新 install 必须替换旧坏定义并先 daemon-reload，再允许 start；幂等 install 不额外 reload 或 restart。回归除字符串断言外，需通过 Linux 原生解析及显式启用的 user manager 验证真实 cwd 与日志落点。

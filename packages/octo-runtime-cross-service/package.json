@@ -13,6 +13,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "iconv-lite": "0.7.3"
+  },
   "engines": {
     "node": "^24.0.0 || ^26.0.0"
   }
