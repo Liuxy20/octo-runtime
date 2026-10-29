@@ -88,13 +88,15 @@ test("OpenClaw Gateway preserves new thought phases, native answer IDs and comme
   assert.equal(thoughts[1].payload.messageId, thoughts[2].payload.messageId);
   assert.equal(thoughts[2].type, "message.update");
   assert.equal(thoughts[2].payload.status, "streaming");
-  const commentary = output.filter((e) => e.payload.channel === "commentary");
+  const commentary = output.filter((e) => e.payload.messageId === "openclaw:preamble");
   assert.deepEqual(
     commentary.map((e) => e.type),
     ["message.update", "message.update"]
   );
   assert.equal(commentary[0].payload.messageId, commentary[1].payload.messageId);
-  const answers = output.filter((e) => e.type === "message.delta" && e.payload.channel === "final");
+  const answers = output.filter(
+    (e) => e.type === "message.delta" && e.payload.channel === "commentary"
+  );
   assert.notEqual(answers[0].payload.messageId, answers[1].payload.messageId);
   assert.equal(output.at(-1).type, "run.completed");
 });

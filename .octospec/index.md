@@ -61,6 +61,8 @@
 
 - [Issue 246：Gateway 展示窗口与终态释放](tasks/246-gateway-projection-window/brief.md)：每轮五条明细、有限预览与独立计数；身份按步骤清理，卡片回调与投影在收尾后释放。手动专项 34 通过，相关回归与验证边界见[验证](tasks/246-gateway-projection-window/validation.md)。
 
+- [Issue 245：OpenClaw 模型轮次与工具归属](tasks/245-openclaw-model-steps/brief.md)：最新 main 独立 worktree，生产仅改 adapter；手动专项及真实 Playboard 验证轮次从 1 轮恢复为 3 轮、工具保留所属步骤。两轴审查与人工卡片验收边界见[验证](tasks/245-openclaw-model-steps/validation.md)。
+
 - [Issue 119：准备期安全原因保真](tasks/119-preparation-error-codes/brief.md)：最新 main 独立 worktree，可执行性 97/100 后实施；复用目录冲突与规则协议码，专项 25 通过、相关回归 472 通过/1 条件跳过。[两轴审查](tasks/119-preparation-error-codes/review.md)各 0 项问题；专项仅手动运行，不扩大 CI，真实 IM 未验。
 
 - [Issue 137：Adapter 协议元数据类型](tasks/137-adapter-protocol-support/brief.md)：区分编写与注册输入，保留 canonical-only 默认值及运行时校验；类型和针对性 30 项通过，全量两项失败及基线对照见[验证记录](journal/shared/2026-10-29-137-adapter-protocol-support.md)。

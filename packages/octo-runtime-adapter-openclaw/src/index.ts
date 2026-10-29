@@ -158,20 +158,31 @@ interface EventQueueItem {
 
 interface StreamState {
   lastSeq: number;
+  runId: string;
+  stepNumber: number;
+  stepHasTools: boolean;
   assistantText: string;
   reasoningText: string;
   stepStarted: boolean;
   stepFinished: boolean;
+  stepFinishReason?: string;
   stepId?: string;
   messageNumber: number;
   messages: Map<string, CanonicalEvent["payload"]>;
   assistantItemId?: string;
-  tools: Set<string>;
+  tools: Map<string, { stepId: string; finished: boolean }>;
+  completedMessages: Set<string>;
+  answers: Map<
+    string,
+    { message: CanonicalEvent["payload"]; text: string; phase?: "commentary" | "final_answer" }
+  >;
+  completedAnswerText?: string;
+  finalAnswerText?: string;
 }
 
 function gatewayMessage(
   state: StreamState,
-  channel: "analysis" | "final" | "commentary",
+  channel: "analysis" | "assistant" | "commentary",
   nativeId?: string
 ): CanonicalEvent["payload"] {
   const key = channel === "commentary" ? `commentary:${nativeId ?? "preamble"}` : channel;
@@ -179,7 +190,8 @@ function gatewayMessage(
   if (!message) {
     message = {
       messageId: nativeId ? `openclaw:${nativeId}` : `openclaw:${channel}:${++state.messageNumber}`,
-      channel,
+      stepId: state.stepId,
+      channel: channel === "assistant" ? "commentary" : channel,
       ...(channel === "analysis"
         ? {
             exposure: "public_reasoning",
@@ -190,6 +202,224 @@ function gatewayMessage(
     state.messages.set(key, message);
   }
   return message;
+}
+
+/** Run 内的模型轮独立编号；只有模型输出/原生消息边界才能开始新轮，工具结果不换轮。 */
+function startGatewayStep(state: StreamState, startedAtMs?: number): CanonicalEvent[] {
+  if (state.stepStarted && !state.stepFinished) return [];
+  state.stepId = `openclaw:${state.runId}:round:${++state.stepNumber}`;
+  state.stepStarted = true;
+  state.stepFinished = false;
+  state.stepFinishReason = undefined;
+  state.stepHasTools = false;
+  state.assistantText = "";
+  state.reasoningText = "";
+  state.assistantItemId = undefined;
+  state.completedAnswerText = undefined;
+  return [
+    {
+      protocolVersion: 2,
+      type: "model_step.started",
+      payload: {
+        stepId: state.stepId,
+        ...(startedAtMs === undefined ? {} : { startedAtMs })
+      }
+    }
+  ];
+}
+
+function finishGatewayStep(
+  state: StreamState,
+  status: string,
+  finishReason?: string,
+  endedAtMs?: number
+): CanonicalEvent[] {
+  if (!state.stepStarted || state.stepFinished) return [];
+  state.stepFinished = true;
+  state.stepFinishReason = finishReason;
+  const events: CanonicalEvent[] = [
+    {
+      protocolVersion: 2,
+      type: "model_step.finished",
+      payload: {
+        stepId: state.stepId!,
+        status: canonicalTerminalStatus(status),
+        ...(finishReason ? { finishReason } : {}),
+        ...(endedAtMs === undefined ? {} : { endedAtMs })
+      }
+    }
+  ];
+  for (const key of [...state.messages.keys()])
+    events.push(...closeGatewayMessage(state, key, status));
+  return events;
+}
+
+function rememberGatewayAnswer(
+  state: StreamState,
+  message: CanonicalEvent["payload"],
+  phase?: unknown
+): void {
+  if (typeof message.messageId === "string") {
+    if (!state.answers.has(message.messageId) && state.answers.size >= 4096)
+      throw new Error("OPENCLAW_STREAM_STATE_EXCEEDED");
+    state.answers.set(message.messageId, {
+      message,
+      text: state.assistantText,
+      phase:
+        phase === "commentary" || phase === "final_answer"
+          ? phase
+          : state.answers.get(message.messageId)?.phase
+    });
+  }
+}
+
+/** 旧 Gateway 缺最终 RPC 正文时只选当前步的最终片段；显式 commentary 永不兜底为 final。 */
+function fallbackGatewayAnswer(state: StreamState): string {
+  const answers = [...state.answers.values()].filter(
+    (answer) => answer.message.stepId === state.stepId
+  );
+  if (answers.some((answer) => answer.phase))
+    return answers
+      .filter((answer) => answer.phase === "final_answer")
+      .map((answer) => answer.text)
+      .join("\n");
+  return answers.at(-1)?.text ?? "";
+}
+
+/** 持久消息可能聚合多个已交付过程片段，只把尚属最后一条的正文交给该消息。 */
+function remainingGatewayAnswer(text: string, earlierAnswers: string[]): string {
+  const prefix = ["\n\n", "\n"]
+    .map((separator) => earlierAnswers.join(separator) + separator)
+    .find((candidate) => earlierAnswers.length > 0 && text.startsWith(candidate));
+  return prefix ? text.slice(prefix.length) : text;
+}
+
+/** 与原生 assistant phase 对齐：显式区分时，只取 final_answer，不把 commentary 混入最终投递。 */
+function completedGatewayAnswer(message: JsonRecord, blocks: JsonRecord[]): string {
+  const textBlocks = blocks.filter(
+    (block) => block.type === "text" && typeof block.text === "string"
+  );
+  const phases = textBlocks.map((block) => {
+    if (typeof block.textSignature !== "string" || !block.textSignature.startsWith("{"))
+      return undefined;
+    try {
+      const signature = asRecord(JSON.parse(block.textSignature));
+      return signature?.v === 1 && ["commentary", "final_answer"].includes(String(signature.phase))
+        ? signature.phase
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  });
+  const explicit = phases.some(Boolean);
+  const final = textBlocks.filter(
+    (_, index) => (phases[index] ?? (explicit ? undefined : message.phase)) === "final_answer"
+  );
+  if (final.length) return final.map((block) => block.text).join("\n");
+  if (explicit || message.phase === "commentary") return "";
+  return textBlocks.map((block) => block.text).join("\n");
+}
+
+/** 只处理调用层已核验 session/run 的持久消息；不从 transcript 补发未公开的 reasoning。 */
+function normalizeGatewaySessionMessage(payload: unknown, state: StreamState): CanonicalEvent[] {
+  const native = asRecord(payload);
+  const message = asRecord(native?.message);
+  const metadata = asRecord(message?.__openclaw);
+  const id = nonEmptyString(native?.messageId) ?? nonEmptyString(metadata?.id);
+  if (!id || !message || message.role !== "assistant" || !Array.isArray(message.content)) return [];
+  if (state.completedMessages.has(id)) return [];
+  if (state.completedMessages.size >= 4096) throw new Error("OPENCLAW_STREAM_STATE_EXCEEDED");
+  state.completedMessages.add(id);
+  const blocks = message.content.map(asRecord).filter((b): b is JsonRecord => !!b);
+  const toolBlocks = blocks.filter((b) => b.type === "toolCall" && nonEmptyString(b.id));
+  const knownStep = toolBlocks.map((b) => state.tools.get(String(b.id))?.stepId).find(Boolean);
+  // 已经通过工具边界换轮后才到达的消息属于旧轮，不能结束当前模型调用或重复创建工具。
+  if (knownStep && (knownStep !== state.stepId || state.stepFinished)) return [];
+  const events = startGatewayStep(state, finiteNumber(message.timestamp));
+  for (const block of toolBlocks) {
+    const toolId = String(block.id);
+    if (state.tools.has(toolId)) continue;
+    if (state.tools.size >= 4096) throw new Error("OPENCLAW_STREAM_STATE_EXCEEDED");
+    state.tools.set(toolId, { stepId: state.stepId!, finished: false });
+    state.stepHasTools = true;
+    events.push({
+      protocolVersion: 2,
+      type: "tool_call.create",
+      payload: {
+        id: toolId,
+        name: nonEmptyString(block.name) ?? "tool",
+        status: "running",
+        args: asRecord(block.arguments) ?? {},
+        stepId: state.stepId
+      }
+    });
+  }
+  const textBlocks = blocks
+    .filter((b) => b.type === "text" && typeof b.text === "string")
+    .map((b) => String(b.text));
+  const text = textBlocks.join("\n");
+  const stepAnswers = [...state.answers.entries()].filter(
+    ([, answer]) => answer.message.stepId === state.stepId
+  );
+  const alreadyDelivered = ["\n", "\n\n"].some(
+    (separator) => text === stepAnswers.map(([, answer]) => answer.text).join(separator)
+  );
+  if (text && !alreadyDelivered) {
+    const corrections: Array<{ message: CanonicalEvent["payload"]; text: string }> = [];
+    if (stepAnswers.length > 0 && stepAnswers.length === textBlocks.length) {
+      // 原生 text block 和流式 item 保持顺序；每块分别校正，不能把全量正文塞进末块。
+      for (const [index, [, answer]] of stepAnswers.entries())
+        corrections.push({ message: answer.message, text: textBlocks[index] });
+    } else {
+      const answer = gatewayMessage(state, "assistant");
+      const earlierAnswers = stepAnswers
+        .filter(([id]) => id !== answer.messageId)
+        .map(([, value]) => value.text);
+      const nextText = remainingGatewayAnswer(text, earlierAnswers);
+      if (earlierAnswers.length && nextText === text) {
+        // Provider 合并/拆分 block 且旧前缀也被修正时，以持久正文替换本步片段并清空旧余片。
+        const first = stepAnswers[0][1].message;
+        corrections.push({ message: first, text });
+        for (const [, previous] of stepAnswers.slice(1)) {
+          events.push({
+            protocolVersion: 2,
+            type: "message.update",
+            payload: { ...previous.message, text: "", status: "completed" }
+          });
+          state.answers.delete(String(previous.message.messageId));
+        }
+        state.messages.set("assistant", first);
+      } else corrections.push({ message: answer, text: nextText });
+    }
+    for (const correction of corrections) {
+      if (state.answers.get(String(correction.message.messageId))?.text !== correction.text)
+        events.push({
+          protocolVersion: 2,
+          type: "message.update",
+          payload: {
+            ...correction.message,
+            text: correction.text,
+            role: "assistant",
+            status: "completed"
+          }
+        });
+      state.assistantText = correction.text;
+      rememberGatewayAnswer(state, correction.message);
+    }
+  }
+  const reason = nonEmptyString(message.stopReason);
+  const finishReason = reason === "toolUse" || reason === "tool_use" ? "tool-calls" : reason;
+  if (finishReason === "tool-calls") state.stepHasTools = true;
+  const status = ["error", "failed", "aborted", "cancelled"].includes(reason ?? "")
+    ? "failed"
+    : "completed";
+  state.completedAnswerText =
+    status === "completed" && finishReason !== "tool-calls" && finishReason !== "length"
+      ? completedGatewayAnswer(message, blocks)
+      : "";
+  const endedAtMs = finiteNumber(metadata?.recordTimestampMs);
+  events.push(...finishGatewayStep(state, status, finishReason, endedAtMs));
+  return events;
 }
 
 function closeGatewayMessage(
@@ -249,56 +479,61 @@ function normalizeGatewayAgentEvent(payload: unknown, state: StreamState): Canon
     return [];
   state.lastSeq = seq;
   const events: CanonicalEvent[] = [];
-  const stepId = (state.stepId ??= `openclaw:${nonEmptyString(native.runId) ?? "run"}`);
-  const ensureStep = () => {
-    if (state.stepStarted) return;
-    state.stepStarted = true;
-    events.push({ protocolVersion: 2, type: "model_step.started", payload: { stepId } });
-  };
+  state.runId = nonEmptyString(native.runId) ?? state.runId;
 
   if (stream === "lifecycle") {
     const phase = nonEmptyString(data.phase);
     const terminal = gatewayTerminal(data, "lifecycle");
-    if (phase === "start") ensureStep();
+    if (phase === "start" && !state.stepStarted)
+      events.push(...startGatewayStep(state, finiteNumber(data.startedAt)));
     if (
       (phase === "end" || phase === "error") &&
       terminal &&
       state.stepStarted &&
       !state.stepFinished
     ) {
-      state.stepFinished = true;
       const finishReason = nonEmptyString(data.stopReason);
-      events.push({
-        protocolVersion: 2,
-        type: "model_step.finished",
-        payload: {
-          stepId,
-          status: canonicalTerminalStatus(terminal),
-          ...(finishReason ? { finishReason } : {})
-        }
-      });
+      events.push(...finishGatewayStep(state, terminal, finishReason, finiteNumber(data.endedAt)));
     }
     return events;
   }
 
-  ensureStep();
+  const modelOutput =
+    stream === "assistant" ||
+    stream === "thinking" ||
+    (stream === "item" && data.kind === "preamble");
+  // 持久 stop 通知后可能再次 flush 同一份 assistant 快照；它不是新模型调用。
+  if (
+    stream === "assistant" &&
+    state.stepFinished &&
+    state.stepFinishReason === "stop" &&
+    (data.text === state.assistantText || data.text === state.completedAnswerText)
+  )
+    return events;
+  if (modelOutput) {
+    // 旧 Gateway 没有可关联的持久消息时，以工具批次后下一次模型输出确认新调用。
+    if (state.stepHasTools && !state.stepFinished)
+      events.push(...finishGatewayStep(state, "completed", "tool-calls"));
+    events.push(...startGatewayStep(state, finiteNumber(native.ts)));
+  }
   if (stream === "assistant" && typeof data.text === "string") {
     events.push(...closeGatewayMessage(state, "analysis"));
     state.reasoningText = "";
     const nativeId = nonEmptyString(data.itemId);
     if (nativeId && nativeId !== state.assistantItemId) {
-      events.push(...closeGatewayMessage(state, "final"));
+      events.push(...closeGatewayMessage(state, "assistant"));
       state.assistantText = "";
       state.assistantItemId = nativeId;
     }
-    const message = gatewayMessage(state, "final", nativeId);
+    const message = gatewayMessage(state, "assistant", nativeId);
     const change = snapshotDelta(state.assistantText, data.text);
     state.assistantText = data.text;
+    rememberGatewayAnswer(state, message, data.phase);
     if (change.delta)
       events.push({
         protocolVersion: 2,
         type: "message.delta",
-        payload: { ...message, text: change.delta, channel: "final" }
+        payload: { ...message, text: change.delta }
       });
     if (change.replacement !== undefined) {
       events.push({
@@ -309,7 +544,7 @@ function normalizeGatewayAgentEvent(payload: unknown, state: StreamState): Canon
           role: "assistant",
           status: "streaming",
           text: change.replacement,
-          channel: "final"
+          channel: "commentary"
         }
       });
     }
@@ -345,9 +580,16 @@ function normalizeGatewayAgentEvent(payload: unknown, state: StreamState): Canon
     const phase = nonEmptyString(data.phase);
     const id = nonEmptyString(data.toolCallId);
     if (!id) return events;
+    let tool = state.tools.get(id);
     if (phase === "start") {
-      if (state.tools.has(id)) return events;
-      state.tools.add(id);
+      if (tool) return events;
+      // 7.1 的 toolUse 持久消息可能只含正文；随后才广播的工具仍属于刚结束的模型调用。
+      if (!state.stepFinished || state.stepFinishReason !== "tool-calls")
+        events.push(...startGatewayStep(state));
+      tool = { stepId: state.stepId!, finished: false };
+      if (state.tools.size >= 4096) throw new Error("OPENCLAW_STREAM_STATE_EXCEEDED");
+      state.tools.set(id, tool);
+      state.stepHasTools = true;
       events.push(...closeGatewayMessage(state, "analysis"));
       state.reasoningText = "";
       events.push({
@@ -356,31 +598,73 @@ function normalizeGatewayAgentEvent(payload: unknown, state: StreamState): Canon
         payload: {
           status: "running",
           id,
+          stepId: tool.stepId,
           name: nonEmptyString(data.name) ?? "tool",
           args: asRecord(data.args) ?? {}
         }
       });
     } else if (phase === "update") {
+      if (!tool || tool.finished) return events;
+      const argsDelta = typeof data.argsDelta === "string" ? data.argsDelta : undefined;
+      const output = data.result ?? data.partialResult;
       events.push({
         protocolVersion: 2,
         type: "tool_call.delta",
         payload: {
           id,
-          outputSnapshot:
-            typeof (data.result ?? data.partialResult) === "string"
-              ? String(data.result ?? data.partialResult)
-              : JSON.stringify(data.result ?? data.partialResult ?? "")
+          stepId: tool.stepId,
+          ...(argsDelta === undefined ? {} : { argsDelta }),
+          ...(output === undefined && argsDelta !== undefined
+            ? {}
+            : {
+                outputSnapshot: typeof output === "string" ? output : JSON.stringify(output ?? "")
+              })
         }
       });
     } else if (phase === "result") {
+      if (!tool || tool.finished) return events;
+      tool.finished = true;
       events.push({
         protocolVersion: 2,
         type: "tool_call.update",
         payload: {
           id,
+          stepId: tool.stepId,
           ...(nonEmptyString(data.name) ? { name: data.name } : {}),
           status: canonicalTerminalStatus(data.isError === true ? "error" : "completed"),
           output: data.result
+        }
+      });
+    }
+  } else if (stream === "command_output") {
+    const id = nonEmptyString(data.toolCallId);
+    const tool = id ? state.tools.get(id) : undefined;
+    // command_output 是已有工具的输出快照，不是模型思考，也不能单独创建模型轮次。
+    if (!id || !tool) return events;
+    if (data.phase === "delta" && typeof data.output === "string" && !tool.finished)
+      events.push({
+        protocolVersion: 2,
+        type: "tool_call.delta",
+        payload: {
+          id,
+          stepId: tool.stepId,
+          outputSnapshot: data.output
+        }
+      });
+    if (data.phase === "end") {
+      tool.finished = true;
+      const exitCode = finiteNumber(data.exitCode);
+      const durationMs = finiteNumber(data.durationMs);
+      events.push({
+        protocolVersion: 2,
+        type: "tool_call.update",
+        payload: {
+          id,
+          stepId: tool.stepId,
+          status: canonicalTerminalStatus(data.status),
+          ...(typeof data.output === "string" ? { output: data.output } : {}),
+          ...(exitCode === undefined ? {} : { exitCode }),
+          ...(durationMs === undefined ? {} : { durationMs })
         }
       });
     }
@@ -400,6 +684,7 @@ function normalizeGatewayAgentEvent(payload: unknown, state: StreamState): Canon
         status: data.phase === "end" ? "completed" : "streaming"
       }
     });
+    if (data.phase === "end") state.messages.delete(`commentary:${nativeId ?? "preamble"}`);
   } else if (stream === "usage") {
     const event = usageEvent(data);
     if (event) events.push(event);
@@ -471,45 +756,32 @@ function normalizeFinalResponse(
   const meta = asRecord(result?.meta);
   const agentMeta = asRecord(meta?.agentMeta);
   const events: CanonicalEvent[] = [];
-  const stepId = (state.stepId ??= `openclaw:${runId}`);
-  const payloads = Array.isArray(result?.payloads) ? result.payloads : [];
-  const finalText = payloads
-    .map((item) => nonEmptyString(asRecord(item)?.text) ?? "")
+  state.runId = runId;
+  const payloads = Array.isArray(result?.payloads) ? result.payloads.map(asRecord) : [];
+  // 原生 finalTextFromResult 的选择合同：不把过程、reasoning 或错误 payload 投进 IM finalMsg。
+  const selected = payloads
+    .filter(
+      (item) =>
+        item && item.isReasoning !== true && item.isCommentary !== true && item.isError !== true
+    )
+    .map((item) => nonEmptyString(item?.text)?.trimEnd() ?? "")
     .filter(Boolean)
     .join("\n");
-  const ensureStep = () => {
-    if (state.stepStarted) return;
-    state.stepStarted = true;
-    events.push({
-      protocolVersion: 2,
-      type: "model_step.started",
-      payload: { stepId }
-    });
-  };
+  // 7.1 的 payload 投影会丢失 reasoning 标记；原生最终可见正文比未标记的列表更权威。
+  const metadataText =
+    !payloads.some((item) => item?.isError === true) &&
+    typeof meta?.finalAssistantVisibleText === "string"
+      ? meta.finalAssistantVisibleText.trimEnd()
+      : undefined;
+  const finalText = metadataText ?? selected;
+  if (Array.isArray(result?.payloads) || typeof meta?.finalAssistantVisibleText === "string")
+    state.finalAnswerText = finalText;
+  const needsNextStep =
+    state.stepFinished &&
+    (state.stepHasTools || ["length", "error", "failed"].includes(state.stepFinishReason ?? ""));
   if (finalText) {
-    ensureStep();
-    const message = gatewayMessage(state, "final", state.assistantItemId);
-    const change = snapshotDelta(state.assistantText, finalText);
-    state.assistantText = finalText;
-    if (change.delta)
-      events.push({
-        protocolVersion: 2,
-        type: "message.delta",
-        payload: { ...message, text: change.delta, channel: "final" }
-      });
-    if (change.replacement !== undefined) {
-      events.push({
-        protocolVersion: 2,
-        type: "message.update",
-        payload: {
-          ...message,
-          role: "assistant",
-          status: "streaming",
-          text: change.replacement,
-          channel: "final"
-        }
-      });
-    }
+    // 工具/length 后模型可能不公开任何流式输出，最终正文仍证明发生了下一次模型调用。
+    if (!state.stepStarted || needsNextStep) events.push(...startGatewayStep(state));
   }
   const usage = asRecord(agentMeta?.usage);
   const usageUpdate = usageEvent({
@@ -522,21 +794,8 @@ function normalizeFinalResponse(
 
   const terminal = gatewayTerminal(response, "final");
   if (terminal && !state.stepFinished) {
-    ensureStep();
-    state.stepFinished = true;
-    events.push({
-      protocolVersion: 2,
-      type: "model_step.finished",
-      payload: {
-        stepId,
-        status: canonicalTerminalStatus(
-          terminal === "cancelled" ? "cancelled" : terminal === "failed" ? "failed" : "completed"
-        ),
-        ...(nonEmptyString(meta?.stopReason)
-          ? { finishReason: nonEmptyString(meta?.stopReason) }
-          : {})
-      }
-    });
+    if (!state.stepStarted) events.push(...startGatewayStep(state));
+    events.push(...finishGatewayStep(state, terminal, nonEmptyString(meta?.stopReason)));
   }
   return {
     events,
@@ -670,6 +929,18 @@ async function* invokeOpenClawGateway(
     if (event.event === "agent") {
       const runId = nonEmptyString(payload?.runId);
       if (runId !== acceptedRunId && runId !== invocation.requestId) return;
+    } else if (event.event === "session.message") {
+      if (!agentDispatched || payload?.sessionKey !== providerSessionKey) return;
+      if (payload.agentId !== undefined && payload.agentId !== invocation.agentId) return;
+      const message = asRecord(payload.message);
+      if (message?.role !== "assistant") return;
+      const topRunId = nonEmptyString(payload.runId);
+      const messageRunId = nonEmptyString(asRecord(message.__openclaw)?.runId);
+      const ids = [topRunId, messageRunId].filter((id): id is string => !!id);
+      // 中间消息的 runId 在原生 __openclaw 元数据内；任何显式身份冲突都拒绝。
+      // 续聊不得按到达时间认领无 runId 的旧消息；fresh 的随机独占 key 没有历史消息。
+      if (ids.some((id) => id !== acceptedRunId && id !== invocation.requestId)) return;
+      if (!ids.length && req.providerSession?.sessionId) return;
     } else if (event.event === "exec.approval.requested") {
       const request = asRecord(payload?.request);
       const id = nonEmptyString(payload?.id);
@@ -717,37 +988,43 @@ async function* invokeOpenClawGateway(
   req.signal?.addEventListener("abort", onAbort, { once: true });
   const state: StreamState = {
     lastSeq: -1,
+    runId: invocation.requestId,
+    stepNumber: 0,
+    stepHasTools: false,
     assistantText: "",
     reasoningText: "",
     stepStarted: false,
     stepFinished: false,
     messageNumber: 0,
     messages: new Map(),
-    tools: new Set()
+    tools: new Map(),
+    completedMessages: new Set(),
+    answers: new Map()
   };
   // 原生终态和步骤收尾共用出口；旧等待失败不能覆盖已确认的结果或丢失步骤结束。
   const terminalEvents = (outcome: GatewayTerminal, message?: string): CanonicalEvent[] => {
     const events: CanonicalEvent[] = [];
-    if (state.stepStarted && !state.stepFinished) {
-      state.stepFinished = true;
+    events.push(...finishGatewayStep(state, outcome));
+    const processOnly =
+      state.stepHasTools || ["length", "error", "failed"].includes(state.stepFinishReason ?? "");
+    const finalText =
+      state.finalAnswerText ??
+      (processOnly ? "" : (state.completedAnswerText ?? fallbackGatewayAnswer(state)));
+    // final 通道只有这一份已选定的回答；IM 按 messageId 聚合时不会再拼进过程正文。
+    // TODO(P2, #243)：成功 final 的远端文件引用由 Adapter 协调转换为可读取 HTTPS；不读本机同名路径、不代发 IM。
+    if (outcome === "completed" && finalText)
       events.push({
         protocolVersion: 2,
-        type: "model_step.finished",
-        payload: { stepId: state.stepId!, status: canonicalTerminalStatus(outcome) }
+        type: "message.update",
+        payload: {
+          messageId: `openclaw:${state.runId}:final-answer`,
+          stepId: state.stepId,
+          role: "assistant",
+          status: "completed",
+          text: finalText,
+          channel: "final"
+        }
       });
-    }
-    // TODO(P2, #243)：成功 final 的远端文件引用由 Adapter 协调转换为可读取 HTTPS；不读本机同名路径、不代发 IM。
-    events.push({
-      protocolVersion: 2,
-      type: "message.update",
-      payload: {
-        ...gatewayMessage(state, "final", state.assistantItemId),
-        role: "assistant",
-        status: outcome === "cancelled" ? "stopped" : outcome,
-        text: state.assistantText,
-        channel: "final"
-      }
-    });
     if (outcome === "cancelled")
       events.push({
         protocolVersion: 2,
@@ -921,25 +1198,8 @@ async function* invokeOpenClawGateway(
           );
           if (resourceFailure) throw resourceFailure;
           terminal ??= confirmed;
-          if (!state.stepFinished) {
-            if (!state.stepStarted) {
-              state.stepStarted = true;
-              yield {
-                protocolVersion: 2,
-                type: "model_step.started",
-                payload: { stepId: state.stepId! }
-              };
-            }
-            state.stepFinished = true;
-            yield {
-              protocolVersion: 2,
-              type: "model_step.finished",
-              payload: {
-                stepId: state.stepId!,
-                status: canonicalTerminalStatus(terminal)
-              }
-            };
-          }
+          if (!state.stepStarted) yield* startGatewayStep(state);
+          yield* finishGatewayStep(state, terminal);
         }
         if (terminal === "failed")
           throw new Error(reconciled.error ?? "OpenClaw Gateway agent run failed");
@@ -1034,6 +1294,10 @@ async function* invokeOpenClawGateway(
             permissions.responseFailed(params, failure);
             queue.push({ error: failure });
           });
+        continue;
+      }
+      if (item.event?.event === "session.message") {
+        yield* normalizeGatewaySessionMessage(item.event.payload, state);
         continue;
       }
       if (!item.event || item.event.event !== "agent") continue;

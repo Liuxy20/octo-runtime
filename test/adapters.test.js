@@ -1389,12 +1389,11 @@ test("OpenClaw Gateway adapter isolates run events, deduplicates seq, and stream
     events.some((event) => JSON.stringify(event).includes("LEAK")),
     false
   );
-  assert.equal(
+  assert.deepEqual(
     events
-      .filter((event) => event.type === "message.delta" && event.payload.channel === "final")
-      .map((event) => event.payload.text)
-      .join(""),
-    "hello"
+      .filter((event) => event.payload.channel === "final")
+      .map((event) => ({ type: event.type, text: event.payload.text })),
+    [{ type: "message.update", text: "hello" }]
   );
   assert.deepEqual(
     events.filter((event) => event.type.startsWith("tool_call.")).map((event) => event.type),
@@ -1549,12 +1548,11 @@ test("OpenClaw Gateway adapter reconciles a final RPC result when live events ar
     requests.slice(0, 4).map((entry) => entry.method),
     ["agents.list", "sessions.create", "sessions.messages.subscribe", "agent"]
   );
-  assert.equal(
+  assert.deepEqual(
     events
-      .filter((event) => event.type === "message.delta")
-      .map((event) => event.payload.text)
-      .join(""),
-    "fallback result"
+      .filter((event) => event.payload.channel === "final")
+      .map((event) => ({ type: event.type, text: event.payload.text })),
+    [{ type: "message.update", text: "fallback result" }]
   );
   assert.deepEqual(events.find((event) => event.type === "usage.update")?.payload, {
     inputTokens: 3,

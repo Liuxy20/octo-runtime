@@ -357,23 +357,21 @@ test("legacy strict requests reproduce the regression when any modern-only creat
   }
 });
 
-test("release normalization preserves maintenance suffixes and rejects unverified versions", async () => {
-  for (const version of ["v2026.7.1-1", "v2026.7.1-2", "v2026.10.5"]) {
-    assert.equal((await invoke(fixture({ version }))).at(-1).type, "run.completed");
-  }
+test("version metadata does not reject compatible Gateway connections", async () => {
   for (const version of [
-    undefined,
+    "v2026.7.1-1",
+    "v2026.7.1-2",
     "2026.7.2",
+    "v2026.10.5",
+    "2027.1.1",
     "2026.10.10-beta.1",
     "2026.10.5-fork",
-    "2027.1.1"
+    undefined
   ]) {
-    const f = fixture({ handshake: hello(version) });
-    const events = await invoke(f);
-    assert.equal(events.at(-1).type, "run.failed");
-    assert.match(events.at(-1).payload.message, /COMPATIBILITY_UNSUPPORTED/);
-    assert.deepEqual(f.calls, []);
-    assert.equal(f.closed, 1);
+    assert.equal(
+      (await invoke(fixture({ version, handshake: hello(version) }))).at(-1).type,
+      "run.completed"
+    );
   }
 });
 
@@ -677,7 +675,7 @@ test("disconnect reconciliation rechecks contracts and preserves the actual term
     assert.equal(second.closed, 1);
   }
   const first = fixture({ result: new Error("connection lost") });
-  const second = fixture({ handshake: hello("2027.1.1") });
+  const second = fixture({ handshake: { ...hello("2027.1.1"), protocol: 5 } });
   let count = 0;
   const adapter = createOpenClawAdapter({
     clientFactory: () => (count++ === 0 ? first.client : second.client)

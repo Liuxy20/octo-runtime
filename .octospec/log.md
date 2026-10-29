@@ -2,6 +2,8 @@
 
 ## 2026-10-29
 
+- [Issue 245](journal/shared/2026-10-29-245-openclaw-model-steps.md)：按模型完成消息拆分 OpenClaw run 内步骤，保留工具增量/结果归属和正文去重；真实 Playboard 中间卡片从 1 轮恢复到 3 轮。专项仅手动运行，未扩大 CI，实际 IM 卡片留待用户本地验收。
+
 - [PR 229 延迟审批修复](journal/shared/2026-10-29-224-session-review.md#延迟首次出现审批的后续修复)：同步 main 并保留双方冲突内容；续聊未知归属审批缺 runId 时明确失败并请求取消，不再仅将授权歧义记录为限制。保留正常匹配 runId 与 fresh 审批，公开兼容代价；审批 12/12、全量 Node 2290 通过，未扩大 CI。
 
 - [PR 229 完整复审修正](journal/shared/2026-10-29-224-session-review.md)：按用户最终选择放宽公共名称为有界非空白 Unicode 文本；Gateway 自行限长并修复旧坏名，保留原生续接身份。修复旧无 runId 审批的前置快照/广播与重播串轮，记录原生关联不足的边界；全量及三家真实特殊名称续聊通过，不扩大 CI。

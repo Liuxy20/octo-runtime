@@ -1,0 +1,75 @@
+{
+  "scope": "Non-gating real isolated Gateway -> Playboard Kernel/worker -> adapter -> model/tools validation after removing exact release admission. No IM delivery, full UI acceptance or live LobsterAI claim.",
+  "source": "ce62c33062423c93e0c213dd46c0a2a845e4c608 plus the reviewed stage compatibility working diff",
+  "platform": "macOS",
+  "command": "node .octospec/tasks/245-openclaw-model-steps/verify-isolated-gateway-live.mjs <isolated-openclaw.mjs> --resume",
+  "runs": [
+    {
+      "version": "2026.7.1",
+      "resumed": false,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "starts": 3,
+      "finishes": 3,
+      "toolEventsWithoutStepId": 0
+    },
+    {
+      "version": "2026.7.1",
+      "resumed": true,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "sameSession": true
+    },
+    {
+      "version": "2026.8.1",
+      "resumed": false,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "starts": 3,
+      "finishes": 3,
+      "toolEventsWithoutStepId": 0
+    },
+    {
+      "version": "2026.8.1",
+      "resumed": true,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "sameSession": true
+    },
+    {
+      "version": "2026.10.8",
+      "resumed": false,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "starts": 3,
+      "finishes": 3,
+      "toolEventsWithoutStepId": 0
+    },
+    {
+      "version": "2026.10.8",
+      "resumed": true,
+      "terminal": "completed",
+      "modelSteps": 3,
+      "tools": 2,
+      "finalMessages": 1,
+      "finalOnlyMarker": true,
+      "sameSession": true
+    }
+  ],
+  "cleanup": "All three verification commands exited 0 after removing their isolated Gateway configuration/workspace and temporary Kernel/worker resources. Global services and installations were not changed."
+}

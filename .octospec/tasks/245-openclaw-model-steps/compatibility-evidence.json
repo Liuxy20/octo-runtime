@@ -1,0 +1,83 @@
+{
+  "scope": "Read-only fixed upstream source SHA256 and TypeScript AST comparison of the exact Runtime request/resume fields against verified 2026.10.5. No claim of live Gateway acceptance.",
+  "upstream": "https://github.com/openclaw/openclaw",
+  "baseline": {
+    "tag": "2026.10.5",
+    "commit": "1b58cb9a1b4f4353e1add63c8506db4d890962e8"
+  },
+  "versions": [
+    {
+      "tag": "2026.9.34",
+      "commit": "f123d430a7dea78c9d78e05606c4cad621c0e2c8",
+      "sourceGroup": "2026.9",
+      "selectedRequestAndResumeAstMatch10_5": true
+    },
+    {
+      "tag": "2026.9.35",
+      "commit": "2ff91b9c5ed26aff603c6d5466fc642ae9d50e72",
+      "sourceGroup": "2026.9",
+      "selectedRequestAndResumeAstMatch10_5": true
+    },
+    {
+      "tag": "2026.10.6",
+      "commit": "fe06181dc5ecc01cf8904abbfc26925925efefbc",
+      "sourceGroup": "2026.10",
+      "selectedRequestAndResumeAstMatch10_5": true
+    },
+    {
+      "tag": "2026.10.7",
+      "commit": "157d8c2bc3ea2fa183afdc11088e69690bf8e64e",
+      "sourceGroup": "2026.10",
+      "selectedRequestAndResumeAstMatch10_5": true
+    },
+    {
+      "tag": "2026.10.8",
+      "commit": "dc2523e5a5c7a309517fd7fa834add938231d526",
+      "sourceGroup": "2026.10",
+      "selectedRequestAndResumeAstMatch10_5": true
+    }
+  ],
+  "sourceGroups": {
+    "2026.9": {
+      "packages/gateway-protocol/src/schema/sessions-create.ts": "2f9f3ab147903a3551682650a842ac9e939687c6c0284e0cc1f60159539bb38a",
+      "packages/gateway-protocol/src/schema/agent.ts": "13081de1bfb3408d9383fba3bb123b2183b05244594346aece81fffc6ccbf523",
+      "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220",
+      "packages/gateway-protocol/src/schema/sessions-row.ts": "9a62e5fd77033f17879da542c59129cafc933a957eaf7bf3eb277a5878bb977a",
+      "packages/gateway-protocol/src/schema/sessions.ts": "7014054a4e37984af066a813b978b08bc66ec2653f3b9206cc931512deb32118",
+      "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687"
+    },
+    "2026.10": {
+      "packages/gateway-protocol/src/schema/sessions-create.ts": "cf223f2aa51dee7503ec14118273f05a2f37f46d74d848038d7831c9be5ad1aa",
+      "packages/gateway-protocol/src/schema/agent.ts": "13081de1bfb3408d9383fba3bb123b2183b05244594346aece81fffc6ccbf523",
+      "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220",
+      "packages/gateway-protocol/src/schema/sessions-row.ts": "99d492147369d5eea6a2457a72f366754247bf762430a1f04e5395119a75453b",
+      "packages/gateway-protocol/src/schema/sessions.ts": "0cd1c21142af0d9fc6294a94b4ee18e70ce77ff1f86b8f8f1127eef3f0cf5950",
+      "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20"
+    }
+  },
+  "comparedFields": {
+    "SessionsCreateParamsSchema": [
+      "key",
+      "agentId",
+      "model",
+      "permissionMode",
+      "thinkingLevel",
+      "idempotencyKey"
+    ],
+    "AgentParamsSchema": [
+      "message",
+      "agentId",
+      "sessionKey",
+      "deliver",
+      "idempotencyKey",
+      "extraSystemPrompt",
+      "model",
+      "thinking",
+      "timeout"
+    ],
+    "SessionsDescribeParamsSchema": ["key"],
+    "SessionsPatchParamsSchema": ["key", "agentId", "permissionMode"]
+  },
+  "method": "Fetch fixed-commit raw source through gh contents API, calculate SHA256, parse TypeScript AST, recursively dereference constant declarations and spread properties, compare selected field expressions and complete required-field lists against baseline. Reject any additional required property outside the selected transmitted fields.",
+  "result": "All five versions have identical selected request/resume constraints and required fields. All six sources for 2026.10.6/7/8 are byte-identical to the 2026.10.5 baseline."
+}
