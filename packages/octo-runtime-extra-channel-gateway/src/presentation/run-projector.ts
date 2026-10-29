@@ -49,7 +49,7 @@ export interface RunPresentation {
 const publicExposures = new Set(["public_reasoning", "public_summary", "public_plan"]);
 const PROGRESS_WINDOW = 5;
 const PREVIEW_RUNES = 180;
-// 仅记近期已退役身份，不保存正文；不能把去重表变成另一份全轮历史。
+// 近期退役缓存只作辅助；未结束步骤的精确去重不能依赖其容量或滚动淘汰。
 const RETIRED_WINDOW = 256;
 
 export class ImRunProjector {
@@ -58,8 +58,8 @@ export class ImRunProjector {
   readonly #toolInputs = new Map<string, Record<string, unknown>>();
   readonly #steps = new Map<string, ProgressItem>();
   readonly #activeTools = new Map<string, ProgressItem>();
-  // 流式消息移出可见窗口后仍需保留分类；只保存生命周期元数据，不保存旧正文。
-  readonly #activeMessages = new Map<
+  // 未结束步骤的身份与分类用于准确去重；不保存旧正文，步骤结束即释放。
+  readonly #stepMessages = new Map<
     string,
     {
       channel: string;
@@ -68,6 +68,8 @@ export class ImRunProjector {
       counted: boolean;
     }
   >();
+  readonly #stepTools = new Map<string, string | undefined>();
+  readonly #unfinishedSteps = new Set<string>();
   readonly #finalMessages = new Map<string, string>();
   readonly #retired = new Set<string>();
   #reasoningCount = 0;
@@ -111,6 +113,7 @@ export class ImRunProjector {
       const p = event.payload;
       if (this.#retired.has(`step:${p.stepId}`)) return;
       this.#currentStep = p.stepId;
+      this.#unfinishedSteps.add(p.stepId);
       let step = this.#steps.get(p.stepId);
       if (!step) {
         step = {
@@ -137,36 +140,54 @@ export class ImRunProjector {
         if (item.startedAtMs !== undefined && p.endedAtMs !== undefined)
           item.durationMs = Math.max(0, p.endedAtMs - item.startedAtMs);
       }
+      // 有的 Provider 只结束步骤、不逐条结束 reasoning；所属消息此时不再是在途资源。
+      this.#unfinishedSteps.delete(p.stepId);
+      for (const [id, message] of this.#stepMessages)
+        if (message.stepId === p.stepId) {
+          this.#stepMessages.delete(id);
+          this.#retire(`message:${id}`);
+          const detail = this.#items.get(`message:${id}`);
+          if (detail?.status === "running") detail.status = p.status;
+        }
+      for (const [id, stepId] of this.#stepTools)
+        if (stepId === p.stepId && !this.#activeTools.has(id)) {
+          this.#stepTools.delete(id);
+          this.#retire(`tool:${id}`);
+        }
     }
     if (event.type.startsWith("message.")) {
       const id =
         p.messageId ??
         `unidentified:${p.stepId ?? this.#currentStep ?? "run"}:${p.channel ?? "final"}`;
-      const active = this.#activeMessages.get(id);
+      const identity = this.#stepMessages.get(id);
       // 已淘汰进度的迟到 delta 可能省略 channel，不能按缺省 final 拼进最终回复。
       if (
         this.#retired.has(`message:${id}`) &&
-        !active &&
+        !identity &&
         p.channel !== "final" &&
         !this.#finalMessages.has(id)
       )
         return;
       const previous = this.#messages.get(id);
-      const channel = p.channel ?? previous?.channel ?? active?.channel ?? "final";
-      const stepId = p.stepId ?? previous?.stepId ?? active?.stepId ?? this.#currentStep;
+      const channel =
+        p.channel ??
+        (this.#finalMessages.has(id)
+          ? "final"
+          : (previous?.channel ?? identity?.channel ?? "final"));
+      const stepId = p.stepId ?? previous?.stepId ?? identity?.stepId ?? this.#currentStep;
+      // 已结束步骤的非 final/未分类迟到帧不能因身份缓存滚动而重新进入当前步骤。
+      if (p.channel !== "final" && !this.#finalMessages.has(id) && this.#stepClosed(stepId)) return;
       // update 也可能是流式替换快照（例如 OpenClaw），不能仅按事件名提前清除分类。
       const running =
         event.type !== "message.update" || p.status === "streaming" || p.status === "running";
       // analysis 必须显式声明可公开；历史片段也清除，避免后续快照泄漏。
       if (channel === "analysis" && !publicExposures.has(p.exposure ?? "")) {
-        if (running)
-          this.#activeMessages.set(id, {
-            channel,
-            stepId,
-            hidden: active?.hidden ?? false,
-            counted: active?.counted ?? false
-          });
-        else this.#activeMessages.delete(id);
+        this.#stepMessages.set(id, {
+          channel,
+          stepId,
+          hidden: identity?.hidden ?? false,
+          counted: identity?.counted ?? false
+        });
         this.#messages.delete(id);
         this.#items.delete(`message:${id}`);
         return;
@@ -177,7 +198,7 @@ export class ImRunProjector {
       )
         return;
       if (channel === "final") {
-        this.#activeMessages.delete(id);
+        this.#stepMessages.delete(id);
         const text =
           typeof p.text !== "string"
             ? (this.#finalMessages.get(id) ?? "")
@@ -188,31 +209,27 @@ export class ImRunProjector {
         const step = stepId && this.#steps.get(stepId);
         if (step) step.content = previewText(text);
       } else {
-        if (this.#retired.has(`message:${id}`) && !active) return;
-        // 真正在途的旧消息可能晚于数百条新消息结束；分类/计数跟随生命周期，正文不回窗。
-        if (active?.hidden) {
-          if (channel === "analysis" && !active.counted) {
+        if (this.#retired.has(`message:${id}`) && !identity) return;
+        // 同一步骤内的迟到更新仍使用原分类和计数；已淘汰正文不回窗。
+        if (identity?.hidden) {
+          if (channel === "analysis" && !identity.counted) {
             this.#reasoningCount++;
-            active.counted = true;
+            identity.counted = true;
           }
-          if (!running) {
-            this.#activeMessages.delete(id);
-            this.#retire(`message:${id}`);
-          }
+          identity.channel = channel;
+          if (!running) this.#retire(`message:${id}`);
           return;
         }
         // 有步骤身份的迟到快照不能重新创建已离开窗口的旧阶段。
         if (stepId && stepId !== this.#currentStep && !this.#steps.has(stepId)) {
           // 首次公开但已不在近期阶段的摘要仍计数，不为了统计恢复旧正文。
-          if (channel === "analysis" && !active?.counted) this.#reasoningCount++;
-          if (running)
-            this.#activeMessages.set(id, {
-              channel,
-              stepId,
-              hidden: true,
-              counted: channel === "analysis" || !!active?.counted
-            });
-          else this.#activeMessages.delete(id);
+          if (channel === "analysis" && !identity?.counted) this.#reasoningCount++;
+          this.#stepMessages.set(id, {
+            channel,
+            stepId,
+            hidden: true,
+            counted: channel === "analysis" || !!identity?.counted
+          });
           this.#retire(`message:${id}`);
           return;
         }
@@ -223,15 +240,13 @@ export class ImRunProjector {
               ? appendPreview(previous?.text ?? "", p.text)
               : previewText(p.text);
         const existing = this.#items.get(`message:${id}`);
-        if (!existing && channel === "analysis" && !active?.counted) this.#reasoningCount++;
-        if (running)
-          this.#activeMessages.set(id, {
-            channel,
-            stepId,
-            hidden: false,
-            counted: channel === "analysis" || !!active?.counted
-          });
-        else this.#activeMessages.delete(id);
+        if (!existing && channel === "analysis" && !identity?.counted) this.#reasoningCount++;
+        this.#stepMessages.set(id, {
+          channel,
+          stepId,
+          hidden: false,
+          counted: channel === "analysis" || !!identity?.counted
+        });
         const item = this.#item(
           `message:${id}`,
           channel === "analysis" ? "reasoning" : "commentary",
@@ -249,12 +264,16 @@ export class ImRunProjector {
       const p = event.payload;
       if (
         this.#retired.has(`tool:${p.id}`) ||
+        this.#stepTools.has(p.id) ||
         this.#activeTools.has(p.id) ||
         this.#items.has(`tool:${p.id}`)
       )
         return;
-      const item = this.#item(`tool:${p.id}`, "tool", p.stepId ?? this.#currentStep);
+      const stepId = p.stepId ?? this.#currentStep;
+      if (this.#stepClosed(stepId)) return;
+      const item = this.#item(`tool:${p.id}`, "tool", stepId);
       this.#toolCallCount++;
+      this.#stepTools.set(p.id, stepId);
       item.toolName = p.name;
       item.startedAtMs = now;
       if (this.allowToolPreview) item.summary = toolPreview(p.name, p.args);
@@ -266,18 +285,42 @@ export class ImRunProjector {
     }
     if (event.type === "tool_call.update") {
       const p = event.payload;
-      const item = this.#activeTools.get(p.id) ?? this.#items.get(`tool:${p.id}`);
-      if (!item) return;
+      let item = this.#activeTools.get(p.id) ?? this.#items.get(`tool:${p.id}`);
+      const args =
+        p.args && typeof p.args === "object" && !Array.isArray(p.args)
+          ? (p.args as Record<string, unknown>)
+          : {};
+      if (!item) {
+        const stepId = p.stepId ?? this.#currentStep;
+        if (
+          this.#stepTools.has(p.id) ||
+          this.#retired.has(`tool:${p.id}`) ||
+          this.#stepClosed(stepId)
+        )
+          return;
+        // ACP/OpenCode 支持仅终态工具；补建展示和计数，不虚构开始时间。
+        item = this.#item(`tool:${p.id}`, "tool", stepId);
+        this.#toolCallCount++;
+        this.#stepTools.set(p.id, stepId);
+      }
+      if (typeof p.name === "string") {
+        item.toolName = p.name;
+        if (this.allowToolPreview && item.summary === undefined)
+          item.summary = toolPreview(p.name, args);
+      }
       item.status = p.status;
       item.exitCode = p.exitCode;
       item.durationMs =
         p.durationMs ??
         (item.startedAtMs === undefined ? undefined : Math.max(0, now - item.startedAtMs));
-      const input = this.#toolInputs.get(p.id);
+      const command = stringArg(args.command ?? args.cmd);
+      const input =
+        this.#toolInputs.get(p.id) ?? (command.length <= 8192 ? { command } : undefined);
       if (p.status === "failed" && p.exitCode === 2 && input && detectorFindings(input, p.output))
         item.outcome = "check_findings";
       this.#toolInputs.delete(p.id);
       this.#activeTools.delete(p.id);
+      if (this.#stepClosed(item.stepId)) this.#stepTools.delete(p.id);
       if (!this.#items.has(item.id)) this.#retire(item.id);
       this.#phase = "tool";
       this.#label = "工具调用完成";
@@ -361,7 +404,9 @@ export class ImRunProjector {
         if (item.status === "running")
           item.status = this.#terminal === "completed" ? "completed" : "cancelled";
       this.#activeTools.clear();
-      this.#activeMessages.clear();
+      this.#stepMessages.clear();
+      this.#stepTools.clear();
+      this.#unfinishedSteps.clear();
       this.#toolInputs.clear();
     }
   }
@@ -377,8 +422,8 @@ export class ImRunProjector {
         if (oldest.startsWith("message:")) {
           const messageId = oldest.slice(8);
           this.#messages.delete(messageId);
-          const active = this.#activeMessages.get(messageId);
-          if (active) active.hidden = true;
+          const identity = this.#stepMessages.get(messageId);
+          if (identity) identity.hidden = true;
         }
         this.#retire(oldest);
       }
@@ -403,6 +448,12 @@ export class ImRunProjector {
         this.#retire(`step:${id}`);
       }
   }
+  #stepClosed(stepId: string | undefined): boolean {
+    // 无步骤事件沿用隐式单步，兼容旧归一化器；有步骤流以 started/finished 管理身份。
+    return (
+      stepId !== undefined && this.#currentStep !== undefined && !this.#unfinishedSteps.has(stepId)
+    );
+  }
   /** 最终文本已取出、卡片/投递收尾后调用；即使迟到回调仍引用对象，也不再持有正文。 */
   dispose(): void {
     this.#disposed = true;
@@ -410,7 +461,9 @@ export class ImRunProjector {
     this.#messages.clear();
     this.#steps.clear();
     this.#activeTools.clear();
-    this.#activeMessages.clear();
+    this.#stepMessages.clear();
+    this.#stepTools.clear();
+    this.#unfinishedSteps.clear();
     this.#toolInputs.clear();
     this.#finalMessages.clear();
     this.#retired.clear();

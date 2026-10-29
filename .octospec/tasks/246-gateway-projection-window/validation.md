@@ -7,7 +7,7 @@
 - Gateway 投影明细最多五条；公开摘要和进度最多 180 码点预览，原文不再全轮累计。模型步骤关联只保留可见窗口及当前步骤，次数独立累计。
 - 有限近期退役身份帮助过滤迟到更新；不保存完整历史 ID 集合。步骤关联已移出窗口的迟到消息不恢复旧正文，首次公开摘要仍计数；显式 final 独立接纳。
 - 活动工具只保留现有元数据和有限输入，完成后释放；不保留完整工具输出。final 用独立消息表维护原有更新/拼接语义。
-- 在途消息仅保留通道、步骤、淘汰标记和计数标记，正文随五条窗口淘汰。`message.update` 若显式为 streaming/running 仍属在途；完成、run 终态或 dispose 释放元数据。
+- 尚未结束步骤中的消息仅保留通道、步骤、淘汰标记和计数标记，正文随五条窗口淘汰。步骤完成、run 终态或 dispose 释放身份元数据；不能仅在消息完成时删除分类，否则同一步骤内的迟到帧可能在近期退役缓存滚动后进入 final。
 - 重试换投影、断流换投影及整轮收尾显式 dispose。外层 finally 保证提前退出或收尾异常也释放正文；final 的读取和投递机会在清理前保留。
 - 卡片 finish 后释放调度器和诊断/typing 回调，保留 messageId 等既有按钮关联。连接关闭时也释放，即使关闭报告失败仍保留错误并清理这些内存引用。调度 dispose 丢弃待发进度并取消 timer，真实在途发送仍由原路径结束，不提前假报排空。
 
@@ -31,12 +31,12 @@ Windows 11 企业版 Build 22621、x64、普通用户；Node.js 24.22.0、pnpm 1
 ## 手动专项
 
 ```text
-node --expose-gc --test .octospec/tasks/246-gateway-projection-window/regression.mjs .octospec/tasks/246-gateway-projection-window/edge-cases.mjs
+node --expose-gc --test .octospec/tasks/246-gateway-projection-window/regression.mjs .octospec/tasks/246-gateway-projection-window/edge-cases.mjs .octospec/tasks/246-gateway-projection-window/review-regression.mjs
 ```
 
 专项文件手动执行，不匹配现有默认测试 glob。
 
-最终版本 26/26 通过，无失败、取消或跳过。用例总耗时约 29 秒（同时有独立工作树回归负载）。
+Review 修复后的最终版本 34/34 通过，无失败、取消或跳过。原 26 项及新增 8 项手动回归共同执行，耗时约 20 秒。
 
 - 直接投影 2,000 轮事件与数 MiB 公开文本，明细始终不超过五条，累计模型/工具/公开摘要各 2,000，最终回复完整。
 - 经 ImRuntime 和 fake Kernel 消费 1,000 轮大量进度/工具事件，未请求取消，final 正常返回，随后清空投影。
@@ -93,3 +93,16 @@ PowerShell 实际按这些前缀展开测试文件后传参。共 500 项：495 
 - Gateway 源码 ESLint、修改源码及专项的 Prettier、diff 空白检查通过。
 
 本次复验针对冲突交汇处的展示、终态释放、上下文衔接和最终回复路径，不重新扩展到完整仓库测试或范围外修复。前述 500 项回归和全仓尝试保留为初次基线验证记录。
+
+## Review 缺陷修复与复验
+
+基于 `1003fc55` 核对并复现三项 P2；补充评审没有新增独立根因。最初新增的五个断言在修复前全部失败。修复仅涉及 Gateway 投影器和本任务测试/记录，未修改适配器、SDK、Kernel、公共协议或 CI。
+
+- 真实 OpenCode 归一化器只结束模型步骤、不逐条结束 reasoning 时，步骤所属身份在 `model_step.finished` 释放。回放 100,000 个已完成步骤，GC 后每 20,000 步采样为 9,049,168 / 9,038,392 / 8,979,544 / 9,046,672 / 8,986,648 字节，展示始终最多五条。
+- 真实 ACP/OpenCode 的 terminal-only 工具保留可用名称、命令短预览、失败状态和提供的耗时，不虚构开始时间、不保存完整输出；重复或已淘汰工具不重复计数。
+- 未结束步骤保留精确身份/分类信息，已完成消息跨越 400 条新记录后不会复活、重复计数或成为 final；步骤结束后释放身份。已关闭步骤的带步骤身份迟到帧拒绝进入当前展示，真实 OpenCode 省略 channel 的新最终正文及显式 final 提升仍正常。
+- 身份元数据规模随尚未完成步骤的身份数变化；没有模型步骤事件的兼容输入按隐式单步处理、在 invocation 结束时释放。此方案不保留已结束步骤的整轮身份历史，不承诺任意单个无限长步骤的恒定内存，也未新增任务中断阈值。
+
+最终检查：`pnpm typecheck`（含完整构建）通过；Gateway ESLint、修改文件 Prettier 和 diff 检查通过；手动专项 34/34 通过。相关九个测试文件（上次七个集成文件，加 `adapter-tool-lifecycle.test.js`、`acp-message-segments.test.js`）共 104 项：103 通过、1 条件跳过、0 失败。
+
+阈值核对：`RETIRED_WINDOW` 仍为 256，单次发送 256 KiB 及投递回执 512 条均未修改；只移除了展示累计 512 条/256 KiB 导致执行中断的条件。本轮仍未运行真实 IM/Provider、24 小时或跨系统验收。

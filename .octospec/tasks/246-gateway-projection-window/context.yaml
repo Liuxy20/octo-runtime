@@ -25,4 +25,5 @@ files_expected:
   - test/im-protocol.test.js
   - .octospec/tasks/246-gateway-projection-window/regression.mjs
   - .octospec/tasks/246-gateway-projection-window/edge-cases.mjs
-updated_at: 2026-10-29T10:58:29Z
+  - .octospec/tasks/246-gateway-projection-window/review-regression.mjs
+updated_at: 2026-10-29T11:37:23Z
