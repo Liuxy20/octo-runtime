@@ -1,0 +1,39 @@
+brief: .octospec/tasks/119-preparation-error-codes/brief.md
+base: dcca46fb0eaaa3be675432321f704de92dbdbce0
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 产品意图与故障责任、SDK/Extra 边界、凭据及 CI 范围
+  - id: runtime-protocol-design
+    source: repo
+    reason: 保持既有执行与错误协议，不新增事件或公共字段
+  - id: runtime-channel
+    source: repo
+    reason: 双渠道准备期安全原因、用户反馈与未执行事实
+  - id: runtime-context-input
+    source: repo
+    reason: IM 固定目录、规则输入和通用执行职责分离
+  - id: runtime-extras
+    source: repo
+    reason: 独立插件所有权与连接状态，不新增跨插件依赖
+  - id: runtime-invoke-input
+    source: repo
+    reason: 保留输入与未发起执行语义
+  - id: runtime-session-reset
+    source: repo
+    reason: 准备失败释放调度且不重置 binding 或目录
+  - id: runtime-stateless
+    source: repo
+    reason: 固定大小映射，无新持久状态或日志正文
+  - id: runtime-engineering
+    source: repo
+    reason: 严格 TypeScript、中文边界注释和专项本地验证
+  - id: commit
+    source: repo
+    reason: 内部中文记录；公开提交和 PR 按用户及 CONTRIBUTING 使用英文
+files_expected:
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-wecom/src/application/im-channel.ts
+  - test/manual/channel-preparation-errors.test.mjs
+  - .octospec/rules/channel-integration.md
+updated_at: 2026-10-29T00:00:00Z

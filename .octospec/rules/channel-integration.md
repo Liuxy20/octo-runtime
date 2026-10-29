@@ -88,6 +88,8 @@ Octo 插件配置只校验已识别字段，未知扩展字段保留并忽略，
 
 2026-10-26 实现 Issue #117/#118：会话读取失败、执行前展示初始化失败及可信接纳前拒绝，通过共享 `failurePayload` / `FailureEnvelope`、标准错误投影和既有结构化日志链路反馈，公共码依次为 `OH-RUN-2010` / `2011` / `2012`。卡片、独立文本和日志关联同一个公共码及 diagnosticId，保留 reasonCode、stage 与实际 source，不在 Channel 或展示组件复制错误码目录。错误卡片不可用或发送失败不阻断安全文本；WeCom 沿自身回复协议消费同一错误对象。执行前错误不得伪造执行启动、向真实执行源注入失败事件或覆盖既有执行终态；真实未知继续保守处理。未提交证明由本地接纳检查或真实 Kernel 执行前拒绝产生，客户端仅接受实际 invoke 响应上匹配 instance 的专用证据；同名错误或手工重建对象不构成证明。展示故障禁用进度后继续观察原流，原流失败必须清除执行重试入口；finish 超时释放本轮但保留关闭 incomplete，排空期间的展示错误仍计入关闭失败。普通日志字段、状态日志隔离、not_submitted 尝试状态及固定策略见[实施合同](../tasks/117-118-turn-failure/implementation-plan.md)，实际验证边界见[验证记录](../tasks/117-118-turn-failure/validation.md)，Kernel 暂态拒绝补充见 [Issue 210](../tasks/210-kernel-recovery/design.md)。
 
+2026-10-29 Issue #119：双渠道现有准备期 catch 精确保留 `IM_AGENT_WORKDIR_FIXED` 与 `IM_RULE_PROTOCOL_INVALID` 原因诊断，并继续报告 `IM_CONTEXT_PREPARATION_FAILED`。用户文本分别说明固定目录冲突或规则格式不符合协议，保留“尚未发起执行”；未知异常继续通用提示，既有 Context 诊断和图片错误保持。映射仅消费两个完整已定义码，不透传原始异常、规则正文或目录，不新增公共错误码、字段或执行事件。Gateway 真实目录与规则读取器、WeCom 原因码注入的本地证据及未验证边界见[本次记录](../journal/shared/2026-10-29-119-preparation-error-codes.md)。全面错误投影仍不在本项范围。
+
 展示故障请求取消执行时，必须保留原 invoke 的观察 signal，并停止后续自动重试。公共 invoke 包装器在正常耗尽后会报告本地 signal 的取消原因；不能由展示层中止该 signal 再将其误判为真正源错误。Gateway 使用 `ImTask.cancelExecution` 请求取消并继续观察真实终态，不用取消 ACK 代替终态；缺终态和终态后源错误仍为 unknown。此边界须用真实 KernelClient/IPC 回归验证，仅 generator stub 不能覆盖公共包装器的尾部检查。
 
 运行中的用户文本 Stop 和卡片 Stop 同样保留原观察流；尚未执行或退避阶段立即中止本地等待。总期限和恢复预算仍强制中止，不因用户取消路径的修正而失效。该区别由真实 IPC 和真实 IM Stop 验证，避免执行已经取消但卡片误报结果未知。

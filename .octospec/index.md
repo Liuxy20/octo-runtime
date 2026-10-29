@@ -55,6 +55,8 @@
 
 ## 当前任务
 
+- [Issue 119：准备期安全原因保真](tasks/119-preparation-error-codes/brief.md)：最新 main 独立 worktree，可执行性 97/100 后实施；复用目录冲突与规则协议码，专项 25 通过、相关回归 472 通过/1 条件跳过。[两轴审查](tasks/119-preparation-error-codes/review.md)各 0 项问题；专项仅手动运行，不扩大 CI，真实 IM 未验。
+
 - [Issue 137：Adapter 协议元数据类型](tasks/137-adapter-protocol-support/brief.md)：区分编写与注册输入，保留 canonical-only 默认值及运行时校验；类型和针对性 30 项通过，全量两项失败及基线对照见[验证记录](journal/shared/2026-10-29-137-adapter-protocol-support.md)。
 
 - [Issue 163：REST 日期格式 Retry-After](tasks/163-http-date-retry-after/brief.md)：从 main@0ca12a0 独立 worktree，REST 与鉴权/注册共用解析，保留各层零等待及重试预算；手动专项、基线失败与 verified-review 处置见[记录](journal/shared/2026-10-28-163-http-date-retry-after.md)。

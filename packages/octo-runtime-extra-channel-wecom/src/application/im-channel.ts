@@ -29,6 +29,12 @@ import { ImDeliveryDispatcher } from "../delivery/dispatcher.js";
 import { ImRunProjector } from "../presentation/run-projector.js";
 import { MemoryImSessionStore, type ImSessionStore } from "./session-store.js";
 
+// 仅精确匹配已定义的准备期原因；未知异常正文不得进入回复或新增诊断。
+const preparationFailureMessages = new Map([
+  ["IM_AGENT_WORKDIR_FIXED", "本轮工作目录与固定目录配置冲突，尚未发起执行。请检查工作目录配置。"],
+  ["IM_RULE_PROTOCOL_INVALID", "规则数据格式不符合协议，尚未发起执行。请检查规则服务返回格式。"]
+]);
+
 export class ImRuntime {
   readonly #preparing = new Map<string, AbortController>();
   readonly config: ImBotConfig;
@@ -563,12 +569,18 @@ export class ImRuntime {
       });
     } catch (error) {
       if (turnSignal.aborted) return;
-      if (error instanceof Error && /^IM_CONTEXT_(?:LOADING|RESULT)_[A-Z_]+$/.test(error.message))
+      const preparationMessage =
+        error instanceof Error ? preparationFailureMessages.get(error.message) : undefined;
+      if (
+        error instanceof Error &&
+        (preparationMessage || /^IM_CONTEXT_(?:LOADING|RESULT)_[A-Z_]+$/.test(error.message))
+      )
         this.#diagnostic(error.message);
       this.#diagnostic("IM_CONTEXT_PREPARATION_FAILED");
       await this.#reply(
         message,
-        "本轮输入或执行配置准备失败，尚未发起执行。请检查配置、会话权限或稍后重试。",
+        preparationMessage ??
+          "本轮输入或执行配置准备失败，尚未发起执行。请检查配置、会话权限或稍后重试。",
         `prepare:${occurrenceId ?? message.messageId}`
       );
       return;
