@@ -1,0 +1,21 @@
+task: 245-openclaw-model-steps
+baseline: 01d0ca5d3f62f1e9dc5999ed84da4797e9acafef
+original_baseline: ba2a706380bf244bc428b3465c0487c5b58e6975
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+references:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/245
+  - .claude/skills/octospec-workflow/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - .octospec/guides/provider-live-acceptance.md
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - packages/octo-runtime-adapter-claude-code/src/index.ts
+  - packages/octo-runtime-adapter-openclaw/src/parser.ts
+  - scripts/verify-playboard-live.mjs

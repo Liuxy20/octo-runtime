@@ -3,41 +3,7 @@ import type { ApprovalMode } from "@mininglamp-oss/octo-runtime-protocol";
 type JsonRecord = Record<string, unknown>;
 export type GatewayTerminal = "completed" | "failed" | "cancelled";
 
-const LEGACY_RELEASES = [
-  "2026.6.11",
-  "2026.7.1",
-  "2026.7.1-1",
-  "2026.7.1-2",
-  "2026.7.33",
-  "2026.7.34",
-  "2026.7.35"
-];
-const SESSION_PERMISSION_RELEASES = [
-  "2026.8.1",
-  "2026.8.2",
-  "2026.8.33",
-  "2026.8.34",
-  "2026.8.35",
-  "2026.9.1",
-  "2026.9.2",
-  "2026.9.3",
-  "2026.9.4",
-  "2026.9.5",
-  "2026.9.6",
-  "2026.9.7",
-  "2026.9.8",
-  "2026.9.9",
-  "2026.9.33",
-  "2026.10.1",
-  "2026.10.2",
-  "2026.10.3",
-  "2026.10.4",
-  "2026.10.5"
-];
-const RELEASES = new Map([
-  ...LEGACY_RELEASES.map((version) => [version, "legacy"] as const),
-  ...SESSION_PERMISSION_RELEASES.map((version) => [version, "session-permissions"] as const)
-]);
+const SESSION_PERMISSIONS_RELEASE = 20260801;
 const EXECUTION_METHODS = [
   "agents.list",
   "sessions.create",
@@ -74,14 +40,15 @@ function strings(value: unknown): string[] {
     : [];
 }
 
-/** 每条连接以真实 hello 选择固定源码核对过的合同；v4 不表示请求字段相同。 */
+/** 每次握手校验协议和实际能力；版本仅选择已知的权限字段代际，不逐版限制升级。 */
 export function resolveGatewayContract(value: unknown): GatewayContract {
   const hello = record(value);
   const rawVersion = record(hello?.server)?.version;
   const version =
-    typeof rawVersion === "string" && /^v?\d{4}\.\d{1,2}\.\d{1,2}(?:-\d{1,2})?$/.test(rawVersion)
+    typeof rawVersion === "string" && /^[A-Za-z0-9.+_-]{1,80}$/.test(rawVersion)
       ? rawVersion.replace(/^v/, "")
       : "unknown";
+  const release = /^(\d{4})\.(\d{1,2})\.(\d{1,2})(?:$|[-+])/.exec(version);
   const fail = (reason: string): never => {
     const displayVersion =
       typeof rawVersion === "string" && /^[A-Za-z0-9.+_-]{1,80}$/.test(rawVersion)
@@ -90,8 +57,15 @@ export function resolveGatewayContract(value: unknown): GatewayContract {
     throw new Error(`OPENCLAW_COMPATIBILITY_UNSUPPORTED: OpenClaw ${displayVersion}: ${reason}`);
   };
   if (hello?.protocol !== 4) fail("unsupported Gateway protocol");
-  const family = RELEASES.get(version);
-  if (!family) return fail("server.version has no verified contract");
+  // hello 未广告参数 schema；上游日期版本只辅助选择旧字段，独立版本号的 fork 按当前 stage 尝试。
+  const releaseNumber =
+    release && Number(release[2]) >= 1 && Number(release[2]) <= 12
+      ? Number(release[1]) * 10000 + Number(release[2]) * 100 + Number(release[3])
+      : undefined;
+  const family =
+    releaseNumber !== undefined && releaseNumber < SESSION_PERMISSIONS_RELEASE
+      ? "legacy"
+      : "session-permissions";
   const features = record(hello?.features);
   const methods = strings(features?.methods);
   const events = strings(features?.events);

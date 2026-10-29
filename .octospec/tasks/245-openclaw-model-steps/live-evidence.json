@@ -1,0 +1,453 @@
+{
+  "scope": "Real local Playboard Kernel/worker -> adapter -> Gateway -> model -> exec -> IM projector. No IM delivery or client UI acceptance. Sanitized event identity/type/count only.",
+  "runs": [
+    {
+      "capture": "7.1",
+      "summary": {
+        "version": "2026.7.1",
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "markerSeen": true,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "toolEventsWithoutStepId": 0,
+        "starts": 3,
+        "finishes": 3
+      },
+      "checkpoints": [
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:1",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:1",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:1",
+          "toolId": "toolu_833b011b323248f9be966729",
+          "status": "running",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:2",
+          "steps": 2,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:2",
+          "toolId": "toolu_4e92f6ac27d741919b38f06b",
+          "status": "running",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:2",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:3",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 2 轮", "第 3 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-087ae1ee-1c00-4f9e-941a-bc4a9990a6e0-4a20e416-d7fb-4c55-adec-ed26c063560b:round:3",
+          "status": "completed",
+          "finishReason": "stop",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 2 轮", "第 3 轮", "第 3 轮"]
+        }
+      ]
+    },
+    {
+      "capture": "9.4",
+      "summary": {
+        "version": "2026.9.4",
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "markerSeen": true,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "toolEventsWithoutStepId": 0,
+        "starts": 3,
+        "finishes": 3
+      },
+      "checkpoints": [
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:1",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:1",
+          "toolId": "toolu_89fcc34d2fb3458db8620873",
+          "status": "running",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:1",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:2",
+          "steps": 2,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:2",
+          "toolId": "toolu_365a16b6654f4358be453ea3",
+          "status": "running",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:2",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:3",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 2 轮", "第 3 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-9d49dacd-b373-42cf-a5e2-58799d942fdd-c770e85b-0411-494a-93f4-bbc0ec2e611a:round:3",
+          "status": "completed",
+          "finishReason": "stop",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 2 轮", "第 3 轮", "第 3 轮"]
+        }
+      ]
+    },
+    {
+      "capture": "10.8",
+      "summary": {
+        "version": "2026.10.8",
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "markerSeen": true,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "toolEventsWithoutStepId": 0,
+        "starts": 3,
+        "finishes": 3
+      },
+      "checkpoints": [
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:1",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:1",
+          "toolId": "toolu_f0edfa7326c042189f384a05",
+          "status": "running",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:1",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:2",
+          "steps": 2,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:2",
+          "toolId": "toolu_c77e34b44a6a4e3bb357ee16",
+          "status": "running",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:2",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:3",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 2 轮", "第 3 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-0a7778eb-8cd8-41f5-9e47-3c9aedc1c5c3-4f7d3bbc-705b-45bb-87d0-370bd51cdbe3:round:3",
+          "status": "completed",
+          "finishReason": "stop",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 2 轮", "第 3 轮", "第 3 轮"]
+        }
+      ]
+    },
+    {
+      "capture": "7.1-resume",
+      "summary": {
+        "version": "2026.7.1",
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "markerSeen": true,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "toolEventsWithoutStepId": 0,
+        "starts": 3,
+        "finishes": 3
+      },
+      "checkpoints": [
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:1",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:1",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:1",
+          "toolId": "toolu_d03f3e4732374c0e86cf3ce5",
+          "status": "running",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:2",
+          "steps": 2,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:2",
+          "toolId": "toolu_724598cf701b41879f34a76e",
+          "status": "running",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:2",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:3",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 2 轮", "第 3 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-b0819946-e0a2-471f-99d9-7527f0726737-4524deb2-f725-4034-b049-4a8617134bdb:round:3",
+          "status": "completed",
+          "finishReason": "stop",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 2 轮", "第 3 轮", "第 3 轮"]
+        }
+      ]
+    },
+    {
+      "capture": "7.1-resume",
+      "summary": {
+        "version": "2026.7.1",
+        "resumed": true,
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "sameSession": true
+      }
+    },
+    {
+      "capture": "10.8-resume",
+      "summary": {
+        "version": "2026.10.8",
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "markerSeen": true,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "toolEventsWithoutStepId": 0,
+        "starts": 3,
+        "finishes": 3
+      },
+      "checkpoints": [
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:1",
+          "steps": 1,
+          "tools": 0,
+          "cardRounds": ["第 1 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:1",
+          "toolId": "toolu_f51021fe98584ef1828bd4d9",
+          "status": "running",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:1",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 1,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 1 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:2",
+          "steps": 2,
+          "tools": 1,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "tool_call.create",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:2",
+          "toolId": "toolu_7c543310c99e4d11b9d5b65e",
+          "status": "running",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:2",
+          "status": "completed",
+          "finishReason": "tool-calls",
+          "steps": 2,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 1 轮", "第 2 轮"]
+        },
+        {
+          "type": "model_step.started",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:3",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 1 轮", "第 2 轮", "第 3 轮"]
+        },
+        {
+          "type": "model_step.finished",
+          "stepId": "openclaw:octo-runtime-qa245-e9271323-669a-418c-b6bb-f784429162de-bc9d45b6-0948-493a-9ca2-00c6e04c043b:round:3",
+          "status": "completed",
+          "finishReason": "stop",
+          "steps": 3,
+          "tools": 2,
+          "cardRounds": ["第 2 轮", "第 3 轮", "第 3 轮"]
+        }
+      ]
+    },
+    {
+      "capture": "10.8-resume",
+      "summary": {
+        "version": "2026.10.8",
+        "resumed": true,
+        "code": 0,
+        "terminal": "completed",
+        "modelSteps": 3,
+        "tools": 2,
+        "finalOnlyMarker": true,
+        "finalMessages": 1,
+        "sameSession": true
+      }
+    }
+  ]
+}

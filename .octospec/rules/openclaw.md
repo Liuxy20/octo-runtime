@@ -106,7 +106,9 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 
 ## Gateway 版本与会话权限
 
-probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同解析器，以真实 hello 的协议号、server.version、必要方法及事件交叉判定。当前精确表为已核对的 2026.6.11，加 2026.7.1 至 2026.10.5 的 26 个正式标签，共 27 个，包含维护后缀；不按版本大小推测中间未列版本、beta、fork、未知补丁或未来版本。probe 只检查基础调用合同和只读 agents.list，不保证特定目标 Agent 或请求权限；invocation 每次重新判定，不依赖旧 probe 缓存。
+probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同解析器，以真实 hello 的协议号、必要方法及事件判定基础可用性。版本不是准入门槛：不设精确名单、最低版本或未知版本拒绝，不因第三方每日升级、独立版本号的 fork、dev 或版本缺失而提前阻断。hello 未广告 RPC 参数 schema；可识别的上游日期版本仅按 2026.8.1 这个已知会话权限变更点选择两代字段，其他版本尝试当前 stage。功能按实际广告的能力、授权和响应确认；不把 WS 连通或方法存在等同于任意 fork 的全部字段保证兼容。实际 RPC 失败保留诊断，不删字段重试或重发任务。不兼容协议、缺少实际必需能力与真实 RPC 失败仍明确报错。已核对的固定上游合同、前向/fork 版本回放与真实验收分别见 [Issue 245](../tasks/245-openclaw-model-steps/validation.md)。probe 只检查基础调用合同和只读 agents.list，不保证特定目标 Agent 或请求权限；invocation 每次重新判定，不依赖旧 probe 缓存。
+
+标准 `openclaw` Adapter 只维护标准 Gateway 协议和功能 stage，不叠加 LobsterAI 等 fork 的产品私有协议、版本名单或特殊分支。非标准版本元数据不作为拒绝理由，仅表示尝试现有标准合同，不代表已适配该 fork。确有协议差异时单独新建 Provider Adapter，复用通用能力并独立验证，不混入标准实现。FDE 固定版本部署可对所选 Provider/版本定制开发和验收，固定版本由该交付配置与独立实现负责，不要求通用 Adapter 为此维护每日版本名单或兼容所有未来版本。
 
 创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model、可信系统指令和 deliver:false。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
 
@@ -117,6 +119,16 @@ probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同�
 RPC expectFinal、终态归一化和 wait 共用中间回执判定：accepted／queued／in_flight／pending／running 及 pendingError 保留原请求，不能提前丢弃最终答案或 usage。并发对账先返回局部结果，再仅填充未知终态；旧 wait 或主动关闭造成的错误不能覆盖已确认取消。断线恢复仍须发布已开始模型步骤的匹配结束事件。确认终态后忽略迟到广播；确认前发生的队列容量失败保留原始异常，并在对账返回和正常出口阻止成功收尾。真实 transport cleanup 错误仍须传播，不能因已知执行终态而吞掉。
 
 上述为代码合同与自动化验证范围，不能代替各 Gateway、reviewer／harness 和 IM 的真实验收。源码及逐标签证据见[Issue 40 实施记录](../tasks/40-openclaw-compatibility/implementation.md)。
+
+### 模型轮次与工具归属
+
+一个 Gateway run 可以包含多个模型调用。Adapter 消费已关联当前 session/run 的 `session.message`，以 assistant 持久消息完成（含 `length`、`toolUse`、单次尝试 `error`）结束该 model_step；下一次模型输出开启下一步，不把单次模型失败冒认为 run 失败。每步独立编号，所有消息与工具事件显式携带所属 `stepId`。run 终态及取消／断线对账仍按原生执行确认处理，每个已开始 step 恰好结束一次。
+
+`toolCallId -> stepId` 在整个调用内保留。持久消息声明的并行工具只创建一次；流式工具开始与持久声明相互去重。参数增量、输出快照、结果和 `command_output` 均更新原工具，即使下一轮已经开始，也不移动归属或生成 thinking。原生 thinking 内出现 HTML/代码仍是 thinking；不按内容猜测类型，不从 transcript 补发未公开 reasoning。
+
+持久消息同时核对 session、顶层 runId 与 `message.__openclaw.runId`，任何显式冲突都拒绝。续聊消息缺少 runId 时不能凭到达时间认领；只在新建独占随机 session key 下接受无 runId 通知。旧 Gateway 没有可关联的持久边界时，仅以工具批次后的下一次模型输出作为换轮依据；不声称此降级路径能识别没有原生边界的 thinking-only 续跑。完成通知按 messageId 去重，迟到且能由已知 tool ID 关联的通知不能结束当前轮。
+
+流式与持久过程正文按消息序列对账并映射既有 commentary；同一步多个正文片段不能把整份持久正文重复放进最后一片。成功收尾只发布一份最终回答到 final，IM finalMsg 不包含过程正文、thinking 或工具内容。原生 `meta.finalAssistantVisibleText` 优先于 payload 列表（7.1 列表可能丢失 reasoning 标记），其显式空值也必须保留；没有元数据时排除 reasoning/commentary/error payload，再兼容当前步已完成的原生 final_answer 或旧版末尾正文，不拼接所有模型轮次。原生 phase 可选，canonical commentary 不依赖每帧具备该字段。消息/工具/答复身份表均有调用内数量上限，超限明确失败。专项仅手动验证，真实多版本 Playboard 证据及边界见 [Issue 245 验收](../tasks/245-openclaw-model-steps/validation.md)。
 
 ## 操作入口
 
