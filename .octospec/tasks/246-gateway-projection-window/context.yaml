@@ -31,4 +31,4 @@ files_expected:
   - .octospec/tasks/246-gateway-projection-window/edge-cases.mjs
   - .octospec/tasks/246-gateway-projection-window/review-regression.mjs
   - .octospec/tasks/246-gateway-projection-window/privacy-regression.mjs
-updated_at: 2026-10-29T12:58:17Z
+updated_at: 2026-10-29T13:13:54Z

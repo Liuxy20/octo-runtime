@@ -99,6 +99,42 @@ test("unknown messages are not published as final, including anonymous tails aft
   accept(p, event("run.completed"));
   assert.equal(p.finalReply.text, "ANONYMOUS_FINAL\n\nEMPTY_ID_FINAL\n\nKNOWN_TAIL");
   p.dispose();
+  const alias = new ImRunProjector("anonymous-alias");
+  accept(
+    alias,
+    event("message.delta", {
+      messageId: "unidentified:run:final",
+      channel: "commentary",
+      text: "PUBLIC_PROGRESS"
+    })
+  );
+  accept(alias, event("message.delta", { text: "PRIVATE_ALIAS_TAIL" }));
+  accept(alias, event("message.update", { channel: "final", text: "ONLY_FINAL" }));
+  accept(alias, event("run.completed"));
+  assert.equal(alias.finalReply.text, "ONLY_FINAL");
+  assert.doesNotMatch(JSON.stringify(alias.snapshot()), /PRIVATE_ALIAS_TAIL/);
+  alias.dispose();
+  const forged = new ImRunProjector("stable-id-cannot-borrow-anonymous");
+  accept(forged, event("message.update", { channel: "commentary", text: "PUBLIC_PROGRESS" }));
+  accept(
+    forged,
+    event("message.delta", {
+      messageId: "unidentified:run:commentary",
+      text: "PRIVATE_PROGRESS_ALIAS"
+    })
+  );
+  accept(forged, event("message.update", { channel: "final", text: "ONLY_FINAL" }));
+  accept(
+    forged,
+    event("message.delta", { messageId: "unidentified:run:final", text: "PRIVATE_FINAL_ALIAS" })
+  );
+  accept(forged, event("run.completed"));
+  assert.equal(forged.finalReply.text, "ONLY_FINAL");
+  assert.doesNotMatch(
+    JSON.stringify(forged.snapshot()),
+    /PRIVATE_PROGRESS_ALIAS|PRIVATE_FINAL_ALIAS/
+  );
+  forged.dispose();
 });
 
 test("scope-free late public summaries do not get assigned to a subsequent step", () => {

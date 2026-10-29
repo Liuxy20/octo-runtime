@@ -54,7 +54,10 @@ const RETIRED_WINDOW = 256;
 
 export class ImRunProjector {
   readonly #items = new Map<string, ProgressItem>();
-  readonly #messages = new Map<string, { channel: string; text: string; stepId?: string }>();
+  readonly #messages = new Map<
+    string,
+    { channel: string; text: string; stepId?: string; stableId: boolean }
+  >();
   readonly #toolInputs = new Map<string, Record<string, unknown>>();
   readonly #steps = new Map<string, ProgressItem>();
   readonly #activeTools = new Map<string, ProgressItem>();
@@ -66,12 +69,13 @@ export class ImRunProjector {
       stepId?: string;
       hidden: boolean;
       counted: boolean;
+      stableId: boolean;
     }
   >();
   readonly #stepTools = new Map<string, string | undefined>();
   readonly #unfinishedSteps = new Set<string>();
   #hasClosedStep = false;
-  readonly #finalMessages = new Map<string, string>();
+  readonly #finalMessages = new Map<string, { text: string; stableId: boolean }>();
   readonly #retired = new Set<string>();
   #reasoningCount = 0;
   #toolCallCount = 0;
@@ -161,18 +165,17 @@ export class ImRunProjector {
       const id =
         p.messageId ??
         `unidentified:${p.stepId ?? this.#currentStep ?? "run"}:${p.channel ?? "final"}`;
-      const identity = this.#stepMessages.get(id);
+      const hasStableId = typeof p.messageId === "string" && p.messageId.length > 0;
+      // 合成的匿名 key 不是源消息身份，不能借其碰巧命中的记录推断通道。
+      if (p.channel === undefined && !hasStableId) return;
+      const storedIdentity = this.#stepMessages.get(id);
+      const identity = storedIdentity?.stableId === hasStableId ? storedIdentity : undefined;
+      const knownFinal = hasStableId && this.#finalMessages.get(id)?.stableId === true;
       // 已淘汰进度的迟到 delta 可能省略 channel，不能按缺省 final 拼进最终回复。
-      if (
-        this.#retired.has(`message:${id}`) &&
-        !identity &&
-        p.channel !== "final" &&
-        !this.#finalMessages.has(id)
-      )
+      if (this.#retired.has(`message:${id}`) && !identity && p.channel !== "final" && !knownFinal)
         return;
-      const previous = this.#messages.get(id);
-      const knownFinal =
-        typeof p.messageId === "string" && p.messageId.length > 0 && this.#finalMessages.has(id);
+      const storedPrevious = this.#messages.get(id);
+      const previous = storedPrevious?.stableId === hasStableId ? storedPrevious : undefined;
       const channel =
         p.channel ?? (knownFinal ? "final" : (previous?.channel ?? identity?.channel));
       // 无法证明通道时不发布正文；匿名帧也不能借用另一个匿名 final 的身份。
@@ -190,7 +193,7 @@ export class ImRunProjector {
         return;
       const stepId = scopedStepId ?? this.#currentStep;
       // 已结束步骤的非 final/未分类迟到帧不能因身份缓存滚动而重新进入当前步骤。
-      if (p.channel !== "final" && !this.#finalMessages.has(id) && this.#stepClosed(stepId)) return;
+      if (p.channel !== "final" && !knownFinal && this.#stepClosed(stepId)) return;
       // update 也可能是流式替换快照（例如 OpenClaw），不能仅按事件名提前清除分类。
       const running =
         event.type !== "message.update" || p.status === "streaming" || p.status === "running";
@@ -200,7 +203,8 @@ export class ImRunProjector {
           channel,
           stepId,
           hidden: identity?.hidden ?? false,
-          counted: identity?.counted ?? false
+          counted: identity?.counted ?? false,
+          stableId: hasStableId
         });
         this.#messages.delete(id);
         this.#items.delete(`message:${id}`);
@@ -215,11 +219,11 @@ export class ImRunProjector {
         this.#stepMessages.delete(id);
         const text =
           typeof p.text !== "string"
-            ? (this.#finalMessages.get(id) ?? "")
+            ? (this.#finalMessages.get(id)?.text ?? "")
             : event.type === "message.delta"
-              ? (this.#finalMessages.get(id) ?? "") + p.text
+              ? (this.#finalMessages.get(id)?.text ?? "") + p.text
               : p.text;
-        this.#finalMessages.set(id, text);
+        this.#finalMessages.set(id, { text, stableId: hasStableId });
         const step = stepId && this.#steps.get(stepId);
         if (step) step.content = previewText(text);
       } else {
@@ -242,7 +246,8 @@ export class ImRunProjector {
             channel,
             stepId,
             hidden: true,
-            counted: channel === "analysis" || !!identity?.counted
+            counted: channel === "analysis" || !!identity?.counted,
+            stableId: hasStableId
           });
           this.#retire(`message:${id}`);
           return;
@@ -259,7 +264,8 @@ export class ImRunProjector {
           channel,
           stepId,
           hidden: false,
-          counted: channel === "analysis" || !!identity?.counted
+          counted: channel === "analysis" || !!identity?.counted,
+          stableId: hasStableId
         });
         const item = this.#item(
           `message:${id}`,
@@ -268,7 +274,7 @@ export class ImRunProjector {
         );
         item.content = text;
         item.status = event.type === "message.update" ? "completed" : "running";
-        this.#messages.set(id, { channel, text, stepId });
+        this.#messages.set(id, { channel, text, stepId, stableId: hasStableId });
       }
       this.#phase =
         channel === "final" ? "answering" : channel === "analysis" ? "thinking" : "commentary";
@@ -448,7 +454,10 @@ export class ImRunProjector {
     return item;
   }
   get finalText(): string {
-    return [...this.#finalMessages.values()].filter(Boolean).join("\n\n");
+    return [...this.#finalMessages.values()]
+      .map((message) => message.text)
+      .filter(Boolean)
+      .join("\n\n");
   }
   #retire(id: string): void {
     this.#retired.add(id);
