@@ -31,7 +31,9 @@ Channel Gateway 支持通过 `GatewayDependencies.loadContexts(config, {signal})
 
 加载结果会与静态 Context 合并。同一 `namespace` 和 `name` 的动态项替换整个静态项，包括其 `payload`；不会逐字段合并。这是 Channel Gateway 的行为，直接调用 Kernel 时不会自动执行这一步。
 
-取得宿主本轮有效 Context 后，Octo Gateway 再将默认英文 mention 指令追加到 `octo.control/instructions.payload.entries`：`entries = [...hostEffectiveEntries, ...gatewayDefaultEntries]`。通过 CLI `extraset` 配置的指令属于宿主，在前保留。两个列表各自保序、保留重复项，最终只有一个 instructions item。Gateway 每个新准备的轮次重新组合，不修改宿主输入、不累计上一轮结果。同代次卡片重试完整复用冻结 Context，其中的指令已经组合，不能再次追加默认项，也不重新读取宿主数据或历史。这一步不改变宿主静态/动态替换、公共 Context 合并或其他 Extra 的行为。
+`extra.im` 整个命名空间由 Octo Gateway 和 WeCom 对应的 Channel Extra 专属管理。渠道构造 Context 时忽略宿主静态配置和 `loadContexts` 返回的全部 `extra.im` 项，即使本轮没有生成同名项也不透传。误配仅记录忽略数量的 warning，不影响后续 AgentRun。宿主业务材料应使用其他命名空间；渠道规则如需外部更新，由渠道内部按业务合同读取并构造，本次未新增外部规则源接口。全局 `octo.control/instructions` 保留下述指令组合规则；冻结重试保留渠道已生成的完整快照。权威约束见 [Channel 规则](../../../.octospec/rules/channel-integration.md)。
+
+取得宿主本轮有效 Context 后，Octo Gateway 在稳定规则刷新轮将默认英文 mention 指令追加到 `octo.control/instructions.payload.entries`：`entries = [...hostEffectiveEntries, ...gatewayDefaultEntries]`。通过 CLI `extraset` 配置的指令属于宿主，在前保留。两个列表各自保序、保留重复项，最终只有一个 instructions item。不修改宿主输入、不累计上一轮结果。同代次卡片重试完整复用冻结 Context 和产物交付策略，不能再次追加默认项，也不重新读取宿主数据或历史。这一步不改变宿主静态/动态替换、公共 Context 合并或其他 Extra 的行为。
 
 Gateway 默认等待加载完成最多 5 秒，同时最多允许 8 个尚未结束的加载操作，可配置到 32 个。返回值最多 32 项，序列化后最多 64 KiB。等待超时不代表底层操作已停止；该操作实际结束前仍占用并发名额。访问数据库时也要注意：仅将同步操作包进 `async` 函数，并不能避免阻塞事件循环。
 
@@ -45,9 +47,23 @@ Gateway 默认指令也计入最终调用的 Context 预算。宿主返回达到
 
 Gateway 在命令处理、Context 准备和 AgentRun 调度前拒绝自身消息，包括自己 @ 自己和 AI 广播，即使自己的 UID 在 `allowed_sender_ids` 中也不能绕过。私聊、群和话题一致。
 
-完整英文规则使用 `[OCTO_CHANNEL_MENTION_RULES_V1]` 边界，在新 Provider 会话中通过既有会话指令通道传入。每轮还提供普通 `extra.im/mention-instructions` 英文短提醒，覆盖升级前创建的续聊会话；该自动辅助材料仍受上述预算降级规则约束。短提醒不会更新已有会话的系统指令或重置会话。完整规则要求模型在摘要或 compaction 时原样保留，以模型行为为准，Runtime 不新增压缩豁免或拦截机制。会话边界见[背景资料与会话](context-and-sessions.md)。
+Bot 配置 `stable_context_refresh_interval_turns` 是正安全整数，默认 30。稳定 `extra.im/mention-instructions`、`artifact-delivery`、`history-instructions` 在第 1、N、2N…轮进入普通模型 Context；新 Provider 会话也携带完整规则，因此 Codex、Claude Code、OpenClaw 续聊均能收到周期刷新。reset/new 重置计数，控制命令、准备失败、工具步骤、自动重试和同代次卡片重试不计轮；刷新执行失败则下次补带。宿主自定义 session store 必须保留 binding 的可选 `stableContext` 状态。群/话题规则每轮核验版本，变化或刷新轮重新携带。
+
+每条真实入站消息独立提供简短 `extra.im/message-trigger` JSON，guidance 只用一句短英文解释字段。`conversation` 标明私聊/群/子区及群、子区名称和 ID；`sender` 提供发起者 UID、姓名和 `human`/`bot`/`unknown` 类型；`recipient` 标明当前 Bot；`sentAt` 为原消息时刻的系统时区时间及显式偏移；`mentions` 保存真实 @ 目标和广播标记。名称和身份由当前 Bot 的只读 API 查询，共用 5 秒补充信息预算；名称/时间查不到为 `null`，类型未知为 `unknown`，不从正文或 UID 后缀猜测。actor 与被 @ 对象分别记录，不依赖稳定规则刷新。历史和历史缺口仍按需装配，其固定阅读规则已移入稳定项。产物交付始终使用有效策略，不因普通轮省略说明而关闭。提示使用真实换行；完整 mention 规则保留 `[OCTO_CHANNEL_MENTION_RULES_V1]` 边界，要求模型在摘要时保留，但不保证模型一定遵守。周期刷新接受轮间可能遗忘的边界，不新增 compaction 监听、压缩豁免或旧 session 升级兼容流程。会话边界见[背景资料与会话](context-and-sessions.md)。
 
 ## 保存会话
+
+历史消息的 `sentAt` 使用原消息时刻的系统时区时间，以带显式偏移的 ISO 8601 表示，例如 `2026-10-29T13:36:53.000+08:00`。引用、转发同样保留各自时间，缺失或无效时为 null，不以处理时间代替；截短正文保留时间，时间计入既有序列化历史预算。
+
+`message-trigger` 中 `conversation.id` 为原始频道 ID，`conversation.type` 固定为 `dm`、`group`、`group_topic`。子区在此保留完整频道 ID，`conversation.group.id` 与 `conversation.topic.id` 分别标明父群与子区。
+
+Gateway 将已确认的用户/Bot 名称与身份类型缓存在内存中，按 API、Bot、Space 隔离，固定十分钟过期，每个 Bot 最多 2,000 项；读取不续期，失败或缺失结果不缓存。名称更新可能延迟至过期；缓存不用于成员权限或发送 mention 的授权。可选信息补全失败不阻断 AgentRun，不重试或改用另一查询接口；用户取消仍会取消准备过程。
+
+自动历史采用 `messages: [{uid, username, sentAt, content}]`，从旧到新排列，同一发送者连续发言仍分别保留。所有正文都有类型，包括 `content: {type: "text", text: "..."}`。回复分开保留引用与回复正文，转发保留嵌套消息，富文本保留有序块。图片、文件和文档引用标为 `read: false`，准备历史不下载资源正文。完整数组序列化后最多 20 条、8,000 个 Unicode 码点；截短或省略正文会明确标注，嵌套也有限制。模型输入不再单独携带自动 `history-gap`：历史不完整、读取失败或被省略时，在 `history` 的 `messages` 旁附一句简短英文 `note`；失败时消息列表可为空，正常历史不加说明。读取游标与交接证据留在 Gateway 内部。
+
+数组预算包含身份、时间、JSON 结构及转义。主历史与 fresh fallback 恢复补充共用同一份最多 20 条/8000 码点窗口；首轮和连续性未知保留自身 Bot 消息，确认正常接续时才可省略已由 assistant 覆盖的具体输出。详见 [Gateway 历史选择与恢复](context-and-sessions.md)。
+
+最终交付物中的本地 Markdown 路径统一按 Gateway 实际文件系统尝试读取，包含 OpenClaw preset，无需新增配置，不默认限制到工作区。原 `artifact_delivery.allowed_roots` 若显式配置仍限制目录，空列表拒绝全部。文件缺失或不可读按实际失败报告，不能由 Agent 来源推断远程存储。
 
 通过 `GatewayDependencies.createSessionStore(botConfig)` 为每个 Bot 提供独立的会话存储。不提供该函数时，Gateway 使用有容量限制的内存存储。
 

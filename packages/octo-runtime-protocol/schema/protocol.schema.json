@@ -937,7 +937,7 @@
     "ContextItem": {
       "title": "ContextItem",
       "description": "Open Context item. Built-in types retain their payload contracts; unknown optional types are preserved and ignored by unsupported consumers.",
-      "tsType": "{ namespace: string; name: string; guidance?: string; payload: Record<string, unknown> }",
+      "tsType": "{ namespace: string; name: string; guidance?: string; data_format?: 'text'; payload: Record<string, unknown> }",
       "type": "object",
       "additionalProperties": false,
       "required": ["namespace", "name", "payload"],
@@ -960,9 +960,27 @@
         "guidance": {
           "type": "string",
           "description": "Producer-authored context guidance, rendered as ordinary model input."
+        },
+        "data_format": {
+          "const": "text",
+          "description": "Explicit extra.* text rendering; payload must contain only a text string. Omit for complete JSON rendering."
         }
       },
       "allOf": [
+        {
+          "if": { "required": ["data_format"] },
+          "then": {
+            "properties": {
+              "namespace": { "pattern": "^extra\\." },
+              "payload": {
+                "type": "object",
+                "required": ["text"],
+                "additionalProperties": false,
+                "properties": { "text": { "type": "string" } }
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {

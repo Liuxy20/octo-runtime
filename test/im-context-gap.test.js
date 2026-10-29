@@ -37,6 +37,7 @@ async function fixture(context, behavior, historyResponse, configuredItems = [])
   context.mock.method(GatewayTransport.prototype, "close", async () => {});
   context.mock.method(globalThis, "fetch", async (url, options) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     const input = JSON.parse(options.body);
     historyCalls.push(input);
     return historyResponse
@@ -179,14 +180,16 @@ test("HG-15/16 queued mentions freeze U and read L only when their turn starts",
   assert.equal(current.binding().gap.preparedTriggerSeq, 103);
   release();
   await current.idle();
-  const gaps = current.requests
-    .slice(1)
-    .map((request) => request.contexts.items.find((item) => item.name === "history-gap"));
+  for (const request of current.requests.slice(1))
+    assert.equal(
+      request.contexts.items.some((item) => item.name === "history-gap"),
+      false
+    );
   assert.deepEqual(
-    gaps.map((item) => item.payload.range),
+    current.historyCalls.slice(1).map((input) => [input.start_message_seq, input.end_message_seq]),
     [
-      { beforeSeq: 103, afterSeq: 100 },
-      { beforeSeq: 106, afterSeq: 103 }
+      [102, 100],
+      [105, 103]
     ]
   );
   assert.equal(current.binding().gap.latestObservedSeq, 500);
@@ -223,11 +226,7 @@ test("HG-17 failed preparation or cancellation does not advance preparation boun
   assert.equal(current.requests.length, 1);
   current.send(107);
   await current.idle();
-  assert.equal(
-    current.requests.at(-1).contexts.items.find((item) => item.name === "history-gap").payload.range
-      .afterSeq,
-    100
-  );
+  assert.equal(current.historyCalls.at(-1).end_message_seq, 100);
 });
 
 test("HG-18 failure leaves a repairable interval that includes the failed trigger", async (context) => {
@@ -238,9 +237,12 @@ test("HG-18 failure leaves a repairable interval that includes the failed trigge
     current.send(sequence);
     await current.idle();
   }
-  const gap = current.requests[2].contexts.items.find((item) => item.name === "history-gap");
-  assert.equal(gap.payload.range.afterSeq, 100);
-  assert.equal(gap.payload.range.beforeSeq, 104);
+  assert.equal(
+    current.requests[2].contexts.items.some((item) => item.name === "history-gap"),
+    false
+  );
+  assert.equal(current.historyCalls.at(-1).end_message_seq, 100);
+  assert.equal(current.historyCalls.at(-1).start_message_seq, 103);
   assert.equal(current.binding().gap.pendingAfterSeq, undefined);
 });
 
@@ -310,7 +312,7 @@ for (const conversationKind of ["group", "thread"]) {
             {
               namespace: "extra.business",
               name: "required",
-              payload: { text: "x".repeat(60000) }
+              payload: { text: "x".repeat(58500) }
             }
           ]
         };
@@ -395,8 +397,8 @@ test("HG-27 fresh fallback reloads one bounded window on the next turn without a
   }
   assert.equal(current.requests.length, 3);
   assert.equal(
-    current.requests[2].contexts.items.find((item) => item.name === "history-gap").payload.mode,
-    "bootstrap"
+    current.requests[2].contexts.items.find((item) => item.name === "history-gap"),
+    undefined
   );
   current.send(105);
   await current.idle();
@@ -405,7 +407,7 @@ test("HG-27 fresh fallback reloads one bounded window on the next turn without a
     undefined
   );
   assert.equal(current.historyCalls.length, 3);
-  assert.equal(current.historyCalls[2].limit, 15);
+  assert.equal(current.historyCalls[2].limit, 20);
   assert.equal(current.historyCalls[2].start_message_seq, 103);
   assert.equal(current.historyCalls[2].end_message_seq, 0);
 });
@@ -487,16 +489,21 @@ test("a resumed topic receives two discussion messages through API before model 
   while (runtime.status.workingTasks) await settle();
   assert.equal(requests.length, 2);
   assert.equal(requests[0].sessionId, requests[1].sessionId);
-  const gap = requests[1].contexts.items.find((item) => item.name === "history-gap");
-  assert.ok(gap, "resumed sessions must not silently omit intervening discussion");
-  assert.equal(gap.payload.messageLimit, 2);
-  assert.deepEqual(gap.payload.range, { afterSeq: 100, beforeSeq: 103 });
-  assert.equal(gap.payload.status, "provided");
-  assert.equal(gap.payload.materialProvided, true);
-  assert.equal(gap.payload.argv, undefined);
   assert.equal(
-    requests[1].contexts.items.find((item) => item.name === "history").payload.text,
-    "peer：decision-101\npeer：decision-102"
+    requests[1].contexts.items.some((item) => item.name === "history-gap"),
+    false
+  );
+  assert.deepEqual(
+    requests[1].contexts.items.find((item) => item.name === "history").payload.messages,
+    [
+      {
+        uid: "peer",
+        username: null,
+        sentAt: null,
+        content: { type: "text", text: "decision-101" }
+      },
+      { uid: "peer", username: null, sentAt: null, content: { type: "text", text: "decision-102" } }
+    ]
   );
 });
 
@@ -539,9 +546,16 @@ test("history API completion precedes host.invoke", async (context) => {
   release();
   await current.idle();
   assert.equal(current.requests.length, 2);
-  assert.equal(
-    current.requests[1].contexts.items.find((item) => item.name === "history").payload.text,
-    "peer：loaded before invoke"
+  assert.deepEqual(
+    current.requests[1].contexts.items.find((item) => item.name === "history").payload.messages,
+    [
+      {
+        uid: "peer",
+        username: null,
+        sentAt: null,
+        content: { type: "text", text: "loaded before invoke" }
+      }
+    ]
   );
   assert.equal(current.historyCalls.length, 2);
 });
@@ -609,7 +623,7 @@ for (const pendingAfterSeq of [98, null])
     current.send(106);
     await current.idle();
     assert.equal(current.historyCalls[2].end_message_seq, pendingAfterSeq ?? 0);
-    assert.equal(current.historyCalls[2].limit, pendingAfterSeq === null ? 15 : 7);
+    assert.equal(current.historyCalls[2].limit, pendingAfterSeq === null ? 20 : 7);
     assert.equal(current.binding().gap.pendingAfterSeq, undefined);
   });
 

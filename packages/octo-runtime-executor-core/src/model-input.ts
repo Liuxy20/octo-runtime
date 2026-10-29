@@ -2,7 +2,7 @@ import type { ContextEnvelope, InvokeRequest } from "@mininglamp-oss/octo-runtim
 
 const MODEL_CONTEXT_PATTERNS = [/^extra\.[^/]+\/[^/]+$/, /^octo\.content\/(inline|references)$/];
 
-/** 仅渲染允许进入模型的本轮业务 Context；Markdown 指引保留原文，排序后的 payload 用 CDATA 包裹，不修改输入。 */
+/** 仅渲染本轮业务 Context；默认完整 JSON，显式文本格式保留原文，不修改输入。 */
 export function renderModelContexts(context: ContextEnvelope): string {
   const items = context.items.filter((item) =>
     MODEL_CONTEXT_PATTERNS.some((pattern) => pattern.test(item.namespace + "/" + item.name))
@@ -13,7 +13,11 @@ export function renderModelContexts(context: ContextEnvelope): string {
     "<contexts>",
     ...items.map((item) => {
       // 拆分 CDATA 终止符为相邻区段，避免材料中的标记提前结束数据边界；不解析内部内容。
-      const data = JSON.stringify(sorted(item.payload)).replaceAll("]]>", "]]]]><![CDATA[>");
+      const data = (
+        item.data_format === "text"
+          ? String(item.payload.text)
+          : JSON.stringify(sorted(item.payload))
+      ).replaceAll("]]>", "]]]]><![CDATA[>");
       return [
         `  <context-item namespace="${item.namespace}" name="${item.name}">`,
         ...(item.guidance ? [`    <guidence>${item.guidance}</guidence>`] : []),
@@ -44,19 +48,20 @@ function sorted(value: unknown): unknown {
 export function withModelContexts(request: InvokeRequest): InvokeRequest {
   const rendered = renderModelContexts(request.context);
   if (!rendered) return request;
+  const prefix = `${rendered}\n\n<!-- Query Input -->\n\n`;
   return {
     ...request,
-    modelInput: [rendered, request.modelInput].filter(Boolean).join("\n\n"),
+    modelInput: prefix + request.modelInput,
     ...(request.modelInputParts
-      ? { modelInputParts: [{ type: "text" as const, text: rendered }, ...request.modelInputParts] }
+      ? { modelInputParts: [{ type: "text" as const, text: prefix }, ...request.modelInputParts] }
       : {}),
     ...(request.freshFallbackModelInput
-      ? { freshFallbackModelInput: [rendered, request.freshFallbackModelInput].join("\n\n") }
+      ? { freshFallbackModelInput: prefix + request.freshFallbackModelInput }
       : {}),
     ...(request.freshFallbackModelInputParts
       ? {
           freshFallbackModelInputParts: [
-            { type: "text" as const, text: rendered },
+            { type: "text" as const, text: prefix },
             ...request.freshFallbackModelInputParts
           ]
         }

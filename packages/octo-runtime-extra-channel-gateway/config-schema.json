@@ -58,6 +58,13 @@
                 "default": true,
                 "description": "可选。是否启动此 Bot；省略为 true，false 时保留配置与 stopped 状态但不连接，不影响其他 Bot。"
               },
+              "stable_context_refresh_interval_turns": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "default": 30,
+                "description": "自动稳定渠道说明的用户任务刷新周期；每会话第 1、N、2N…轮携带，默认 30。reset/new 后重新计轮；工具调用、同轮自动重试和同代次卡片重试不计新轮。只控制 Gateway 自有稳定说明，不省略宿主显式 Context、本轮 actor 或历史增量。"
+              },
               "bf_token": {
                 "type": "string",
                 "writeOnly": true,
@@ -245,7 +252,7 @@
                   "allowed_roots": {
                     "type": "array",
                     "maxItems": 32,
-                    "description": "宿主授权的绝对产物目录；省略使用当前本地 Agent 工作区，空列表拒绝全部文件。realpath 后检查包含关系，拒绝 symlink 逃逸；远程 Provider 路径始终不可读。",
+                    "description": "可选的 Gateway 本机绝对产物目录限制。省略时对成功 final 中的本地文件引用尝试按实际文件系统读取，不按 Agent 来源拒绝、不额外限制到工作区；空列表拒绝全部文件。显式目录按 realpath 检查包含关系，拒绝 symlink 逃逸；不修改 Agent 工作区、不下载远端文件。",
                     "items": {
                       "type": "string",
                       "pattern": "^(?:/|[A-Za-z]:[\\\\/]|\\\\\\\\[^\\\\/]+[\\\\/][^\\\\/]+)"

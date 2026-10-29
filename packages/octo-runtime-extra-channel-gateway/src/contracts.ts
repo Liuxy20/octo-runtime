@@ -15,6 +15,7 @@ import type {
 import type { RunPresentation } from "./presentation/run-projector.js";
 import type { ImGapPlan, ImGapTurnToken } from "./application/context-gap.js";
 import type { ImArtifactPolicy } from "./delivery/artifact-policy.js";
+import type { ImStableContextState } from "./application/stable-context.js";
 
 export interface ImPositionObservation {
   conversationId: string;
@@ -22,6 +23,7 @@ export interface ImPositionObservation {
   messageSeq: number;
   own?: boolean;
   turn?: ImGapTurnToken;
+  outputFingerprint?: string;
 }
 
 export interface ImAdapterConfig {
@@ -56,6 +58,8 @@ export interface ImCommonConfig {
 export interface OctoBotConfig extends ImCommonConfig {
   api_url: string;
   bf_token?: string;
+  /** 自动稳定说明的用户任务刷新周期，默认 30；首轮必带，reset/new 后重新计轮。 */
+  stable_context_refresh_interval_turns?: number;
   /** .octospec/tasks/channel-group-admission/plan.md：群/话题入口开关，省略为 true，不影响私聊。 */
   groups_enabled?: boolean;
   /** 仅约束群范围；省略、null、[] 均不增加限制，关闭入口使用 groups_enabled=false。 */
@@ -65,6 +69,7 @@ export interface OctoBotConfig extends ImCommonConfig {
   /** 渠道固定产物交付；由宿主配置，模型 Context 不能扩大文件访问范围。 */
   artifact_delivery?: {
     mode?: "channel" | "tools";
+    /** 可选的 Gateway 本机产物目录限制；省略不额外限制，空列表拒绝全部，不改变 Agent 工作区。 */
     allowed_roots?: string[];
     allowed_mime_types?: string[];
     max_file_bytes?: number;
@@ -90,6 +95,8 @@ export interface ImInboundMessage {
   position?: { messageSeq: number };
   /** 同代次卡片重试：buildContext 返回 Gateway 已组合的冻结快照，不再采集或追加默认项。 */
   historyRetry?: boolean;
+  /** 同代次卡片重试复用原投递合同，不从更新后的配置重建文件访问策略。 */
+  frozenArtifacts?: ImArtifactPolicy;
   bindHistoryTurn?(token: ImGapTurnToken): void;
   markRead?(signal: AbortSignal): Promise<void>;
   messageId: string;
@@ -112,7 +119,6 @@ export interface ImInboundMessage {
     signal: AbortSignal,
     options?: {
       initialSession: boolean;
-      mentionGuidance?: boolean;
       configuredItems?: readonly ContextItem[];
       historyGap?: ImGapPlan;
       onHistoryGapPrepared?(plan: ImGapPlan): void;
@@ -176,6 +182,8 @@ export interface ImSession {
   tail: Promise<void>;
   /** 同代次排队快照共享资格对象；reset 替换对象，不修改旧请求。 */
   initialization?: { attempted: boolean };
+  /** 与初始化资格相同的同代次共享对象，reset 替换而非修改旧轮状态。 */
+  stableContext?: ImStableContextState;
 }
 
 export type DeliveryState = "pending" | "delivered" | "failed" | "unknown";

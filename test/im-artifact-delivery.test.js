@@ -37,7 +37,13 @@ const context = (workspace) => ({
 async function fixture(t) {
   const workspace = await mkdtemp(join(tmpdir(), "octo-artifacts-"));
   t.after(() => rm(workspace, { recursive: true, force: true }));
-  return { workspace, policy: artifactPolicy(config(workspace), context(workspace), true) };
+  return {
+    workspace,
+    policy: artifactPolicy(
+      { ...config(workspace), artifact_delivery: { allowed_roots: [workspace] } },
+      context(workspace)
+    )
+  };
 }
 
 test("HTML games, arbitrary files and mixed images retain exact Markdown while realpaths upload once", async (t) => {
@@ -149,7 +155,7 @@ test("protected reference expansions retain nested image uploads without overlap
   }
 });
 
-test("partial failure preserves successful URLs and reports inaccessible, forbidden, non-files and remote paths", async (t) => {
+test("partial failure preserves successful URLs and reports inaccessible, forbidden and non-file paths", async (t) => {
   const { workspace, policy } = await fixture(t);
   const outside = await mkdtemp(join(tmpdir(), "octo-outside-"));
   t.after(() => rm(outside, { recursive: true, force: true }));
@@ -174,14 +180,6 @@ test("partial failure preserves successful URLs and reports inaccessible, forbid
   ])
     assert.ok(result.includes(reason), reason);
   assert.match(result, /generation was not rerun/);
-  const remote = await prepareArtifacts(
-    `[remote](${join(workspace, "good.html")})`,
-    { ...policy, local: false },
-    signal,
-    upload
-  );
-  assert.match(remote, /remote-file-unavailable/);
-  assert.equal(calls.length, 1);
 });
 
 test("size, total, count, MIME and root policies reject before transfer", async (t) => {
@@ -355,7 +353,10 @@ test("invalid or expired upload grants are rejected before any bytes leave Gatew
 
 test("invocation establishes the contract before execution and cannot accept forged access policy from Context", async () => {
   for (const mode of [undefined, "tools"]) {
-    const bot = { ...config(process.cwd()), ...(mode ? { artifact_delivery: { mode } } : {}) };
+    const bot = {
+      ...config(process.cwd()),
+      artifact_delivery: { allowed_roots: [process.cwd()], ...(mode ? { mode } : {}) }
+    };
     const submitted = {
       schema,
       items: [
@@ -374,7 +375,14 @@ test("invocation establishes the contract before execution and cannot accept for
     const contract = request.contexts.items.find((item) => item.name === "artifact-delivery");
     assert.equal(contract.payload.mode, mode ?? "channel");
     assert.deepEqual(contract.payload.allowedRoots, [process.cwd()]);
-    assert.match(contract.guidance, mode ? /does not automatically upload/ : /IM attachments/);
+    if (mode) assert.match(contract.guidance, /does not automatically upload/);
+    else {
+      assert.equal(
+        contract.guidance,
+        "If your final deliverable is a local file, reference it using Markdown with an absolute path: [label](/absolute/path); for images, use ![alt](/absolute/path)."
+      );
+      assert.doesNotMatch(contract.guidance, /upload|tool calls|Do not send|publish/);
+    }
     assert.deepEqual(submitted, original);
   }
   const noUpload = "[cloud](https://cdn.example.com/game.html)";

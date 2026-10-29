@@ -8,7 +8,9 @@ import {
   compactHistoryGap
 } from "../packages/octo-runtime-extra-channel-gateway/dist/application/context-gap.js";
 import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
-import { historyPromptVersions } from "../test-support/history-intent-cases.mjs";
+const historyGuidance = "This data contains bounded earlier messages from the current channel.";
+const gapGuidance =
+  "This data describes the range, availability, and omissions of channel history for the current turn.";
 
 for (const channelType of [1, 2, 5]) {
   test(`history guidance evaluated for channel type ${channelType} reaches the model with bounded material`, async (context) => {
@@ -61,7 +63,6 @@ for (const channelType of [1, 2, 5]) {
       new AbortController().signal,
       {
         initialSession: channelType === 1,
-        mentionGuidance: false,
         historyGap: channelType === 1 ? undefined : planHistoryGap(3, undefined, "epoch")
       }
     );
@@ -69,27 +70,35 @@ for (const channelType of [1, 2, 5]) {
       {
         channel_id: channelId,
         channel_type: channelType,
-        limit: 15,
+        limit: 20,
         start_message_seq: 2,
         end_message_seq: 0,
         pull_mode: 0
       }
     ]);
     const history = items.find((item) => item.name === "history");
-    assert.equal(history.guidance, historyPromptVersions.candidate.history);
-    assert.equal(history.payload.text, "Alice：7+5?\nBob：Correction: 7+6?");
+    assert.equal(history.guidance, historyGuidance);
+    assert.deepEqual(history.payload.messages, [
+      { uid: "Alice", username: null, sentAt: null, content: { type: "text", text: "7+5?" } },
+      {
+        uid: "Bob",
+        username: null,
+        sentAt: null,
+        content: { type: "text", text: "Correction: 7+6?" }
+      }
+    ]);
     assert.deepEqual(history.payload.range, { beforeSeq: 3 });
     assert.equal(history.payload.truncated, false);
     const rendered = renderModelContexts({ schema: "octo.context-envelope/v3", items });
-    assert.ok(rendered.includes(`<guidence>${historyPromptVersions.candidate.history}</guidence>`));
+    assert.ok(rendered.includes(`<guidence>${historyGuidance}</guidence>`));
     assert.doesNotMatch(rendered, /FUTURE_NOT_VISIBLE/);
     const gap = items.find((item) => item.name === "history-gap");
     if (channelType === 1) assert.equal(gap, undefined);
     else {
-      assert.equal(gap.guidance, historyPromptVersions.candidate.full);
+      assert.equal(gap.guidance, gapGuidance);
       const compact = compactHistoryGap(gap);
       assert.ok(compact);
-      assert.equal(compact.guidance, historyPromptVersions.candidate.compact);
+      assert.equal(compact.guidance, gapGuidance);
       for (const key of [
         "source",
         "status",
@@ -119,7 +128,7 @@ test("compact history guidance preserves failure facts within its existing byte 
       retrieval,
       earlierOmitted: true,
       reason: "unknown-baseline",
-      messageLimit: 15
+      messageLimit: 20
     });
     const compact = compactHistoryGap(full);
     assert.ok(compact);

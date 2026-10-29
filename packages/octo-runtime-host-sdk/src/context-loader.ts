@@ -24,13 +24,21 @@ export interface ChannelDependencies {
  * 只合并本轮数据，不保留历史。动态同 key 整项替换且保留静态位置，新项按返回顺序追加。
  * instructions.entries 也不拼接：覆盖方须显式保留需要的固定人设；空动态列表不删除静态项。
  * 两个来源先分别校验，避免同源重复 key 被覆盖掩盖；返回副本隔离宿主与插件的后续修改。
+ * 调用方可在来源校验后显式选择有效项，选择策略归调用方；最终合并预算仍强制校验。
  */
 export function mergeConfiguredContexts(
   base: readonly ContextItem[],
-  dynamic: readonly ContextItem[]
+  dynamic: readonly ContextItem[],
+  selectItems?: (items: readonly ContextItem[]) => readonly ContextItem[]
 ): ContextItem[] {
   assertContextEnvelope({ schema: CONTEXT_SCHEMA, items: base });
   assertContextEnvelope({ schema: CONTEXT_SCHEMA, items: dynamic });
+  if (selectItems) {
+    base = selectItems(base);
+    dynamic = selectItems(dynamic);
+    assertContextEnvelope({ schema: CONTEXT_SCHEMA, items: base });
+    assertContextEnvelope({ schema: CONTEXT_SCHEMA, items: dynamic });
+  }
   const items = [...base];
   const positions = new Map(items.map((item, index) => [`${item.namespace}/${item.name}`, index]));
   for (const item of dynamic) {
@@ -79,10 +87,15 @@ export function createContextLoader(
   const pending = new Set<Promise<unknown>>();
   const stop = new AbortController();
   return {
-    async load(config: JsonObject, signal: AbortSignal): Promise<ContextItem[]> {
+    async load(
+      config: JsonObject,
+      signal: AbortSignal,
+      selectItems?: (items: readonly ContextItem[]) => readonly ContextItem[]
+    ): Promise<ContextItem[]> {
       const base = (config.context as JsonObject | undefined)?.items ?? [];
       if (!Array.isArray(base)) throw new Error("IM_CONTEXT_INVALID");
-      if (!callback) return mergeConfiguredContexts(base as unknown as ContextItem[], []);
+      if (!callback)
+        return mergeConfiguredContexts(base as unknown as ContextItem[], [], selectItems);
       owner.throwIfAborted();
       stop.signal.throwIfAborted();
       signal.throwIfAborted();
@@ -102,7 +115,7 @@ export function createContextLoader(
           // 超时或取消后的迟到结果不能再校验、复制或进入本轮模型输入。
           combined.throwIfAborted();
           assertBoundedJson(items);
-          return mergeConfiguredContexts(base as unknown as ContextItem[], items);
+          return mergeConfiguredContexts(base as unknown as ContextItem[], items, selectItems);
         });
       pending.add(operation);
       // 跟踪真实操作，而非 race 的等待结果；迟到 reject 也必须被消费，避免未处理拒绝。

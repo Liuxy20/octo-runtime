@@ -501,16 +501,27 @@ test("Group/topic rules become ordered v3 items; history excludes the trigger an
     [
       ["extra.im", "group-rules"],
       ["extra.im", "topic-rules"],
-      ["extra.im", "mention-instructions"],
-      ["extra.im", "history"]
+      ["extra.im", "history"],
+      ["extra.im", "message-trigger"]
     ]
   );
-  assert.equal(items[3].payload.text, "peer：text 3\npeer：text 7");
+  const historyMessages = items[2].payload.messages;
+  for (const { sentAt } of historyMessages) {
+    assert.match(sentAt, /[+-]\d{2}:\d{2}$/);
+    assert.equal(Date.parse(sentAt), 1000);
+  }
+  assert.deepEqual(
+    historyMessages.map(({ sentAt, ...message }) => message),
+    [
+      { uid: "peer", username: null, content: { type: "text", text: "text 3" } },
+      { uid: "peer", username: null, content: { type: "text", text: "text 7" } }
+    ]
+  );
   assert.equal(items[0].payload.text, "group text");
   assert.equal(items[1].payload.version, 2);
   const again = await read();
   assert.deepEqual(again, items);
-  assert.equal(f.requests.length, 6);
+  assert.equal(f.requests.filter(({ path }) => /\/(md|sync)$/.test(path)).length, 6);
   mode = "missing";
   assert.equal((await read())[1].payload.status, "not_found");
   mode = "forbidden";
@@ -568,16 +579,18 @@ test("Channel public input keeps automatic material budget fallback without drop
   const context = {
     schema: "octo.context-envelope/v3",
     items: [
-      ...Array.from({ length: 26 }, (_, i) => ({
+      ...Array.from({ length: 24 }, (_, i) => ({
         namespace: "extra.business",
         name: `item-${i}`,
         payload: {}
       })),
-      { namespace: "extra.im", name: "history", payload: { automatic: true, text: "history" } },
       {
         namespace: "extra.im",
-        name: "mention-instructions",
-        payload: { automatic: true, text: "guidance" }
+        name: "history",
+        payload: {
+          automatic: true,
+          messages: [{ uid: "peer", username: null, content: { type: "text", text: "history" } }]
+        }
       }
     ]
   };
@@ -594,16 +607,14 @@ test("Channel public input keeps automatic material budget fallback without drop
   assert.equal(request.contexts.items.length, 32);
   assert.equal(
     request.contexts.items.filter((item) => item.namespace === "extra.business").length,
-    26
+    24
   );
   assert.equal(
-    request.contexts.items.some(
-      (item) => item.namespace === "extra.im" && item.name !== "artifact-delivery"
-    ),
+    request.contexts.items.some((item) => item.name === "history"),
     false
   );
-  assert.equal(context.items.length, 28);
-  context.items.at(-2).payload.automatic = false;
+  assert.equal(context.items.length, 25);
+  context.items.at(-1).payload.automatic = false;
   assert.throws(create, /CONTEXT_BUDGET_EXCEEDED/);
 });
 

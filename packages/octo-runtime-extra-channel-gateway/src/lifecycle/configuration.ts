@@ -77,6 +77,12 @@ export function validateImConfig(config: ImBotConfig): void {
       throw new Error("IM_PROVIDER_AGENT_ID_UNSUPPORTED");
   }
   if (config.context !== undefined) assertContextEnvelope(config.context);
+  const refreshInterval = config.stable_context_refresh_interval_turns;
+  if (
+    refreshInterval !== undefined &&
+    (!Number.isSafeInteger(refreshInterval) || refreshInterval < 1)
+  )
+    throw new Error("IM_STABLE_CONTEXT_REFRESH_INTERVAL_INVALID");
   const delivery = config.artifact_delivery;
   if (delivery !== undefined) {
     if (!delivery || typeof delivery !== "object" || Array.isArray(delivery))

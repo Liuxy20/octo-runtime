@@ -55,11 +55,11 @@ Gateway 的 cardDeliveries、Gateway/WeCom 的 deliveries 仅输出当前保留�
 
 Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 reset 见 [会话合同](session-reset.md)。Octo Gateway 可显式消费宿主 createSessionStore 返回的句柄，数据仍属于宿主；整个 Runtime 不依赖 SQLite、不提供适配、表结构或迁移。这些业务映射不属于通用 Host 的持久历史。默认映射失效后创建新会话；宿主持久 binding 也不等于 Provider 会话必定恢复或旧 Run 可继续执行。
 
-2026-10-15 用户对 Channel Gateway 再次确认：不新增 Context、聊天正文、输入图片、业务 Provider binding 或投递账本的本地持久化，不在 Adapter 建业务状态库；在途与连接状态保持有界内存。需要新会话背景时由 Channel 调用 API 获取当前频道此前 15 条并显式提交 extra Context；此策略于 2026-10-16 实施，一次资格保存在现有有界 binding 中。Provider 原生存储、现有身份和配置不因本决策删除或重置。依据、代价与验收见[不持久化决策](../tasks/channel-no-context-persistence/brief.md)及[历史 Context 专项](../tasks/channel-new-session-history/brief.md)。
+2026-10-15 用户对 Channel Gateway 再次确认：不新增 Context、聊天正文、输入图片、业务 Provider binding 或投递账本的本地持久化，不在 Adapter 建业务状态库；在途与连接状态保持有界内存。需要新会话背景时由 Channel 调用 API 获取当前频道此前 20 条并显式提交 extra Context；此策略于 2026-10-16 实施，一次资格保存在现有有界 binding 中。Provider 原生存储、现有身份和配置不因本决策删除或重置。依据、代价与验收见[不持久化决策](../tasks/channel-no-context-persistence/brief.md)及[历史 Context 专项](../tasks/channel-new-session-history/brief.md)。
 
 ## 保留的文件
 
-群/话题续聊缺口仅新增现有binding内的有界位置元数据及最多32个自身输出位置，不保存聊天正文或新建文件。观察不创建binding或延长TTL；模型前通过API取得的最多15条/1500码点正文只进入本轮Context及现有有界occurrence快照，重试不重取，不扩为长期transcript。API成功、材料交接和模型实际阅读是不同事实，不新增Host工具输出拦截或跨进程已读游标，见[Issue #32实施](../tasks/channel-context-gap/implementation.md)。
+群/话题续聊缺口仅在现有binding内保存有界位置元数据及最多32个自身输出的位置/内容指纹，不保存聊天正文或新建文件。观察不创建binding或延长TTL；模型前通过API取得的最多20条消息，完整序列化messages数组最多8000 Unicode码点，身份、时间、结构及转义均计入。材料只进入本轮Context及现有有界occurrence快照，主历史与fresh fallback恢复补充共用原窗口和总预算，重试不重取，不扩为长期transcript。API成功、材料交接和模型实际阅读是不同事实，不新增Host工具输出拦截或跨进程已读游标，见[Issue #32实施](../tasks/channel-context-gap/implementation.md)与[保守历史设计](../tasks/234-context-lifecycle/conservative-history-plan.md)。
 
 配置、受保护凭据、machine/Runtime 身份、PID/socket、监督状态和 `invocations.json` 可以保留。后者用于孤儿进程清理，不保存 Run 输入或事件历史。Provider 自身的数据库及原生会话文件仍由 Provider 管理。
 

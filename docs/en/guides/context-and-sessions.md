@@ -47,6 +47,21 @@ Some Adapters can fall back to a new session when resuming fails. Use `freshFall
 
 To change session instructions, have your application create or reset the Provider session.
 
+## Channel Gateway History
+
+Gateway prepares automatic IM history before invoking the model, using the message API directly. It selects at most 20 recent messages before the current trigger in the same DM, group, or topic. Messages are presented oldest first as `{uid, username, sentAt, content}`. The complete serialized `messages` array has an 8,000-Unicode-code-point budget, including names, original timestamps, JSON keys, and escaping. Bodies may therefore be shorter than 8,000 characters. Retrieval does not download referenced media.
+
+| Situation | Automatic history behavior |
+| --- | --- |
+| First input, `/reset`, or `/new` | One cold-start attempt; retain own Bot messages within the bounded window. Preparation failure preserves the attempt; empty or failed history handed to execution consumes it. |
+| Normal group/topic continuation | Read an observed history gap; no gap means no read. Omit a specific own final reply or related file card only when completion, session ownership, successful delivery position, and unchanged content prove assistant coverage. |
+| Recovery or uncertain continuity | Retain own messages. If a prepared continuation falls back to a fresh Provider session, restore omitted messages through the existing fallback input in the same invocation. |
+| Retry of the same occurrence | Reuse frozen primary and fallback input; do not query again. |
+
+Cold-start and gap preparation share one bounded read. Gateway budgets the full window before partitioning primary history and recovery supplements; their union stays within 20 messages and 8,000 serialized code points. Omitting a message does not refill the window. Matching UID, text, or URL alone never justifies removal; quoted/forwarded content and explicit host Context remain intact.
+
+This policy belongs to Gateway and applies across Providers. Runtime does not add a transcript database or infer that the model has read every supplied message. See [architecture](../concepts/architecture.md) and [history representation](extras.md).
+
 ## Readable Session Names
 
 Set optional `sessionName` when creating a conversation, and keep it with your application binding. Names contain 1–256 Unicode code points, cannot consist only of whitespace, and cannot contain C0/DEL/C1 control characters. Colons, hyphens, underscores, spaces within text and non-ASCII text are allowed; valid input is preserved unchanged. Each caller owns its naming policy: for example, `wecom-{uuid}` or `webui-{uuid}`. Core supplies a random UUID when omitted. Host SDK and Kernel forward the field without inventing business naming rules or keeping a name registry. Names never serve as recovery handles, authorization, or model input. Two conversations with the same name remain separate; changing a name on resume does not select or rename a native session.

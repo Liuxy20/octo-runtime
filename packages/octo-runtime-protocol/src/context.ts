@@ -38,7 +38,7 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
   const keys = new Set<string>();
   for (const item of value.items) {
     object(item, "CONTEXT_SCHEMA_INVALID");
-    fields(item, ["namespace", "name", "guidance", "payload"]);
+    fields(item, ["namespace", "name", "guidance", "data_format", "payload"]);
     for (const property of ["namespace", "name"]) {
       const text = item[property];
       if (typeof text !== "string" || text.length > 96 || !/^[a-z0-9][a-z0-9._-]*$/.test(text))
@@ -57,6 +57,12 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
         throw new TypeError("CONTEXT_GUIDANCE_FORBIDDEN");
     }
     object(item.payload, "CONTEXT_SCHEMA_INVALID");
+    if (item.data_format !== undefined) {
+      if (item.data_format !== "text" || !String(item.namespace).startsWith("extra."))
+        throw new TypeError("CONTEXT_SCHEMA_INVALID");
+      fields(item.payload, ["text"]);
+      if (typeof item.payload.text !== "string") throw new TypeError("CONTEXT_SCHEMA_INVALID");
+    }
     publicPayload(item.namespace as string, item.name as string, item.payload);
   }
   if (new TextEncoder().encode(JSON.stringify(value)).length > CONTEXT_MAX_BYTES)

@@ -127,7 +127,7 @@ test("F02 new-message materials use Context v3 and never fetch or expand history
       "bf_fixture",
       new AbortController().signal
     );
-    assert.equal(items.length, 1);
+    assert.equal(items.length, 2);
     assert.equal(items[0].namespace, "extra.im");
     assert.equal(items[0].name, "message-content");
     assert.equal(items[0].payload.messageId, "new-message");
@@ -140,13 +140,15 @@ test("F02 new-message materials use Context v3 and never fetch or expand history
       channelType: 1
     });
   }
-  assert.deepEqual(
-    await build_im_contexts(
-      config,
-      { ...message({ type: 1, content: "ordinary" }), channelType: 1 },
-      "bf_fixture",
-      new AbortController().signal
-    ),
-    []
+  assert.equal(
+    (
+      await build_im_contexts(
+        config,
+        { ...message({ type: 1, content: "ordinary" }), channelType: 1 },
+        "bf_fixture",
+        new AbortController().signal
+      )
+    ).some((item) => item.name === "message-content"),
+    false
   );
 });

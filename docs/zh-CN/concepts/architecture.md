@@ -44,6 +44,18 @@ Adapter 与 Extra 由接入入口选择。SDK 宿主原生 import 和组装，�
 
 Provider harness 的登录、授权及凭据准备归使用者、宿主与 harness。Runtime 传递普通执行环境并完成必要的协议握手，包括使用 harness 广告的受支持方式进行 ACP 认证；不检查 Provider 专属认证环境变量或凭据文件，不因某个变量缺失而推断未登录，也不代办登录和凭据刷新。harness 自行解析认证来源并判断认证是否成功，Runtime 如实返回失败。框架自身安全及 Extra 显式业务凭据合同仍按各自规则执行。
 
+## Channel Context 与历史
+
+Channel Gateway 负责 IM Context 的稳定规则、当前消息事实和历史查询。Host SDK、Kernel、Core、renderer 与 Provider Adapter 消费已提交输入，不自行选择或去重业务历史；OpenClaw、Codex、Claude Code 共用该责任边界。
+
+稳定 mention、产物格式和历史理解指引在第 1 轮及每 N 轮携带（`stable_context_refresh_interval_turns`，默认 30）；reset/new 重置计数，新 Provider 会话获得完整规则。独立 `message-trigger` 描述每条真实入站消息。群/子区规则按范围及版本更新，清空时明确 `NO RULES`。周期刷新不保证轮间始终记住规则，也不监听模型压缩。
+
+自动历史选取同频道当前触发前最近最多 **20 条消息**，从旧到新呈现。**完整序列化 `messages` 数组最多 8000 Unicode 码点**，包括身份、时间、JSON 结构及转义，属于整个数组的总预算。冷启动和缺口准备共用本轮一次有界读取，主历史与 fresh fallback 恢复补充共用同一窗口和预算。
+
+首轮、reset、补位或连续性未知的历史保留自身 Bot 消息。确认正常续接时，Gateway 才可依据完成状态、归属、投递位置和内容指纹，省略已由同一 Provider 会话 assistant 覆盖的具体成功输出；本次 fresh fallback 从冻结窗口补回。不按 UID、正文或 URL 全面去重，不删除引用/转发内部消息，不过滤显式宿主 Context。
+
+接入说明见[会话准备](../guides/context-and-sessions.md)，权威合同见 [Octospec 架构约束](../../../.octospec/rules/architecture.md)。
+
 ## 调用时序
 
 ```mermaid

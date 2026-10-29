@@ -93,6 +93,17 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 
 统一执行接口不表示各 Provider 能力相同。OpenClaw Adapter 声明 `metadata.workspace: false`，忽略 `octo.execution/workspace` 和 `workdir`，不检查或创建本地工作区、不分配随机目录、不覆盖目标 Agent 的原生工作区。本地调用不增加 Worker 回执门槛。Context 快照不改写，审批模式、环境变量和恢复等能力按实际支持范围校验。业务上下文由每轮发起方决定，显式重复照常传递，不自动补齐、缓存或追加。
 
+## 远端产物交付：P2 待办
+
+2026-10-29 用户明确：远端 OpenClaw 场景较少，按 **P2 暂缓实施**，覆盖此前的 P0 提议；不改变 Issue #234 的 P0 级别。此节是后续架构约束，当前仅保留 TODO，不表示已支持远端附件转换。
+
+- 后续由 OpenClaw Adapter 解析连接 URL 的 `hostname`，完整匹配 `127.0.0.1`、`localhost`、`0.0.0.0` 时按本地产物处理，其他 hostname 按远端处理。不能用字符串包含匹配，不能用 `agentSource` 或 WS 传输推断位置。此产物判定约定不改变现有 URL 校验、TLS 或认证要求，尤其不表示当前已放开 `ws://0.0.0.0`。
+- 本地绝对路径 Markdown 引用继续交给 Gateway 按实际文件系统与交付限制读取。远端执行返回的文件引用由 Adapter 协调远端访问或上传，转换成 Gateway 可读取的 HTTPS 资源后输出；远端绝对路径不得误读 Gateway 本机同名文件。
+- Adapter 不调用 IM 业务接口；Gateway 继续负责交付限制、附件上传、链接改写、文件卡、去重、取消及失败反馈。远端资源如何被 Gateway 拉取并交付也属本项待办，不能把普通网页链接都当成附件。
+- 远端文件 API、URL 有效期及访问方式需在实施前核实。提示词可说明输出约定，但不能代替确定性的转换与验证；IPv6、代理/隧道、容器及共享目录映射另行确认，不扩充本次用户指定的 hostname 规则。
+
+两个 TODO 槽位位于 [Adapter](../../packages/octo-runtime-adapter-openclaw/src/index.ts) 的连接参数解析处和最终消息出口。待办与验收边界见 [Issue #243 记录](../tasks/234-context-lifecycle/remote-artifact-backlog.md)。本次不新增配置、协议字段或运行时分支，不删除 `agentSource`。
+
 ## Gateway 版本与会话权限
 
 probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同解析器，以真实 hello 的协议号、server.version、必要方法及事件交叉判定。当前精确表为已核对的 2026.6.11，加 2026.7.1 至 2026.10.5 的 26 个正式标签，共 27 个，包含维护后缀；不按版本大小推测中间未列版本、beta、fork、未知补丁或未来版本。probe 只检查基础调用合同和只读 agents.list，不保证特定目标 Agent 或请求权限；invocation 每次重新判定，不依赖旧 probe 缓存。

@@ -11,6 +11,7 @@ import {
   mergeContext,
   type ApprovalMode,
   type ContextEnvelope,
+  type ContextItem,
   type ContextInstructionsPayload,
   type InvokeInput
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -18,8 +19,11 @@ import type { ImBotConfig, ImInboundMessage, ImSession } from "../contracts.js";
 import { validateImConfig } from "../lifecycle/configuration.js";
 import { compactHistoryGap, historyGapContext } from "../application/context-gap.js";
 import { MENTION_GUIDANCE } from "../transport/mentions.js";
-import { artifactContext, artifactPolicy } from "../delivery/artifact-policy.js";
+import { artifactPolicy } from "../delivery/artifact-policy.js";
 import type { ImArtifactPolicy } from "../delivery/artifact-policy.js";
+import { stableChannelContexts } from "../application/stable-context.js";
+import { modelRulesContext } from "../application/rules-context.js";
+import { modelHistoryContexts } from "../application/history-context.js";
 
 export type ImInvocationInput = InvokeInput & {
   runId: string;
@@ -34,8 +38,17 @@ export function createImInvocation(
   sessionKey: string,
   session: ImSession,
   _signal: AbortSignal,
-  occurrenceId = message.messageId
-): { request: ImInvocationInput; adapterType: string; artifacts: ImArtifactPolicy } {
+  occurrenceId = message.messageId,
+  refreshStableContext = !session.providerSession?.sessionId ||
+    session.providerSession.resumable === false
+): {
+  request: ImInvocationInput;
+  adapterType: string;
+  artifacts: ImArtifactPolicy;
+  recoveryContexts: ContextItem[];
+  stableContextIncluded: boolean;
+  historyContext?: ContextItem;
+} {
   validateImConfig(config);
   assertContextEnvelope(context);
   if (!session.id) throw new Error("IM_SESSION_NOT_ALLOCATED");
@@ -108,11 +121,11 @@ export function createImInvocation(
     ]
   };
   // Channel 只组装公开 InvokeInput；执行解析和指令渲染统一交给 Host，避免再次拒绝业务 Context。
-  // 宿主已先解析静态/动态 Context；渠道默认指令只在本轮与有效 entries 保序组合一次。
+  // 宿主已先解析静态/动态 Context；渠道默认指令仅在刷新轮与有效 entries 保序组合。
   // 不改变公共 mergeContext 或动态人设替换合同，也不把上一轮的组合结果累积回来。
   let submitted = context;
   // 同代次卡片重试已从 occurrence 取得组合后的冻结快照，不能再次追加或按文本去重。
-  if (!message.historyRetry) {
+  if (!message.historyRetry && refreshStableContext) {
     const instructions = context.items.find(
       (item) => item.namespace === "octo.control" && item.name === "instructions"
     );
@@ -134,27 +147,28 @@ export function createImInvocation(
         : [...context.items, channelInstructions]
     };
   }
+  submitted = { ...submitted, items: submitted.items.map(modelRulesContext) };
   let snapshot: ContextEnvelope | undefined;
+  let artifacts: ImArtifactPolicy | undefined;
+  let stable: ContextItem[] = [];
   // 执行默认项也占协议预算；只降级本渠道自动追加的辅助材料，不丢弃显式业务项。
-  for (const optional of [
-    "history",
-    "history-gap-compact",
-    "mention-instructions",
-    "history-gap",
-    undefined
-  ]) {
+  for (const optional of ["history", "history-gap-compact", "history-gap", undefined]) {
     try {
-      snapshot = mergeContext(defaults, submitted);
-      // 固定交付约定也计入 Context 预算；沿原策略只移除自动辅助材料。
-      snapshot = {
-        ...snapshot,
-        items: [
-          ...snapshot.items.filter(
-            (item) => !(item.namespace === "extra.im" && item.name === "artifact-delivery")
-          ),
-          artifactContext(artifactPolicy(config, snapshot, agentSource === "provisioned"))
-        ]
-      };
+      snapshot = mergeContext(defaults, {
+        ...submitted,
+        items: modelHistoryContexts(submitted.items)
+      });
+      artifacts = structuredClone(message.frozenArtifacts ?? artifactPolicy(config, snapshot));
+      stable = stableChannelContexts(artifacts);
+      // 稳定说明只由渠道按周期生成；已有同名项不能抑制刷新或绕过普通轮省略。
+      // 冻结重试复用渠道已生成的完整快照，不重建或再次追加说明。
+      if (!message.historyRetry) {
+        snapshot.items = snapshot.items.filter(
+          (item) =>
+            !stable.some((owned) => owned.namespace === item.namespace && owned.name === item.name)
+        );
+        if (refreshStableContext) snapshot.items.push(...stable);
+      }
       assertContextEnvelope(snapshot);
       break;
     } catch (error) {
@@ -233,7 +247,17 @@ export function createImInvocation(
       }
     }
   }
-  if (!snapshot) throw new Error("IM_EXECUTION_CONFIG_INVALID");
+  if (!snapshot || !artifacts) throw new Error("IM_EXECUTION_CONFIG_INVALID");
+  // 仅最终仍提交的自动历史构成交接证据；内部字段不进入模型快照或冻结重试。
+  const historyContext = submitted.items.find(
+    (item) =>
+      item.namespace === "extra.im" &&
+      item.name === "history" &&
+      item.payload.automatic === true &&
+      snapshot.items.some(
+        (candidate) => candidate.namespace === item.namespace && candidate.name === item.name
+      )
+  );
   const eventId = `evt_${randomUUID()}`,
     runId = `run_${randomUUID()}`;
   const prompt = message.buildInputs ? "[Image]" : message.text.trim();
@@ -275,6 +299,18 @@ export function createImInvocation(
   return {
     request,
     adapterType: selectedAdapter,
-    artifacts: artifactPolicy(config, snapshot, agentSource === "provisioned")
+    artifacts,
+    historyContext,
+    recoveryContexts: stable.filter(
+      (item) =>
+        !snapshot.items.some(
+          (existing) => existing.namespace === item.namespace && existing.name === item.name
+        )
+    ),
+    stableContextIncluded: stable.every((item) =>
+      snapshot.items.some(
+        (existing) => existing.namespace === item.namespace && existing.name === item.name
+      )
+    )
   };
 }

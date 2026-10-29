@@ -1,0 +1,58 @@
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    {
+      "namespace": "extra.im",
+      "name": "history",
+      "guidance": "Earlier messages, oldest first; sentAt=system-zone time, content.type=body type; null=unknown, read=false=unread, truncated=true=shortened.",
+      "payload": {
+        "messages": [
+          {
+            "uid": "example-human",
+            "username": "Example User",
+            "sentAt": "2026-10-29T13:36:50.000+08:00",
+            "content": { "type": "text", "text": "Please review this image." }
+          },
+          {
+            "uid": "example-human",
+            "username": "Example User",
+            "sentAt": "2026-10-29T13:36:51.000+08:00",
+            "content": { "type": "image", "url": "https://example.com/image.png", "read": false }
+          },
+          {
+            "uid": "example-bot",
+            "username": "Example Bot",
+            "sentAt": "2026-10-29T13:36:52.000+08:00",
+            "content": {
+              "type": "reply",
+              "quote": {
+                "uid": "example-human",
+                "username": "Example User",
+                "sentAt": "2026-10-29T13:36:50.000+08:00",
+                "content": { "type": "text", "text": "Please review this image." }
+              },
+              "content": { "type": "text", "text": "Which part should I review?" }
+            }
+          },
+          {
+            "uid": "example-human",
+            "username": "Example User",
+            "sentAt": "2026-10-29T13:36:53.000+08:00",
+            "content": {
+              "type": "forward",
+              "messages": [
+                {
+                  "uid": "example-peer",
+                  "username": null,
+                  "sentAt": null,
+                  "content": { "type": "text", "text": "The chart in the upper right." }
+                }
+              ]
+            }
+          }
+        ],
+        "note": "Some earlier messages are not included."
+      }
+    }
+  ]
+}

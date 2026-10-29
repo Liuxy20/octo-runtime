@@ -26,7 +26,19 @@ Channel Gateway 是长期 IM Agent 的业务入口，管理固定 Agent workdir�
 
 2026-10-16 F16 评审再次明确：不得混合 ChannelGateway 的渠道接入责任与 AgentRun 的执行责任。业务方/宿主确定长期 Agent 配置，Channel 使用该配置完成消息准入、本轮输入、会话关联与结果投递；执行层按已确定的合同处理目录准备、Provider 调用、权限/审批及执行生命周期。渠道 session/reset 不得隐式派生、切换、迁移或清理工作目录；通用执行层有目录能力不构成渠道新增目录管理的需求。AgentRun 在此表示执行职责，不新增组件或协议。详见[F16 责任边界评审](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf16-逐会话工作目录)。
 
-人格、persona、SOUL 的提示词注入完全归业务方；IM 场景由 ChannelGateway 选择和构造本轮 Context v3，决定内容、顺序与发送时机。Channel 不新增人格专用协议、Provider 旁路拼装或通用技能扫描体系；下层 Host/Adapter 不自行读人格文件、补默认人格或从历史恢复人格内容。普通指引使用 extra.im，可信控制仍遵循独立来源校验合同。该约定不授权更改现有 Provider 文件；详见[人格注入架构约束](architecture.md#人格与-soul-的注入归业务方)。
+人格、persona、SOUL 的提示词注入完全归业务方；IM 场景由 ChannelGateway 选择和构造本轮 Context v3，决定内容、顺序与发送时机。Channel 不新增人格专用协议、Provider 旁路拼装或通用技能扫描体系；下层 Host/Adapter 不自行读人格文件、补默认人格或从历史恢复人格内容。宿主普通指引使用非 extra.im 的业务命名空间，渠道自身指引使用 extra.im，可信控制仍遵循独立来源校验合同。该约定不授权更改现有 Provider 文件；详见[人格注入架构约束](architecture.md#人格与-soul-的注入归业务方)。
+
+## extra.im 命名空间归属
+
+`extra.im` 整个命名空间保留给 `channel-gateway` 与 `channel-wecom`，由对应 Channel Extra 按业务逻辑构造本轮 Context，决定内容、顺序及注入时机。宿主静态 `context.items` 和动态 `loadContexts` 返回的所有 `extra.im` 项均在渠道构造输入时忽略；不是只对本轮生成的同名项执行覆盖。即使本轮不注入某项，宿主同名项也不得留下，不能改变周期、伪造触发事实、替代历史或导致同名冲突而阻断执行。宿主业务 Context 应使用其他命名空间，其他合法项保序保留，不做通用去重。
+
+宿主误配 extra.im 只写 warning 诊断并忽略，不作为配置冲突报错、不发送用户错误消息、不影响后续 AgentRun；诊断仅记录忽略数量，不输出 guidance/payload 内容。
+
+静态和动态来源分别通过原有协议、容量和有界 JSON 校验后，由渠道提供的同步选择函数排除 extra.im，再合并有效项并校验最终预算；被忽略项不能占合并预算。来源自身不合法及实际业务项超限仍按原合同拒绝。通用 Context loader 仅支持调用方显式提供的合并前选择函数，不识别 extra.im；未提供选择函数时行为不变，同一回调池的超时、取消、实际在途和迟到结果保护保持。回调仍接收完整、独立的原 Bot 配置快照，每轮只调用一次。
+
+稳定规则即使允许修改，也应由 Channel Extra 内部按业务合同读取外部规则源后构造，不通过宿主 Context 配置或 `loadContexts` 覆盖。本约束不新增配置中心接口、读取实现或配置字段，也不改变宿主提供 Bot 配置和凭据值的合同。同代次冻结重试中的 extra.im 是渠道已生成的快照，须原样复用，不重新过滤或采集。
+
+`octo.control/instructions` 属于全局公共指令，独立于 extra.im 的专属命名空间约束；保留其既有特殊合并及 mandatory 合同。公共 `mergeContext`、Host、Core、Kernel 和 Adapter 不增加渠道命名空间过滤；过滤与渠道内容构造只在对应 Channel Extra 中完成。
 
 2026-10-16 F29 明确三类权限责任：Extra/Channel 决定真实消息是否准入；ChannelGateway 为 CLI 及使用相应执行环境的 MCP 提供本 Bot 的工具身份，工具与服务端校验 token 和资源 ACL；AgentRun 的本地执行权限使用统一 approval_policy（含 full_access），由 Adapter 按原生合同处理。不得以旧 minimal/host 分档将三者再次杂糅到 Channel 权限中心或专用业务 broker。获准触发不代表以发送者身份访问资源，full_access 不放大 bf_token 的业务权限；独立 MCP 凭据和 OpenClaw 实例环境沿既有合同，不虚称任意 MCP 自动继承或逐 Run 注入。见[F29 已确认评审](../tasks/gateway-august-feature-assessment/assessment.md#逐项-reviewf29-权限分档与工具网关)。
 
@@ -100,21 +112,29 @@ IM 后台配置对应的 Agent 使用固定目录，不按任务选择或改变 
 
 以上为 IM 架构约束，替代此前“Context workspace 可覆盖 IM 默认目录”的规则表述；通用 Host 的配置解析能力不因此改变。IM 请求入口已在 resolver 前校验任务 workspace，指定不同目录时返回 IM_AGENT_WORKDIR_FIXED，不把固定目录作为可被任务替换的 defaults。
 
-新逻辑会话在首条普通输入准备时只自动尝试一次最近历史：最多 15 条、总计 1500 Unicode 码点，取当前触发之前同一 DM/群/话题的纯文本。先占用有界会话标记再异步读取，失败、空结果和准备失败均不恢复资格；正常续聊不重拉。reset 后允许补旧聊天，重试使用冻结输入，不新增本地历史持久库。
+新逻辑会话在首条普通输入准备时自动尝试最近历史：最多 20 条，取当前触发之前同一 DM/群/话题的消息。首次资格在实际交给执行时消费，准备失败仍保留资格；实际执行后的历史失败或空结果不重复冷启动读取，正常续聊按缺口策略处理。reset 后允许补旧聊天，重试使用冻结输入，不新增本地历史持久库。历史给模型为从旧到新的 `messages:[{uid,username,content}]`；文本也是 content：`{type:"text",text:"..."}`，引用/转发保留嵌套来源和消息边界，富文本保留图文顺序，图片/文件/文档仅保存已有地址并标 read=false，不自动下载或解引用。username 查不到为 null；消息数组序列化后最多 8000 Unicode 码点，文本只缩短正文而保留身份，特殊内容放不下时保留 omitted 占位和 truncated 标记。模型侧删除独立自动 history-gap；历史不完整、读取失败或被省略时，仅在 history.messages 旁附一句英文 note，正常历史不加说明，异常无正文时 messages 可为空。范围/source/automatic/模式/游标留在 Gateway 用于预算与实际交接判断，说明不构成正文交接证据；宿主 extra.im 项按命名空间归属规则忽略，其他宿主业务项不投影。
 
-OCTO-2 / #213：history、完整与精简 history-gap 的指引允许模型结合当前消息、发言者、时序及对话关系理解当前意图，包括先提问再单独 mention、补充、更正及跨参与者引用。不按上一条消息或相同发送者硬编码意图，不将历史重复出现或 reset 前材料视为新任务；尊重取消、话题切换和完成状态。历史仍是对话数据，不覆盖系统指令，不单独授予工具、身份或权限。关键歧义或缺失影响回答时说明或澄清，不虚构完整记忆。此为 Channel 的提示语义，模型评估不构成权限执行机制，也不改变上述准入、检索、游标、reset 与重试合同。选择依据和未通过的模型样本见[评估记录](../tasks/octo-2-history-intent/assessment.md)。
+2026-10-29 自身历史保守选择：首轮/新会话保留原窗口内含自身 Bot 的历史；只有正常连续接续同一 Provider 会话、且具体输出能明确归属并由已有 assistant 内容覆盖时才允许排除。历史补位、reset/new、fresh fallback、归属不明或连续性未知均保留；不按 UID、正文/URL 相同全面去重，不删他人引用或转发中的自身内容。仅正常耗尽且 completed 的 final 正文及关联文件卡，在成功投递位置与内容指纹均匹配时才有资格，后续编辑、控制/错误和交付失败提示保留。该选择只归 channel-gateway；同次有界窗口经原预算后分为主历史和恢复补充，沿既有 fresh fallback 输入恢复，无法保证安全则保留。主动排除不构成历史缺失或其他正文已交接的证据。最小资格、恢复输入和验收见 [保守历史设计](../tasks/234-context-lifecycle/conservative-history-plan.md)。
 
-群/话题续聊不把Provider session稳定视为历史完整。Channel在现有有界binding中记录位置及待补边界，未 @ 消息只观察，不创建session、不执行任务；位置观察不延长binding TTL。模型前固定输入准备直接使用现有TypeScript API层，不委托Agent调用octo-cli，不做关键词判断。准备时按冻结触发序号及当前已交接边界调用消息sync API：已知缺口limit=min(15,跨度)，未知基线最近最多15条，无缺口不查；冷启动和缺口共用本轮一次读取。10秒超时、1 MiB响应上限、禁用429自动重试，不翻页；代码过滤上下界、去重并再次截至15条，文本沿用1500 Unicode码点。正文作为`extra.im/history`在host.invoke前冻结，`history-gap`仅报告provided/partial/empty/unavailable/omitted，不再携带CLI命令。失败或预算省略不阻断当前任务，但保留待补边界；最终快照确有正文或API返回无可用文本时才清除该边界。交接不代表模型已阅读完整讨论，不拦截通用工具输出造已读水位。额外业务调查仍由Agent按用户任务使用octo-cli，不能与固定准备流程混同。
+OCTO-2 / #213：历史理解的意图目标由稳定 history-instructions 承担，history 仅说明消息数据，允许模型结合当前消息、发言者、时序及对话关系理解当前意图，包括先提问再单独 mention、补充、更正及跨参与者引用。不按上一条消息或相同发送者硬编码意图，不将历史重复出现或 reset 前材料视为新任务；尊重取消、话题切换和完成状态。历史仍是对话数据，不覆盖系统指令，不单独授予工具、身份或权限。关键歧义或缺失影响回答时说明或澄清，不虚构完整记忆。此为 Channel 的提示语义，模型评估不构成权限执行机制，也不改变上述准入、检索、游标、reset 与重试合同。选择依据和未通过的模型样本见[评估记录](../tasks/octo-2-history-intent/assessment.md)。
 
-该本地实现覆盖原准入、排队/取消、reset代次、重试与预算边界，不改变WeCom、Host或协议。默认store将元数据计入原1024/4MiB/24h边界，自定义store缺少可选原子patch能力时明确unknown。成功ACK及能关联原发送/卡片的自身RECV才可按原turn排除自身位置；未关联/已淘汰位置保守处理。真实服务端可见性、序号同域与Agent取材仍须按[实施记录](../tasks/channel-context-gap/implementation.md)验收，不能由fake测试推断已部署。
+群/话题续聊不把Provider session稳定视为历史完整。Channel在现有有界binding中记录位置及待补边界，未 @ 消息只观察，不创建session、不执行任务；位置观察不延长binding TTL。模型前固定输入准备直接使用现有TypeScript API层，不委托Agent调用octo-cli，不做关键词判断。准备时按冻结触发序号及当前已交接边界调用消息sync API：已知缺口limit=min(20,跨度)，未知基线最近最多20条，无缺口不查；冷启动和缺口共用本轮一次读取。10秒超时、1 MiB响应上限、禁用429自动重试，不翻页；代码过滤上下界、去重并再次截至20条，文本沿用8000 Unicode码点。正文作为`extra.im/history`在host.invoke前冻结，内部缺口状态保留provided/partial/empty/unavailable/omitted，模型侧仅在`history`中按需附一句事实说明，不再输出自动`history-gap`或CLI命令。失败或预算省略不阻断当前任务，但保留待补边界；最终快照确有正文或API返回无可用文本时才清除该边界。交接不代表模型已阅读完整讨论，不拦截通用工具输出造已读水位。额外业务调查仍由Agent按用户任务使用octo-cli，不能与固定准备流程混同。
+
+该本地实现覆盖原准入、排队/取消、reset代次、重试与预算边界，不改变WeCom、Host或协议。默认store将元数据计入原1024/4MiB/24h边界，自定义store缺少可选原子patch能力时明确unknown。ACK/自身RECV只提供位置，不能单独证明 assistant 已覆盖；有缺口仍进行一次有界查询以核对输出内容并准备当次恢复材料，未关联/已淘汰位置保守保留。真实服务端可见性、序号同域与Agent取材仍须按[实施记录](../tasks/channel-context-gap/implementation.md)验收，不能由fake测试推断已部署。
 
 出站普通回复不自动 @ 发起者。当前用户明确要求通知真人或向当前群 Bot 交接任务时，由模型理解需求、按需查询真实身份，在成功 final 普通正文中输出 `@[uid:displayName]`。Channel 用结构化 Markdown 解析排除代码和引用，再核验当前成员的 UID、显示名和明确身份：真人 `robot=0/false`、Bot `robot=1/true`。有效目标转换为人类协议 `content + mention.uids/entities`，经原连接统一发送；身份未知、非成员及广播 UID 不生成原生 mention。失败目标退为普通 @名字，不阻断正文、不另发失败提示或补发。广播、自行发起 Bot 调用不因此开放；进度、工具、thinking 和失败终态不转换。接收 Bot 仍必须通过现有发送者、Space、群范围和真实 mention 准入，自消息始终拒绝。
 
-Gateway 默认 mention 控制指令与逐轮提醒均使用英文。请求装配先消费宿主已解析的本轮有效 Context，再将 `octo.control/instructions.payload.entries` 组合为 `[...hostEffectiveEntries, ...gatewayDefaultEntries]`；同 key 只保留一个 item，原顺序和显式重复内容均保留，不修改宿主输入、不累计上一轮结果。此为 Gateway 局部组合，不改变公共 `mergeContext`、静态/动态宿主整项替换或 `mandatory` 的可信来源及覆盖合同。完整组合内容计入 Context 预算；允许沿现有规则省略自动辅助材料，不静默丢弃默认控制指令或显式业务材料。
+Gateway 默认 mention 控制指令与稳定说明使用英文。请求装配先消费宿主已解析的本轮有效 Context，仅在稳定说明刷新轮将 `octo.control/instructions.payload.entries` 组合为 `[...hostEffectiveEntries, ...gatewayDefaultEntries]`；同 key 只保留一个 item，原顺序和显式重复内容均保留，不修改宿主输入、不累计上一轮结果。此为 Gateway 局部组合，不改变公共 `mergeContext`、静态/动态宿主整项替换或 `mandatory` 的可信来源及覆盖合同。完整组合内容计入 Context 预算；允许沿现有规则省略自动辅助材料，不静默丢弃当前应带的稳定说明或显式业务材料。
 
 同代次卡片重试沿用 occurrence 中已经组合的完整冻结 Context，不重新读取宿主或历史，不再次追加 Gateway 默认指令。重放来源由现有内部 `historyRetry` 标记确定，不能扫描规则文本或去重宿主显式重复项；原请求符合预算时，不能因重复追加默认内容而使重试超过预算。重试回归必须比较完整 Context 和 inputs，覆盖连续重试及接近预算上限的群/话题。
 
-新 Provider 会话通过原生控制通道使用完整默认规则；每轮普通输入都显式提供可选 `extra.im/mention-instructions` 英文短提醒，让升级前已有 Provider binding 也能收到新提示，不自动 reset。完整控制规则以 `[OCTO_CHANNEL_MENTION_RULES_V1]` / `[/OCTO_CHANNEL_MENTION_RULES_V1]` 标记，并要求模型在摘要或 compaction 时原样保留。按用户决定，保留以模型行为为准，不新增 compaction 保留机制或验证要求。历史的一次资格不受提醒重提影响。实施和验证记录见[Issue #101](../tasks/101-bot-mention/brief.md)。
+2026-10-29 Issue #234 替代此前逐轮提醒及“升级旧 session”解释：Bot 的 `stable_context_refresh_interval_turns` 默认 30，只接受正安全整数。稳定 `extra.im/mention-instructions`、`artifact-delivery`、`history-instructions` 在会话第 1、N、2N…轮及新 Provider 会话进入普通模型 Context，保证 Codex、Claude Code、OpenClaw 续聊有真实输入载体；不以仅首轮消费的控制字段充当周期刷新。history-instructions 只约定结合前文理解当前意图、遵循最新相关修正、不自动重启旧任务三个总体目标，不规定模型的具体操作或加载/工具流程；历史不完整时仅在 history 内附一句事实说明，模型侧无独立自动 history-gap。群/话题规则在相同周期也重带当前版本，原每轮权威查询及变更刷新保持。
+
+轮次以实际交给执行的用户任务计数，控制命令、准备/展示前失败、工具步骤、自动重试及同代次冻结卡片重试不增加。可信未提交可回退本次推进；结果未知不可回退。失败刷新保留待补，成功且耗尽源流才确认。状态由有界 binding 保存；宿主 store 必须保留可选 `stableContext`，同代次队列共享对象，reset/new 重置，旧任务不能回写新代次。历史首轮资格只在实际尝试时消费，准备失败仍有资格。
+
+每轮真实消息单独携带 `extra.im/message-trigger` JSON，guidance 只用一句简短英文解释字段：conversation.id 是原始频道 ID，conversation.type 只取 dm/group/group_topic（私聊/群/群子区），group/topic 分别保留群与子区名称和 ID；sender 是发起者 UID/名称及 human/bot/unknown 类型，recipient 是当前 Bot ID/名称，sentAt 是原消息秒级时间转换的系统时区及显式偏移的 ISO 时间，mentions 是真实 @ 目标与广播标记。身份及范围名称通过当前 Bot 的只读 API 查询；共用 5 秒预算、不重试 429、限制响应大小。名称/时间缺失为 null，类型未知为 unknown，不从正文、昵称或 UID 后缀猜测，不把接收 Bot 当作发起者；可选查询失败不阻断，外部取消继续传播，群规则权限失败仍按原合同阻断。真实准入已拒绝空发送者。history guidance 同样只解释数据，固定阅读原则放入稳定项。省略的稳定和群规则加入既有 fresh fallback 备用输入，保留图片；同代次卡片重试冻结完整 Context、恢复输入及产物策略。共享模型渲染器继续保留真实换行，无通用去重。完整 mention 规则的保留仍以模型行为为准，接受刷新间隔内可能遗忘，不新增 compaction 监听或旧 session 兼容机制。见[任务](../tasks/234-context-lifecycle/brief.md)。
+
+当前消息与历史共用 Transport 独立持有的展示身份内存缓存，键按 API/Bot/Space/UID 隔离，最多 2000 项，固定 10 分钟 TTL、不因读取续期、不落盘。只缓存查到的名称/类型，失败和不存在不缓存；每次只查未命中项，每批不超过 200。该缓存不保存准入/权限、原消息时间或群规则，不替代出站 mention 的实时成员核验；10 分钟内改名/类型变化可能延迟体现。补充信息 API 失败不重试、不换接口、不要求模型修复，也不阻断后续 AgentRun。
 
 ## 业务工具与产物交付边界
 
@@ -122,11 +142,13 @@ octo-cli 是业务团队共同维护的 Go 二进制程序，提供 Octo 各业�
 
 定制业务执行流程通过 octo.context-envelope/v3 注入本轮约束，由 Agent 工具循环完成，严禁在 Channel 编码任意步骤编排、条件分支或收尾代执行。此原则不限于消息、文件和 artifact；Channel 必需的传输、准入、生命周期、CanonicalEvent 呈现及已约定的固定产物投递按明确合同执行，不能扩大解释为业务自动化入口。
 
-2026-10-26 Issue #182 修正旧的统一 tool-only 表述：主动业务上传走 LLM → ToolCall，渠道固定输出交付走 Gateway final 投递。二者由输入/Context 预先建立的责任合同区分，可以调用相同底层附件 API；不能检测工具未调用来决定是否“补做”。现有云地址不重复上传，仍只发送同一条 final。
+自动历史每条 messages 消息、嵌套引用和转发消息都携带 sentAt，使用各自原消息时刻的系统时区时间，以带显式偏移的 ISO 8601 表示；不硬编码时区，偏移按消息时刻计算，兼容夏令时。未知为 null，不补 Date.now，不继承外层时间。解码 API 秒转毫秒时保留未知值，模型投影统一转为 ISO。正文截短/省略仍保留时间，时间计入既有完整 JSON 预算，顺序仍按消息序号。
 
-Bot 配置 `artifact_delivery.mode` 省略为 `channel`，`tools` 关闭 Gateway 固定上传。Gateway 每轮执行前写入 `extra.im/artifact-delivery`，明示行为、有效工作区及宿主文件访问策略，正文、Context 中的同名伪造授权或路径不放大权限。只解析成功 final 的普通/图片 Markdown 引用及使用中的定义，跳过代码、引用和 HTML。绝对/工作区相对/file URL 按本机路径解析，realpath 与打开的 regular-file 描述符共同核验，禁止目录及符号链接逃逸；远程 Provider 文件明确不可读，不假定本机挂载。
+2026-10-26 Issue #182 修正旧的统一 tool-only 表述：主动业务上传走 LLM → ToolCall，渠道固定输出交付走 Gateway final 投递。二者由输入/Context 预先建立的责任合同区分，可以调用相同底层附件 API；不能检测工具未调用来决定是否“补做”。现有云地址不重复上传，仍只发送同一条 final。Issue #234 最终将默认 channel 模式的 artifact-delivery guidance 收敛为本地 final 的输出格式：绝对路径 Markdown 文件链接，图片使用 !；不在此提示中解释上传实现、禁止上传/发送或指挥工具调用。用户明确要求的 octo-cli 操作仍由正常 ToolCall 执行，不以关键词自动切换模式。
 
-默认允许有效本地工作区，宿主可用 `allowed_roots` 明确限定绝对目录（空列表拒绝全部），以 `allowed_mime_types` 收紧类型；无文档扩展白名单。默认单文件 20 MiB、总计 50 MiB、16 个文件和 30 秒整次上传预算，仅可收紧。HTML、Markdown 等均按 IM 附件交付；部署在线文档服务不改变这一语义。不得自动探测企业服务、发布/导入文档、授予文档权限或创建公开分享，不提供企业服务路由开关。用户明确的在线协作和发布走普通 LLM ToolCall。
+Bot 配置 `artifact_delivery.mode` 省略为 `channel`，`tools` 关闭 Gateway 固定上传。Gateway 每轮执行前计算真实产物策略，在上述首轮/周期及新 Provider 会话写入 `extra.im/artifact-delivery`，明示行为、有效工作区及宿主文件访问策略；普通轮省略说明不关闭交付，冻结卡片重试复用原策略。正文、Context 中的同名伪造授权或路径不放大权限。只解析成功 final 的普通/图片 Markdown 引用及使用中的定义，跳过代码、引用和 HTML。绝对/工作区相对/file URL 按 Gateway 本机路径解析并实际尝试读取，不以 agentSource/preset 或 Provider 类型预先判定远程不可读；realpath 与打开的 regular-file 描述符共同核验，拒绝目录。默认不额外限制到工作区；宿主显式配置根目录时拒绝 symlink 逃逸。路径缺失或读取失败按实际事实报告，不自动下载远端产物。
+
+用户无需额外配置即可交付成功 final 中显式引用的 Gateway 可读本地文件，不限制 Provider 类型或默认工作区；宿主可用原有 `allowed_roots` 额外限定绝对目录（空列表拒绝全部），以 `allowed_mime_types` 收紧类型；无文档扩展白名单。默认单文件 20 MiB、总计 50 MiB、16 个文件和 30 秒整次上传预算，仅可收紧。HTML、Markdown 等均按 IM 附件交付；部署在线文档服务不改变这一语义。不得自动探测企业服务、发布/导入文档、授予文档权限或创建公开分享，不提供企业服务路由开关。用户明确的在线协作和发布走普通 LLM ToolCall。
 
 IM 附件使用当前连接 Bot 获取 `GET /v1/bot/upload/presigned` 凭据，按返回的 PUT 及签名头直传已核验字节，不向存储服务转发 Bot Token；仅交付独立 downloadUrl。图片以 Markdown 图片内嵌展示，保留 alt/title，纯下载链接不满足图片交付。不递归上传文档依赖或部署任意网站。API 相对下载地址规范化；需要 Bot 鉴权的预览路由、临时签名 URL 和上传 URL 不能冒充长期收件地址。
 
@@ -137,6 +159,8 @@ IM 附件使用当前连接 Bot 获取 `GET /v1/bot/upload/presigned` 凭据，�
 2026-10-26 PR #187 产品决策：`/stop`、`/cancel` 在本轮最终交付完成前继续有效。模型完成后，Gateway 必须在移除执行登记前注册最终交付取消控制器，并在等待 `presentation.finish()` 后复用同一取消状态；等待期间收到停止命令，后续不得启动产物准备、文件卡或 final 发送。执行终态与业务交付分开：已经确认的 `completed` 不改为 `cancelled`，不再次取消或重跑已完成模型，也不回滚已完成的上传或已发送消息。停止只取消剩余交付，不承诺强制终止尚未返回的展示清理；交付结束后释放取消登记。该决策沿用原有停止合同，避免用户在收尾阶段看到“无可停止执行”后仍发生自动上传；不新增模型完成后忽略 stop 的阶段规则。
 
 工具调用不稳定时，在业务方拥有的 Context、提示词、技能与工具说明处对齐；工具或身份合同实际有缺陷时修复其责任模块，不能在 Channel 特殊处理来代执行。Context 的生成和发送仍由业务发起方决定，不要求框架自动注入或每轮重复。Channel 继续按标准合同负责 IM 准入、输入/Context 接线、CanonicalEvent 展示、交互回传和当前会话最终回复。已存在的 CLI/tool call 能力计入目标覆盖，不因 Channel 未重复实现 API 而扣分；本轮未独立复测与功能未实现分别记录。见[架构决定](../journal/shared/2026-10-16-agent-toolcall-channel-boundary.md)。
+
+远端 Provider 的文件可访问性归对应 Adapter 协调转换，Gateway 保留最终交付限制及 IM 投递责任。OpenClaw 远端文件转为可读取 HTTPS 资源的路径按用户决定列为 [P2 待办](../tasks/234-context-lifecycle/remote-artifact-backlog.md)，尚未实现；当前不据 `agentSource` 推断本机文件不可读，也不自动下载普通远端链接。具体位置判定见 [OpenClaw 后续合同](openclaw.md#远端产物交付p2-待办)。
 
 ## Octo CLI 的渠道执行环境
 

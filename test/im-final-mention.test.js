@@ -2,10 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as settle } from "node:timers/promises";
 import { readFile } from "node:fs/promises";
-import {
-  prepareFinalMention,
-  MENTION_REMINDER
-} from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
+import { prepareFinalMention } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
 import { WukongConnection } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/wukong.js";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
@@ -99,14 +96,27 @@ test("boolean human and bot flags are valid and mixed Unicode entity offsets rem
   assert.equal(result.text, "😀 @人😀 和 @Bot🤖 @Bot🤖");
 });
 
-test("per-turn Context reminder matches the current English example exactly", async () => {
+test("per-turn trigger example separates the actor from stable mention rules", async () => {
   const example = JSON.parse(
     await readFile(
-      new URL("../.octospec/tasks/101-bot-mention/turn-context.example.json", import.meta.url),
+      new URL(
+        "../.octospec/tasks/234-context-lifecycle/turn-context.example.json",
+        import.meta.url
+      ),
       "utf8"
     )
   );
-  assert.equal(example.items[0].guidance, MENTION_REMINDER);
+  assert.equal(example.items[0].name, "message-trigger");
+  assert.equal(example.items[0].guidance.split("\n").length, 1);
+  assert.equal(example.items[0].payload.sender.uid, "sender-uid");
+  assert.deepEqual(
+    example.items[0].payload.mentions.targets.map((target) => target.uid),
+    ["bot-uid"]
+  );
+  assert.equal(
+    example.items.some((item) => item.name === "mention-instructions"),
+    false
+  );
 });
 
 test("transport resolves topic members once and sends mention with final text on the original connection", async (t) => {

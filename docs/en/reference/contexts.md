@@ -114,7 +114,13 @@ The rendered tag is intentionally spelled `guidence`; the API field remains `gui
 
 Data keeps the existing JSON serialization of the object payload, with recursively sorted object keys and array order preserved. CDATA only wraps that serialized text; it does not parse or reinterpret embedded JSON, XML, YAML, or other material. Embedded `]]>` is split across adjacent CDATA sections so joining their contents recovers the original serialized text.
 
-The same format is used for primary input, multipart text input, and explicitly supplied fresh fallback input. This is model-facing text, not a strict XML interchange format; raw Markdown may contain XML syntax. CDATA does not grant permissions or enforce instruction boundaries.
+An `extra.*` item may explicitly set `data_format: "text"` with a payload containing only `{ "text": "original text" }`. Its CDATA contains the original text directly, preserving newlines and indentation. Additional payload fields are rejected in this mode, so rendering cannot silently drop data. Omitting `data_format` retains complete JSON rendering, even for a payload containing `text`.
+
+Octo Gateway uses text mode for automatically loaded group and topic rules. A group receives its group rules; a topic receives both parent group and topic rules. The group guidance names the source as `Octo IM Group's GROUP.md`; topic guidance uses `Octo IM Group Topic Rules`. Version cursors, source identifiers and automatic-loading markers stay inside Gateway. Missing documents and text that is empty after trimming produce `NO RULES`, with guidance withdrawing previously supplied rules. These items remain present on scheduled refreshes or rule changes, including recovery input. Nonempty text is preserved verbatim.
+
+When contexts are present, Core inserts `<!-- Query Input -->` with a blank line on either side between the context block and the invocation input. Original text and image parts remain in order. With no model-facing contexts, input is unchanged.
+
+The same format is used for primary input, multipart text input, and explicitly supplied fresh fallback input. This is model-facing text, not a strict XML interchange format; raw Markdown may contain XML syntax. The comments and CDATA do not grant permissions or enforce instruction boundaries.
 
 ## Timeout Fields
 

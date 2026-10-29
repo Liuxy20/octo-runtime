@@ -160,7 +160,7 @@ octo-runtime channel-gateway extraget
 ## 会话与投递
 
 - 聊天到会话的绑定放在 `ImSessionStore`。默认的 `MemoryImSessionStore` 有界、不跨重启；要持久化就提供 `createSessionStore(botConfig)`。store 不保存完整 Provider 历史，也恢复不了未结束的 Run。
-- Gateway 在模型执行前准备本轮 Context。新逻辑会话可补充当前触发之前的最近聊天；群/话题存在历史缺口时按固定规则补齐，最多 15 条、1500 Unicode 码点，失败不阻断当前任务。Host/Adapter 不自行读取聊天历史，额外业务调查仍由 Agent 按任务执行。
+- Gateway 在模型执行前准备本轮 Context。新逻辑会话可补充当前触发之前的最近聊天；群/话题存在历史缺口时按固定规则补齐，最多 20 条、8000 Unicode 码点，失败不阻断当前任务。Host/Adapter 不自行读取聊天历史，额外业务调查仍由 Agent 按任务执行。
 - 成功 final 里引用的文件会作为 IM 附件上传：单文件 20 MiB、单轮 50 MiB、最多 16 个不同文件、准备时间 30 秒。部分失败保留成功的链接，并写明哪些没投递。
 - Adapter 发来的 `session.update` 是不透明的 Provider 绑定数据，不是应用历史。
 

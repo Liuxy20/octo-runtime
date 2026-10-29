@@ -8,6 +8,7 @@
 
 - 你要接的是企业微信而不是 Octo IM；两个渠道互不依赖。
 - SDK 宿主自己管理 Extra 生命周期和 Kernel 端点。
+- `extra.im` 由 Channel Extra 专属构造；宿主静态 Context 和动态 `loadContexts` 的全部同命名空间项均被忽略，即使渠道本轮没有生成同名项。宿主业务材料使用其他命名空间；全局 `octo.control/instructions` 保留既有合并合同。
 - 你要通过 CLI 部署：保存 `channel-wecom` 声明，再执行 `octo-runtime channel-wecom start`；它的服务独立于 `channel-gateway`。
 
 ## CLI 常用命令

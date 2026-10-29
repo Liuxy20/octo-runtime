@@ -138,7 +138,7 @@ test("rules are supplied once per provider session and authoritative versions re
   current.documents.set("group", { content: "GROUP-RULE-2", version: 2 });
   current.send();
   await current.idle();
-  assert.equal(rules(current.requests[2])[0].payload.version, 2);
+  assert.equal(rules(current.requests[2])[0].payload.text, "GROUP-RULE-2");
   current.send();
   await current.idle();
   assert.equal(rules(current.requests[3]).length, 0);
@@ -195,7 +195,7 @@ test("updates arriving during execution survive success and queued turns read th
   release();
   await current.idle();
   assert.equal(rules(current.requests[1]).length, 0);
-  assert.equal(rules(current.requests[2])[0].payload.version, 3);
+  assert.equal(rules(current.requests[2])[0].payload.text, "GROUP-RULE-3");
   current.send();
   await current.idle();
   assert.equal(rules(current.requests[3]).length, 0);
@@ -237,15 +237,17 @@ test("empty, deletion, recreation and reset/new each refresh the provider contex
   current.documents.set("group", { content: "", version: 2 });
   current.send();
   await current.idle();
-  assert.equal(rules(current.requests.at(-1))[0].payload.status, "empty");
+  assert.equal(rules(current.requests.at(-1))[0].payload.text, "NO RULES");
+  assert.match(rules(current.requests.at(-1))[0].guidance, /currently empty;.*no longer apply/);
   current.documents.delete("group");
   current.send();
   await current.idle();
-  assert.equal(rules(current.requests.at(-1))[0].payload.status, "not_found");
+  assert.equal(rules(current.requests.at(-1))[0].payload.text, "NO RULES");
+  assert.match(rules(current.requests.at(-1))[0].guidance, /not found.*no longer apply/);
   current.documents.set("group", { content: "RECREATED", version: 4 });
   current.send();
   await current.idle();
-  assert.equal(rules(current.requests.at(-1))[0].payload.version, 4);
+  assert.equal(rules(current.requests.at(-1))[0].payload.text, "RECREATED");
   for (const command of ["/reset", "/new"]) {
     const previous = current.requests.at(-1).sessionId;
     const count = current.requests.length;

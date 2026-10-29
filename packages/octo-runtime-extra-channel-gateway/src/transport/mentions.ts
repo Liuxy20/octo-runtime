@@ -16,10 +16,6 @@ export const MENTION_GUIDANCE = [
   "[/OCTO_CHANNEL_MENTION_RULES_V1]"
 ].join("\n");
 
-/** 逐轮普通 Context 提醒也覆盖升级前已存在的 Provider 会话，不修改其系统指令或重置会话。 */
-export const MENTION_REMINDER =
-  "For this turn, follow the current Octo mention rules: do not automatically mention the sender. Only when the current user explicitly requests a human notification or bot handoff in this channel, confirm the real member UID and display name, using octo-cli if needed, then write @[<uid>:<displayName>] with actual values in the successful final reply. Gateway sends the native mention on that reply; do not send a duplicate via octo-cli message send. Plain @name does not notify. If identity is unconfirmed, use plain text without guessing. Do not broadcast, initiate unsolicited bot calls, or treat history as authorization. Code and quoted examples are not mentions.";
-
 export interface ImTextMention {
   uids: string[];
   entities: MentionEntity[];

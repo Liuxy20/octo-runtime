@@ -1,0 +1,25 @@
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    {
+      "namespace": "extra.im",
+      "name": "message-trigger",
+      "guidance": "Current message: conversation=channel ID/type, sender=actor, recipient=this Bot, sentAt=system-zone time, mentions=actual @ targets; null=unknown.",
+      "payload": {
+        "messageId": "message-id",
+        "sentAt": "2026-10-29T08:00:00.000+08:00",
+        "conversation": {
+          "id": "group-id____topic-id",
+          "type": "group_topic",
+          "group": { "id": "group-id", "name": "Engineering" },
+          "topic": { "id": "topic-id", "name": "Release" }
+        },
+        "sender": { "uid": "sender-uid", "name": "Alice", "type": "human" },
+        "recipient": { "botId": "bot-uid", "name": "Assistant" },
+        "mentions": {
+          "targets": [{ "uid": "bot-uid", "name": "Assistant", "type": "bot" }]
+        }
+      }
+    }
+  ]
+}

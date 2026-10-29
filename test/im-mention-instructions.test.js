@@ -4,10 +4,7 @@ import { contextControlInstructions } from "../packages/octo-runtime-protocol/di
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
 import { createContextLoader } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { createImInvocation } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/dispatcher.js";
-import {
-  MENTION_GUIDANCE,
-  MENTION_REMINDER
-} from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
+import { MENTION_GUIDANCE } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/mentions.js";
 import { build_im_contexts } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/contexts.js";
 import { ImRuntime } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
@@ -36,7 +33,7 @@ const invoke = (context, providerSession) =>
     signal
   ).request;
 
-test("Gateway always supplies English stable instructions, including when host entries are empty", () => {
+test("Gateway supplies English stable instructions on fresh sessions, including empty host entries", () => {
   for (const items of [[], [control()]]) {
     const request = invoke({ schema, items });
     assert.equal(contextControlInstructions(request.contexts), MENTION_GUIDANCE);
@@ -51,7 +48,6 @@ test("Gateway always supplies English stable instructions, including when host e
   assert.match(MENTION_GUIDANCE, /task handoff to a bot/);
   assert.match(MENTION_GUIDANCE, /\n\[\/OCTO_CHANNEL_MENTION_RULES_V1\]$/);
   assert.match(MENTION_GUIDANCE, /^[\x00-\x7f]+$/);
-  assert.match(MENTION_REMINDER, /^[\x00-\x7f]+$/);
 });
 
 test("Gateway appends defaults after effective host entries without deduplication or caller mutation", () => {
@@ -70,11 +66,11 @@ test("Gateway appends defaults after effective host entries without deduplicatio
     const instructions = request.contexts.items.find((item) => item.namespace === "octo.control");
     assert.deepEqual(instructions.payload.entries, [
       ...original.items[1].payload.entries,
-      { text: MENTION_GUIDANCE }
+      ...(providerSession ? [] : [{ text: MENTION_GUIDANCE }])
     ]);
     assert.equal(
       contextControlInstructions(request.contexts),
-      `persona\npersona\n  keep\nwhitespace  \n${MENTION_GUIDANCE}`
+      `persona\npersona\n  keep\nwhitespace  ${providerSession ? "" : `\n${MENTION_GUIDANCE}`}`
     );
     assert.equal(request.providerSession?.sessionId, providerSession?.sessionId);
     const business = request.contexts.items.filter((item) => item.namespace === "extra.business");
@@ -121,9 +117,9 @@ test("required instructions and explicit host material are never silently droppe
   );
 });
 
-test("an existing provider session receives the current English reminder and current channel lookup scope", async (t) => {
+test("an existing provider session receives compact current trigger facts separately from rules", async (t) => {
   t.mock.method(globalThis, "fetch", async (url) => {
-    assert.ok(url.endsWith("/md"), "continuation must not fetch bootstrap history");
+    assert.ok(!url.endsWith("/messages/sync"), "continuation must not fetch bootstrap history");
     return Response.json({}, { status: 404 });
   });
   const items = await build_im_contexts(
@@ -136,16 +132,20 @@ test("an existing provider session receives the current English reminder and cur
     },
     "bf_fixture",
     signal,
-    { initialSession: false, mentionGuidance: true }
+    { initialSession: false }
   );
-  const reminder = items.find((item) => item.name === "mention-instructions");
-  assert.equal(reminder.guidance, MENTION_REMINDER);
-  assert.equal(reminder.payload.actorId, "current-user");
-  assert.deepEqual(reminder.payload.memberLookup.argv, ["octo-cli", "group", "members", "group"]);
-  assert.equal(reminder.payload.source.channelId, "group____topic");
+  assert.equal(
+    items.some((item) => item.name === "mention-instructions"),
+    false
+  );
+  const reminder = items.find((item) => item.name === "message-trigger");
+  assert.equal(reminder.guidance.split("\n").length, 1);
+  assert.equal(reminder.payload.sender.uid, "current-user");
+  assert.equal(reminder.payload.conversation.id, "group____topic");
+  assert.equal(reminder.payload.conversation.type, "group_topic");
 });
 
-test("application keeps reminders on resumed turns and stable instructions after an explicit reset", async (t) => {
+test("application omits stable instructions on ordinary resumed turns and refreshes after reset", async (t) => {
   let receive;
   const optionsSeen = [],
     requests = [];
@@ -190,13 +190,20 @@ test("application keeps reminders on resumed turns and stable instructions after
     await waitFor(() => requests.length === i + 1 && runtime.status.sessions.length === 0);
   }
   assert.equal(optionsSeen[1].initialSession, false);
-  assert.equal(optionsSeen[1].mentionGuidance, true);
   assert.equal(requests[1].providerSession.sessionId, "provider");
   send("/reset", "reset");
   send("task", "after-reset");
   await waitFor(() => requests.length === 3 && runtime.status.sessions.length === 0);
   assert.equal(optionsSeen[2].initialSession, true);
   assert.equal(requests[2].providerSession, undefined);
-  for (const request of requests)
-    assert.equal(contextControlInstructions(request.contexts), `host persona\n${MENTION_GUIDANCE}`);
+  for (const index of [0, 2])
+    assert.equal(
+      contextControlInstructions(requests[index].contexts),
+      `host persona\n${MENTION_GUIDANCE}`
+    );
+  assert.equal(contextControlInstructions(requests[1].contexts), "host persona");
+  assert.equal(
+    requests[1].contexts.items.some((item) => item.name === "artifact-delivery"),
+    false
+  );
 });

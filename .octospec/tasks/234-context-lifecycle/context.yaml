@@ -1,0 +1,18 @@
+rules_read:
+  - ../../rules/_index.yaml
+  - ../../rules/architecture.md
+  - ../../rules/protocol-design.md
+  - ../../rules/protocol-schema.md
+  - ../../rules/channel-integration.md
+  - ../../rules/context-input.md
+  - ../../rules/context-extensions.md
+  - ../../rules/invoke-input.md
+  - ../../rules/session-reset.md
+  - ../../rules/extras.md
+  - ../../rules/stateless-execution.md
+  - ../../rules/openclaw.md
+  - ../../rules/adapter-metadata.md
+  - ../../rules/engineering.md
+baseline: 96a6f58cf1ec8cfb0f33e88b522bea6b6a95e822
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/234
+ci_scope_change: false

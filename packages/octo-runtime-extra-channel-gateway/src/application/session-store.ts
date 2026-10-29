@@ -3,12 +3,15 @@ import type { FailureEnvelope, ProviderSession } from "@mininglamp-oss/octo-runt
 import type { ImTaskAttempt } from "../contracts.js";
 import type { ImGapMetadata, ImGapTurnToken } from "./context-gap.js";
 import type { ImRulesContext } from "./rules-context.js";
+import type { ImStableContextState } from "./stable-context.js";
+import type { ImArtifactPolicy } from "../delivery/artifact-policy.js";
 
 export interface ImSessionOccurrence {
   text: string;
   sessionId: string;
   runId: string;
   snapshot?: ImInvocationInput;
+  artifacts?: ImArtifactPolicy;
   attempts?: ImTaskAttempt[];
   /** 仅整轮没有已执行或未知尝试时保存；旧记录缺省不推测执行事实。 */
   notSubmittedFailure?: FailureEnvelope;
@@ -21,6 +24,7 @@ export interface ImSessionBinding {
   lastEventId?: string;
   lastRunId?: string;
   initialContextPrepared?: boolean;
+  stableContext?: ImStableContextState;
   gap?: ImGapMetadata;
   rulesContext?: ImRulesContext;
 }

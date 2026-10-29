@@ -6,6 +6,7 @@
 import type { ChannelType } from "./types.js";
 import { DEFAULT_TIMEOUT_MS, postJson, getJson } from "./client.js";
 import { trimTrailingSlashes } from "./url.js";
+import { messageDate } from "../message-time.js";
 
 // Fetch the groups the bot belongs to
 export async function fetchBotGroups(params: {
@@ -97,7 +98,7 @@ export async function getChannelMessages(params: {
   Array<{
     from_uid: string;
     content: string;
-    timestamp: number;
+    timestamp: number | null;
     message_id?: string;
     message_seq?: number;
     type?: number;
@@ -167,8 +168,8 @@ export async function getChannelMessagePage(
       name: payload.name ?? undefined,
       content: payload.content ?? "",
       payload, // preserve full payload for types that need nested data (e.g. MultipleForward)
-      // Convert seconds to milliseconds (API returns seconds, internal standard is ms)
-      timestamp: (m.timestamp ?? Math.floor(Date.now() / 1000)) * 1000
+      // API 秒转内部毫秒；未知保留 null，不能伪造为处理时刻。
+      timestamp: messageDate(m.timestamp, "seconds")?.getTime() ?? null
     };
   });
   return { messages: decoded, ...(data.more !== undefined ? { more: Boolean(data.more) } : {}) };

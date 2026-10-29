@@ -38,11 +38,11 @@ Octo Gateway 的 `/new` 为同一 reset 分支的别名。reset 同时清除 bin
 
 2026-10-15 用户确认 IM Agent 固定 workdir；每会话目录不是需求。reset 只切业务 session、代次和 Provider binding，不切目录或删除产物；延迟分配的现有实现不应改成修改旧 Provider 的 opaque ID。2026-10-16 进一步明确这是 IM 层的架构决策，不是功能计划，也不要求通用 Host 限制其他调用方的合法目录配置。决策依据及共享文件、并发影响评估见[固定目录决策](../tasks/channel-fixed-workdir-decision/brief.md)，分层责任见[IM Agent 与 invoke 边界](../guides/im-agent-invocation-boundary.md)。
 
-IM reset 不要求无历史对话。已实施的[历史策略](../tasks/channel-new-session-history/brief.md)为：下一条普通输入可补 reset 前的最近聊天，每新 session 仅自动尝试一次，最多 15 条/1500 字符；失败或空结果也消耗本次资格，当前任务空历史继续。正常续聊不自动重新拉取；重试复用冻结快照。一次性资格由 Channel 在有界会话状态中管理，Host/Adapter 不去重或补齐 Context，不增加持久 reset 屏障。2026-10-16 im-test 已验证 reset 后补旧历史且工作目录不变，详见[交付记录](../journal/shared/2026-10-16-channel-features-delivery.md)。
+IM reset 不要求无历史对话。已实施的[历史策略](../tasks/channel-new-session-history/brief.md)为：下一条普通输入可补 reset 前的最近聊天，每新 session 仅自动尝试一次冷启动读取，最多 20 条，完整序列化 messages 数组最多 8000 Unicode 码点（身份、时间、结构和转义均计入）；准备失败不消耗资格，实际交给执行后历史失败或空结果也消耗本次资格，当前任务空历史继续。正常群/话题续聊仍按实际缺口有界补取，无缺口不查；重试复用冻结快照。首轮、reset/new 与补位保留窗口内自身 Bot 消息，不能仅按 UID 排除。一次性资格由 Channel 在有界会话状态中管理，Host/Adapter 不去重或补齐 Context，不增加持久 reset 屏障。2026-10-16 im-test 已验证 reset 后补旧历史且工作目录不变，详见[交付记录](../journal/shared/2026-10-16-channel-features-delivery.md)。
 
 ## 当前内置 IM 存储
 
-Issue #32的群/话题gap元数据附于同一有界binding，无旁路聊天库。观察与ACK只原子patch已有同session/generation条目，不续TTL、不改淘汰顺序；reset清除旧元数据，旧turn/ACK不能更新新代次。固定历史API在模型前完成，第一次交接只推进本地prepared事实，不宣称Provider已接受或Agent已读；API失败或正文被预算省略时保留待补边界。Provider显式fresh_fallback只使下一条新输入重新取最多15条，不重拉本轮历史或另起invoke；同代次卡片重试复用冻结快照，不重新采集。详见[缺口状态机](../tasks/channel-context-gap/design.md)。
+Issue #32的群/话题gap元数据附于同一有界binding，无旁路聊天库。观察与ACK只原子patch已有同session/generation条目，不续TTL、不改淘汰顺序；reset清除旧元数据，旧turn/ACK不能更新新代次。固定历史API在模型前完成，第一次交接只推进本地prepared事实，不宣称Provider已接受或Agent已读；API失败或正文被预算省略时保留待补边界。正常接续若保守省略已被assistant覆盖的自身输出，Gateway必须从同次已查询、已预算窗口准备互不重叠的恢复补充，沿既有freshFallbackModelInput/Parts在本次fresh fallback补回，不重拉本轮历史或另起invoke；主历史与恢复补充合计仍最多20条/8000序列化码点。Provider显式fresh_fallback也使下一条新输入按连续性未知重新有界取历史；同代次卡片重试复用两份冻结快照，不重新采集。详见[缺口状态机](../tasks/channel-context-gap/design.md)与[保守历史设计](../tasks/234-context-lifecycle/conservative-history-plan.md)。
 
 ### 调度状态与业务 binding 分开
 

@@ -54,7 +54,10 @@ test("F01: absent, malformed, empty and non-text quotes do not invent material",
     { payload: { content: " " } },
     { payload: { type: 2, content: "image" } }
   ]) {
-    assert.deepEqual(await build(reply), []);
+    assert.equal(
+      (await build(reply)).some((item) => item.name === "reply"),
+      false
+    );
   }
   const [unknown] = await build({ payload: { content: "text" } });
   assert.match(unknown.payload.text, /^引用来源：未知来源/);

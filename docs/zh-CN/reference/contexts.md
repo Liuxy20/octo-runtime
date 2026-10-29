@@ -114,7 +114,13 @@
 
 数据沿用对象 payload 的 JSON 序列化：递归排序对象键，保留数组顺序。CDATA 仅包裹序列化文本，不解析或重新解释其中的 JSON、XML、YAML 等材料。文本中的 `]]>` 拆成相邻 CDATA 区段，连接各区段正文后可还原原序列化文本。
 
-主输入、multipart text 输入及显式提供的 fresh fallback 输入使用同一格式。这是面向模型的文本，原始 Markdown 可能含 XML 语法，不保证是严格 XML 交换格式；CDATA 不授予权限，也不强制执行指令边界。
+`extra.*` 项可显式设置 `data_format: "text"`，此时 payload 必须且只能包含 `{ "text": "原文" }`。CDATA 直接放入原文，保留换行和缩进；额外 payload 字段会校验失败，避免渲染时静默丢失字段。省略 `data_format` 仍完整输出 JSON，即使 payload 含有 `text` 也不会自动解包。
+
+Octo Gateway 自动读取的群规则、话题规则使用文本格式。群聊只带群规则；子区同时带父群规则和子区规则。群规则英文指引明确注明 `Octo IM Group's GROUP.md`；话题指引使用 `Octo IM Group Topic Rules`。版本游标、来源标识及自动加载标记只在 Gateway 内部使用。文档不存在或正文 trim 后为空时，正文统一为 `NO RULES`，英文指引明确撤销此前规则；在周期刷新、规则变化及恢复输入中仍保留对应项。非空正文保留原文。
+
+存在模型可见 Context 时，Core 在 Context 块与调用输入之间加入 `<!-- Query Input -->`，标记前后各空一行；原文本和图片部分的顺序不变。没有模型可见 Context 时不改写输入。
+
+主输入、multipart text 输入及显式提供的 fresh fallback 输入使用同一格式。这是面向模型的文本，原始 Markdown 可能含 XML 语法，不保证是严格 XML 交换格式；注释和 CDATA 不授予权限，也不强制执行指令边界。
 
 ## 超时字段
 

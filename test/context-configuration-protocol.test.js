@@ -52,7 +52,8 @@ for (const fixture of fixtures) {
 
 test("catalog covers every schema branch, including grouped capability namespaces", () => {
   const keys = schema.definitions.ContextItem.allOf
-    .filter((branch) => branch.if.properties.name)
+    // 格式条件仅检查字段存在；目录覆盖只遍历按名称分派的内置类型。
+    .filter((branch) => branch.if?.properties?.name)
     .flatMap((branch) =>
       (branch.if.properties.namespace.enum ?? [branch.if.properties.namespace.const]).map(
         (namespace) => `${namespace}/${branch.if.properties.name.const}`

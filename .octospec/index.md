@@ -55,6 +55,10 @@
 
 ## 当前任务
 
+- [Issue 234：接续历史保守选择](tasks/234-context-lifecycle/conservative-history-plan.md)：首轮、补位和恢复不明保留自身消息，channel-gateway 只排除明确由接续会话覆盖的具体输出；实现、双轴审查和全局安装完成，不做全面去重，用户已确认真实群聊验收通过。
+
+- [Issue 243：OpenClaw 远端产物交付](tasks/234-context-lifecycle/remote-artifact-backlog.md)：用户确认按 P2 暂缓；记录 Adapter 位置判定及远端引用转换、Gateway 附件投递的边界，代码仅留两个 TODO，远端能力尚未实现。
+
 - [Issue 119：准备期安全原因保真](tasks/119-preparation-error-codes/brief.md)：最新 main 独立 worktree，可执行性 97/100 后实施；复用目录冲突与规则协议码，专项 25 通过、相关回归 472 通过/1 条件跳过。[两轴审查](tasks/119-preparation-error-codes/review.md)各 0 项问题；专项仅手动运行，不扩大 CI，真实 IM 未验。
 
 - [Issue 137：Adapter 协议元数据类型](tasks/137-adapter-protocol-support/brief.md)：区分编写与注册输入，保留 canonical-only 默认值及运行时校验；类型和针对性 30 项通过，全量两项失败及基线对照见[验证记录](journal/shared/2026-10-29-137-adapter-protocol-support.md)。

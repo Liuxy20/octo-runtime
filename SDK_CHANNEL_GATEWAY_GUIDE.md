@@ -24,9 +24,17 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 
 ## 逐轮 Context
 
+`extra.im` 是 channel-gateway/channel-wecom 的保留命名空间，由对应 Extra 构造并决定注入时机；宿主静态 Context 和动态 `loadContexts` 中的全部 `extra.im` 项均不生效，本轮没有渠道同名项也不透传。宿主业务材料使用其他命名空间。渠道规则内容如需外部更新，由渠道内部按业务合同读取，不通过宿主 Context 覆盖。全局 `octo.control/instructions` 保留既有特殊合并，冻结重试复用渠道快照。详见 [Channel 规则](.octospec/rules/channel-integration.md#extraim-命名空间归属)。
+
+`message-trigger.conversation.id` 是原始频道 ID，type 仅为 `dm`、`group`、`group_topic`，分别表示私聊、群和群子区。子区保留完整频道 ID，父群/子区短 ID 与名称分别保留在 conversation.group/topic 中。
+
 dependencies.loadContexts(botConfig,{signal}) 返回当前 ContextItem 数组或 Promise。函数在宿主同进程直接调用，读取的数据变化无需重载连接。超时或取消后真实 Promise 未结束仍占额度；返回值最多 32 项 / 64 KiB。静态 context 与动态项的合并、业务指引和准入规则继续按 [Gateway 合同](packages/octo-runtime-extra-channel-gateway/README.md)。
 
-Gateway 将渠道默认英文 mention 指令与宿主本轮有效 `octo.control/instructions.payload.entries` 保序拼接为一个 item，宿主在前、默认在后；宿主静态/动态项之间仍按原规则整项替换。默认内容也占 Context 预算。用户明确要求的 Bot 交接支持原生 mention。接收 Bot 省略 `allowed_sender_ids` 时，DM 沿用平台好友准入，群/话题不额外限制发送者；显式名单仍限制发送者，空名单拒绝全部。当前 Bot 自己 @ 自己的消息不会触发 AgentRun。完整提示及逐轮英文提醒见上述 Gateway 合同。
+Gateway 的稳定 mention、产物交付和历史阅读说明，在会话首轮及第 N、2N…轮注入普通 Context，Bot 字段 `stable_context_refresh_interval_turns` 默认 30，必须为正安全整数。reset/new 重新计数；工具步骤、自动重试、同代次卡片重试及准备失败不增加用户任务轮数。刷新轮的渠道默认英文 mention 指令与宿主有效 `octo.control/instructions.payload.entries` 保序拼接，宿主在前、默认在后，内容也占 Context 预算。每轮独立提供简短 `extra.im/message-trigger`，描述真实发送者、频道和实际 mention；稳定说明不混入 actor。宿主静态/动态项仍按原规则整项替换，不做通用去重。用户明确要求的 Bot 交接支持原生 mention；自消息和真实 mention 准入合同保持，详见上述 Gateway 合同。
+
+身份补全使用 Bot 的只读 API，失败不阻断 AgentRun，不重试或切换查询接口。UID/Bot ID 对应的名称与类型在各 Bot 的内存中按 API/Space 隔离缓存，固定十分钟过期，最多 2,000 项，失败与缺失结果不缓存；成员权限和发送 mention 的授权不使用此缓存。
+
+自动历史以 `messages: [{uid, username, sentAt, content}]` 从旧到新呈现。纯文本也用 `content: {type: "text", text: "..."}`；回复保留引用与回复正文，转发保留嵌套消息，富文本保留块顺序，媒体引用标记 `read: false`，不下载媒体正文。完整 JSON 数组上限为 20 条和 8,000 个 Unicode 码点，截短或省略明确标注，身份字段不截短。模型不再收到独立自动 `history-gap`；历史不完整、读取失败或被省略时，仅在 `history` 中补充一句英文 `note`，失败时 `messages` 可为空。游标与真实交接证据不进入模型快照，说明不代表正文已交接。
 
 不要把函数、源码或模块实例放进 config。替换函数引用按整体停止/加载处理。调用方处理 signal 的正常取消，dispose 的真实失败仍须报告。
 
@@ -157,7 +165,7 @@ Gateway 默认通过本轮 `extra.im/artifact-delivery` 建立文件交付约定
 
 HTML、Markdown 与其他文件采用相同附件合同，不根据企业服务部署状态转成在线文档，不创建文档权限或公开分享。群聊交付沿用 IM 文件访问体验，避免文档 ACL、后加入成员及转发场景引入额外访问障碍。用户明确要求在线协作、发布、上传或网盘保存时，仍由 Agent 普通 ToolCall 完成；已有远程 URL 不重复上传或补发卡片。
 
-Bot 的 `artifact_delivery.mode: "tools"` 可关闭固定交付；省略为 `channel`。默认授权当前本地工作区，宿主可用绝对 `allowed_roots`（空数组拒绝全部）、`allowed_mime_types` 及更小的文件/总量/数量/超时预算收紧。远程 Provider 文件不作为本地可读文件处理，超限、越界、符号链接逃逸或部分上传失败在同条回复明确标注，不重跑模型。发送重试复用上传结果；stop/reset 撤销在途交付和旧代次 final，shutdown 沿既有共享期限。完整字段及限制见下方 Schema。
+Bot 的 `artifact_delivery.mode: "tools"` 可关闭固定交付；省略为 `channel`。默认对成功 final 引用的本机路径尝试实际读取，不以 Agent 来源或工作区拒绝，无需新增配置；宿主可用绝对 `allowed_roots`（空数组拒绝全部）、`allowed_mime_types` 及更小的文件/总量/数量/超时预算收紧。文件不存在或无法读取按实际失败报告，不主动下载远端文件；超限、显式目录限制越界、符号链接逃逸或部分上传失败在同条回复明确标注，不重跑模型。发送重试复用上传结果；stop/reset 撤销在途交付和旧代次 final，shutdown 沿既有共享期限。完整字段及限制见下方 Schema。
 
 上传准备按 final 缓存，每张文件卡拥有独立稳定编号和确认回执，沿既有 WS ACK/取消路径发送；最终文本重试不会重新上传或补发卡片。卡片未确认时在同条 final 明确提示，已上传的下载链接仍保留，不把卡片失败当作模型生成失败。原生文件卡不受进度/互动卡片的 `cards` 开关控制。
 

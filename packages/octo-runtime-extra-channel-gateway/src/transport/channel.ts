@@ -31,9 +31,11 @@ import { sendReadReceipt } from "./api/messages.js";
 import { deliveryNoticeCard } from "../presentation/delivery-notice.js";
 import { ImSendError } from "../delivery/text-send.js";
 import type { ImGapTurnToken } from "../application/context-gap.js";
+import { assistantOutputFingerprint } from "../application/context-gap.js";
 import { observesImScope } from "./normalize.js";
 import { prepareArtifacts } from "../delivery/artifacts.js";
 import { uploadChatAttachment } from "./api/files.js";
+import { MessageIdentityCache } from "./message-identities.js";
 
 /** Octo IM 平台连接器：WuKong 与 Octo REST 适配；不是 MCP 连接器。 */
 export class GatewayTransport {
@@ -53,6 +55,7 @@ export class GatewayTransport {
   #api?: OctoConnector;
   #delivery?: ImDeliveryDispatcher;
   #polling?: Promise<void>;
+  readonly #messageIdentityCache = new MessageIdentityCache();
   readonly #bindings = new Map<
     string,
     {
@@ -115,8 +118,9 @@ export class GatewayTransport {
         }
         if (!acceptsImMessage(this.scopedConfig, message)) return;
         let finalReply: { key: string; value: ReturnType<typeof prepareFinalMention> } | undefined;
+        let finalOutputCovered = false;
         let historyTurn: ImGapTurnToken | undefined;
-        const outputObserver = () => {
+        const outputObserver = (payload?: Record<string, unknown>) => {
           const turn = historyTurn;
           if (!turn || !observesImScope(this.scopedConfig, message.channelId, message.channelType))
             return undefined;
@@ -127,7 +131,10 @@ export class GatewayTransport {
               conversationKind: message.channelType === 5 ? "thread" : "group",
               messageSeq,
               own: true,
-              turn
+              turn,
+              ...(payload && turn.providerSessionId
+                ? { outputFingerprint: assistantOutputFingerprint(payload) }
+                : {})
             });
           };
         };
@@ -294,7 +301,7 @@ export class GatewayTransport {
                           key,
                           this.#spaceId,
                           finalSignal,
-                          outputObserver()
+                          outputObserver(delivered.incomplete ? undefined : { type: 8, ...file })
                         ),
                       { obsolete: () => finalSignal.aborted || Boolean(options?.obsolete()) }
                     );
@@ -308,6 +315,8 @@ export class GatewayTransport {
                     (failures.length
                       ? `\n\nFile card delivery unconfirmed: ${failures.join("; ")}. The attachment download links above remain available; generation was not rerun.`
                       : "");
+                  // 新增失败事实不在先前 assistant 中，不能因它由本机发送而过滤。
+                  finalOutputCovered = !delivered.incomplete && failures.length === 0;
                   finalSignal.throwIfAborted();
                   return prepareFinalMention(finalText, async () => {
                     if ([2, 5].includes(message.channelType))
@@ -340,7 +349,15 @@ export class GatewayTransport {
               this.#spaceId,
               result.mention,
               finalSignal,
-              outputObserver()
+              outputObserver(
+                finalOutputCovered
+                  ? {
+                      type: 1,
+                      content: result.text,
+                      ...(result.mention ? { mention: result.mention } : {})
+                    }
+                  : undefined
+              )
             );
           },
           buildContext: async (turnSignal, options) => ({
@@ -350,7 +367,11 @@ export class GatewayTransport {
               message,
               token,
               AbortSignal.any([signal, turnSignal]),
-              options
+              {
+                ...options,
+                initialSession: options?.initialSession ?? false,
+                identityCache: this.#messageIdentityCache
+              }
             )
           }),
           beginPresentation: (runId, onDiagnostic, controls) => {

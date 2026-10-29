@@ -203,7 +203,7 @@ test("Host renders each run independently without deduplicating resumed context"
     const rendered = renderModelContexts(context);
     assert.equal(
       received[index].modelInput,
-      [rendered, request.modelInput].filter(Boolean).join("\n\n")
+      rendered ? `${rendered}\n\n<!-- Query Input -->\n\n${request.modelInput}` : request.modelInput
     );
     assert.deepEqual(
       received[index].context.items.filter((item) => item.namespace !== "octo.execution"),
@@ -258,17 +258,15 @@ test("Host freezes contexts and injects once for both modes and image input", as
     );
     request.context = snapshot;
     for await (const frame of stream) void frame;
-    assert.equal(received.modelInput, renderModelContexts(snapshot) + "\n\n" + request.modelInput);
+    const prefix = renderModelContexts(snapshot) + "\n\n<!-- Query Input -->\n\n";
+    assert.equal(received.modelInput, prefix + request.modelInput);
     assert.deepEqual(received.modelInputParts, [
-      { type: "text", text: renderModelContexts(snapshot) },
+      { type: "text", text: prefix },
       ...request.modelInputParts
     ]);
-    assert.equal(
-      received.freshFallbackModelInput,
-      renderModelContexts(snapshot) + "\n\n" + request.freshFallbackModelInput
-    );
+    assert.equal(received.freshFallbackModelInput, prefix + request.freshFallbackModelInput);
     assert.deepEqual(received.freshFallbackModelInputParts, [
-      { type: "text", text: renderModelContexts(snapshot) },
+      { type: "text", text: prefix },
       ...request.freshFallbackModelInputParts
     ]);
     assert.equal(received.prompt, request.prompt);

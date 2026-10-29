@@ -81,9 +81,12 @@ export class WecomTransport {
       buildContext: (_signal, options) =>
         Promise.resolve({
           schema: CONTEXT_SCHEMA,
-          items: structuredClone([
-            ...(options?.configuredItems ?? this.config.context?.items ?? [])
-          ])
+          // extra.im 由本渠道构造；宿主业务材料须使用其他命名空间。
+          items: structuredClone(
+            (options?.configuredItems ?? this.config.context?.items ?? []).filter(
+              (item) => item.namespace !== "extra.im"
+            )
+          )
         }),
       beginPresentation: (_runId, onDiagnostic) => {
         this.#streams.add(stream);

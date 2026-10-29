@@ -44,6 +44,18 @@ Local SDK invocation can use Kernel alone, without an Extra, cloud login, or IM 
 
 Provider harness login, authorization, and credential preparation belong to the user, host application, and harness. Runtime passes the ordinary execution environment and performs required protocol handshakes, including ACP authentication using supported methods advertised by the harness. It does not inspect Provider-specific authentication environment variables or credential files, infer login state from a missing variable, or log in and refresh credentials on the user's behalf. The harness resolves its own credential sources and reports whether authentication succeeds; Runtime reports real failures. This does not change Runtime's own security or an Extra's explicit business credential contract.
 
+## Channel Context and History
+
+Channel Gateway owns IM Context preparation: stable rules, current-message facts, and history retrieval. Host SDK, Kernel, Core, the renderer, and Provider Adapters consume the supplied input without choosing or deduplicating business history. This boundary is shared by OpenClaw, Codex, and Claude Code.
+
+Stable mention, artifact-format, and history-reading guidance is supplied on turn 1 and every N turns (`stable_context_refresh_interval_turns`, default 30). Reset/new restarts the count, and a new Provider session receives the full rules. The separate `message-trigger` describes each incoming message. Group/topic rules follow their scope and version; cleared rules explicitly say `NO RULES`. Periodic refresh does not guarantee retention between refreshes or monitor model compaction.
+
+Automatic history selects at most the latest **20 messages** before the trigger in the same conversation, presented oldest first. The **complete serialized `messages` array is limited to 8,000 Unicode code points**, including identity, timestamps, JSON structure, and escaping. This is a total array budget. Cold-start and gap preparation share one bounded read per turn; primary history and fresh-fallback supplements share the same window and budget.
+
+Own Bot messages remain in first-turn, reset, recovery, and uncertain-continuity history. During verified continuation, Gateway may omit specific successfully delivered outputs already covered by the same Provider session's assistant history, using completion, ownership, delivery-position, and content-fingerprint evidence. A fresh fallback restores those messages from the frozen window in the same invocation. There is no general UID/text/URL deduplication, removal inside quotes or forwards, or filtering of explicit host Context.
+
+See [session preparation](../guides/context-and-sessions.md) and the authoritative [architecture constraints](../../../.octospec/rules/architecture.md).
+
 ## Invocation Sequence
 
 ```mermaid

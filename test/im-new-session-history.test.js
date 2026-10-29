@@ -1,12 +1,19 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as settle } from "node:timers/promises";
 import {
   build_im_contexts,
   ImRuntime
 } from "../packages/octo-runtime-extra-channel-gateway/dist/index.js";
-import { historyText } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/contexts.js";
+import { historyMessages } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/history-messages.js";
 import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
+
+const previousZone = process.env.TZ;
+process.env.TZ = "Asia/Shanghai";
+after(() => {
+  if (previousZone === undefined) delete process.env.TZ;
+  else process.env.TZ = previousZone;
+});
 
 const schema = "octo.context-envelope/v3";
 const config = {
@@ -17,16 +24,17 @@ const config = {
 };
 const incoming = { channelId: "g____t", channelType: 5, messageId: "100", messageSeq: 100 };
 
-test("history fetches the closest fifteen older messages in the exact topic and emits text only", async (t) => {
+test("history fetches the closest twenty older messages in the exact topic and emits text only", async (t) => {
   let calls = 0;
   t.mock.method(globalThis, "fetch", async (url, options) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     calls++;
     assert.equal(url, `${config.api_url}/v1/bot/messages/sync`);
     assert.deepEqual(JSON.parse(options.body), {
       channel_id: "g____t",
       channel_type: 5,
-      limit: 15,
+      limit: 20,
       start_message_seq: 99,
       end_message_seq: 0,
       pull_mode: 0
@@ -36,6 +44,7 @@ test("history fetches the closest fifteen older messages in the exact topic and 
         message_id: String(seq),
         message_seq: seq,
         from_uid: "peer",
+        timestamp: 1793252213 + seq,
         payload: {
           type: seq === 98 ? 2 : 1,
           content: seq === 98 ? "image secret" : `text${seq}`,
@@ -51,29 +60,54 @@ test("history fetches the closest fifteen older messages in the exact topic and 
     new AbortController().signal,
     { initialSession: true }
   );
-  assert.equal(
-    items.find((item) => item.name === "history").payload.text,
-    "peer：text97\npeer：text99"
-  );
-  assert.equal(JSON.stringify(items).includes("never-download"), false);
+  assert.deepEqual(items.find((item) => item.name === "history").payload.messages, [
+    {
+      uid: "peer",
+      username: null,
+      sentAt: "2026-10-29T13:38:30.000+08:00",
+      content: { type: "text", text: "text97" }
+    },
+    {
+      uid: "peer",
+      username: null,
+      sentAt: "2026-10-29T13:38:31.000+08:00",
+      content: { type: "image", url: "https://never-download", read: false }
+    },
+    {
+      uid: "peer",
+      username: null,
+      sentAt: "2026-10-29T13:38:32.000+08:00",
+      content: { type: "text", text: "text99" }
+    }
+  ]);
+  assert.equal(calls, 1, "historical image references are not downloaded");
   await build_im_contexts(config, incoming, "bf_fixture", new AbortController().signal, {
-    initialSession: false,
-    mentionGuidance: true
+    initialSession: false
   });
   assert.equal(calls, 1);
 });
 
-test("history trims newest-first with a partial oldest tail, marker and Unicode within 1500 codepoints", () => {
-  const text = historyText([
+test("history trims newest-first with a partial oldest tail and Unicode within 8000 JSON codepoints", () => {
+  const { messages, truncated } = historyMessages([
     { type: 1, from_uid: "new", content: "latest" },
-    { type: 1, from_uid: "old", content: "😀".repeat(2000) + "TAIL" },
+    { type: 1, from_uid: "old", content: "😀".repeat(10000) + "TAIL" },
     { type: 1, from_uid: "older", content: "excluded" }
   ]);
-  assert.equal(Array.from(text).length, 1500);
-  assert.ok(text.startsWith("<历史已截断>😀"));
-  assert.ok(text.endsWith("TAIL\nnew：latest"));
-  assert.equal(text.includes("excluded"), false);
-  assert.equal(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(text), false);
+  const serialized = JSON.stringify(messages);
+  assert.equal(Array.from(serialized).length, 8000);
+  assert.equal(truncated, true);
+  assert.equal(messages[0].uid, "old");
+  assert.equal(messages[0].username, null);
+  assert.equal(messages[0].truncated, true);
+  assert.ok(messages[0].content.text.endsWith("TAIL"));
+  assert.deepEqual(messages[1], {
+    uid: "new",
+    username: null,
+    sentAt: null,
+    content: { type: "text", text: "latest" }
+  });
+  assert.equal(serialized.includes("excluded"), false);
+  assert.equal(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(serialized), false);
 });
 
 test("history failure, malformed result, missing sequence and budget overflow continue without history; cancellation propagates", async (t) => {
@@ -105,7 +139,7 @@ test("history failure, malformed result, missing sequence and budget overflow co
     ...config,
     context: {
       schema,
-      items: [{ namespace: "extra.test", name: "large", payload: { text: "x".repeat(65280) } }]
+      items: [{ namespace: "extra.test", name: "large", payload: { text: "x".repeat(64950) } }]
     }
   };
   const items = await build_im_contexts(
@@ -115,7 +149,11 @@ test("history failure, malformed result, missing sequence and budget overflow co
     new AbortController().signal,
     { initialSession: true }
   );
-  assert.equal(items.length, 1);
+  assert.equal(items.length, 2);
+  assert.equal(
+    items.some((item) => item.name === "history"),
+    false
+  );
   const abort = new AbortController();
   abort.abort();
   await assert.rejects(
@@ -126,7 +164,6 @@ test("history failure, malformed result, missing sequence and budget overflow co
 test("session initialization is attempted once without a Provider binding, including queued reset races and failed preparation", async (t) => {
   let receive, release;
   const initializations = [],
-    guidance = [],
     calls = [],
     replies = [];
   t.mock.method(GatewayTransport.prototype, "start", async function () {
@@ -157,7 +194,6 @@ test("session initialization is attempted once without a Provider binding, inclu
       text: id,
       async buildContext(_signal, options) {
         initializations.push([id, options.initialSession]);
-        guidance.push(options.mentionGuidance);
         if (build) await build();
         return { schema, items: [] };
       },
@@ -197,10 +233,6 @@ test("session initialization is attempted once without a Provider binding, inclu
   for (let i = 0; i < 30 && runtime.status.sessions.length; i++) await settle();
   assert.deepEqual(initializations.slice(-2), [
     ["failed", true],
-    ["after-failure", false]
+    ["after-failure", true]
   ]);
-  assert.ok(
-    guidance.every(Boolean),
-    "without a Provider binding the short guide is explicit on each new invoke"
-  );
 });

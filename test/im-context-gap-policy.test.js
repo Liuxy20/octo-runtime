@@ -45,7 +45,7 @@ const message = {
 };
 
 test("HG-23 removing history reports omitted material without asking the model to fetch it", () => {
-  const items = Array.from({ length: 25 }, (_, index) => ({
+  const items = Array.from({ length: 23 }, (_, index) => ({
     namespace: "extra.test",
     name: `explicit-${index}`,
     payload: { text: "keep" }
@@ -53,7 +53,12 @@ test("HG-23 removing history reports omitted material without asking the model t
   items.push({
     namespace: "extra.im",
     name: "history",
-    payload: { source, automatic: true, upperMessageSeq: 104, text: "recent window" }
+    payload: {
+      source,
+      automatic: true,
+      upperMessageSeq: 104,
+      messages: [{ uid: "peer", username: null, content: { type: "text", text: "recent window" } }]
+    }
   });
   items.push(
     historyGapContext(source, "104", {
@@ -61,33 +66,38 @@ test("HG-23 removing history reports omitted material without asking the model t
       retrieval: "provided"
     })
   );
-  const { request } = createImInvocation(
-    config,
-    {
-      messageId: "104",
-      senderId: "owner",
-      conversationId: source.channelId,
-      conversationKind: "thread",
-      text: "summary"
-    },
-    { schema: "octo.context-envelope/v3", items },
-    "scope",
-    { id: "session", generation: 1 },
-    new AbortController().signal
+  const invoke = () =>
+    createImInvocation(
+      config,
+      {
+        messageId: "104",
+        senderId: "owner",
+        conversationId: source.channelId,
+        conversationKind: "thread",
+        text: "summary"
+      },
+      { schema: "octo.context-envelope/v3", items },
+      "scope",
+      { id: "session", generation: 1 },
+      new AbortController().signal
+    );
+  const text = "x".repeat(
+    65536 - Buffer.byteLength(JSON.stringify(invoke().request.contexts)) + 10
   );
+  items[0].payload.text = text;
+  const { request, historyContext } = invoke();
+  const history = request.contexts.items.find((item) => item.name === "history");
+  assert.deepEqual(history.payload, { messages: [], note: "Earlier messages are not included." });
+  assert.equal(historyContext, undefined, "a note alone is not message handoff evidence");
   assert.equal(
-    request.contexts.items.some((item) => item.name === "history"),
-    false
+    request.contexts.items.find((item) => item.name === "explicit-0").payload.text,
+    text
   );
+  assert.equal(request.contexts.items.filter((item) => item.namespace === "extra.test").length, 23);
   assert.equal(
-    request.contexts.items.find((item) => item.name === "history-gap").payload.range.beforeSeq,
-    104
+    request.contexts.items.find((item) => item.name === "history-gap"),
+    undefined
   );
-  assert.equal(request.contexts.items.filter((item) => item.namespace === "extra.test").length, 25);
-  const gap = request.contexts.items.find((item) => item.name === "history-gap");
-  assert.equal(gap.payload.status, "omitted");
-  assert.equal(gap.payload.materialProvided, false);
-  assert.equal(gap.payload.argv, undefined);
 });
 
 test("HG-23 byte pressure compacts automatic hints without truncating explicit business material", () => {
@@ -121,35 +131,46 @@ test("HG-23 byte pressure compacts automatic hints without truncating explicit b
   const { request } = invoke();
   assert.equal(request.contexts.items.find((item) => item.name === "explicit").payload.text, text);
   assert.equal(
-    request.contexts.items.find((item) => item.name === "history-gap").payload.mode,
-    "delta"
+    request.contexts.items.find((item) => item.name === "history-gap"),
+    undefined
   );
 });
 
-test("HG-29 a configured reserved gap item is not overwritten by automatic context", async (context) => {
+test("HG-29 a configured extra.im gap item is ignored before automatic context is built", async (context) => {
   context.mock.method(globalThis, "fetch", async () => Response.json({}, { status: 404 }));
-  await assert.rejects(
-    build_im_contexts(config, message, "bf_fixture", new AbortController().signal, {
+  const items = await build_im_contexts(
+    config,
+    message,
+    "bf_fixture",
+    new AbortController().signal,
+    {
       initialSession: false,
       historyGap: planHistoryGap(104, metadata(), "epoch"),
       configuredItems: [
         { namespace: "extra.im", name: "history-gap", payload: { text: "explicit" } }
       ]
-    }),
-    /IM_CONTEXT_KEY_CONFLICT/
+    }
   );
+  assert.equal(JSON.stringify(items).includes('"text":"explicit"'), false);
+  assert.ok(items.some((item) => item.name === "history-gap" && item.payload.automatic));
 });
 
 for (const [name, trigger, previous, mode, limit] of [
-  ["HG-02 known self output is not discussion", 103, metadata({ localOutputSeqs: [102] }), "none"],
+  [
+    "HG-02 own ACK alone cannot prove assistant coverage",
+    103,
+    metadata({ localOutputSeqs: [102] }),
+    "delta",
+    1
+  ],
   ["HG-03 one position is sufficient", 103, metadata(), "delta", 1],
   ["HG-04 two positions have an exact interval", 104, metadata(), "delta", 2],
-  ["HG-05 fourteen positions stay below the cap", 116, metadata(), "delta", 14],
-  ["HG-05 fifteen positions reach the cap", 117, metadata(), "delta", 15],
-  ["HG-05 sixteen positions are capped", 118, metadata(), "delta", 15],
-  ["HG-05 a large span is capped", 500, metadata(), "delta", 15],
-  ["HG-05 the largest valid position is capped", 0xffffffff, metadata(), "delta", 15],
-  ["HG-09 unknown baseline bootstraps fifteen", 104, undefined, "bootstrap", 15],
+  ["HG-05 nineteen positions stay below the cap", 121, metadata(), "delta", 19],
+  ["HG-05 twenty positions reach the cap", 122, metadata(), "delta", 20],
+  ["HG-05 twenty-one positions are capped", 123, metadata(), "delta", 20],
+  ["HG-05 a large span is capped", 500, metadata(), "delta", 20],
+  ["HG-05 the largest valid position is capped", 0xffffffff, metadata(), "delta", 20],
+  ["HG-09 unknown baseline bootstraps twenty", 104, undefined, "bootstrap", 20],
   ["HG-10 sequence one must not use start-zero sentinel", 1, undefined, "none"],
   ["HG-10 missing position is unavailable", undefined, metadata(), "unavailable"],
   ["HG-10 negative position is unavailable", -1, metadata(), "unavailable"],
@@ -161,7 +182,7 @@ for (const [name, trigger, previous, mode, limit] of [
     104,
     metadata({ processEpoch: "old" }),
     "bootstrap",
-    15
+    20
   ],
   ["HG-24 adjacent input needs no repeated history", 102, metadata(), "none"],
   [
@@ -169,14 +190,14 @@ for (const [name, trigger, previous, mode, limit] of [
     104,
     metadata({ continuityUnknown: true }),
     "bootstrap",
-    15
+    20
   ]
 ])
   test(name, async (context) => {
     const plan = planHistoryGap(trigger, previous, "epoch");
     assert.equal(plan.mode, mode);
     assert.equal(plan.messageLimit, limit);
-    if (mode === "delta") assert.equal(plan.earlierOmitted, plan.positionSpan > 15);
+    if (mode === "delta") assert.equal(plan.earlierOmitted, plan.positionSpan > 20);
     const item = historyGapContext(source, "trigger", plan);
     if (item) {
       assert.equal(item.payload.materialProvided, false);
@@ -186,6 +207,7 @@ for (const [name, trigger, previous, mode, limit] of [
     const calls = [];
     context.mock.method(globalThis, "fetch", async (url, options) => {
       if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+      if (!String(url).endsWith("/messages/sync")) return Response.json({});
       calls.push(JSON.parse(options.body));
       return Response.json({ more: 0, messages: [] });
     });
@@ -210,7 +232,7 @@ for (const [name, trigger, previous, mode, limit] of [
           pull_mode: 0
         }
       ]);
-      assert.ok(limit <= 15);
+      assert.ok(limit <= 20);
     } else {
       assert.equal(calls.length, 0);
     }
@@ -337,7 +359,13 @@ test("HG-23 only handed-off API material or an empty response clears pending his
   const history = {
     namespace: "extra.im",
     name: "history",
-    payload: { automatic: true, upperMessageSeq: 104, text: "actual material" }
+    payload: {
+      automatic: true,
+      upperMessageSeq: 104,
+      messages: [
+        { uid: "peer", username: null, content: { type: "text", text: "actual material" } }
+      ]
+    }
   };
   const provided = commitHistoryGap(
     metadata({ latestObservedSeq: 999, pendingAfterSeq: 101 }),
@@ -377,7 +405,7 @@ test("HG-24 failed API ranges merge with new gaps without exceeding the latest w
   const plan = planHistoryGap(104, metadata({ pendingAfterSeq: 80 }), "epoch");
   const item = historyGapContext(source, "104", plan);
   assert.equal(item.payload.range.afterSeq, 80);
-  assert.equal(plan.messageLimit, 15);
+  assert.equal(plan.messageLimit, 20);
   const fallback = historyGapContext(
     source,
     "104",
@@ -391,7 +419,7 @@ test("HG-24 failed API ranges merge with new gaps without exceeding the latest w
     )
   );
   assert.deepEqual(fallback.payload.range, { beforeSeq: 104 });
-  assert.equal(fallback.payload.messageLimit, 15);
+  assert.equal(fallback.payload.messageLimit, 20);
 });
 
 test("HG-07 cold history coordinates complete, omitted and truncated windows without another fetch", async (context) => {
@@ -399,6 +427,7 @@ test("HG-07 cold history coordinates complete, omitted and truncated windows wit
   let syncs = 0;
   context.mock.method(globalThis, "fetch", async (url) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     syncs++;
     return Response.json(page);
   });
@@ -442,6 +471,7 @@ test("HG-08 cold and warm API failures do not block or delegate repair to model 
   let syncs = 0;
   context.mock.method(globalThis, "fetch", async (url) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     syncs++;
     return Response.json({}, { status: 403 });
   });
@@ -462,23 +492,24 @@ test("HG-08 cold and warm API failures do not block or delegate repair to model 
   assert.equal(syncs, 2);
 });
 
-test("HG-05 API preparation enforces the latest fifteen records even when the server returns more", async (context) => {
+test("HG-05 API preparation enforces the latest twenty records even when the server returns more", async (context) => {
   let calls = 0;
   const entry = (sequence) => ({
     message_id: String(sequence),
     message_seq: sequence,
     from_uid: "peer",
-    payload: { type: 1, content: `discussion-${sequence}` }
+    payload: { type: 1, content: String(sequence) }
   });
   context.mock.method(globalThis, "fetch", async (url, options) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     calls++;
     assert.equal(url, `${source.service}/v1/bot/messages/sync`);
     assert.equal(options.headers.Authorization, "Bearer bf_fixture");
     assert.deepEqual(JSON.parse(options.body), {
       channel_id: source.channelId,
       channel_type: 5,
-      limit: 15,
+      limit: 20,
       start_message_seq: 499,
       end_message_seq: 101,
       pull_mode: 0
@@ -486,7 +517,7 @@ test("HG-05 API preparation enforces the latest fifteen records even when the se
     return Response.json({
       more: 1,
       messages: [
-        ...Array.from({ length: 20 }, (_, index) => entry(480 + index)),
+        ...Array.from({ length: 25 }, (_, index) => entry(475 + index)),
         entry(499),
         entry(500),
         entry(501),
@@ -509,10 +540,15 @@ test("HG-05 API preparation enforces the latest fifteen records even when the se
       historyGap: planHistoryGap(500, metadata(), "epoch")
     }
   );
-  const text = items.find((item) => item.name === "history").payload.text;
+  const messages = items.find((item) => item.name === "history").payload.messages;
   assert.deepEqual(
-    text.split("\n"),
-    Array.from({ length: 15 }, (_, index) => `peer：discussion-${485 + index}`)
+    messages,
+    Array.from({ length: 20 }, (_, index) => ({
+      uid: "peer",
+      username: null,
+      sentAt: null,
+      content: { type: "text", text: String(480 + index) }
+    }))
   );
   const gap = items.find((item) => item.name === "history-gap");
   assert.equal(gap.payload.status, "partial");
@@ -526,6 +562,7 @@ test("HG-08 malformed API responses remain unavailable without another request",
   let calls = 0;
   context.mock.method(globalThis, "fetch", async (url) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     calls++;
     return Response.json(response);
   });
@@ -553,6 +590,7 @@ test("history API rate limits are not retried by the fixed preparation pipeline"
   let calls = 0;
   context.mock.method(globalThis, "fetch", async (url) => {
     if (String(url).endsWith("/md")) return Response.json({}, { status: 404 });
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     calls++;
     return Response.json({}, { status: 429, headers: { "Retry-After": "0" } });
   });
@@ -577,7 +615,8 @@ test("review regression: DM cold history retains its original timeout and HTTP 4
     return new AbortController().signal;
   });
   let calls = 0;
-  context.mock.method(globalThis, "fetch", async () => {
+  context.mock.method(globalThis, "fetch", async (url) => {
+    if (!String(url).endsWith("/messages/sync")) return Response.json({});
     calls++;
     if (calls === 1) return Response.json({}, { status: 429, headers: { "Retry-After": "0" } });
     return Response.json({
@@ -602,5 +641,7 @@ test("review regression: DM cold history retains its original timeout and HTTP 4
   assert.equal(calls, 2);
   assert.ok(deadlines.includes(30_000));
   assert.equal(deadlines.includes(10_000), false);
-  assert.equal(items.find((item) => item.name === "history").payload.text, "peer：DM background");
+  assert.deepEqual(items.find((item) => item.name === "history").payload.messages, [
+    { uid: "peer", username: null, sentAt: null, content: { type: "text", text: "DM background" } }
+  ]);
 });

@@ -40,6 +40,7 @@ import { ImRunProjector } from "../presentation/run-projector.js";
 import { deliveryNotice } from "../presentation/delivery-notice.js";
 import { MemoryImSessionStore, type ImSessionStore } from "./session-store.js";
 import { addRulesRecovery, selectRulesContext, type ImRulesVersions } from "./rules-context.js";
+import { planStableContext } from "./stable-context.js";
 import { groupScope } from "../transport/normalize.js";
 import { connectionFailure, ImConnectionError } from "../transport/connection-error.js";
 import {
@@ -390,6 +391,27 @@ export class ImRuntime {
             next.localOutputSeqs = [...new Set([...next.localOutputSeqs, position.messageSeq])]
               .sort((left, right) => left - right)
               .slice(-32);
+          const providerSessionId = position.turn?.providerSessionId;
+          if (
+            position.own &&
+            position.outputFingerprint &&
+            providerSessionId &&
+            binding.providerSession?.sessionId === providerSessionId
+          ) {
+            const previous =
+              next.assistantOutputs?.providerSessionId === providerSessionId
+                ? next.assistantOutputs.messages
+                : [];
+            next.assistantOutputs = {
+              providerSessionId,
+              messages: [
+                ...previous.filter((entry) => entry.seq !== position.messageSeq),
+                { seq: position.messageSeq, fingerprint: position.outputFingerprint }
+              ]
+                .sort((left, right) => left.seq - right.seq)
+                .slice(-32)
+            };
+          }
           return next;
         }
       );
@@ -492,6 +514,7 @@ export class ImRuntime {
           session.generation = binding.generation;
           session.providerSession = binding.providerSession;
           session.initialization = { attempted: false };
+          session.stableContext = { turnCount: 0, refreshPending: true };
           session.lastRunId = undefined;
           void this.#reply(message, "会话已经重置", `control:${message.messageId}`, true).catch(
             () => {
@@ -551,6 +574,7 @@ export class ImRuntime {
         generation: 1,
         ...binding,
         initialization: { attempted: binding?.initialContextPrepared === true },
+        stableContext: binding?.stableContext ?? { turnCount: 0, refreshPending: true },
         pending: 0,
         tail: Promise.resolve()
       };
@@ -580,7 +604,6 @@ export class ImRuntime {
         (await this.#tasks.get(key)!.task.cancel("IM card stop")),
       retry: (senderId: string, id: string): boolean => {
         if (!controls.failed) return false;
-        if (!message.position) return this.#enqueue({ ...message, senderId }, key, id);
         const saved = this.#sessionStore.occurrence(key, message.messageId)?.snapshot;
         if (!saved) return false;
         const binding = this.#sessionStore.read(key);
@@ -592,6 +615,8 @@ export class ImRuntime {
             ...message,
             senderId,
             historyRetry: true,
+            frozenArtifacts: this.#sessionStore.occurrence(key, message.messageId)?.artifacts,
+            runMetadata: saved.runMetadata,
             buildContext: () => Promise.resolve(structuredClone(saved.contexts)),
             ...(images.length
               ? { buildInputs: () => Promise.resolve(structuredClone(images)) }
@@ -918,6 +943,12 @@ export class ImRuntime {
     let failureAfterSeq: number | null = null;
     let rulesRevision = 0;
     let rulesVersions: ImRulesVersions | undefined;
+    const stableState = executionSession.stableContext!;
+    const initialWasAttempted = executionSession.initialization!.attempted;
+    const stablePlan = message.historyRetry
+      ? { turn: stableState.turnCount, refresh: false }
+      : planStableContext(stableState, this.config.stable_context_refresh_interval_turns);
+    let stableRecovered = false;
     const rulesEnabled = message.conversationKind !== "direct";
     // Octospec F05: .octospec/tasks/gateway-august-feature-assessment/assessment.md
     // 仅普通任务开始时回执；通知失败不阻断 Context 准备和模型执行。
@@ -932,8 +963,10 @@ export class ImRuntime {
         executionSession.providerSession = session.providerSession;
       const initialization = executionSession.initialization!;
       const initialSession = !initialization.attempted;
-      initialization.attempted = true;
-      if (session.id === executionSession.id) this.#saveBinding(key, session);
+      const refreshStableContext =
+        stablePlan.refresh ||
+        !executionSession.providerSession?.sessionId ||
+        executionSession.providerSession.resumable === false;
       const binding = this.#sessionStore.read(key);
       const rulesCursor =
         !message.historyRetry &&
@@ -959,6 +992,20 @@ export class ImRuntime {
           this.#processEpoch,
           typeof this.#sessionStore.patchGap === "function"
         );
+        const outputs = binding?.gap?.assistantOutputs;
+        // 补位/新建/恢复不明均保留；旧 ACK 与同 UID 不能代替当前 Provider 的归属证据。
+        if (
+          !initialSession &&
+          gapPlan.mode === "delta" &&
+          binding?.gap?.pendingAfterSeq === undefined &&
+          !binding?.gap?.continuityUnknown &&
+          outputs?.providerSessionId === executionSession.providerSession?.sessionId &&
+          executionSession.providerSession?.resumable !== false &&
+          !["fresh_fallback", "compacted"].includes(
+            executionSession.providerSession?.resumeOutcome ?? ""
+          )
+        )
+          gapPlan.excludedOutputs = outputs?.messages;
         message.bindHistoryTurn?.({
           sessionId: executionSession.id!,
           generation: executionSession.generation,
@@ -973,8 +1020,6 @@ export class ImRuntime {
               turnSignal
             ),
         initialSession,
-        // 逐轮提醒让升级前的 Provider binding 也收到新 mention 规则，不隐式 reset。
-        mentionGuidance: true,
         ...(gapEnabled
           ? {
               historyGap: gapPlan,
@@ -987,12 +1032,13 @@ export class ImRuntime {
       const selection = selectRulesContext(
         fullContext,
         rulesCursor,
-        executionSession.providerSession
+        executionSession.providerSession,
+        !message.historyRetry && refreshStableContext
       );
       const context = selection.context;
       rulesVersions = message.historyRetry ? undefined : selection.versions;
       if (gapEnabled) failureAfterSeq = gapPlan.afterSeq ?? null;
-      // 资格先占用再异步读取；同代次队列共享标记，重试只使用本轮冻结快照。
+      // 准备只计算发送计划；直到第一次执行尝试才消费轮次和首轮历史资格。
       prepared = createImInvocation(
         this.config,
         message,
@@ -1000,7 +1046,8 @@ export class ImRuntime {
         key,
         executionSession,
         turnSignal,
-        occurrenceId
+        occurrenceId,
+        refreshStableContext
       );
       if (
         gapEnabled &&
@@ -1024,7 +1071,17 @@ export class ImRuntime {
           throw new ImImageInputError("每条独立图片消息只接收一张图片。");
         prepared.request.inputs = parts;
       }
-      addRulesRecovery(prepared.request, selection.omitted);
+      // 恢复补充只含主历史排除的消息，同一窗口/快照，不重复用户 gap 或另起读取。
+      addRulesRecovery(prepared.request, [
+        ...selection.omitted,
+        ...prepared.recoveryContexts,
+        ...(prepared.historyContext && gapPlan.recoveryHistory ? [gapPlan.recoveryHistory] : [])
+      ]);
+      if (!message.historyRetry)
+        prepared.request.runMetadata = {
+          ...prepared.request.runMetadata,
+          conversationTurn: stablePlan.turn
+        };
       if (message.historyRetry) {
         const saved = this.#sessionStore.occurrence(key, message.messageId)?.snapshot;
         if (saved?.freshFallbackModelInput !== undefined)
@@ -1047,7 +1104,8 @@ export class ImRuntime {
         text: message.text,
         sessionId: executionSession.id!,
         runId: prepared.request.runId,
-        snapshot
+        snapshot,
+        artifacts: prepared.artifacts
       });
     } catch (error) {
       if (rulesEnabled) this.#finishRules(key, executionSession, rulesRevision, undefined, false);
@@ -1086,6 +1144,7 @@ export class ImRuntime {
     let presentationSeq = 0;
     let projector = new ImRunProjector(rootRunId, message.conversationKind === "direct");
     let handedOff = false;
+    let turnStarted = false;
     const task = new ImTask(
       this.dependencies.kernel,
       request,
@@ -1093,6 +1152,13 @@ export class ImRuntime {
       this.config,
       { ...environment, signal: this.#signal },
       (attempt) => {
+        // 同代次排队共享状态；自动/卡片重试不增加用户轮数，reset 后旧任务仅更新旧对象。
+        if (!turnStarted && !message.historyRetry) {
+          turnStarted = true;
+          stableState.turnCount = stablePlan.turn;
+          stableState.refreshPending ||= prepared.stableContextIncluded;
+          executionSession.initialization!.attempted = true;
+        }
         if (
           !handedOff &&
           message.position &&
@@ -1109,9 +1175,11 @@ export class ImRuntime {
                   gapMetadata(this.#processEpoch, previous),
                   message.position?.messageSeq,
                   gapPlan,
-                  attempt.contexts.items.find(
+                  attempt.contexts.items.some(
                     (item) => item.namespace === "extra.im" && item.name === "history"
                   )
+                    ? prepared.historyContext
+                    : undefined
                 )
             );
           } catch {
@@ -1174,6 +1242,7 @@ export class ImRuntime {
           session.providerSession = event.payload.providerSession;
           this.#saveBinding(key, session);
           if (event.payload.providerSession?.resumeOutcome === "fresh_fallback") {
+            stableRecovered = true;
             try {
               this.#sessionStore.patchGap?.(
                 key,
@@ -1311,6 +1380,34 @@ export class ImRuntime {
         }
       }
     } finally {
+      let stableChanged = false;
+      if (
+        localFailure &&
+        turnStarted &&
+        task.attempts.every((attempt) => attempt.outcome === "not_submitted") &&
+        session.id === executionSession.id &&
+        session.generation === executionSession.generation
+      ) {
+        // 可信未提交才允许回退轮次；已执行失败或结果未知不能当作从未执行。
+        stableState.turnCount--;
+        executionSession.initialization!.attempted = initialWasAttempted;
+        stableChanged = true;
+      }
+      if (
+        session.id === executionSession.id &&
+        session.generation === executionSession.generation &&
+        projector.snapshot().terminal === "completed" &&
+        (prepared.stableContextIncluded || stableRecovered)
+      ) {
+        stableState.refreshPending = false;
+        stableChanged = true;
+      }
+      if (stableChanged)
+        try {
+          this.#saveBinding(key, session);
+        } catch {
+          this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
+        }
       if (rulesEnabled)
         this.#finishRules(
           key,
@@ -1356,6 +1453,7 @@ export class ImRuntime {
             sessionId: request.sessionId,
             runId: rootRunId,
             snapshot: saved,
+            artifacts: prepared.artifacts,
             attempts: task.attempts.map((attempt) => ({ ...attempt })),
             ...(localFailure &&
             task.attempts.every((attempt) => attempt.outcome === "not_submitted")
@@ -1404,6 +1502,18 @@ export class ImRuntime {
       // reset 不取消原模型执行，但旧代次的结果不能启动上传或继续最终消息重试。
       if (allowMention && obsolete()) return;
       const deliverySignal = AbortSignal.any([this.#signal, delivery.signal]);
+      if (
+        allowMention &&
+        projector.snapshot().terminal === "completed" &&
+        session.providerSession?.sessionId &&
+        session.providerSession.resumable !== false
+      )
+        message.bindHistoryTurn?.({
+          sessionId: request.sessionId,
+          generation: executionSession.generation,
+          processEpoch: this.#processEpoch,
+          providerSessionId: session.providerSession.sessionId
+        });
       // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
       await this.#reply(
         message,
@@ -1433,6 +1543,7 @@ export class ImRuntime {
       lastEventId: session.lastEventId,
       lastRunId: session.lastRunId,
       initialContextPrepared: session.initialization?.attempted === true,
+      stableContext: session.stableContext,
       ...(binding?.id === session.id &&
       binding?.generation === session.generation &&
       binding.rulesContext

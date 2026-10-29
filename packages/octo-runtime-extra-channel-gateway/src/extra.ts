@@ -63,7 +63,20 @@ async function initialize(
     log: context.log,
     createSessionStore: dependencies.createSessionStore,
     // 只保存调用入口，不预取提示词；宿主更新业务存储后，下一个接纳的逻辑轮重新读取。
-    prepareContexts: (bot, signal) => contexts.load(bot, signal),
+    prepareContexts: async (bot, signal) => {
+      let ignored = 0;
+      const business = await contexts.load(bot, signal, (items) => {
+        const selected = items.filter((item) => item.namespace !== "extra.im");
+        ignored += items.length - selected.length;
+        return selected;
+      });
+      // 保留命名空间误配只记数量，不输出内容或阻断当前任务。
+      if (ignored)
+        context.log("warn", "channel.context.reserved_ignored", {
+          ignored_items: ignored
+        });
+      return business;
+    },
     credentials: (bot) => Promise.resolve(configuredCredential(bot)),
     ...(allowed
       ? {

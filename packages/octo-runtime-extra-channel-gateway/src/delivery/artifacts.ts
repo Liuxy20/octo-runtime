@@ -215,6 +215,7 @@ export interface ArtifactFile {
 export interface PreparedArtifacts {
   text: string;
   files: ArtifactFile[];
+  incomplete?: true;
 }
 
 /** 只交付成功 final 的显式引用；失败不改变生成终态，缓存由 transport 的 final effect 闭包持有。 */
@@ -240,12 +241,13 @@ export async function prepareArtifacts(
       const file = localPath(target, policy.workspace);
       if (file === undefined) continue;
       signal.throwIfAborted();
-      if (!policy.local) throw new Error("remote-file-unavailable");
-      if (!roots) roots = await Promise.all(policy.roots.map((root) => realpath(root)));
+      if (policy.roots !== undefined && !roots)
+        roots = await Promise.all(policy.roots.map((root) => realpath(root)));
       const resolved = await realpath(file).catch(() => {
         throw new Error("file-unavailable");
       });
-      if (!roots.some((root) => contained(root, resolved))) throw new Error("directory-policy");
+      if (roots && !roots.some((root) => contained(root, resolved)))
+        throw new Error("directory-policy");
       let result = files.get(resolved);
       if (!result) {
         if (++count > policy.maxFiles) throw new Error("file-count-limit");
@@ -340,5 +342,9 @@ export async function prepareArtifacts(
     output = output.slice(0, edit.start) + edit.url + output.slice(edit.end);
   if (failures.length)
     output += `\n\nAttachment delivery failed: ${failures.join("; ")}. These local references are unavailable to channel recipients; generation was not rerun.`;
-  return { text: output, files: [...cards.values()] };
+  return {
+    text: output,
+    files: [...cards.values()],
+    ...(failures.length ? { incomplete: true as const } : {})
+  };
 }

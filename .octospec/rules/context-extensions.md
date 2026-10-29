@@ -38,6 +38,8 @@ Context 使用 `octo.context-envelope/v3` 的 `schema + items`，Run 使用 `sch
 
 Host 的 [renderModelContexts](../../packages/octo-runtime-executor-core/src/model-input.ts) 按 namespace/name 白名单匹配，保留 item 顺序，完整输出 guidance 与 payload。不要求注册业务处理器，不进行字段投影、材料预取或摘要。普通扩展指引不具有控制指令权限。
 
+纯文本扩展可显式设置 `data_format: "text"`，payload 必须且只能包含字符串 `text`，渲染器无损输出原文到 CDATA。默认格式仍为完整 JSON，不自动解包含 `text` 的任意业务对象。格式是通用协议能力，不为群规则等业务增加 Core 分支；业务方自行在提交前分离内部元数据。
+
 其他结构合法的未知可选类型参与信封数量、字节预算和快照 hash，并在中转时保留；Host 不将它们渲染到模型输入。忽略消费不表示已经应用某项执行能力。已识别类型仍按自身合同校验；身份、权限及必要执行配置不能作为未知扩展忽略。
 
 ## 责任边界

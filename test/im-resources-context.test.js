@@ -61,7 +61,10 @@ test("F04: missing addresses remain explicit, arbitrary objects and unsupported 
     "bf_fixture",
     new AbortController().signal
   );
-  assert.deepEqual(empty, []);
+  assert.equal(
+    empty.some((item) => item.name === "resources"),
+    false
+  );
   assert.equal(
     acceptsImMessage(config, incoming({ type: 17, content: "card", mention: { uids: ["bot"] } })),
     false

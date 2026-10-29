@@ -91,6 +91,7 @@ export function buildOpenClawGatewayInvocation(req: InvokeRequest): OpenClawGate
       "CONTEXT_ENVS_UNSUPPORTED: openclaw gateway has no per-run environment carrier"
     );
   const gatewayUrl = requiredOption(req, OPENCLAW_PROVIDER_OPTIONS.url);
+  // TODO(P2, #243)：按 URL.hostname 判定产物位置，127.0.0.1/localhost/0.0.0.0 为本地；不使用 agentSource。
   const token = requiredOption(req, OPENCLAW_PROVIDER_OPTIONS.token);
   const device: OpenClawDeviceIdentity = {
     deviceId: requiredOption(req, OPENCLAW_PROVIDER_OPTIONS.deviceId),
@@ -735,6 +736,7 @@ async function* invokeOpenClawGateway(
         payload: { stepId: state.stepId!, status: canonicalTerminalStatus(outcome) }
       });
     }
+    // TODO(P2, #243)：成功 final 的远端文件引用由 Adapter 协调转换为可读取 HTTPS；不读本机同名路径、不代发 IM。
     events.push({
       protocolVersion: 2,
       type: "message.update",
