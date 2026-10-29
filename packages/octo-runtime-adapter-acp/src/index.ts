@@ -392,6 +392,24 @@ export function createAcpAdapter(
         ? stringField(sessionResult, "sessionId")
         : (requestedSessionId ?? stringField(sessionResult, "sessionId"));
       if (!sessionId) throw new Error("ACP session/new returned no sessionId");
+      // ACP 标准没有设置标题的请求；不得伪造 session/new 字段或把名称当恢复 ID。
+      if (request.sessionName && (!requestedSessionId || resumeFallback))
+        yield {
+          protocolVersion: 2,
+          type: "run.notice",
+          payload: {
+            noticeId: `${request.invocationId}:session-name`,
+            code: "provider_diagnostic",
+            severity: "info",
+            params: {
+              adapter: definition.type,
+              diagnosticId: "session-name-unsupported",
+              category: "session_name_unsupported",
+              message:
+                "ACP has no standard session-name setter; the native session title was not set."
+            }
+          }
+        };
       const requestedMode = contextActmode(request.context);
       if (requestedMode !== undefined) {
         const selection = acpActmodeSelectionRequest(sessionResult, sessionId, requestedMode);

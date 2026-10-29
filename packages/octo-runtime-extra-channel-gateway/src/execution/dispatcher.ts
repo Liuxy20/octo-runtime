@@ -242,6 +242,7 @@ export function createImInvocation(
     invocationId: `invoke_${randomUUID()}`,
     runId,
     sessionId: session.id,
+    ...(session.sessionName ? { sessionName: session.sessionName } : {}),
     sessionGeneration: session.generation,
     providerEpoch: session.generation,
     agentSource,

@@ -65,6 +65,8 @@
 
 - [Issue 222：DSH 最低版本检查](tasks/222-dsh-min-version/brief.md)：独立 worktree 将 Provider 准入改为 `>=0.2.1-rc.4`，低版本明确要求升级，初始化不锁定 `0.0.1`；116 项离线回归、真实 rc.4 握手及 Kernel final、发行安装验证见[验收](tasks/222-dsh-min-version/validation.md)。后续审查及 PR 按用户授权交付，未发布。
 
+- [Issue 224：调用方会话名称与 OpenClaw 续接](tasks/224-session-names/brief.md)：新 worktree，方案准备度 96/100 后实施；名称由调用方生成，Core 仅补 UUID，OpenClaw 使用原生句柄续接。10/29 放宽公共文本合同、限定 Gateway 展示片段并过滤已知旧审批；三种真实 Provider 特殊名称续聊通过，真实 IM 因测试凭据缺失阻塞；见[验证记录](tasks/224-session-names/validation.md)。
+
 - [Issue 205：宿主管理 DSH npm 入口](tasks/205-host-configured-dsh/brief.md)：宿主传入绝对路径 dshBin，删除安装发现及 Desktop/ASAR；官方 SDK 保持未修改，三平台 Node/Electron 验证分别记录。
 
 - [Issue 217：CodeBuddy 显式选模与续聊切模](tasks/217-codebuddy-model-selection/brief.md)：最新 main 独立 worktree，方案可执行性 96/100；prompt 前按原生目录设置并确认模型，未知模型和原生拒绝送达用户。真实 CodeBuddy/IM、自动化及本地 verified-review 见[验收记录](tasks/217-codebuddy-model-selection/validation.md)。

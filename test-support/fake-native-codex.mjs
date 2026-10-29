@@ -15,6 +15,7 @@ for await (const line of createInterface({ input: process.stdin })) {
   const message = JSON.parse(line);
   if (message.method === "initialize")
     send({ id: message.id, result: { privateInit: "excluded" } });
+  else if (message.method === "thread/name/set") send({ id: message.id, result: {} });
   else if (message.method === "thread/start")
     send({ id: message.id, result: { thread: { id: "thread-native" }, future: { exact: true } } });
   else if (message.method === "turn/start") {

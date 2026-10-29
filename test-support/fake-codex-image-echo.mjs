@@ -2,7 +2,7 @@ import { createInterface } from "node:readline";
 const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 for await (const line of createInterface({ input: process.stdin })) {
   const rpc = JSON.parse(line);
-  if (rpc.method === "initialize") send({ id: rpc.id, result: {} });
+  if (["initialize", "thread/name/set"].includes(rpc.method)) send({ id: rpc.id, result: {} });
   else if (rpc.method === "thread/start")
     send({ id: rpc.id, result: { thread: { id: "image-thread" } } });
   else if (rpc.method === "thread/resume") {

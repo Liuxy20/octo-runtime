@@ -15,6 +15,7 @@ export interface ImSessionOccurrence {
 }
 export interface ImSessionBinding {
   id?: string;
+  sessionName?: string;
   generation: number;
   providerSession?: ProviderSession;
   lastEventId?: string;

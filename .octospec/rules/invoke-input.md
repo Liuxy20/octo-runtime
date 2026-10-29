@@ -35,6 +35,7 @@ AgentExecutor.invoke、worker RPC 和公开 KernelClient.invoke 使用相同 inp
 | inputs | 必填 | 1–128 个有序 text/image part，对应 modelInputParts，图片字节不转成文本。 |
 | contexts | 必填，items 可空 | 当前 Event 的 Context v3 快照，对应 context。业务项原值、保序传递；只补必要执行默认值，不补历史业务背景。 |
 | sessionId | 省略时生成 | 业务会话 ID，对应 agentSessionId，不保证 Provider 恢复。 |
+| sessionName | 省略时仅 Core 补随机 UUID | 调用方决定的可读名称，原样透传；长度 1–256 个 Unicode 码点，不能全为空白，不含 C0/DEL/C1 控制字符；允许 `:`、`-`、`_`、中文等。名称不解析业务身份、不用于恢复或授权、不进入模型正文。 |
 | protocol_mode | native | native HostFrame 或 canonical CanonicalEvent，是同次执行的输出视图。 |
 | invocationId | 省略时生成 | 本次调用 ID及取消目标。 |
 | runId | 省略时生成 | 本轮业务执行 ID，与 invocationId/sessionId 独立。 |

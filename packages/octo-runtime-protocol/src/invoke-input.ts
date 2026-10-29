@@ -35,6 +35,8 @@ export class InvokeInput {
   declare contexts: ContextEnvelope;
   /** Business session identity; generated if omitted. Does not imply provider resume. */
   declare sessionId?: string;
+  /** 调用方拥有的展示名称；省略时由 Core 提供 UUID，不参与会话恢复。 */
+  declare sessionName?: string;
   /** Output view of the same execution stream; defaults to native. */
   declare protocol_mode?: "native" | "canonical";
   /** Cancellation identity for this invocation; generated if omitted. */
@@ -150,6 +152,7 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
     throw new TypeError("executionEnvOverrides belongs to the local invoke environment");
   assertModelInputParts(input.inputs);
   assertContextEnvelope(input.contexts);
+  if (input.sessionName !== undefined) assertSessionName(input.sessionName);
   for (const key of [
     "sessionId",
     "invocationId",
@@ -240,6 +243,23 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
     )
       throw new TypeError("providerSession.contextInputVariant is invalid");
   }
+}
+
+/** 校验可读名称，不解析业务身份；同一约束用于公开输入与内部 Adapter wire。 */
+export function assertSessionName(value: unknown): asserts value is string {
+  if (
+    typeof value !== "string" ||
+    !value.trim() ||
+    value.length > 512 ||
+    [...value].length > 256 ||
+    [...value].some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || (code >= 127 && code <= 159);
+    })
+  )
+    throw new TypeError(
+      "sessionName must contain 1-256 characters, not only whitespace, without control characters"
+    );
 }
 
 /** Lossless field reorganization of a validated prepared execution, excluding its local signal. */

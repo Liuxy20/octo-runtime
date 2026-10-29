@@ -18,7 +18,7 @@ if (mode === "tool") {
   createInterface({ input: process.stdin })
     .on("line", (line) => {
       const message = JSON.parse(line);
-      if (message.method === "initialize") respond(message.id, {});
+      if (["initialize", "thread/name/set"].includes(message.method)) respond(message.id, {});
       if (message.method === "thread/start") respond(message.id, { thread: { id: threadId } });
       if (message.method === "turn/start") {
         const tool = spawn(

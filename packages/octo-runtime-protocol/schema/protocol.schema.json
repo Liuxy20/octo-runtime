@@ -3476,6 +3476,18 @@
           "description": "Long-lived Agent Worker session identifier for this execution context.",
           "type": "string"
         },
+        "sessionName": {
+          "description": "Caller-owned nonblank display name of 1-256 Unicode code points, without C0/DEL/C1 controls; independent of business identity and opaque provider recovery handles.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "not": {
+            "anyOf": [
+              { "pattern": "[\\x00-\\x1f\\x7f-\\x9f]" },
+              { "pattern": "^[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$" }
+            ]
+          }
+        },
         "runId": {
           "description": "Run identifier for this execution.",
           "type": "string"
@@ -4121,6 +4133,18 @@
       "additionalProperties": true,
       "required": ["inputs", "contexts"],
       "properties": {
+        "sessionName": {
+          "description": "Optional caller-owned nonblank display name of 1-256 Unicode code points, without C0/DEL/C1 controls; Core supplies a random UUID default without business naming policy.",
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "not": {
+            "anyOf": [
+              { "pattern": "[\\x00-\\x1f\\x7f-\\x9f]" },
+              { "pattern": "^[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$" }
+            ]
+          }
+        },
         "sessionId": {
           "type": "string",
           "minLength": 1

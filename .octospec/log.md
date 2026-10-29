@@ -2,10 +2,19 @@
 
 ## 2026-10-29
 
+- [PR 229 延迟审批修复](journal/shared/2026-10-29-224-session-review.md#延迟首次出现审批的后续修复)：同步 main 并保留双方冲突内容；续聊未知归属审批缺 runId 时明确失败并请求取消，不再仅将授权歧义记录为限制。保留正常匹配 runId 与 fresh 审批，公开兼容代价；审批 12/12、全量 Node 2290 通过，未扩大 CI。
+
+- [PR 229 完整复审修正](journal/shared/2026-10-29-224-session-review.md)：按用户最终选择放宽公共名称为有界非空白 Unicode 文本；Gateway 自行限长并修复旧坏名，保留原生续接身份。修复旧无 runId 审批的前置快照/广播与重播串轮，记录原生关联不足的边界；全量及三家真实特殊名称续聊通过，不扩大 CI。
 - [Issue 119](journal/shared/2026-10-29-119-preparation-error-codes.md)：最新 main 独立 worktree，OctoSpec 可执行性 97/100 后实施；双渠道精确保留目录冲突和规则协议码及固定安全提示，不新增公共码/字段。原始专项 7 项失败，修复后 25 项通过；相关回归 472 通过、1 条件跳过。专项仅手动运行，CI 范围保持，审查与 PR 状态见记录。
 - [PR #226 同类排查](journal/shared/2026-10-28-163-http-date-retry-after.md#2026-10-29-jerry-xin-review-与输入解析同类排查)：处理 Jerry-Xin 的非十进制 Retry-After blocker，统一检查数字语法、三种 HTTP-date、日历顺延、星期及闰秒；改为格式和 UTC 分量校验。266 项相关回归通过，含手动专项 103 项；增加 400 年日历周期检查，保留 50 年窗口、溢出、兜底和预算。类型/构建、lint、命名、格式及知识检查通过，专项未扩大 CI，远端复审待确认。
 
 ## 2026-10-28
+
+- [PR 229 名称合同修正](tasks/224-session-names/validation.md#pr-229-后续修正ascii-名称与三端一致性)：用户明确只允许英文字母、数字与 `-`；修复前瞻在 Go RE2 上拒绝合法名称的问题，新增 JS/Go/Python 共用 fixtures，保留原生句柄语义和 CI 范围。
+
+- [Issue 224](journal/shared/2026-10-28-224-session-names.md)：实施调用方名称合同、Gateway 命名生命周期与 OpenClaw 原生续接，保留 Codex/CC/ACP 恢复语义。自动化、三种真实 Provider 及未完成 IM 的边界分别记录，不扩大 CI。
+
+- [PR #226 同类排查](journal/shared/2026-10-28-163-http-date-retry-after.md#2026-10-29-jerry-xin-review-与输入解析同类排查)：处理 Jerry-Xin 的非十进制 Retry-After blocker，统一检查数字语法、三种 HTTP-date、日历顺延、星期及闰秒；改为格式和 UTC 分量校验。266 项相关回归通过，含手动专项 103 项；增加 400 年日历周期检查，保留 50 年窗口、溢出、兜底和预算。类型/构建、lint、命名、格式及知识检查通过，专项未扩大 CI，远端复审待确认。
 
 - [Issue 163](journal/shared/2026-10-28-163-http-date-retry-after.md)：独立 worktree 修复 REST 对 HTTP-date Retry-After 的提前重试，复用建联解析并保留原有预算。PR #226 review 依次处理数值溢出兼容、Jerry-Xin 的 asctime 时区和 yujiawei 的 RFC850 两位年份窗口问题；UTC+8/UTC-7 独立子进程与最终 197 项回归通过。专项仅手动运行，未扩大 CI，按用户授权提交并 push。
 

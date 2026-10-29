@@ -279,6 +279,9 @@ export async function* runCodexAppServerTurn({
     let threadId = extractThreadId(threadResult);
     if (!threadId) throw new Error("codex thread start/resume returned no thread id");
     client.setActiveThread(threadId);
+    // 名称属于调用方；只命名本轮新建 thread，恢复时保留原生标题与句柄。
+    if (!resumed && request.sessionName)
+      await client.request("thread/name/set", { threadId, name: request.sessionName });
     const requestedMode = contextActmode(request.context);
     let collaborationMode: JsonRecord | undefined;
     let effectiveMode: "default" | "plan" | undefined;
@@ -327,6 +330,8 @@ export async function* runCodexAppServerTurn({
         throw new Error("codex fresh fallback returned no thread id", { cause: error });
       }
       client.setActiveThread(threadId);
+      if (request.sessionName)
+        await client.request("thread/name/set", { threadId, name: request.sessionName });
       turnResult = await client.request("turn/start", {
         ...turnParams(request, threadId, true),
         ...(collaborationMode ? { collaborationMode } : {})

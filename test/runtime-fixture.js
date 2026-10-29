@@ -35,12 +35,16 @@ export function codexAppServerFixture({
   method = "item/commandExecution/requestApproval",
   holdResponseWrites = false,
   turnStartError,
+  resumeError,
+  firstTurnStartError,
+  nameError,
   skills = [],
   config = {}
 } = {}) {
   const child = new EventEmitter();
   const writes = [];
   const pendingWrites = [];
+  let turnStarts = 0;
   const send = (message) => child.stdout.write(`${JSON.stringify(message)}\n`);
   const requestInteraction = () =>
     send({
@@ -73,15 +77,21 @@ export function codexAppServerFixture({
       writes.push(message);
       if (message.method === "initialize") send({ id: message.id, result: {} });
       if (message.method === "config/read") send({ id: message.id, result: { config } });
-      if (["thread/start", "thread/resume"].includes(message.method))
+      if (message.method === "thread/resume" && resumeError)
+        send({ id: message.id, error: { code: -32000, message: resumeError } });
+      else if (["thread/start", "thread/resume"].includes(message.method))
         send({ id: message.id, result: { thread: { id: "thread-fixture" } } });
-      if (["skills/extraRoots/set", "skills/config/write"].includes(message.method))
+      if (message.method === "thread/name/set" && nameError)
+        send({ id: message.id, error: { code: -32601, message: nameError } });
+      else if (
+        ["skills/extraRoots/set", "skills/config/write", "thread/name/set"].includes(message.method)
+      )
         send({ id: message.id, result: {} });
       if (message.method === "skills/list")
         send({ id: message.id, result: { data: [{ skills }] } });
       if (message.method === "turn/start") {
-        if (turnStartError)
-          send({ id: message.id, error: { code: -32000, message: turnStartError } });
+        const error = turnStartError ?? (turnStarts++ === 0 ? firstTurnStartError : undefined);
+        if (error) send({ id: message.id, error: { code: -32000, message: error } });
         else {
           send({ id: message.id, result: { turn: { id: "turn-fixture" } } });
           setImmediate(requestInteraction);

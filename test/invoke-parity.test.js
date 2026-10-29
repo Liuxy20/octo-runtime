@@ -42,7 +42,8 @@ const input = (mode = "canonical") => ({
   protocol_mode: mode,
   invocationId: "parity-invoke",
   runId: "parity-run",
-  sessionId: "parity-session"
+  sessionId: "parity-session",
+  sessionName: "caller-parity-session"
 });
 
 for (const mode of ["native", "canonical"])
@@ -73,6 +74,7 @@ for (const mode of ["native", "canonical"])
     const { signal: _local, ...localRequest } = received[0];
     const { signal: _remote, ...remoteRequest } = received[1];
     assert.deepEqual(remoteRequest, localRequest);
+    assert.equal(remoteRequest.sessionName, value.sessionName);
     assert.equal(remoteRequest.workdir, process.cwd());
     assert.deepEqual(value, before);
     const call = remote.wire.find((message) => message.method === "invoke");

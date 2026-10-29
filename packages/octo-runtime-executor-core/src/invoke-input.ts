@@ -136,6 +136,8 @@ export function prepareInvokeInput(value: unknown): {
     invocationId: input.invocationId ?? `invoke_${randomUUID()}`,
     runId: input.runId ?? `run_${randomUUID()}`,
     agentSessionId: value.sessionId ?? `session_${randomUUID()}`,
+    // 名称默认值只在此归一化；Host SDK/Adapter 不猜业务策略或据此决定恢复。
+    sessionName: input.sessionName ?? randomUUID(),
     agentSource,
     continuityMode,
     ...(providerSession ? { providerSession } : {}),

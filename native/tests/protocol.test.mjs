@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { build, batch } from "./driver.mjs";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { InvokeInput, assertInvokeRequest } from "@mininglamp-oss/octo-runtime-protocol";
 const language = process.env.OCTO_NATIVE_LANGUAGE ?? "go";
 const read = async (name) =>
   JSON.parse(
@@ -12,6 +12,37 @@ const read = async (name) =>
     )
   );
 const cases = [];
+// Exercise the same naming fixtures through TS and both generated native wire codecs.
+for (const { name, sessionName, valid } of await read("session-name-fixtures.json")) {
+  const input = {
+    inputs: [{ type: "text", text: "hello" }],
+    contexts: { schema: "octo.context-envelope/v3", items: [] },
+    ...(sessionName === undefined ? {} : { sessionName })
+  };
+  const request = {
+    protocolVersion: 2,
+    invocationId: "name-fixture",
+    agentSessionId: "name-fixture",
+    runId: "name-fixture",
+    prompt: "hello",
+    modelInput: "hello",
+    controlInstructions: "",
+    context: input.contexts,
+    approvalMode: "ask",
+    workdir: process.cwd(),
+    agentSource: "provisioned",
+    agentConfig: {},
+    ...(sessionName === undefined ? {} : { sessionName })
+  };
+  for (const [definition, value, check] of [
+    ["InvokeInputWire", input, InvokeInput.check],
+    ["InvokeRequestWire", request, assertInvokeRequest]
+  ]) {
+    if (valid) assert.doesNotThrow(() => check(value), name);
+    else assert.throws(() => check(value), /sessionName/, name);
+    cases.push({ name: `${definition} sessionName: ${name}`, definition, value, valid });
+  }
+}
 // Context budgets count compact UTF-8 without extra U+2028/U+2029 escaping; literal backslashes differ.
 for (const [name, text, valid] of [
   ["line separator", "\u2028".repeat(12000), true],

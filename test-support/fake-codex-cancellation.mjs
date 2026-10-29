@@ -15,6 +15,7 @@ reader.on("line", (line) => {
     return;
   }
   if (message.method === "initialized") return;
+  if (message.method === "thread/name/set") return respond(message.id, {});
   if (message.method === "thread/start") {
     respond(message.id, { thread: { id: threadId } });
     return;

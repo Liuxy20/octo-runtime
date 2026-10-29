@@ -1166,7 +1166,7 @@ test("control instructions use private provider-native carriers", async () => {
   assert.equal(openclaw.createParams.cwd, undefined);
   assert.equal(openclaw.createParams.model, "provider/model");
   assert.equal(openclaw.createParams.thinkingLevel, undefined);
-  assert.match(openclaw.sessionKey, /^agent:octo-openclaw-runner:octo-run:run-1:/);
+  assert.match(openclaw.sessionKey, /^agent:octo-openclaw-runner:[0-9a-f-]{36}$/);
 });
 
 test("text adapters prefer the exact modelInput over the display prompt", async () => {

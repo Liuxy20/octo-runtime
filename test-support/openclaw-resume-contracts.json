@@ -1,0 +1,453 @@
+{
+  "scope": "Fixed upstream AST projections of resume RPC requests; not live Gateway acceptance.",
+  "versions": [
+    {
+      "tag": "2026.6.11",
+      "commit": "e085fa1a3ffd32d0ea6917e1e6fb4ecbffbb77d2",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "acfbeb46d72ed955c65cfeee4c309e3b005db51f698162140a2c9a52c167c0d8",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.1",
+      "commit": "2d2ddc43d0dcf71f31283d780f9fe9ff4cc04fe4",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.1-1",
+      "commit": "81ac4f3bddc8b7a9a68ae908dd3d60d819c024f2",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.1-2",
+      "commit": "0790d9f593ad30c940ed93b5872a8cf6d6f3cf8c",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.33",
+      "commit": "b60a4e9fa97cddf1869a1866d879b3051783cf12",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.34",
+      "commit": "0847c47f4451569148e5ef1789be771416ff7b11",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.7.35",
+      "commit": "aa94808cb05668cdf1c10bc8f034a8176deba483",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "fb693b9f6d21bfb227609bd434e79b66056baf745a2c1bcb40e189248705db93",
+        "packages/gateway-protocol/src/schema/primitives.ts": "d7ea10c42fa1420a81eba7eeec4e661340b70e10cfc5a10237eafda82af0df11"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7"
+      }
+    },
+    {
+      "tag": "2026.8.1",
+      "commit": "ea806575e6450e4d1efdfc72c19f04be982a1b9b",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ac6dbcb18961de4e8de776273cdc37e262656e93a0f57cd1b377880a84a49c9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "6b3d9b84db56da5af91231c8c05c64145099bbb266e3d5a30ceea308b6f5fff2",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "eb0e0e77e15aa16bd3e547d94e9eecd9c5c6f3f34304bb623609ae9fb3afe4be",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.8.2",
+      "commit": "0965053fe6b9341776df147a6934b7485c60b5ca",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ac6dbcb18961de4e8de776273cdc37e262656e93a0f57cd1b377880a84a49c9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "c043d95888e04b818ae2451744c3f098f858b68e414fa765c321a03f7d613412",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.8.33",
+      "commit": "f773aa06a1a93b36b050f1a3f4b57d3d91311541",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ac6dbcb18961de4e8de776273cdc37e262656e93a0f57cd1b377880a84a49c9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "c043d95888e04b818ae2451744c3f098f858b68e414fa765c321a03f7d613412",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.8.34",
+      "commit": "d21cb744af45bc4d29352750c5e1e7f1cf7f066a",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ac6dbcb18961de4e8de776273cdc37e262656e93a0f57cd1b377880a84a49c9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "c043d95888e04b818ae2451744c3f098f858b68e414fa765c321a03f7d613412",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.8.35",
+      "commit": "713ba5785d72d6ed1cec971e21307f16cc4234a6",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ac6dbcb18961de4e8de776273cdc37e262656e93a0f57cd1b377880a84a49c9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "c043d95888e04b818ae2451744c3f098f858b68e414fa765c321a03f7d613412",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.1",
+      "commit": "ad6fe23aecb9b833d68139b0ddc9f239b894d2f1",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "80574c96535c2d38568e5414b7e5309fecc1281e8bff5db43d73baae396c12c8",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "c043d95888e04b818ae2451744c3f098f858b68e414fa765c321a03f7d613412",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.2",
+      "commit": "3928bad9badfcb6c7d140530435e806fb8092190",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "7c9b46451d698809302d5ec351944839705211e7b31068346eee30f014bd5ff0",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "77eccd1d6491a33f26f4148e893d2e2fa031fb999052ce8de3dc3eae7701bd42",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.3",
+      "commit": "1391f7cd2d40ab5bbcf2f5f831d3a64f520e72d7",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "cbac71f460929234171a9e75605370079af68ca85fde11a98df771cedf7b98e0",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "c01a3790add8a9ee392dd32a0984702896a2a16a10203b10b9c85dee9a0a98c5",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "48f4ee6d3a5c64073d66eaf8df0b0e16a51ee95c223b6b17425ef74d8738bc5e",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.4",
+      "commit": "3a9d69db306cd7f081e06254cb89c4bcc14a7107",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "cbac71f460929234171a9e75605370079af68ca85fde11a98df771cedf7b98e0",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "7eac6110f9445d084a160d5b83fa245eb36777a5972595280f4250a71431699f",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "f317d16c236dad3913e0bb932d1e26b852542fccbe44a1042c40e787d0a5f2fc",
+        "packages/gateway-protocol/src/schema/primitives.ts": "cbe08a045911202a0d3d081c3ced962db975b77450d5c6c5e3a7274532600524"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.5",
+      "commit": "ec9c1a13db8938e5a3eaa51fca2e981cde2395a9",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "3ccd3b26ede2889bb6796b32e53e1a86b8b505e990dd4acc60e9d803798fa145",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "9d539538d1aeefa31a60f2b6d4bf49c544c2da2640b17ef23a1f8ea4e6222e51",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "89926a3a38e2e38352a415cd12515fe2619271745047e03416efcd61ecec6b01",
+        "packages/gateway-protocol/src/schema/primitives.ts": "32ac5dabfcb4dbffe3e87f5b5ed77e768f222427e0411effed6d07c8d599ff68"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.6",
+      "commit": "eb377ac59e6c9fd6c7705028034812becf00271b",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "42aff8f10139d8e713fdd7fe92c59bcedd2fa7eb144ab59af30b3d85c2125529",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "78083339bdbae36825de6a3dd58a992598f741865aa5e8eee1a598c5fdfcad17",
+        "packages/gateway-protocol/src/schema/primitives.ts": "32ac5dabfcb4dbffe3e87f5b5ed77e768f222427e0411effed6d07c8d599ff68"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.7",
+      "commit": "c074824a27c96d3983043f9eeb33823cd1772d8c",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "7014054a4e37984af066a813b978b08bc66ec2653f3b9206cc931512deb32118",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "9a62e5fd77033f17879da542c59129cafc933a957eaf7bf3eb277a5878bb977a",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.8",
+      "commit": "fc23bc864e4553c2d215e479eeec47b67a0bf943",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "7014054a4e37984af066a813b978b08bc66ec2653f3b9206cc931512deb32118",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "9a62e5fd77033f17879da542c59129cafc933a957eaf7bf3eb277a5878bb977a",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.9",
+      "commit": "bcfc88812a35243893585dbeca87ca41b48272ca",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "7014054a4e37984af066a813b978b08bc66ec2653f3b9206cc931512deb32118",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "9a62e5fd77033f17879da542c59129cafc933a957eaf7bf3eb277a5878bb977a",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.9.33",
+      "commit": "5873f8174e0b2866a2b8bc0dbf4c4c8164d8dc82",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "7014054a4e37984af066a813b978b08bc66ec2653f3b9206cc931512deb32118",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f442a779cbe6d6b4c09df019095b059048b98285a5f16a35e88524148315b687",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "9a62e5fd77033f17879da542c59129cafc933a957eaf7bf3eb277a5878bb977a",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.10.1",
+      "commit": "e178c39e9aae3fa440735217f9aef9574f286677",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "19c3d541b618885992a6f2f0438a2bdaec622905a1c5cf8ed86ef15f8aac8da9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "b836ae7b62a835cd0a270452c82a0fac22e7ecccf542d5c30919829ac344ea82",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.10.2",
+      "commit": "b8952d477f0c932d8ddc6da5c89cab5a169b6ff1",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "19c3d541b618885992a6f2f0438a2bdaec622905a1c5cf8ed86ef15f8aac8da9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "b836ae7b62a835cd0a270452c82a0fac22e7ecccf542d5c30919829ac344ea82",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.10.3",
+      "commit": "59cb44796b0f1f0daa0e37af8b1495abb45d9bc1",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "19c3d541b618885992a6f2f0438a2bdaec622905a1c5cf8ed86ef15f8aac8da9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "b836ae7b62a835cd0a270452c82a0fac22e7ecccf542d5c30919829ac344ea82",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.10.4",
+      "commit": "383c124cc32ffee3f8e56f549b88da94d269a4af",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "19c3d541b618885992a6f2f0438a2bdaec622905a1c5cf8ed86ef15f8aac8da9",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "b836ae7b62a835cd0a270452c82a0fac22e7ecccf542d5c30919829ac344ea82",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    },
+    {
+      "tag": "2026.10.5",
+      "commit": "1b58cb9a1b4f4353e1add63c8506db4d890962e8",
+      "sources": {
+        "packages/gateway-protocol/src/schema/sessions.ts": "0cd1c21142af0d9fc6294a94b4ee18e70ce77ff1f86b8f8f1127eef3f0cf5950",
+        "packages/gateway-protocol/src/schema/sessions-patch.ts": "f5ee4bdb22fb25a580296a191e99c8c9e51ee05936f121acfa369607752e3d20",
+        "packages/gateway-protocol/src/schema/sessions-row.ts": "99d492147369d5eea6a2457a72f366754247bf762430a1f04e5395119a75453b",
+        "packages/gateway-protocol/src/schema/primitives.ts": "3deca4a2307008c39adcac00ce8610b949a1cbcd508b97005949753bed504220"
+      },
+      "schemas": {
+        "SessionsDescribeParamsSchema": "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5",
+        "SessionsPatchParamsSchema": "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f"
+      }
+    }
+  ],
+  "schemas": {
+    "01dd8683ee5070e1ecf611071e048dd30f80360a7c34a226b8cc3ba1028747f5": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": ["key"],
+      "additionalProperties": false
+    },
+    "286965f0ba602292a48415b34c8ae825aca3435f045d98ea05b59ab59bef8fa7": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "execSecurity": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execAsk": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["key"],
+      "additionalProperties": false
+    },
+    "cdbd639f9fb5c3e4a5949ffc245935fa4aafe1ec876443f7d062989db745b79f": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "permissionMode": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "const": "read-only"
+                },
+                {
+                  "const": "guarded"
+                },
+                {
+                  "const": "workspace"
+                },
+                {
+                  "const": "full"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["key"],
+      "additionalProperties": false
+    }
+  }
+}

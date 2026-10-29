@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { assertSessionName } from "./invoke-input.js";
 export { assertJsonByteLimit } from "./json-size.js";
 export { INVOKE_REQUEST_MAX_BYTES, assertInvokeRequestSize } from "./invoke-size.js";
 export * from "./stream-limits.js";
@@ -876,6 +877,7 @@ export function assertFailureEnvelope(value: unknown): asserts value is FailureE
 /** Assert the execution identifiers and path fields that must be present before the Host calls an adapter. */
 export function assertInvokeRequest(request: unknown): asserts request is InvokeRequest {
   if (!isRecord(request)) throw new TypeError("InvokeRequest must be an object");
+  if (request.sessionName !== undefined) assertSessionName(request.sessionName);
   if (request.protocolVersion !== PROTOCOL_VERSION)
     throw new TypeError("InvokeRequest.protocolVersion must be 2");
   if ("appendInstructions" in request) throw new TypeError("LEGACY_RUN_CONTRACT_REJECTED");

@@ -171,10 +171,12 @@ test("real Gateway consumes the host factory, reloads saved bindings and resets 
   await load();
   await send("second");
   assert.equal(requests[1].sessionId, first.sessionId);
+  assert.equal(requests[1].sessionName, first.sessionName);
   assert.equal(requests[1].providerSession.sessionId, "provider-saved");
   await send("reset", "/reset");
   await send("third");
   assert.notEqual(requests[2].sessionId, first.sessionId);
+  assert.notEqual(requests[2].sessionName, first.sessionName);
   assert.equal(requests[2].sessionGeneration, first.sessionGeneration + 1);
   assert.equal(requests[2].providerSession, undefined);
   // 模拟重连后再次收到同一控制消息，保留 backend 的控制去重记录。
@@ -183,6 +185,7 @@ test("real Gateway consumes the host factory, reloads saved bindings and resets 
   await send("reset", "/reset");
   await send("fourth");
   assert.equal(requests[3].sessionId, requests[2].sessionId);
+  assert.equal(requests[3].sessionName, requests[2].sessionName);
   assert.equal(requests[3].sessionGeneration, requests[2].sessionGeneration);
   for (const name of ["read", "save", "reset", "occurrence", "remember"])
     assert.ok(trace.includes(name), name);
@@ -526,6 +529,11 @@ test("trusted host scope and opaque chat identities remain isolated across Extra
   for (const value of cases) sessions.push(await run(value));
   assert.equal(new Set(sessions).size, cases.length);
   assert.equal(await run(cases[0]), sessions[0]);
+  assert.equal(
+    new Set(requests.slice(0, cases.length).map((request) => request.sessionName)).size,
+    cases.length
+  );
+  assert.equal(requests.at(-1).sessionName, requests[0].sessionName);
 });
 
 test("startup failure releases the acquired handle and allows a clean retry", async (t) => {

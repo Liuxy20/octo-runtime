@@ -7,7 +7,8 @@ const finish = (status) => emit("turn/completed", { turn: { id: "turn-final", st
 let mode;
 reader.on("line", (line) => {
   const message = JSON.parse(line);
-  if (message.method === "initialize") send({ id: message.id, result: {} });
+  if (["initialize", "thread/name/set"].includes(message.method))
+    send({ id: message.id, result: {} });
   if (["thread/start", "thread/resume"].includes(message.method))
     send({ id: message.id, result: { thread: { id: "thread-final" } } });
   if (message.method === "turn/start") {

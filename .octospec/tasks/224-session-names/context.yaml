@@ -1,0 +1,25 @@
+task: 224-session-names
+baseline: 0ca12a03a055ccb766e6126716c51bb6cc6efe1c
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+references:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/224
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/guides/provider-live-acceptance.md
+  - .octospec/tasks/40-openclaw-compatibility/implementation.md
+  - .octospec/tasks/40-openclaw-compatibility/source-evidence.json
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md

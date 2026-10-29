@@ -32,6 +32,7 @@ test("all prepared fields, primary/recovery images and provider extensions survi
     ]
   };
   const request = invokeRequest({
+    sessionName: "arbitrary-caller-name",
     context,
     sessionGeneration: 7,
     providerEpoch: 3,
@@ -80,6 +81,28 @@ test("removed channel snapshot metadata is ignored and never forwarded to execut
     assert.deepEqual(prepared.request.context, input.contexts);
     assert.deepEqual(input, before);
   }
+});
+
+test("session names are optional caller data with a Core-only UUID default", () => {
+  const input = {
+    inputs: [{ type: "text", text: "hello" }],
+    contexts: { schema: "octo.context-envelope/v3", items: [] },
+    providerSession: { sessionId: "opaque-provider-session" }
+  };
+  const first = prepareInvokeInput(input).request;
+  const second = prepareInvokeInput(input).request;
+  assert.match(first.sessionName, /^[0-9a-f-]{36}$/);
+  assert.notEqual(first.sessionName, second.sessionName);
+  assert.equal(input.sessionName, undefined);
+  for (const sessionName of ["wecom:anything_1", "WebUI-ABC-123", " 名称 ", "😀".repeat(256)]) {
+    const prepared = prepareInvokeInput({ ...input, sessionName }).request;
+    assert.equal(prepared.sessionName, sessionName);
+    assert.equal(prepared.providerSession.sessionId, input.providerSession.sessionId);
+    assert.equal(prepared.continuityMode, "continue");
+    assert.equal(prepared.modelInput, "hello");
+  }
+  for (const sessionName of [null, 1, "", "   ", "x\n", "x\x7f", "name\u0085", "a".repeat(257)])
+    assert.throws(() => InvokeInput.check({ ...input, sessionName }), /sessionName/);
 });
 
 test("every ingress can use the same plain JSON and exact model parts reach the adapter", async () => {

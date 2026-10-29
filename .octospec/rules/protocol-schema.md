@@ -40,6 +40,7 @@ Native SDK 按一份生成源码和一份手写源码组织：Python 为 `octo_r
 
 1. 修改 Schema 及相关运行时校验器。
 2. 更新共享正反 fixtures 和受影响消费者。
+   涉及公共输入的字符串校验时，fixtures 必须同时经过 TS 与 Go/Python 原生 codec；生成产物 hash 匹配不代表校验行为一致。正则采用三端共同支持的语法；`sessionName` 允许标点和 Unicode 文本，按码点计长，使用现有 `not`/`anyOf` 排除控制字符与全空白文本。空白集合与 TS trim 显式对齐，不用语言相关的 `\s` 或前瞻；末尾换行由控制字符规则拒绝。
 3. 重新生成类型并构建：
 
 ```sh

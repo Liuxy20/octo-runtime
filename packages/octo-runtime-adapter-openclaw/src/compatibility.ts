@@ -52,6 +52,7 @@ const APPROVAL_EVENTS = ["exec.approval.requested", "exec.approval.resolved"];
 export interface GatewayContract {
   version: string;
   family: "legacy" | "session-permissions";
+  methods: readonly string[];
   approvalTransport: boolean;
   scopes?: readonly string[];
 }
@@ -104,6 +105,7 @@ export function resolveGatewayContract(value: unknown): GatewayContract {
   return {
     version,
     family,
+    methods,
     approvalTransport:
       APPROVAL_METHODS.every((method) => methods.includes(method)) &&
       APPROVAL_EVENTS.every((event) => events.includes(event)),

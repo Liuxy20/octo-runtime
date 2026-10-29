@@ -47,6 +47,24 @@
 
 需要更换会话指令时，由应用新建或重置 Provider 会话。
 
+## 可读会话名称
+
+可选 `sessionName` 由各调用方制定生成策略，并保存在自己的会话 binding 中，例如 `wecom-{uuid}` 或 `webui-{uuid}`。名称长度 1–256 个 Unicode 码点，不能全为空白，不含 C0/DEL/C1 控制字符；允许冒号、连字符、下划线、文本中的空格和中文，合法输入原样保留。省略时仅 Core 补随机 UUID；Host SDK 和 Kernel 只透传，不提供业务命名器或名称 registry。名称不作为恢复句柄、权限或模型输入；同名不会合并会话，续聊改名也不会选择或重命名原生会话。
+
+Channel Gateway 生成 `octo-dm-{uid}-{uuid}`、`octo-group-{groupId}-{uuid}` 或 `octo-group-{groupId}-topic-{topicId}-{uuid}`。同一 scoped binding 跨轮、重试和闲置调度清理保持名称；`/reset`、`/new` 清除 binding，下一条普通消息分配新名称。旧 binding 缺少名称时补充，不更换 Provider 句柄；当前 store 的容量、期限及持久化保证不变。
+
+| Adapter | 新建原生会话 | 续聊 |
+| --- | --- | --- |
+| OpenClaw | 可读 `agent:{agentId}:` key 加独立随机后缀；Provider 必需的冒号保留。 | 原样复用返回的 key，先 `sessions.describe` 验证存在，按版本确认本轮权限，再订阅和执行；缺失或归属错误明确失败，不自动新建。旧的 `resumable: false` 句柄仍可显式续接已存在的原生会话。 |
+| Codex | 新 thread 通过 `thread/name/set` 命名，fresh fallback 同样处理；原生拒绝命名时不启动新 turn。 | 保持 `thread/resume`，不更换 ID 或标题。 |
+| Claude Code | 新建时用 `--name`；原生 CLI 须支持此选项。 | 保持 `--resume` 和原生 UUID。 |
+| 通用 ACP | 无标准标题 setter，新建时通过 `provider_diagnostic` notice 明示名称未应用。 | 保持 `session/load` / `session/new` 及原有恢复行为。 |
+| CodeBuddy ACP / Grok Build ACP / 其他 Adapter | 本次不新增原生标题映射，可读命名不支持。 | 原有 Provider 恢复行为不变。 |
+
+真实命名验收版本为 Codex 0.164.0、Claude Code 2.1.306、OpenClaw 2026.9.4；OpenClaw 另覆盖既有 27 个固定版本的请求源码投影，不等于全部版本真实验收，见[验证记录](../../../.octospec/tasks/224-session-names/validation.md)。
+
+OpenClaw 续聊的审批必须标明当前原生 run。已知旧无 runId 审批会被忽略；派发后首次出现的无 `runId` 审批无法仅凭共享 sessionKey 证明归属，会以 `OPENCLAW_APPROVAL_RUN_UNVERIFIED` 明确失败并请求取消本轮，不回答审批、不改变权限、不另建 session。`ask`、`full_access` 均执行该检查；若 Gateway 连合法本轮审批也不提供 runId，该续聊审批路径同样不能完成。新建独立随机 key 的 session 仍支持无 runId 审批，普通不触发此类审批的续聊继续复用同一 session。发出取消请求不等于 Provider 已确认停止。
+
 ## 为下一轮准备 Context
 
 应用自行决定下一轮发送全部背景、仅发送变化内容，还是不发送背景。Runtime 不会根据 session 或内容 hash 补回省略项。

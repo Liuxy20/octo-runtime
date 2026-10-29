@@ -166,6 +166,7 @@ export type ImConnectionState = "stopped" | "connecting" | "online" | "retrying"
 
 export interface ImSession {
   id?: string;
+  sessionName?: string;
   generation: number;
   providerSession?: ProviderSession;
   lastEventId?: string;

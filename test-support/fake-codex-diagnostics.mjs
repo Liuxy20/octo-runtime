@@ -20,7 +20,8 @@ const item = (text) =>
 
 createInterface({ input: process.stdin }).on("line", (line) => {
   const message = JSON.parse(line);
-  if (message.method === "initialize") send({ id: message.id, result: {} });
+  if (["initialize", "thread/name/set"].includes(message.method))
+    send({ id: message.id, result: {} });
   if (message.method === "config/read") send({ id: message.id, result: { config: {} } });
   if (["skills/extraRoots/set", "skills/config/write"].includes(message.method))
     send({ id: message.id, result: {} });

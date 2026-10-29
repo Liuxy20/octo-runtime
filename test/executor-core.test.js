@@ -25,7 +25,8 @@ const input = (id = "one", mode = "native", text = "answer") => ({
   protocol_mode: mode,
   invocationId: `invoke-${id}`,
   runId: `run-${id}`,
-  sessionId: "session-one"
+  sessionId: "session-one",
+  sessionName: "caller-session-one"
 });
 const executor = (t, invoke) => {
   const core = new AgentExecutor();

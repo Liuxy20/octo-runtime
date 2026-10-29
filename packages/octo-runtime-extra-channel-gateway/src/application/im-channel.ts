@@ -7,6 +7,7 @@ import { shutdownDeadline, withinShutdown } from "@mininglamp-oss/octo-runtime-h
 import { randomUUID } from "node:crypto";
 import {
   assertModelInputParts,
+  assertSessionName,
   failurePayload,
   failureMessage
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -48,6 +49,36 @@ import {
   validMessageSeq,
   type ImGapPlan
 } from "./context-gap.js";
+
+function readableSessionName(message: ImInboundMessage, current?: string): string {
+  if (current !== undefined) {
+    try {
+      assertSessionName(current);
+      return current;
+    } catch {
+      // 修复旧版本已保存的非法展示名称，不触碰业务身份和原生恢复句柄。
+    }
+  }
+  // 每个地址片段最多 80 个码点，最长群话题名称（含 UUID）不超过 215 个码点。
+  const displayPart = (value: string): string =>
+    [...value]
+      .slice(0, 80)
+      .map((character) => {
+        const code = character.charCodeAt(0);
+        return code < 32 || (code >= 127 && code <= 159) ? "-" : character;
+      })
+      .join("") || "unknown";
+  const suffix = randomUUID();
+  const scope = groupScope(message.conversationId);
+  const name =
+    message.conversationKind === "direct"
+      ? `octo-dm-${displayPart(message.conversationId)}-${suffix}`
+      : message.conversationKind === "thread"
+        ? `octo-group-${displayPart(scope.groupNo)}-topic-${displayPart(scope.shortId ?? message.conversationId)}-${suffix}`
+        : `octo-group-${displayPart(message.conversationId)}-${suffix}`;
+  assertSessionName(name);
+  return name;
+}
 
 // 仅精确匹配已定义的准备期原因；未知异常正文不得进入回复或新增诊断。
 const preparationFailureMessages = new Map([
@@ -457,6 +488,7 @@ export class ImRuntime {
           this.#finalDeliveries.get(key)?.abort();
           this.#tasks.get(key)?.task.stopRetries();
           session.id = binding.id;
+          session.sessionName = binding.sessionName;
           session.generation = binding.generation;
           session.providerSession = binding.providerSession;
           session.initialization = { attempted: false };
@@ -614,6 +646,13 @@ export class ImRuntime {
         };
         this.#sessionStore.save(key, binding);
         session.id = binding.id;
+      }
+      if (message.text.trim() !== "/session") {
+        const name = readableSessionName(message, session.sessionName);
+        if (name !== session.sessionName) {
+          session.sessionName = name;
+          this.#saveBinding(key, session);
+        }
       }
       const executionSession = { ...session };
       const frozenMessage = {
@@ -1388,6 +1427,7 @@ export class ImRuntime {
     const binding = this.#sessionStore.read(key);
     this.#sessionStore.save(key, {
       id: session.id,
+      sessionName: session.sessionName,
       generation: session.generation,
       providerSession: session.providerSession,
       lastEventId: session.lastEventId,

@@ -151,6 +151,8 @@ export async function buildClaudeCommand(
     ...(initialControlInstructions(req) ? ["--append-system-prompt-file", promptFile] : [])
   ];
   if (req.providerSession?.sessionId) args.push("--resume", req.providerSession.sessionId);
+  // --name 是展示标题；不能替换原生 UUID，也不在 resume 时覆盖既有名称。
+  else if (req.sessionName) args.push("--name", req.sessionName);
   if (req.agentConfig?.model) args.push("--model", req.agentConfig.model);
   const effort = mapReasoningEffort("claude-code", req.agentConfig?.effort);
   if (effort) args.push("--effort", effort);

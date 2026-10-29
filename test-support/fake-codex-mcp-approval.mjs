@@ -6,7 +6,7 @@ const reply = (id, result) => send({ id, result });
 
 reader.on("line", (line) => {
   const message = JSON.parse(line);
-  if (message.method === "initialize") {
+  if (["initialize", "thread/name/set"].includes(message.method)) {
     reply(message.id, {});
     return;
   }

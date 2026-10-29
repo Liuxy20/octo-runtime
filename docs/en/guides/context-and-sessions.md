@@ -47,6 +47,24 @@ Some Adapters can fall back to a new session when resuming fails. Use `freshFall
 
 To change session instructions, have your application create or reset the Provider session.
 
+## Readable Session Names
+
+Set optional `sessionName` when creating a conversation, and keep it with your application binding. Names contain 1–256 Unicode code points, cannot consist only of whitespace, and cannot contain C0/DEL/C1 control characters. Colons, hyphens, underscores, spaces within text and non-ASCII text are allowed; valid input is preserved unchanged. Each caller owns its naming policy: for example, `wecom-{uuid}` or `webui-{uuid}`. Core supplies a random UUID when omitted. Host SDK and Kernel forward the field without inventing business naming rules or keeping a name registry. Names never serve as recovery handles, authorization, or model input. Two conversations with the same name remain separate; changing a name on resume does not select or rename a native session.
+
+Channel Gateway generates `octo-dm-{uid}-{uuid}`, `octo-group-{groupId}-{uuid}`, or `octo-group-{groupId}-topic-{topicId}-{uuid}`. It preserves the name in the existing scoped binding across turns, retries and idle scheduler cleanup. `/reset` and `/new` discard that binding and allocate a new name with the next normal message. Existing unnamed bindings receive a name without changing their Provider handle. The current store's retention and persistence guarantees still apply.
+
+| Adapter | New native conversation | Continuation |
+| --- | --- | --- |
+| OpenClaw | Readable `agent:{agentId}:` key with an independent random suffix; the Provider envelope keeps its colons. | Reuses the exact returned key, checks existence with `sessions.describe`, applies this turn's version-specific permission policy, then subscribes and runs. Missing/mismatched handles fail without creating a replacement. Old explicitly supplied `resumable: false` handles may resume if they still exist. |
+| Codex | `thread/name/set` after creating a thread, including fresh fallback. A rejected name request fails before starting the new turn. | Existing `thread/resume`; native ID and title stay unchanged. |
+| Claude Code | `--name` on new sessions; requires a CLI version supporting that option. | Existing `--resume` with the opaque native UUID. |
+| Generic ACP | No standard title setter; a fresh session emits a `provider_diagnostic` notice that the name was not applied. | Existing `session/load` / `session/new` and recovery behavior. |
+| CodeBuddy ACP / Grok Build ACP / other adapters | This change does not add native title mapping; readable naming is unsupported. | Existing provider-specific recovery behavior is unchanged. |
+
+Native naming was checked with Codex 0.164.0, Claude Code 2.1.306 and OpenClaw 2026.9.4. OpenClaw request projections also cover its existing 27 verified release contracts; that is source-level coverage, not live testing of every release. See the [task validation](../../../.octospec/tasks/224-session-names/validation.md).
+
+During OpenClaw continuation, approvals must identify the current native run. Previously observed runless approvals are ignored. A first-seen approval without `runId` after dispatch fails with `OPENCLAW_APPROVAL_RUN_UNVERIFIED` and requests cancellation of the current run without answering the approval, changing permissions, or creating another session. This applies to both `ask` and `full_access`: a shared session key alone cannot prove turn ownership. Gateway versions omitting `runId` on legitimate approvals cannot complete that continuation approval path. Fresh sessions with independently random keys retain runless approval support; ordinary turns without such approvals still reuse the same session. A cancellation request alone does not confirm that the Provider has stopped.
+
 ## Prepare Context for the Next Turn
 
 Your application decides whether the next turn needs all background, changed material only, or no background. Runtime does not restore omitted items from a session or content hash.

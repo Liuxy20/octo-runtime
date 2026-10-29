@@ -13,6 +13,66 @@ const fixture = fileURLToPath(
   new URL("../test-support/fake-codex-cancellation.mjs", import.meta.url)
 );
 
+for (const scenario of ["fresh", "resumed", "resume-fallback", "turn-fallback", "name-unavailable"])
+  test(
+    `Codex session names apply only to newly created native threads: ${scenario}`,
+    { timeout: 5_000 },
+    async () => {
+      const server = codexAppServerFixture({
+        ...(scenario === "resume-fallback" ? { resumeError: "thread not found" } : {}),
+        ...(scenario === "turn-fallback" ? { firstTurnStartError: "thread not found" } : {}),
+        ...(scenario === "name-unavailable" ? { nameError: "method not found" } : {})
+      });
+      const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+      const events = [];
+      const req = invokeRequest({
+        sessionName: "webui-caller-readable-name",
+        signal: AbortSignal.timeout(4_000),
+        ...(["resumed", "resume-fallback", "turn-fallback"].includes(scenario)
+          ? { providerSession: { sessionId: "thread-fixture", resumable: true } }
+          : {})
+      });
+      try {
+        for await (const event of adapter.invoke(req)) {
+          events.push(event);
+          if (event.type === "interaction.requested") {
+            await adapter.respondInteraction(req.invocationId, {
+              interactionId: event.payload.interactionId,
+              outcome: "accepted"
+            });
+            server.complete();
+          }
+        }
+        const names = server.writes.filter((message) => message.method === "thread/name/set");
+        assert.equal(names.length, scenario === "resumed" ? 0 : 1);
+        if (names.length)
+          assert.deepEqual(names[0].params, { threadId: "thread-fixture", name: req.sessionName });
+        if (scenario === "name-unavailable") {
+          assert.equal(events.at(-1).type, "run.failed");
+          assert.ok(!server.writes.some((message) => message.method === "turn/start"));
+        } else {
+          assert.equal(events.at(-1).type, "run.completed");
+          if (names.length)
+            assert.ok(
+              server.writes.indexOf(names[0]) <
+                server.writes.findLastIndex((message) => message.method === "turn/start")
+            );
+          assert.equal(
+            events.find((event) => event.type === "session.update").payload.providerSession
+              .resumeOutcome,
+            scenario === "resumed"
+              ? "resumed"
+              : scenario.endsWith("fallback")
+                ? "fresh_fallback"
+                : undefined
+          );
+        }
+      } finally {
+        server.close(0);
+      }
+    }
+  );
+
 for (const mode of ["eof", "nonzero", "malformed", "wait"]) {
   test(
     `Codex diagnostics preserve transport failure/cancellation: ${mode}`,

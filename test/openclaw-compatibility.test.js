@@ -12,13 +12,20 @@ import { assertCanonicalEvent } from "../packages/octo-runtime-protocol/dist/ind
 const contracts = JSON.parse(
   readFileSync(new URL("../test-support/openclaw-request-contracts.json", import.meta.url))
 );
+const resumeContracts = JSON.parse(
+  readFileSync(new URL("../test-support/openclaw-resume-contracts.json", import.meta.url))
+);
 const ajv = new Ajv();
 const validators = Object.fromEntries(
-  Object.entries(contracts.schemas).map(([key, schema]) => [key, ajv.compile(schema)])
+  Object.entries({ ...contracts.schemas, ...resumeContracts.schemas }).map(([key, schema]) => [
+    key,
+    ajv.compile(schema)
+  ])
 );
 const methods = [
   "agents.list",
   "sessions.create",
+  "sessions.describe",
   "sessions.patch",
   "sessions.messages.subscribe",
   "agent",
@@ -81,6 +88,9 @@ function fixture({
     waitIndex = 0,
     finish;
   const source = contracts.versions.find((entry) => entry.tag === version.replace(/^v/, ""));
+  const resumeSource = resumeContracts.versions.find(
+    (entry) => entry.tag === version.replace(/^v/, "")
+  );
   const client = {
     connect: async () => handshake,
     onEvent(fn) {
@@ -98,10 +108,15 @@ function fixture({
       const name = {
         "sessions.create": "SessionsCreateParamsSchema",
         "sessions.patch": "SessionsPatchParamsSchema",
+        "sessions.describe": "SessionsDescribeParamsSchema",
         agent: "AgentParamsSchema"
       }[method];
       if (name && source) {
-        const validate = validators[source.schemas[name]];
+        const validate =
+          validators[
+            (method === "sessions.patch" || method === "sessions.describe" ? resumeSource : source)
+              .schemas[name]
+          ];
         assert.ok(validate, `Unexpected RPC ${method} on ${version}`);
         assert.equal(validate(params), true, JSON.stringify(validate.errors));
       }
@@ -110,11 +125,17 @@ function fixture({
       if (failure !== undefined) return failure;
       if (method === "agents.list") return { agents: [{ id: "main" }] };
       if (method === "sessions.create") return { key: params.key };
+      if (method === "sessions.describe")
+        return { session: { key: params.key, sessionId: "native-uuid" } };
       if (method === "sessions.patch")
         return {
           ok: true,
           key: params.key,
-          entry: { execSecurity: params.execSecurity, execAsk: params.execAsk }
+          entry: {
+            execSecurity: params.execSecurity,
+            execAsk: params.execAsk,
+            permissionMode: params.permissionMode
+          }
         };
       if (method === "exec.approval.list") return [];
       if (method === "agent.wait") return waits[Math.min(waitIndex++, waits.length - 1)];
@@ -192,6 +213,95 @@ async function invoke(f, req = request()) {
   }
   return events;
 }
+
+for (const { tag } of contracts.versions)
+  for (const approvalMode of ["ask", "full_access"])
+    test(`OpenClaw ${tag} resumes an existing session with verified ${approvalMode} requests`, async () => {
+      const first = fixture({ version: tag });
+      const firstEvents = await invoke(
+        first,
+        request({ sessionName: "octo-dm-user-visible", approvalMode })
+      );
+      const providerSession = firstEvents.find((event) => event.type === "session.update").payload
+        .providerSession;
+      assert.equal(providerSession.resumable, true);
+      assert.match(providerSession.sessionId, /^agent:main:octo-dm-user-visible-[0-9a-f-]{36}$/);
+      for (let turn = 2; turn <= 3; turn++) {
+        const resumed = fixture({ version: tag });
+        const events = await invoke(
+          resumed,
+          request({
+            sessionName: "a-different-display-name",
+            runId: `run-${turn}`,
+            approvalMode,
+            providerSession: { ...providerSession, resumable: false }
+          })
+        );
+        assert.equal(events.at(-1).type, "run.completed");
+        const update = events.find((event) => event.type === "session.update").payload
+          .providerSession;
+        assert.equal(update.sessionId, providerSession.sessionId);
+        assert.equal(update.resumeOutcome, "resumed");
+        assert.equal(update.resumable, true);
+        assert.ok(!resumed.calls.some((call) => call.method === "sessions.create"));
+        const methods = resumed.calls.map((call) => call.method);
+        assert.ok(methods.indexOf("sessions.describe") < methods.indexOf("sessions.patch"));
+        assert.ok(
+          methods.indexOf("sessions.patch") < methods.indexOf("sessions.messages.subscribe")
+        );
+        const agents = resumed.calls.filter((call) => call.method === "agent");
+        assert.equal(agents.length, 1);
+        assert.equal(agents[0].params.sessionKey, providerSession.sessionId);
+        assert.equal(agents[0].params.extraSystemPrompt, undefined);
+        assert.notEqual(
+          agents[0].params.idempotencyKey,
+          first.calls.find((call) => call.method === "agent").params.idempotencyKey
+        );
+      }
+      const sameName = fixture({ version: tag });
+      const fresh = await invoke(
+        sameName,
+        request({ sessionName: "octo-dm-user-visible", approvalMode })
+      );
+      assert.notEqual(
+        fresh.find((event) => event.type === "session.update").payload.providerSession.sessionId,
+        providerSession.sessionId
+      );
+    });
+
+test("OpenClaw never creates or dispatches when a recovery handle is missing or mismatched", async () => {
+  for (const fail of [
+    (method) => (method === "sessions.describe" ? { session: null } : undefined),
+    (method) =>
+      method === "sessions.describe"
+        ? { session: { key: "agent:other:wrong", agentId: "other" } }
+        : undefined,
+    (method) =>
+      method === "sessions.describe" ? new Error("describe transport failed") : undefined,
+    (method) =>
+      method === "sessions.patch"
+        ? { ok: true, key: "agent:main:existing", entry: { permissionMode: "guarded" } }
+        : undefined
+  ]) {
+    const f = fixture({ fail });
+    const events = await invoke(
+      f,
+      request({
+        approvalMode: "full_access",
+        providerSession: { sessionId: "agent:main:existing" }
+      })
+    );
+    assert.equal(events.at(-1).type, "run.failed");
+    assert.ok(!f.calls.some((call) => ["sessions.create", "agent"].includes(call.method)));
+    assert.ok(!events.some((event) => event.type === "session.update"));
+  }
+  const f = fixture();
+  await assert.rejects(
+    invoke(f, request({ providerSession: { sessionId: "agent:other:existing" } })),
+    /OPENCLAW_SESSION_AGENT_MISMATCH/
+  );
+  assert.equal(f.calls.length, 0);
+});
 
 for (const { tag, schemas } of contracts.versions)
   for (const mode of ["ask", "full_access"]) {
@@ -301,7 +411,9 @@ test("probe and invocation revalidate their own connection in both version direc
 });
 
 test("missing core capabilities fail before session creation while absent approval transport falls back", async () => {
-  for (const method of methods.filter((method) => method !== "sessions.patch")) {
+  for (const method of methods.filter(
+    (method) => !["sessions.patch", "sessions.describe"].includes(method)
+  )) {
     const handshake = hello("2026.10.5");
     handshake.features.methods = handshake.features.methods.filter((item) => item !== method);
     const f = fixture({ handshake });
@@ -319,6 +431,22 @@ test("missing core capabilities fail before session creation while absent approv
     events.find((event) => event.type === "run.notice").payload.params.message,
     /approval_transport_unavailable/
   );
+});
+
+test("OpenClaw requires read and patch methods only when resuming", async () => {
+  for (const method of ["sessions.describe", "sessions.patch"]) {
+    const handshake = hello("2026.10.5");
+    handshake.features.methods = handshake.features.methods.filter((item) => item !== method);
+    const f = fixture({ handshake });
+    assert.equal(
+      (await invoke(f, request({ providerSession: { sessionId: "agent:main:existing" } }))).at(-1)
+        .type,
+      "run.failed"
+    );
+    assert.ok(
+      !f.calls.some((call) => ["sessions.create", "sessions.patch", "agent"].includes(call.method))
+    );
+  }
 });
 
 test("insufficient native scope is not misreported as an available full fallback", async () => {

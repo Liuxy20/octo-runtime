@@ -128,4 +128,10 @@ octo-runtime --home /path/to/runtime --profile work adapter probe openclaw
 
 [连接解析与私密文件](../../packages/octo-runtime-adapter-openclaw/src/local-gateway.ts)、[Gateway 执行](../../packages/octo-runtime-adapter-openclaw/src/index.ts)、[公共输入默认值](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[目录准备](../../packages/octo-runtime-executor-core/src/execution-preparation.ts)、[连接测试](../../test/openclaw-runtime-connection.test.js)。
 
-每次 invoke 创建隔离的执行 session，通过 `sessions.messages.subscribe` 取流、`agent.wait` 确认终态、`sessions.abort` 取消。连接验证、执行完成和渠道投递分别判断；`deliver: false` 的本地验证不证明 IM 发消息成功。
+新逻辑会话创建可读 `agent:{agentId}:{encoded-sessionName}-{uuid}` key，独立随机后缀防止同名合并；Provider 包装保留冒号。缺省名称仅由 Core 生成 UUID，Adapter 不决定渠道命名策略。
+
+续聊必须原样复用 `providerSession.sessionId`，先校验 Agent 前缀与扩展归属，再用 hello 实际广告的 `sessions.describe({key})` 只读确认存在及 key，按版本 patch 本轮权限并确认后订阅、执行；不得逐 Run 新建。旧版 patch full/off，新版 patch permissionMode full/guarded。缺失、错归属或 RPC 失败明确失败，不隐式新建、不自动重发；旧 `resumable:false` 的已存在 key 可被显式续接。新回执 resumable:true，续接回执 resumeOutcome:resumed。系统指令仅在实际新建时发送。
+
+每轮仍独立生成 run/idempotency key，通过 `sessions.messages.subscribe` 取流、`agent.wait` 确认终态、`sessions.abort` 取消，不能因共享 session 而接受前一轮广播。连接验证、执行完成和渠道投递分别判断；`deliver: false` 的本地验证不证明 IM 发消息成功。27 版本新增请求投影与 9.4 真实续接见 [Issue 224](../tasks/224-session-names/validation.md)。
+
+审批没有 runId 时，agent 派发前收到的同 session 广播及 pending 快照属于旧轮次，忽略并有界记住其审批 ID，防止派发后重播重新路由。续聊派发后首次出现的无 runId 审批不能仅凭 sessionKey 或到达时间证明归属：以 `OPENCLAW_APPROVAL_RUN_UNVERIFIED` 明确失败、请求取消本轮，不发布交互、不调用原生 approval.resolve，不自动提升权限或新建 session；ask 和 full_access 均受此关联检查。若原生版本对合法本轮审批同样不提供 runId，该版本的该续聊审批路径也明确失败。新建独立随机 key 的 session 可接纳派发后无 runId 审批；带 runId 的审批始终严格匹配本轮请求身份。取消使用既有 sessions.abort 清理路径，发出请求不等于 Provider 已确认终止。

@@ -59,7 +59,8 @@ function codexFixture({ fallback = false } = {}) {
     write(chunk, _encoding, callback) {
       const frame = JSON.parse(chunk.toString());
       frames.push(frame);
-      if (frame.method === "initialize") send({ id: frame.id, result: {} });
+      if (["initialize", "thread/name/set"].includes(frame.method))
+        send({ id: frame.id, result: {} });
       if (frame.method === "thread/start" || frame.method === "thread/resume") {
         send(
           frame.method === "thread/resume" && fallback

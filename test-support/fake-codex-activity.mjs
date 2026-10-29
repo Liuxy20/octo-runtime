@@ -6,7 +6,7 @@ const emit = (method, params = {}) =>
   send({ method, params: { threadId: "thread-activity", turnId: "turn-activity", ...params } });
 reader.on("line", (line) => {
   const m = JSON.parse(line);
-  if (m.method === "initialize") reply(m.id, {});
+  if (["initialize", "thread/name/set"].includes(m.method)) reply(m.id, {});
   if (m.method === "thread/start") reply(m.id, { thread: { id: "thread-activity" } });
   if (m.method === "turn/start") {
     reply(m.id, { turn: { id: "turn-activity" } });
