@@ -1,0 +1,34 @@
+brief: .octospec/tasks/170-registration-url-slashes/brief.md
+baseline: 96a6f58cf1ec8cfb0f33e88b522bea6b6a95e822
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "修复归 Gateway 传输层，保持公共 SDK 与 CI 范围。"
+  - id: runtime-protocol-design
+    source: repo
+    reason: "不改变协议、执行和错误归属。"
+  - id: runtime-channel
+    source: repo
+    reason: "仅修复建联 URL；不改业务准入、投递或会话策略。"
+  - id: runtime-extras
+    source: repo
+    reason: "连接及清理归插件内部，宿主接入保持。"
+  - id: runtime-session-reset
+    source: repo
+    reason: "保留原身份 key、binding 和 reset。"
+  - id: runtime-stateless
+    source: repo
+    reason: "不新增持久状态或恢复逻辑。"
+  - id: runtime-invoke-input
+    source: repo
+    reason: "不改变执行输入。"
+  - id: runtime-engineering
+    source: repo
+    reason: "真实 loopback 复现、运行期生成凭据、针对性验证及中文注释。"
+  - id: commit
+    source: repo
+    reason: "内部记录中文；CONTRIBUTING 要求公开 commit 与 PR 使用英文。"
+files_expected:
+  - packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts
+  - test/manual/im-registration-url.test.mjs
+updated_at: 2026-10-29T02:30:00Z

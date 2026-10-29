@@ -15,6 +15,7 @@ import WebSocket from "ws";
 import { ImSendError, ImTextSend } from "../delivery/text-send.js";
 import type { ImTextMention } from "./mentions.js";
 import { isRulesNotification } from "./normalize.js";
+import { trimTrailingSlashes } from "./api/url.js";
 import {
   connectionFetch,
   connectionJson,
@@ -47,8 +48,9 @@ export async function registerBot(
   token: string,
   signal?: AbortSignal
 ): Promise<BotRegistration> {
+  // 与鉴权及其他 REST 请求共用尾斜杠处理，保留 API 路径前缀。
   const response = await connectionFetch(
-    `${apiUrl.replace(/\/$/, "")}/v1/bot/register`,
+    `${trimTrailingSlashes(apiUrl)}/v1/bot/register`,
     {
       method: "POST",
       // 返回重定向状态供统一分类，不跟随到新地址，也不将其折叠成网络暂态。
