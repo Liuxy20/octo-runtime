@@ -254,6 +254,8 @@ export function normalizeOpenCodeEvent(native: OpenCodeNativeEvent): CanonicalEv
       type: "message.delta",
       payload: {
         text: part.text,
+        // 原生 text 是公开最终正文；显式标记，展示层无需猜测缺失的通道。
+        channel: "final",
         ...(stepId
           ? { stepId, messageId: `opencode:${part.id ?? `${stepId}:answer`}` }
           : part.id

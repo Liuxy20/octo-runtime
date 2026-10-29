@@ -70,6 +70,7 @@ export class ImRunProjector {
   >();
   readonly #stepTools = new Map<string, string | undefined>();
   readonly #unfinishedSteps = new Set<string>();
+  #hasClosedStep = false;
   readonly #finalMessages = new Map<string, string>();
   readonly #retired = new Set<string>();
   #reasoningCount = 0;
@@ -141,6 +142,7 @@ export class ImRunProjector {
           item.durationMs = Math.max(0, p.endedAtMs - item.startedAtMs);
       }
       // 有的 Provider 只结束步骤、不逐条结束 reasoning；所属消息此时不再是在途资源。
+      this.#hasClosedStep = true;
       this.#unfinishedSteps.delete(p.stepId);
       for (const [id, message] of this.#stepMessages)
         if (message.stepId === p.stepId) {
@@ -169,12 +171,24 @@ export class ImRunProjector {
       )
         return;
       const previous = this.#messages.get(id);
+      const knownFinal =
+        typeof p.messageId === "string" && p.messageId.length > 0 && this.#finalMessages.has(id);
       const channel =
-        p.channel ??
-        (this.#finalMessages.has(id)
-          ? "final"
-          : (previous?.channel ?? identity?.channel ?? "final"));
-      const stepId = p.stepId ?? previous?.stepId ?? identity?.stepId ?? this.#currentStep;
+        p.channel ?? (knownFinal ? "final" : (previous?.channel ?? identity?.channel));
+      // 无法证明通道时不发布正文；匿名帧也不能借用另一个匿名 final 的身份。
+      if (channel === undefined) return;
+      const scopedStepId = p.stepId ?? previous?.stepId ?? identity?.stepId;
+      // 步骤结束后，未知旧身份不能仅靠 currentStep 被补造成当前步骤的新记录。
+      if (
+        this.#hasClosedStep &&
+        scopedStepId === undefined &&
+        !identity &&
+        !previous &&
+        channel !== "final" &&
+        event.type !== "message.create"
+      )
+        return;
+      const stepId = scopedStepId ?? this.#currentStep;
       // 已结束步骤的非 final/未分类迟到帧不能因身份缓存滚动而重新进入当前步骤。
       if (p.channel !== "final" && !this.#finalMessages.has(id) && this.#stepClosed(stepId)) return;
       // update 也可能是流式替换快照（例如 OpenClaw），不能仅按事件名提前清除分类。
@@ -291,6 +305,8 @@ export class ImRunProjector {
           ? (p.args as Record<string, unknown>)
           : {};
       if (!item) {
+        // 已有步骤完成时，缺少自身步骤的未知终态可能是旧工具迟到；不能补造归属。
+        if (this.#hasClosedStep && p.stepId === undefined) return;
         const stepId = p.stepId ?? this.#currentStep;
         if (
           this.#stepTools.has(p.id) ||

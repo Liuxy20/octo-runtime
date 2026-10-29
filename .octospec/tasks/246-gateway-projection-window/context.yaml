@@ -15,6 +15,9 @@ injected:
   - id: runtime-engineering
     source: repo
     reason: TypeScript checks, comments and focused fake-provider verification
+  - id: runtime-protocol-design
+    source: repo
+    reason: explicit existing message-channel metadata at the OpenCode normalization boundary
 files_expected:
   - packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts
   - packages/octo-runtime-extra-channel-gateway/src/transport/reasoning-frame.ts
@@ -22,8 +25,10 @@ files_expected:
   - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
   - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
   - packages/octo-runtime-extra-channel-gateway/src/delivery/scheduler.ts
+  - packages/octo-runtime-adapter-opencode/src/index.ts
   - test/im-protocol.test.js
   - .octospec/tasks/246-gateway-projection-window/regression.mjs
   - .octospec/tasks/246-gateway-projection-window/edge-cases.mjs
   - .octospec/tasks/246-gateway-projection-window/review-regression.mjs
-updated_at: 2026-10-29T11:37:23Z
+  - .octospec/tasks/246-gateway-projection-window/privacy-regression.mjs
+updated_at: 2026-10-29T12:58:17Z

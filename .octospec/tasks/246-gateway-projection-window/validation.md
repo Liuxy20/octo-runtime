@@ -11,7 +11,7 @@
 - 重试换投影、断流换投影及整轮收尾显式 dispose。外层 finally 保证提前退出或收尾异常也释放正文；final 的读取和投递机会在清理前保留。
 - 卡片 finish 后释放调度器和诊断/typing 回调，保留 messageId 等既有按钮关联。连接关闭时也释放，即使关闭报告失败仍保留错误并清理这些内存引用。调度 dispose 丢弃待发进度并取消 timer，真实在途发送仍由原路径结束，不提前假报排空。
 
-不修改 Kernel、Provider、公共协议、工具执行、最终回复单次报文 256 KiB、任务/模型等待期限、其他 Extra、CI workflow 或默认测试入口。
+不修改 Kernel、Provider 执行与正文、公共协议结构、工具执行、最终回复单次报文 256 KiB、任务/模型等待期限、其他 Extra、CI workflow 或默认测试入口。隐私补充修复在 OpenCode 既有归一化函数中显式补充 final 通道，其余产品改动仍属于 Gateway。
 
 ## 环境与检查
 
@@ -31,12 +31,12 @@ Windows 11 企业版 Build 22621、x64、普通用户；Node.js 24.22.0、pnpm 1
 ## 手动专项
 
 ```text
-node --expose-gc --test .octospec/tasks/246-gateway-projection-window/regression.mjs .octospec/tasks/246-gateway-projection-window/edge-cases.mjs .octospec/tasks/246-gateway-projection-window/review-regression.mjs
+node --expose-gc --test .octospec/tasks/246-gateway-projection-window/regression.mjs .octospec/tasks/246-gateway-projection-window/edge-cases.mjs .octospec/tasks/246-gateway-projection-window/review-regression.mjs .octospec/tasks/246-gateway-projection-window/privacy-regression.mjs
 ```
 
 专项文件手动执行，不匹配现有默认测试 glob。
 
-Review 修复后的最终版本 34/34 通过，无失败、取消或跳过。原 26 项及新增 8 项手动回归共同执行，耗时约 20 秒。
+隐私补充修复后的最终版本 41/41 通过，无失败、取消或跳过。原 34 项及新增 7 项手动回归共同执行，耗时约 21 秒。
 
 - 直接投影 2,000 轮事件与数 MiB 公开文本，明细始终不超过五条，累计模型/工具/公开摘要各 2,000，最终回复完整。
 - 经 ImRuntime 和 fake Kernel 消费 1,000 轮大量进度/工具事件，未请求取消，final 正常返回，随后清空投影。
@@ -106,3 +106,18 @@ PowerShell 实际按这些前缀展开测试文件后传参。共 500 项：495 
 最终检查：`pnpm typecheck`（含完整构建）通过；Gateway ESLint、修改文件 Prettier 和 diff 检查通过；手动专项 34/34 通过。相关九个测试文件（上次七个集成文件，加 `adapter-tool-lifecycle.test.js`、`acp-message-segments.test.js`）共 104 项：103 通过、1 条件跳过、0 失败。
 
 阈值核对：`RETIRED_WINDOW` 仍为 256，单次发送 256 KiB 及投递回执 512 条均未修改；只移除了展示累计 512 条/256 KiB 导致执行中断的条件。本轮仍未运行真实 IM/Provider、24 小时或跨系统验收。
+
+## 跨已结束步骤且省略分类字段的补充修复
+
+Jerry 与 yujiawei 指向同一根因：`c023d0d9` 仅保留未结束步骤的身份，旧步骤结束且近期缓存滚动后，省略 channel/stepId 的旧消息会被按当前步骤和默认 final 解释。PR 合入 main 后的 `d9b0fa62` 投影器源码相同。使用合法 `private_reasoning`、commentary 及工具事件复现了私有尾帧进入 final、旧进度进入 final 和工具重复计数。
+
+修复后的发布依据：
+
+- 通道只能来自当前帧、仍已知的消息分类，或同一非空稳定消息 ID 的已知 final。陌生消息及匿名/空 ID 的无通道尾帧不默认 final，不发送未知正文。
+- 已存在已结束步骤时，陌生非 create 进度/摘要及陌生工具终态没有自身 stepId，不再借用 currentStep；已知在途工具仍按原状态收尾。
+- OpenCode 原生 text 在已有归一化函数中显式补充 `channel: final`，不改变正文或执行；真实 OpenCode 增量/替换快照和 ACP terminal-only 归一化路径均回归。协议字段仍可省略，但缺少可验证分类的消息不会自动发布为 IM 正文。
+- 身份继续按步骤释放，不新增全轮 tombstone/ID 表，不增加缓存容量或新的执行中断阈值。
+
+新增七项用例中六项在修改前失败，另一项确认真实 ACP 的新 terminal-only 工具已带正确步骤。修复后七项通过，并与原 34 项共同得到 41/41。覆盖 private_reasoning/旧进度/旧工具、跨步骤及 400 条滚动、双字段省略、匿名与空 ID 尾帧、稳定 final ID 连续帧、真实 OpenCode 与 ACP 输入。
+
+基于 `d9b0fa62` 完整重建后，`pnpm typecheck` 通过；最终根类型复验、ESLint、修改文件 Prettier 和 diff 检查通过。十一文件相关回归（前述九文件，加 `opencode-v2.test.js`、`adapters.test.js`）188 项：167 通过、21 项平台条件跳过、0 失败。没有为了处理范围外失败修改 OpenClaw 等其他源码；本轮没有真实 IM/Provider、跨系统或 24 小时验收。

@@ -46,3 +46,5 @@ upstream: "https://github.com/Mininglamp-OSS/octo-runtime/issues/246"
 ## Review 补充
 
 当前提交确认三个边界缺陷：OpenCode reasoning 只结束步骤时仍保留消息元数据；ACP/OpenCode 的 terminal-only 工具被遗漏；已完成消息跨越退役缓存后可能复活或进入 final。修复与手动回归仍属于本任务，不扩大 CI；身份去重不得以无界整轮历史或静默丢失最终正文换取有界内存。
+
+Jerry 补充的跨步骤、同时省略 stepId/channel 的迟到帧已确认会使私有 reasoning 进入 final。分类在接收边界采取保守处理：未知通道不默认 final，已结束步骤后的未知非 final/工具终态不能仅按当前步骤补造归属。OpenCode 原生 text 本身具有最终正文语义，在既有归一化函数显式补充 channel=final 以保留正常回复；不改变正文、Provider 执行或公共协议结构。不新增整轮身份历史、概率去重或容量中断阈值。

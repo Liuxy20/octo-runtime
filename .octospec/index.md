@@ -59,7 +59,7 @@
 
 - [Issue 243：OpenClaw 远端产物交付](tasks/234-context-lifecycle/remote-artifact-backlog.md)：用户确认按 P2 暂缓；记录 Adapter 位置判定及远端引用转换、Gateway 附件投递的边界，代码仅留两个 TODO，远端能力尚未实现。
 
-- [Issue 246：Gateway 展示窗口与终态释放](tasks/246-gateway-projection-window/brief.md)：每轮五条明细、有限预览与独立计数；身份按步骤清理，卡片回调与投影在收尾后释放。手动专项 34 通过，相关回归与验证边界见[验证](tasks/246-gateway-projection-window/validation.md)。
+- [Issue 246：Gateway 展示窗口与终态释放](tasks/246-gateway-projection-window/brief.md)：每轮五条明细、有限预览与独立计数；身份按步骤清理，未知分类不发布到 final，卡片回调与投影在收尾后释放。手动专项 41 通过，相关回归与验证边界见[验证](tasks/246-gateway-projection-window/validation.md)。
 
 - [Issue 245：OpenClaw 模型轮次与工具归属](tasks/245-openclaw-model-steps/brief.md)：最新 main 独立 worktree，生产仅改 adapter；手动专项及真实 Playboard 验证轮次从 1 轮恢复为 3 轮、工具保留所属步骤。两轴审查与人工卡片验收边界见[验证](tasks/245-openclaw-model-steps/validation.md)。
 
