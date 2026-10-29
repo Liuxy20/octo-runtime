@@ -1,6 +1,6 @@
 /**
  * 公开事件投影：将 CanonicalEvent 累积为平台无关的展示快照。
- * 按消息/工具/模型轮次保留身份与顺序，仅公开协议允许的内容；不展示私有 reasoning。
+ * 只保留近期五条展示明细和必要在途元数据；最终正文独立保存，不展示私有 reasoning。
  */
 import type { CanonicalEvent, FailureEnvelope } from "@mininglamp-oss/octo-runtime-protocol";
 import { sanitizePublicValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -21,6 +21,7 @@ export interface ProgressItem {
   finishReason?: string;
   startedAtMs?: number;
   durationMs?: number;
+  ordinal?: number;
 }
 export interface RunPresentation {
   runId: string;
@@ -30,6 +31,7 @@ export interface RunPresentation {
   terminal?: "completed" | "failed" | "cancelled";
   elapsedMs?: number;
   items: ProgressItem[];
+  modelSteps?: ProgressItem[];
   reasoningCount: number;
   toolCallCount: number;
   modelStepCount: number;
@@ -45,11 +47,33 @@ export interface RunPresentation {
 }
 
 const publicExposures = new Set(["public_reasoning", "public_summary", "public_plan"]);
+const PROGRESS_WINDOW = 5;
+const PREVIEW_RUNES = 180;
+// 仅记近期已退役身份，不保存正文；不能把去重表变成另一份全轮历史。
+const RETIRED_WINDOW = 256;
 
 export class ImRunProjector {
   readonly #items = new Map<string, ProgressItem>();
   readonly #messages = new Map<string, { channel: string; text: string; stepId?: string }>();
   readonly #toolInputs = new Map<string, Record<string, unknown>>();
+  readonly #steps = new Map<string, ProgressItem>();
+  readonly #activeTools = new Map<string, ProgressItem>();
+  // 流式消息移出可见窗口后仍需保留分类；只保存生命周期元数据，不保存旧正文。
+  readonly #activeMessages = new Map<
+    string,
+    {
+      channel: string;
+      stepId?: string;
+      hidden: boolean;
+      counted: boolean;
+    }
+  >();
+  readonly #finalMessages = new Map<string, string>();
+  readonly #retired = new Set<string>();
+  #reasoningCount = 0;
+  #toolCallCount = 0;
+  #modelStepCount = 0;
+  #disposed = false;
   #currentStep?: string;
   #seq = 0;
   #phase = "accepted";
@@ -71,7 +95,7 @@ export class ImRunProjector {
 
   accept(event: CanonicalEvent, now = Date.now()): void {
     // 终态后不再接纳迟到帧，防止完成卡片被旧进度改回执行中。
-    if (this.#terminal) return;
+    if (this.#terminal || this.#disposed) return;
     this.#seq++;
     const p = event.payload;
     // 实际协议以 activity/model_step 启动计时，不能只等待历史 run.started。
@@ -85,27 +109,64 @@ export class ImRunProjector {
     if (event.type === "run.queued") this.#phase = "accepted";
     if (event.type === "model_step.started") {
       const p = event.payload;
+      if (this.#retired.has(`step:${p.stepId}`)) return;
       this.#currentStep = p.stepId;
-      this.#item(`step:${p.stepId}`, "model_step", p.stepId).startedAtMs = p.startedAtMs;
+      let step = this.#steps.get(p.stepId);
+      if (!step) {
+        step = {
+          id: `step:${p.stepId}`,
+          kind: "model_step",
+          stepId: p.stepId,
+          status: "running",
+          content: "",
+          ordinal: ++this.#modelStepCount
+        };
+        this.#steps.set(p.stepId, step);
+      }
+      step.startedAtMs = p.startedAtMs;
+      this.#pruneSteps();
       this.#phase = "model";
       this.#label = undefined;
     }
     if (event.type === "model_step.finished") {
       const p = event.payload;
-      const item = this.#item(`step:${p.stepId}`, "model_step", p.stepId);
-      item.status = p.status;
-      item.finishReason = p.finishReason;
-      if (item.startedAtMs !== undefined && p.endedAtMs !== undefined)
-        item.durationMs = Math.max(0, p.endedAtMs - item.startedAtMs);
+      const item = this.#steps.get(p.stepId);
+      if (item) {
+        item.status = p.status;
+        item.finishReason = p.finishReason;
+        if (item.startedAtMs !== undefined && p.endedAtMs !== undefined)
+          item.durationMs = Math.max(0, p.endedAtMs - item.startedAtMs);
+      }
     }
     if (event.type.startsWith("message.")) {
       const id =
         p.messageId ??
         `unidentified:${p.stepId ?? this.#currentStep ?? "run"}:${p.channel ?? "final"}`;
+      const active = this.#activeMessages.get(id);
+      // 已淘汰进度的迟到 delta 可能省略 channel，不能按缺省 final 拼进最终回复。
+      if (
+        this.#retired.has(`message:${id}`) &&
+        !active &&
+        p.channel !== "final" &&
+        !this.#finalMessages.has(id)
+      )
+        return;
       const previous = this.#messages.get(id);
-      const channel = p.channel ?? previous?.channel ?? "final";
+      const channel = p.channel ?? previous?.channel ?? active?.channel ?? "final";
+      const stepId = p.stepId ?? previous?.stepId ?? active?.stepId ?? this.#currentStep;
+      // update 也可能是流式替换快照（例如 OpenClaw），不能仅按事件名提前清除分类。
+      const running =
+        event.type !== "message.update" || p.status === "streaming" || p.status === "running";
       // analysis 必须显式声明可公开；历史片段也清除，避免后续快照泄漏。
       if (channel === "analysis" && !publicExposures.has(p.exposure ?? "")) {
+        if (running)
+          this.#activeMessages.set(id, {
+            channel,
+            stepId,
+            hidden: active?.hidden ?? false,
+            counted: active?.counted ?? false
+          });
+        else this.#activeMessages.delete(id);
         this.#messages.delete(id);
         this.#items.delete(`message:${id}`);
         return;
@@ -115,15 +176,62 @@ export class ImRunProjector {
         (p.role && p.role !== "assistant")
       )
         return;
-      const text =
-        typeof p.text !== "string"
-          ? (previous?.text ?? "")
-          : event.type === "message.delta"
-            ? (previous?.text ?? "") + p.text
-            : p.text;
-      const stepId = p.stepId ?? previous?.stepId ?? this.#currentStep;
-      this.#messages.set(id, { channel, text, stepId });
-      if (channel !== "final") {
+      if (channel === "final") {
+        this.#activeMessages.delete(id);
+        const text =
+          typeof p.text !== "string"
+            ? (this.#finalMessages.get(id) ?? "")
+            : event.type === "message.delta"
+              ? (this.#finalMessages.get(id) ?? "") + p.text
+              : p.text;
+        this.#finalMessages.set(id, text);
+        const step = stepId && this.#steps.get(stepId);
+        if (step) step.content = previewText(text);
+      } else {
+        if (this.#retired.has(`message:${id}`) && !active) return;
+        // 真正在途的旧消息可能晚于数百条新消息结束；分类/计数跟随生命周期，正文不回窗。
+        if (active?.hidden) {
+          if (channel === "analysis" && !active.counted) {
+            this.#reasoningCount++;
+            active.counted = true;
+          }
+          if (!running) {
+            this.#activeMessages.delete(id);
+            this.#retire(`message:${id}`);
+          }
+          return;
+        }
+        // 有步骤身份的迟到快照不能重新创建已离开窗口的旧阶段。
+        if (stepId && stepId !== this.#currentStep && !this.#steps.has(stepId)) {
+          // 首次公开但已不在近期阶段的摘要仍计数，不为了统计恢复旧正文。
+          if (channel === "analysis" && !active?.counted) this.#reasoningCount++;
+          if (running)
+            this.#activeMessages.set(id, {
+              channel,
+              stepId,
+              hidden: true,
+              counted: channel === "analysis" || !!active?.counted
+            });
+          else this.#activeMessages.delete(id);
+          this.#retire(`message:${id}`);
+          return;
+        }
+        const text =
+          typeof p.text !== "string"
+            ? (previous?.text ?? "")
+            : event.type === "message.delta"
+              ? appendPreview(previous?.text ?? "", p.text)
+              : previewText(p.text);
+        const existing = this.#items.get(`message:${id}`);
+        if (!existing && channel === "analysis" && !active?.counted) this.#reasoningCount++;
+        if (running)
+          this.#activeMessages.set(id, {
+            channel,
+            stepId,
+            hidden: false,
+            counted: channel === "analysis" || !!active?.counted
+          });
+        else this.#activeMessages.delete(id);
         const item = this.#item(
           `message:${id}`,
           channel === "analysis" ? "reasoning" : "commentary",
@@ -131,12 +239,7 @@ export class ImRunProjector {
         );
         item.content = text;
         item.status = event.type === "message.update" ? "completed" : "running";
-      }
-      if (channel === "final" && stepId && this.#items.has(`step:${stepId}`)) {
-        this.#items.get(`step:${stepId}`)!.content = [...this.#messages.values()]
-          .filter((message) => message.channel === "final" && message.stepId === stepId)
-          .map((message) => message.text)
-          .join("\n\n");
+        this.#messages.set(id, { channel, text, stepId });
       }
       this.#phase =
         channel === "final" ? "answering" : channel === "analysis" ? "thinking" : "commentary";
@@ -144,18 +247,27 @@ export class ImRunProjector {
     }
     if (event.type === "tool_call.create") {
       const p = event.payload;
+      if (
+        this.#retired.has(`tool:${p.id}`) ||
+        this.#activeTools.has(p.id) ||
+        this.#items.has(`tool:${p.id}`)
+      )
+        return;
       const item = this.#item(`tool:${p.id}`, "tool", p.stepId ?? this.#currentStep);
+      this.#toolCallCount++;
       item.toolName = p.name;
       item.startedAtMs = now;
       if (this.allowToolPreview) item.summary = toolPreview(p.name, p.args);
       const command = stringArg(p.args.command ?? p.args.cmd);
       if (command.length <= 8192) this.#toolInputs.set(p.id, { command });
+      this.#activeTools.set(p.id, item);
       this.#phase = "tool";
       this.#label = undefined;
     }
     if (event.type === "tool_call.update") {
       const p = event.payload;
-      const item = this.#item(`tool:${p.id}`, "tool", p.stepId ?? this.#currentStep);
+      const item = this.#activeTools.get(p.id) ?? this.#items.get(`tool:${p.id}`);
+      if (!item) return;
       item.status = p.status;
       item.exitCode = p.exitCode;
       item.durationMs =
@@ -165,6 +277,8 @@ export class ImRunProjector {
       if (p.status === "failed" && p.exitCode === 2 && input && detectorFindings(input, p.output))
         item.outcome = "check_findings";
       this.#toolInputs.delete(p.id);
+      this.#activeTools.delete(p.id);
+      if (!this.#items.has(item.id)) this.#retire(item.id);
       this.#phase = "tool";
       this.#label = "工具调用完成";
     }
@@ -243,20 +357,13 @@ export class ImRunProjector {
             : this.#failureMessage || detail;
       }
       this.#selectFinalReply();
-      for (const item of this.#items.values())
+      for (const item of [...this.#items.values(), ...this.#steps.values()])
         if (item.status === "running")
           item.status = this.#terminal === "completed" ? "completed" : "cancelled";
+      this.#activeTools.clear();
+      this.#activeMessages.clear();
+      this.#toolInputs.clear();
     }
-    if (
-      this.#items.size > 512 ||
-      this.#messages.size > 512 ||
-      [...this.#messages.values()].reduce(
-        (size, message) => size + Buffer.byteLength(message.text),
-        0
-      ) >
-        256 * 1024
-    )
-      throw new Error("IM_RESULT_TOO_LARGE");
   }
 
   #item(id: string, kind: ProgressItem["kind"], stepId?: string): ProgressItem {
@@ -264,15 +371,54 @@ export class ImRunProjector {
     if (!item) {
       item = { id, kind, stepId, status: "running", content: "" };
       this.#items.set(id, item);
+      if (this.#items.size > PROGRESS_WINDOW) {
+        const oldest = this.#items.keys().next().value!;
+        this.#items.delete(oldest);
+        if (oldest.startsWith("message:")) {
+          const messageId = oldest.slice(8);
+          this.#messages.delete(messageId);
+          const active = this.#activeMessages.get(messageId);
+          if (active) active.hidden = true;
+        }
+        this.#retire(oldest);
+      }
+      this.#pruneSteps();
     }
     return item;
   }
   get finalText(): string {
-    return [...this.#messages.values()]
-      .filter((m) => m.channel === "final")
-      .map((m) => m.text)
-      .filter(Boolean)
-      .join("\n\n");
+    return [...this.#finalMessages.values()].filter(Boolean).join("\n\n");
+  }
+  #retire(id: string): void {
+    this.#retired.add(id);
+    if (this.#retired.size > RETIRED_WINDOW)
+      this.#retired.delete(this.#retired.values().next().value!);
+  }
+  #pruneSteps(): void {
+    const retained = new Set([...this.#items.values()].map((item) => item.stepId));
+    retained.add(this.#currentStep);
+    for (const [id] of this.#steps)
+      if (!retained.has(id)) {
+        this.#steps.delete(id);
+        this.#retire(`step:${id}`);
+      }
+  }
+  /** 最终文本已取出、卡片/投递收尾后调用；即使迟到回调仍引用对象，也不再持有正文。 */
+  dispose(): void {
+    this.#disposed = true;
+    this.#items.clear();
+    this.#messages.clear();
+    this.#steps.clear();
+    this.#activeTools.clear();
+    this.#activeMessages.clear();
+    this.#toolInputs.clear();
+    this.#finalMessages.clear();
+    this.#retired.clear();
+    this.#currentStep = undefined;
+    this.#finalReply = undefined;
+    this.#failure = undefined;
+    this.#failureDetail = this.#failureMessage = undefined;
+    this.#providerDiagnostic = undefined;
   }
   // 只在终态选择一次；有故障证据的轮次才解析可见 Markdown 内容。
   #selectFinalReply(): void {
@@ -320,9 +466,10 @@ export class ImRunProjector {
           ? undefined
           : Math.max(0, (this.#endedAt ?? now) - this.#startedAt),
       items,
-      reasoningCount: items.filter((i) => i.kind === "reasoning").length,
-      toolCallCount: items.filter((i) => i.kind === "tool").length,
-      modelStepCount: items.filter((i) => i.kind === "model_step").length,
+      modelSteps: structuredClone([...this.#steps.values()]),
+      reasoningCount: this.#reasoningCount,
+      toolCallCount: this.#toolCallCount,
+      modelStepCount: this.#modelStepCount,
       failure: this.#failure,
       failureMessage: this.#failureMessage,
       failureDetail: this.#failureDetail,
@@ -331,6 +478,18 @@ export class ImRunProjector {
       ...(this.#retryNoticeCount ? { retryNoticeCount: this.#retryNoticeCount } : {})
     };
   }
+}
+
+// 预览仅取有限首尾片段，避免为展示截短而 Array.from 整段长正文。
+function previewText(text: string): string {
+  const edge = PREVIEW_RUNES * 2;
+  return compactRunes(
+    text.length > edge * 2 ? text.slice(0, edge) + text.slice(-edge) : text,
+    PREVIEW_RUNES
+  );
+}
+function appendPreview(previous: string, delta: string): string {
+  return previewText(previous + previewText(delta));
 }
 
 function failureIdentity(failure: FailureEnvelope | undefined): string {

@@ -460,6 +460,8 @@ export class GatewayTransport {
                   }
                   if (errors.length) throw new AggregateError(errors, "IM_PRESENTATION_FAILED");
                 } finally {
+                  // 仅保留按钮所需的轻量关联，避免卡片回调继续引用本轮投影上下文。
+                  card.release();
                   const binding = this.#bindings.get(runId);
                   if (binding) {
                     binding.active = false;
@@ -663,8 +665,9 @@ export class GatewayTransport {
       const errors = results
         .filter((result) => result.status === "rejected")
         .map((result): unknown => result.reason);
-      if (errors.length) throw new AggregateError(errors, "IM_TRANSPORT_DISPOSE_FAILED");
+      for (const binding of this.#bindings.values()) binding.card.release();
       this.#bindings.clear();
+      if (errors.length) throw new AggregateError(errors, "IM_TRANSPORT_DISPOSE_FAILED");
     });
     return this.#closing;
   }

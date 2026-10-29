@@ -108,7 +108,7 @@ function action(item: ProgressItem): ReasoningAction {
 }
 
 export function reasoningPhases(snapshot: RunPresentation): ReasoningPhase[] {
-  const steps = snapshot.items.filter((i) => i.kind === "model_step");
+  const steps = snapshot.modelSteps ?? snapshot.items.filter((i) => i.kind === "model_step");
   let phases: ReasoningPhase[];
   if (steps.length) {
     phases = steps.flatMap((step, index) => {
@@ -136,7 +136,7 @@ export function reasoningPhases(snapshot: RunPresentation): ReasoningPhase[] {
           : ["stop", "end_turn", "completed"].includes(step.finishReason ?? "")
             ? "整理回答"
             : "模型处理";
-        let heading = `第 ${index + 1} 轮 · ${label}${step.durationMs === undefined ? "" : " · " + formatDuration(step.durationMs)}`;
+        let heading = `第 ${step.ordinal ?? index + 1} 轮 · ${label}${step.durationMs === undefined ? "" : " · " + formatDuration(step.durationMs)}`;
         if (segments.length > 1) heading += ` · 阶段 ${segmentIndex + 1}`;
         const failed = children.some(
           (i) => i.kind === "tool" && i.status === "failed" && i.outcome !== "check_findings"

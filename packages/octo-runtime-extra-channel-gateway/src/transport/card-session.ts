@@ -15,16 +15,20 @@ export class CardSession {
   #messageId?: string;
   #seq = 0;
   #terminalFailed = false;
-  readonly #scheduler: ProgressScheduler<RunPresentation>;
+  #scheduler?: ProgressScheduler<RunPresentation>;
+  #stopTyping?: () => void;
+  #onDiagnostic?: (code: string) => void;
   readonly effectKey: string;
   constructor(
     readonly connector: OctoConnector,
     readonly delivery: ImDeliveryDispatcher,
     readonly address: ImAddress,
     runId: string,
-    readonly stopTyping: () => void,
-    readonly onDiagnostic: (code: string) => void
+    stopTyping: () => void,
+    onDiagnostic: (code: string) => void
   ) {
+    this.#stopTyping = stopTyping;
+    this.#onDiagnostic = onDiagnostic;
     this.effectKey = stableEffectKey(imBotIdentity(connector.config), address, runId, "progress");
     this.#scheduler = new ProgressScheduler(
       async (snapshot) => {
@@ -35,29 +39,30 @@ export class CardSession {
           throw error;
         }
       },
-      () => onDiagnostic("IM_CARD_FAILED")
+      () => this.#onDiagnostic?.("IM_CARD_FAILED")
     );
   }
   update(snapshot: RunPresentation): void {
-    if (snapshot.terminal || snapshot.phase === "waiting") this.stopTyping();
-    this.#scheduler.enqueue(snapshot, !!snapshot.terminal || !!snapshot.resultUnknown);
+    if (snapshot.terminal || snapshot.phase === "waiting") this.#stopTyping?.();
+    this.#scheduler?.enqueue(snapshot, !!snapshot.terminal || !!snapshot.resultUnknown);
   }
   async #send(snapshot: RunPresentation): Promise<void> {
+    if (!this.#scheduler) return;
     const settled = !!snapshot.terminal || !!snapshot.resultUnknown;
     const template = await this.connector.reasoningTemplate();
     if (!template) {
       if (settled && this.#messageId) this.#terminalFailed = true;
-      this.onDiagnostic("IM_CARD_UNAVAILABLE");
+      this.#onDiagnostic?.("IM_CARD_UNAVAILABLE");
       return;
     }
     const frame = buildReasoningFrame(snapshot, template);
     if (!frame) {
       if (settled) this.#terminalFailed = true;
-      this.onDiagnostic("IM_CARD_BUDGET_EXCEEDED");
+      this.#onDiagnostic?.("IM_CARD_BUDGET_EXCEEDED");
       return;
     }
     // 模板查询期间可能已收到终态；旧快照必须在出站前再次检查。
-    if (this.#scheduler.terminal && !settled) return;
+    if (!this.#scheduler || (this.#scheduler.terminal && !settled)) return;
     const seq = ++this.#seq;
     const receipt = await this.delivery.deliver(
       `${this.effectKey}:${seq}`,
@@ -71,21 +76,31 @@ export class CardSession {
           seq,
           !settled
         ),
-      { transient: !settled, obsolete: () => this.#scheduler.terminal && !settled }
+      {
+        transient: !settled,
+        obsolete: () => !this.#scheduler || (this.#scheduler.terminal && !settled)
+      }
     );
     if (receipt.state === "delivered") {
       // 后续更新绑定第一次成功发送的消息，不另起卡片；可见卡片接替 typing 提示。
       this.#messageId = receipt.messageId;
-      this.stopTyping();
+      this.#stopTyping?.();
     } else {
       if (settled) this.#terminalFailed = true;
-      this.onDiagnostic(receipt.code ?? "IM_CARD_FAILED");
+      this.#onDiagnostic?.(receipt.code ?? "IM_CARD_FAILED");
     }
   }
   async finish(): Promise<void> {
-    this.stopTyping();
-    await this.#scheduler.flush();
+    this.#stopTyping?.();
+    await this.#scheduler?.flush();
     if (this.#terminalFailed) throw new Error("IM_CARD_FINALIZATION_FAILED");
+  }
+  /** 所有者完成 finish 后释放调度/回调；保留 messageId 供已有卡片按钮关联使用。 */
+  release(): void {
+    this.#scheduler?.dispose();
+    this.#scheduler = undefined;
+    this.#stopTyping = undefined;
+    this.#onDiagnostic = undefined;
   }
   get messageId(): string | undefined {
     return this.#messageId;

@@ -1,0 +1,28 @@
+brief: .octospec/tasks/246-gateway-projection-window/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: Gateway owns presentation; preserve public SDK, topology and existing CI scope
+  - id: runtime-channel
+    source: repo
+    reason: canonical projection, card delivery and terminal semantics
+  - id: runtime-stateless
+    source: repo
+    reason: bounded process-local state and no persistent output history
+  - id: runtime-extras
+    source: repo
+    reason: finalization and owned resource cleanup
+  - id: runtime-engineering
+    source: repo
+    reason: TypeScript checks, comments and focused fake-provider verification
+files_expected:
+  - packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/reasoning-frame.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-gateway/src/delivery/scheduler.ts
+  - test/im-protocol.test.js
+  - .octospec/tasks/246-gateway-projection-window/regression.mjs
+  - .octospec/tasks/246-gateway-projection-window/edge-cases.mjs
+updated_at: 2026-10-29T10:58:29Z

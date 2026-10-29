@@ -71,6 +71,14 @@ export class ProgressScheduler<T> {
     this.#schedule();
     await done;
   }
+  /** 所有者收尾时丢弃未发送进度并解除 timer；在途发送仍沿原 finally 完成，不伪报排空。 */
+  dispose(): void {
+    this.#terminal = true;
+    this.#pending = undefined;
+    clearTimeout(this.#timer);
+    this.#timer = undefined;
+    if (!this.#running) for (const resolve of this.#waiters.splice(0)) resolve();
+  }
   get terminal(): boolean {
     return this.#terminal;
   }

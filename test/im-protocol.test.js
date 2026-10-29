@@ -271,14 +271,15 @@ test("Phase/action budgets retain latest phases and full counts with Unicode byt
       p.accept(event("tool_call.create", { id: `${s}-${t}`, name: "read", args: {} }));
   }
   const frame = buildReasoningFrame(p.snapshot(), template);
-  assert.equal(frame.phases.length, 3);
+  assert.equal(p.snapshot().items.length, 5);
+  assert.equal(frame.phases.length, 1);
   assert.equal(
     frame.phases.reduce((n, phase) => n + phase.actions.length, 0),
-    8
+    5
   );
   assert.ok(frame.phases.every((phase) => phase.actions.length >= 1));
   assert.match(frame.title, /工具 60/);
-  assert.match(frame.phases[0].thought, /第 4 轮/);
+  assert.match(frame.phases[0].thought, /第 6 轮/);
   assert.match(compactRunes("开头" + "过程".repeat(200) + "结论", 180), /^开头.*结论$/);
   assert.ok(frame.timerText.length > 0);
   assert.equal(buildReasoningFrame(p.snapshot(), { ...template, maxPayloadBytes: 256 }), undefined);

@@ -1189,6 +1189,7 @@ export class ImRuntime {
         for (const [id, entry] of this.#interactions)
           if (entry.invocationId === request.invocationId) this.#interactions.delete(id);
         request = attempt;
+        projector.dispose();
         projector = new ImRunProjector(rootRunId, message.conversationKind === "direct");
         session.activeInvocationId = request.invocationId;
         if (session.id === request.sessionId) {
@@ -1228,308 +1229,315 @@ export class ImRuntime {
       }
     };
     try {
-      presentation = message.beginPresentation?.(
-        rootRunId,
-        (code) => this.#diagnostic(code, rootRunId),
-        controls
-      );
-      presentation?.update(snapshot());
-      session.activeInvocationId = request.invocationId;
-      executionStarted = true;
-      for await (const event of task.events()) {
-        if (this.#closed || this.#signal.aborted) break;
-        if (event.type === "session.update" && session.id === request.sessionId) {
-          session.providerSession = event.payload.providerSession;
-          this.#saveBinding(key, session);
-          if (event.payload.providerSession?.resumeOutcome === "fresh_fallback") {
-            stableRecovered = true;
-            try {
-              this.#sessionStore.patchGap?.(
-                key,
-                { sessionId: request.sessionId, generation: executionSession.generation },
-                (previous) => ({
-                  ...gapMetadata(this.#processEpoch, previous),
-                  continuityUnknown: true,
-                  pendingAfterSeq: null
-                })
-              );
-            } catch {
-              this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
+      try {
+        presentation = message.beginPresentation?.(
+          rootRunId,
+          (code) => this.#diagnostic(code, rootRunId),
+          controls
+        );
+        presentation?.update(snapshot());
+        session.activeInvocationId = request.invocationId;
+        executionStarted = true;
+        for await (const event of task.events()) {
+          if (this.#closed || this.#signal.aborted) break;
+          if (event.type === "session.update" && session.id === request.sessionId) {
+            session.providerSession = event.payload.providerSession;
+            this.#saveBinding(key, session);
+            if (event.payload.providerSession?.resumeOutcome === "fresh_fallback") {
+              stableRecovered = true;
+              try {
+                this.#sessionStore.patchGap?.(
+                  key,
+                  { sessionId: request.sessionId, generation: executionSession.generation },
+                  (previous) => ({
+                    ...gapMetadata(this.#processEpoch, previous),
+                    continuityUnknown: true,
+                    pendingAfterSeq: null
+                  })
+                );
+              } catch {
+                this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
+              }
             }
           }
-        }
-        // 只有执行策略与事件策略均为 full_access 的审批才是自动处理的审计记录。
-        // 问题/elicitation 仍须展示并交回原交互入口，不能一并过滤。
-        if (
-          event.type === "interaction.requested" &&
-          event.payload.kind === "approval" &&
-          request.approvalMode === "full_access" &&
-          (event.payload.request.policy as { mode?: unknown } | undefined)?.mode === "full_access"
-        )
-          continue;
-        if (event.type === "interaction.requested") {
-          if (this.#draining) continue;
-          // Octospec F09: .octospec/tasks/gateway-august-feature-assessment/assessment.md
-          // 普通 IM 不提供秘密输入通道，禁止退回聊天命令收集凭据。
+          // 只有执行策略与事件策略均为 full_access 的审批才是自动处理的审计记录。
+          // 问题/elicitation 仍须展示并交回原交互入口，不能一并过滤。
           if (
-            Array.isArray(event.payload.request.questions) &&
-            event.payload.request.questions.some(
-              (question: unknown) =>
-                question !== null &&
-                typeof question === "object" &&
-                "isSecret" in question &&
-                question.isSecret === true
-            )
-          ) {
-            this.#diagnostic("IM_INTERACTION_SECRET_UNSUPPORTED", request.runId);
-            await this.#reply(
-              message,
-              "本次执行需要安全输入，当前聊天不支持。请勿在聊天中发送密码或密钥；本次执行已请求停止。",
-              `interaction:${event.payload.interactionId}`
-            );
-            await this.dependencies.kernel.cancelInvocation(
-              request.invocationId,
-              "IM secret input unsupported"
-            );
+            event.type === "interaction.requested" &&
+            event.payload.kind === "approval" &&
+            request.approvalMode === "full_access" &&
+            (event.payload.request.policy as { mode?: unknown } | undefined)?.mode === "full_access"
+          )
             continue;
-          }
-          if (this.#interactions.size >= 64) throw new Error("IM_INTERACTION_CAPACITY_EXHAUSTED");
-          this.#interactions.set(event.payload.interactionId, {
-            invocationId: request.invocationId,
-            sessionId: request.sessionId,
-            key,
-            senderId: message.senderId,
-            request: structuredClone(event.payload)
-          });
-          const interaction = event.payload;
-          let cardShown = false;
-          try {
-            cardShown =
-              !presentationFailed && ((await presentation?.interaction?.(interaction)) ?? false);
-          } catch {
-            this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
-          }
-          const display = interaction.request.operation as { summary?: unknown } | undefined;
-          const summary = [
-            display?.summary,
-            interaction.request.question,
-            interaction.request.message
-          ].find((value) => typeof value === "string");
-          const instruction =
-            interaction.kind === "approval"
-              ? `/approve ${interaction.interactionId} 或 /decline ${interaction.interactionId}`
-              : `/respond ${interaction.interactionId} ${interaction.kind === "elicitation" ? "<JSON>" : "<回答>"}`;
-          if (!cardShown)
-            await this.#reply(
-              message,
-              `${summary?.slice(0, 1000) ?? "执行需要你的确认或输入。"}\n${Array.isArray(interaction.request.questions) ? JSON.stringify(interaction.request.questions).slice(0, 8000) + "\n请按问题 ID 提交 JSON 答案。\n" : ""}${instruction}`,
-              `interaction:${interaction.interactionId}`,
-              true
-            );
-        }
-        if (event.type === "interaction.resolved") {
-          this.#interactions.delete(event.payload.interactionId);
-          try {
-            if (!presentationFailed)
-              await presentation?.resolveInteraction?.(
-                event.payload.interactionId,
-                event.payload.status
+          if (event.type === "interaction.requested") {
+            if (this.#draining) continue;
+            // Octospec F09: .octospec/tasks/gateway-august-feature-assessment/assessment.md
+            // 普通 IM 不提供秘密输入通道，禁止退回聊天命令收集凭据。
+            if (
+              Array.isArray(event.payload.request.questions) &&
+              event.payload.request.questions.some(
+                (question: unknown) =>
+                  question !== null &&
+                  typeof question === "object" &&
+                  "isSecret" in question &&
+                  question.isSecret === true
+              )
+            ) {
+              this.#diagnostic("IM_INTERACTION_SECRET_UNSUPPORTED", request.runId);
+              await this.#reply(
+                message,
+                "本次执行需要安全输入，当前聊天不支持。请勿在聊天中发送密码或密钥；本次执行已请求停止。",
+                `interaction:${event.payload.interactionId}`
               );
-          } catch {
-            this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
-          }
-        }
-        projector.accept(event);
-        controls.failed =
-          projector.snapshot().terminal === "failed" ||
-          (projector.snapshot().terminal === "cancelled" &&
-            task.modelWait.snapshot.timeout === "terminated");
-        updatePresentation();
-      }
-      if (!projector.snapshot().terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
-    } catch {
-      if (!executionStarted || task.notSubmittedFailure) {
-        localFailure =
-          task.notSubmittedFailure ??
-          failurePayload(
-            { code: "IM_PRESENTATION_INITIALIZATION_FAILED" },
-            {
-              stage: "channel_presentation_initialize",
-              defaultDomain: "runtime",
-              runId: request.runId
+              await this.dependencies.kernel.cancelInvocation(
+                request.invocationId,
+                "IM secret input unsupported"
+              );
+              continue;
             }
-          ).failure;
-        controls.failed = false;
-        await this.#notifyFailure(message, localFailure, request, task.attempts.length > 1);
-      } else {
-        if (this.#draining) this.#drainErrors.push(new Error("IM_EXECUTION_RESULT_UNKNOWN"));
-        // 流断开无法证明执行失败；尽力取消并提示核查，不自动重跑潜在的业务副作用。
-        await this.dependencies.kernel
-          .cancelInvocation(request.invocationId, "IM execution stream failed")
-          .catch(() => undefined);
-        this.#diagnostic("IM_EXECUTION_RESULT_UNKNOWN", request.runId);
-        // 原源流即使在终态后失败，也不能被展示层的终态掩盖。
-        controls.failed = false;
-        projector = new ImRunProjector(rootRunId, message.conversationKind === "direct");
-        if (!presentationFailed) {
-          try {
-            presentation?.update({ ...snapshot(), resultUnknown: true });
-          } catch {
-            this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
+            if (this.#interactions.size >= 64) throw new Error("IM_INTERACTION_CAPACITY_EXHAUSTED");
+            this.#interactions.set(event.payload.interactionId, {
+              invocationId: request.invocationId,
+              sessionId: request.sessionId,
+              key,
+              senderId: message.senderId,
+              request: structuredClone(event.payload)
+            });
+            const interaction = event.payload;
+            let cardShown = false;
+            try {
+              cardShown =
+                !presentationFailed && ((await presentation?.interaction?.(interaction)) ?? false);
+            } catch {
+              this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
+            }
+            const display = interaction.request.operation as { summary?: unknown } | undefined;
+            const summary = [
+              display?.summary,
+              interaction.request.question,
+              interaction.request.message
+            ].find((value) => typeof value === "string");
+            const instruction =
+              interaction.kind === "approval"
+                ? `/approve ${interaction.interactionId} 或 /decline ${interaction.interactionId}`
+                : `/respond ${interaction.interactionId} ${interaction.kind === "elicitation" ? "<JSON>" : "<回答>"}`;
+            if (!cardShown)
+              await this.#reply(
+                message,
+                `${summary?.slice(0, 1000) ?? "执行需要你的确认或输入。"}\n${Array.isArray(interaction.request.questions) ? JSON.stringify(interaction.request.questions).slice(0, 8000) + "\n请按问题 ID 提交 JSON 答案。\n" : ""}${instruction}`,
+                `interaction:${interaction.interactionId}`,
+                true
+              );
+          }
+          if (event.type === "interaction.resolved") {
+            this.#interactions.delete(event.payload.interactionId);
+            try {
+              if (!presentationFailed)
+                await presentation?.resolveInteraction?.(
+                  event.payload.interactionId,
+                  event.payload.status
+                );
+            } catch {
+              this.#diagnostic("IM_INTERACTION_CARD_FAILED", request.runId);
+            }
+          }
+          projector.accept(event);
+          controls.failed =
+            projector.snapshot().terminal === "failed" ||
+            (projector.snapshot().terminal === "cancelled" &&
+              task.modelWait.snapshot.timeout === "terminated");
+          updatePresentation();
+        }
+        if (!projector.snapshot().terminal) throw new Error("IM_RUN_WITHOUT_TERMINAL");
+      } catch {
+        if (!executionStarted || task.notSubmittedFailure) {
+          localFailure =
+            task.notSubmittedFailure ??
+            failurePayload(
+              { code: "IM_PRESENTATION_INITIALIZATION_FAILED" },
+              {
+                stage: "channel_presentation_initialize",
+                defaultDomain: "runtime",
+                runId: request.runId
+              }
+            ).failure;
+          controls.failed = false;
+          await this.#notifyFailure(message, localFailure, request, task.attempts.length > 1);
+        } else {
+          if (this.#draining) this.#drainErrors.push(new Error("IM_EXECUTION_RESULT_UNKNOWN"));
+          // 流断开无法证明执行失败；尽力取消并提示核查，不自动重跑潜在的业务副作用。
+          await this.dependencies.kernel
+            .cancelInvocation(request.invocationId, "IM execution stream failed")
+            .catch(() => undefined);
+          this.#diagnostic("IM_EXECUTION_RESULT_UNKNOWN", request.runId);
+          // 原源流即使在终态后失败，也不能被展示层的终态掩盖。
+          controls.failed = false;
+          projector.dispose();
+          projector = new ImRunProjector(rootRunId, message.conversationKind === "direct");
+          if (!presentationFailed) {
+            try {
+              presentation?.update({ ...snapshot(), resultUnknown: true });
+            } catch {
+              this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
+            }
           }
         }
-      }
-    } finally {
-      let stableChanged = false;
-      if (
-        localFailure &&
-        turnStarted &&
-        task.attempts.every((attempt) => attempt.outcome === "not_submitted") &&
-        session.id === executionSession.id &&
-        session.generation === executionSession.generation
-      ) {
-        // 可信未提交才允许回退轮次；已执行失败或结果未知不能当作从未执行。
-        stableState.turnCount--;
-        executionSession.initialization!.attempted = initialWasAttempted;
-        stableChanged = true;
-      }
-      if (
-        session.id === executionSession.id &&
-        session.generation === executionSession.generation &&
-        projector.snapshot().terminal === "completed" &&
-        (prepared.stableContextIncluded || stableRecovered)
-      ) {
-        stableState.refreshPending = false;
-        stableChanged = true;
-      }
-      if (stableChanged)
+      } finally {
+        let stableChanged = false;
+        if (
+          localFailure &&
+          turnStarted &&
+          task.attempts.every((attempt) => attempt.outcome === "not_submitted") &&
+          session.id === executionSession.id &&
+          session.generation === executionSession.generation
+        ) {
+          // 可信未提交才允许回退轮次；已执行失败或结果未知不能当作从未执行。
+          stableState.turnCount--;
+          executionSession.initialization!.attempted = initialWasAttempted;
+          stableChanged = true;
+        }
+        if (
+          session.id === executionSession.id &&
+          session.generation === executionSession.generation &&
+          projector.snapshot().terminal === "completed" &&
+          (prepared.stableContextIncluded || stableRecovered)
+        ) {
+          stableState.refreshPending = false;
+          stableChanged = true;
+        }
+        if (stableChanged)
+          try {
+            this.#saveBinding(key, session);
+          } catch {
+            this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
+          }
+        if (rulesEnabled)
+          this.#finishRules(
+            key,
+            executionSession,
+            rulesRevision,
+            rulesVersions,
+            projector.snapshot().terminal === "completed"
+          );
+        if (!this.#closed && handedOff && projector.snapshot().terminal !== "completed") {
+          try {
+            this.#sessionStore.patchGap?.(
+              key,
+              { sessionId: executionSession.id!, generation: executionSession.generation },
+              (previous) => {
+                const next = gapMetadata(this.#processEpoch, previous);
+                next.pendingAfterSeq =
+                  next.pendingAfterSeq === null || failureAfterSeq === null
+                    ? null
+                    : Math.min(next.pendingAfterSeq ?? failureAfterSeq, failureAfterSeq);
+                return next;
+              }
+            );
+          } catch {
+            this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
+          }
+        }
+        if (task.stopReason) this.#diagnostic(task.stopReason, rootRunId);
+        this.#log("agent_run.finished", {
+          run_id: rootRunId,
+          invocation_id: request.invocationId,
+          session_id: request.sessionId,
+          status: localFailure ? "not_submitted" : (projector.snapshot().terminal ?? "unknown")
+        });
+        // 移除执行身份前移交收尾/产物投递的取消权；finish 等待期间的 stop 不能落入空窗。
+        if (!localFailure) this.#finalDeliveries.set(key, delivery);
+        this.#tasks.delete(key);
         try {
-          this.#saveBinding(key, session);
+          // 长任务结束后重新开始终态去重窗口，保留有界尝试身份，避免立即重复执行。
+          const saved = { ...prepared.request };
+          if (!this.#closed)
+            this.#sessionStore.remember(key, occurrenceId ?? message.messageId, {
+              text: message.text,
+              sessionId: request.sessionId,
+              runId: rootRunId,
+              snapshot: saved,
+              artifacts: prepared.artifacts,
+              attempts: task.attempts.map((attempt) => ({ ...attempt })),
+              ...(localFailure &&
+              task.attempts.every((attempt) => attempt.outcome === "not_submitted")
+                ? { notSubmittedFailure: localFailure }
+                : {})
+            });
         } catch {
           this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
         }
-      if (rulesEnabled)
-        this.#finishRules(
-          key,
-          executionSession,
-          rulesRevision,
-          rulesVersions,
-          projector.snapshot().terminal === "completed"
-        );
-      if (!this.#closed && handedOff && projector.snapshot().terminal !== "completed") {
+        session.activeInvocationId = undefined;
+        for (const [id, entry] of this.#interactions)
+          if (entry.invocationId === request.invocationId) this.#interactions.delete(id);
         try {
-          this.#sessionStore.patchGap?.(
-            key,
-            { sessionId: executionSession.id!, generation: executionSession.generation },
-            (previous) => {
-              const next = gapMetadata(this.#processEpoch, previous);
-              next.pendingAfterSeq =
-                next.pendingAfterSeq === null || failureAfterSeq === null
-                  ? null
-                  : Math.min(next.pendingAfterSeq ?? failureAfterSeq, failureAfterSeq);
-              return next;
-            }
-          );
-        } catch {
-          this.#finalizationFailed("IM_HISTORY_POSITION_UNAVAILABLE");
+          if (!this.#closed)
+            await withinShutdown(
+              Promise.resolve().then(() => presentation?.finish()),
+              shutdownDeadline(this.dependencies.signal),
+              "IM_PRESENTATION_FINISH_INCOMPLETE"
+            );
+        } catch (error) {
+          // 截止只结束等待，不能证明尚未完成的展示资源已经释放。
+          if (error instanceof Error && error.message === "IM_PRESENTATION_FINISH_INCOMPLETE")
+            this.#finishIncomplete ??= error;
+          this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
         }
       }
-      if (task.stopReason) this.#diagnostic(task.stopReason, rootRunId);
-      this.#log("agent_run.finished", {
-        run_id: rootRunId,
-        invocation_id: request.invocationId,
-        session_id: request.sessionId,
-        status: localFailure ? "not_submitted" : (projector.snapshot().terminal ?? "unknown")
-      });
-      // 移除执行身份前移交收尾/产物投递的取消权；finish 等待期间的 stop 不能落入空窗。
-      if (!localFailure) this.#finalDeliveries.set(key, delivery);
-      this.#tasks.delete(key);
       try {
-        // 长任务结束后重新开始终态去重窗口，保留有界尝试身份，避免立即重复执行。
-        const saved = { ...prepared.request };
-        if (!this.#closed)
-          this.#sessionStore.remember(key, occurrenceId ?? message.messageId, {
-            text: message.text,
+        if (localFailure || this.#closed || this.#signal.aborted || delivery.signal.aborted) return;
+        const { text, allowMention } =
+          task.modelWait.snapshot.timeout && projector.snapshot().terminal !== "completed"
+            ? {
+                text:
+                  MODEL_WAIT_TIMEOUT_MESSAGE +
+                  (task.modelWait.snapshot.timeout === "terminated"
+                    ? "已确认执行结束，可以重试。"
+                    : "尚未确认执行停止，请核查运行记录，避免重复执行。"),
+                allowMention: false
+              }
+            : projector.finalReply;
+        const obsolete = () => {
+          const binding = this.#sessionStore.read(key);
+          return (
+            binding?.id !== request.sessionId || binding.generation !== request.sessionGeneration
+          );
+        };
+        // reset 不取消原模型执行，但旧代次的结果不能启动上传或继续最终消息重试。
+        if (allowMention && obsolete()) return;
+        const deliverySignal = AbortSignal.any([this.#signal, delivery.signal]);
+        if (
+          allowMention &&
+          projector.snapshot().terminal === "completed" &&
+          session.providerSession?.sessionId &&
+          session.providerSession.resumable !== false
+        )
+          message.bindHistoryTurn?.({
             sessionId: request.sessionId,
-            runId: rootRunId,
-            snapshot: saved,
-            artifacts: prepared.artifacts,
-            attempts: task.attempts.map((attempt) => ({ ...attempt })),
-            ...(localFailure &&
-            task.attempts.every((attempt) => attempt.outcome === "not_submitted")
-              ? { notSubmittedFailure: localFailure }
-              : {})
+            generation: executionSession.generation,
+            processEpoch: this.#processEpoch,
+            providerSessionId: session.providerSession.sessionId
           });
-      } catch {
-        this.#finalizationFailed("IM_SESSION_STORE_FAILED", rootRunId);
-      }
-      session.activeInvocationId = undefined;
-      for (const [id, entry] of this.#interactions)
-        if (entry.invocationId === request.invocationId) this.#interactions.delete(id);
-      try {
-        if (!this.#closed)
-          await withinShutdown(
-            Promise.resolve().then(() => presentation?.finish()),
-            shutdownDeadline(this.dependencies.signal),
-            "IM_PRESENTATION_FINISH_INCOMPLETE"
-          );
-      } catch (error) {
-        // 截止只结束等待，不能证明尚未完成的展示资源已经释放。
-        if (error instanceof Error && error.message === "IM_PRESENTATION_FINISH_INCOMPLETE")
-          this.#finishIncomplete ??= error;
-        this.#finalizationFailed("IM_PRESENTATION_FAILED", request.runId);
-      }
-    }
-    try {
-      if (localFailure || this.#closed || this.#signal.aborted || delivery.signal.aborted) return;
-      const { text, allowMention } =
-        task.modelWait.snapshot.timeout && projector.snapshot().terminal !== "completed"
-          ? {
-              text:
-                MODEL_WAIT_TIMEOUT_MESSAGE +
-                (task.modelWait.snapshot.timeout === "terminated"
-                  ? "已确认执行结束，可以重试。"
-                  : "尚未确认执行停止，请核查运行记录，避免重复执行。"),
-              allowMention: false
-            }
-          : projector.finalReply;
-      const obsolete = () => {
-        const binding = this.#sessionStore.read(key);
-        return (
-          binding?.id !== request.sessionId || binding.generation !== request.sessionGeneration
+        // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
+        await this.#reply(
+          message,
+          text,
+          `final:${rootRunId}`,
+          false,
+          allowMention,
+          projector.snapshot().terminal !== "cancelled",
+          {
+            artifacts: prepared.artifacts,
+            signal: deliverySignal,
+            obsolete: () => deliverySignal.aborted || (allowMention && obsolete())
+          }
         );
-      };
-      // reset 不取消原模型执行，但旧代次的结果不能启动上传或继续最终消息重试。
-      if (allowMention && obsolete()) return;
-      const deliverySignal = AbortSignal.any([this.#signal, delivery.signal]);
-      if (
-        allowMention &&
-        projector.snapshot().terminal === "completed" &&
-        session.providerSession?.sessionId &&
-        session.providerSession.resumable !== false
-      )
-        message.bindHistoryTurn?.({
-          sessionId: request.sessionId,
-          generation: executionSession.generation,
-          processEpoch: this.#processEpoch,
-          providerSessionId: session.providerSession.sessionId
-        });
-      // 最终文本拥有独立投递身份，即使进度卡投递失败，也必须尝试回复用户。
-      await this.#reply(
-        message,
-        text,
-        `final:${rootRunId}`,
-        false,
-        allowMention,
-        projector.snapshot().terminal !== "cancelled",
-        {
-          artifacts: prepared.artifacts,
-          signal: deliverySignal,
-          obsolete: () => deliverySignal.aborted || (allowMention && obsolete())
-        }
-      );
+      } finally {
+        if (this.#finalDeliveries.get(key) === delivery) this.#finalDeliveries.delete(key);
+      }
     } finally {
-      if (this.#finalDeliveries.get(key) === delivery) this.#finalDeliveries.delete(key);
+      // 先保留 final 的读取与投递机会，再解除正文引用；取消/早退同样进入此收尾。
+      projector.dispose();
+      presentation = undefined;
     }
   }
   #saveBinding(key: string, session: ImSession): void {

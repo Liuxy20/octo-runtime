@@ -51,6 +51,8 @@ ACP 的每个 session 更新队列、ZCode 的每次客户端事件队列复用 
 
 ## 插件状态
 
+Issue #246：Octo Gateway 的单轮卡片投影只保留最近五条明细，非 final 正文只保留 180 码点预览；模型步骤关联与在途工具保留必要元数据，累计次数独立计数。不因展示累计超过 512 条或 256 KiB 取消执行，不保存工具原始输出。final 独立保留并沿原发送合同投递；卡片排空与最终投递收尾后清空投影，卡片控制关联不得继续持有投影回调。此约束只针对 Gateway 展示缓存，不改变下文回执窗口、Provider/Kernel 源流预算或单次最终报文限制。专项与未验范围见 [任务](../tasks/246-gateway-projection-window/brief.md)。
+
 Gateway 的 cardDeliveries、Gateway/WeCom 的 deliveries 仅输出当前保留回执的总数，直接读取 Map.size，不复制或公开 effectKey/messageId 明细；不是累计发送量。原有投递重试与每个投递器最多 512 条的防重回执缓存保持不变。512 是当前容量选择而非协议常量；此上限不等同于整个进程 RSS 上限或重启后恰好一次投递。用户于 2026-10-21 明确本项只调整状态展示，不借此改造投递机制。
 
 Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 reset 见 [会话合同](session-reset.md)。Octo Gateway 可显式消费宿主 createSessionStore 返回的句柄，数据仍属于宿主；整个 Runtime 不依赖 SQLite、不提供适配、表结构或迁移。这些业务映射不属于通用 Host 的持久历史。默认映射失效后创建新会话；宿主持久 binding 也不等于 Provider 会话必定恢复或旧 Run 可继续执行。
