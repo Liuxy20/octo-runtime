@@ -1,0 +1,39 @@
+task: ORT-59
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/161
+baseline: 28c3ffa2ef685e14ac58d57c2788c9d07b92471c
+initial_implementation_baseline: c35b261b31573bc2f08a16eeced12f18705b2560
+spec_baseline: f7384fcbc63b3392af6972c0da6e756bee80ac60
+branch: fix/161-extra-platform-temp
+phase: pr-preparation
+rules:
+  - path: .octospec/rules/_index.yaml
+    scope: rule-discovery
+  - path: .octospec/rules/architecture.md
+    scope: product ownership, platform API boundaries, GitHub CI scope
+  - path: .octospec/rules/engineering.md
+    scope: fixture ownership, local verification, evidence and cleanup
+  - path: .octospec/rules/extras.md
+    scope: Home-specific CLI configuration and Extra responsibility
+  - path: .octospec/rules/collaboration.md
+    scope: Chinese internal documents; user OSS English commit and PR instructions take precedence
+sources:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .octospec/index.md
+  - .octospec/tasks/_brief.template.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .claude/commands/octospec-go.md
+  - .claude/commands/octospec-check.md
+  - .claude/commands/octospec-finish.md
+  - .octospec/tasks/88-native-codex-home/brief.md
+  - .octospec/tasks/267-cli-help-attribution/context.yaml
+  - test/cli-extra-directory.test.js
+  - test/cli-home.test.js
+  - package.json
+  - .octospec/scripts/lint.py
+  - Loop ORT-59 description and comments
+  - User request to start spec and discussion of macOS verification limits
+  - User request to implement and check latest spec YAML metadata
+  - User authorization to update code, commit, push and create PR
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md

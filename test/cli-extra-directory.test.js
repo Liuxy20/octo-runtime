@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
@@ -11,7 +12,7 @@ import { runCli } from "../apps/cli/dist/main.js";
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 test("CLI Extra storage isolates Homes", async (t) => {
-  const home = await mkdtemp("/tmp/extra-home-");
+  const home = await mkdtemp(join(tmpdir(), "extra-home-"));
   t.after(() => rm(home, { recursive: true, force: true }));
   for (const [name, value] of [
     ["first", 1],
