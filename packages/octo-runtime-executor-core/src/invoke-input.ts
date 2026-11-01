@@ -83,6 +83,11 @@ export function prepareInvokeInput(value: unknown): {
     ) {
       throw new TypeError("providerSession.resumable must be a boolean");
     }
+    if (
+      value.providerSession.requireResume !== undefined &&
+      typeof value.providerSession.requireResume !== "boolean"
+    )
+      throw new TypeError("providerSession.requireResume must be a boolean");
     providerSession = structuredClone(value.providerSession) as ProviderSession;
   }
   if (continuityMode === "fresh" && providerSession)

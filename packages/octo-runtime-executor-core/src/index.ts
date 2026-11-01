@@ -1052,12 +1052,12 @@ export class AgentExecutor {
     return true;
   }
 
-  /** Route an answer only to the adapter instance that owns the active invocation. */
+  /** 仅将回答路由到原活动调用；终态后返回稳定失效码，不转交其他 Adapter 或轮次。 */
   async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
     assertInteractionResponse(response);
     const adapter = this.#activeAdapters.get(invocationId);
     if (!adapter || this.#acceptedTerminals.has(invocationId)) {
-      throw new Error(`invocation is not active: ${invocationId}`);
+      throw protocolError("INTERACTION_NOT_ACTIVE", `invocation is not active: ${invocationId}`);
     }
     if (this.#modes.get(invocationId) !== "canonical")
       throw protocolError("EXECUTION_PROTOCOL_MISMATCH");

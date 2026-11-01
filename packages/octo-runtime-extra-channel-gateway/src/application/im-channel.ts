@@ -916,6 +916,7 @@ export class ImRuntime {
       !entry ||
       entry.key !== key ||
       entry.senderId !== message.senderId ||
+      entry.request.expiresAt === undefined ||
       !Number.isFinite(Date.parse(entry.request.expiresAt)) ||
       Date.parse(entry.request.expiresAt) <= Date.now()
     ) {
@@ -960,6 +961,7 @@ export class ImRuntime {
       entry.key !== key ||
       entry.senderId !== senderId ||
       this.#sessionStore.read(key)?.id !== entry.sessionId ||
+      entry.request.expiresAt === undefined ||
       !Number.isFinite(Date.parse(entry.request.expiresAt)) ||
       Date.parse(entry.request.expiresAt) <= Date.now()
     )

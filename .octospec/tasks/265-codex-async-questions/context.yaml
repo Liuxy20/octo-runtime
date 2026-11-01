@@ -1,0 +1,49 @@
+task: 265-codex-async-questions
+baseline: 28c3ffa2ef685e14ac58d57c2788c9d07b92471c
+original_baseline: 0bcd89c528018ffd508ca8099c8ac9c6b88de35d
+branch: fix/265-codex-async-questions
+stage: supplement-verified
+revision_baseline: 59bed1986c66657f5a7318acbb51d361d914cbf3
+revision_intent: optional session supplement; steer while running; new AgentRun after completion
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/collaboration.md
+references:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/265
+  - https://learn.chatgpt.com/docs/app-server#steer-an-active-turn
+  - https://github.com/openai/codex/issues/40805
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - packages/octo-runtime-adapter-codex/src/index.ts
+  - packages/octo-runtime-executor-core/src/experience.ts
+  - packages/octo-runtime-executor-core/src/watchdog.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-protocol/src/generated/protocol-types.ts
+native_evidence:
+  version: codex-cli 0.164.0
+  command: codex app-server generate-ts --experimental --out <temporary-directory>
+  examined_types: [AsyncUserInputQuestion, ThreadItem, TurnSteerParams, TurnSteerResponse, UserInput]
+  real_answer_round_trip: passed-native-and-public-kernel
+workflow:
+  loop_task: e724be08-cd1a-4b01-86c7-b27f96922658
+  execution: ORT84-20261101-supplement
+  source_triage_comment: 1825e3b1-0a0a-49fd-b8e3-bee470f3a405
+authorization:
+  write_spec: true
+  implement: true
+  commit: true
+  push: true
+  create_pr: true
+  expand_ci: false

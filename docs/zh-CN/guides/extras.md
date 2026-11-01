@@ -114,6 +114,8 @@ Gateway 将已确认的用户/Bot 名称与身份类型缓存在内存中，按 
 
 ## 开发自己的 Extra
 
+> **交互兼容性要求：登记或渲染控件前，必须按 `interaction.requested.payload.delivery` 分流。** async 是可选的旁路补充，旧同步处理器不会自动兼容。没有专门接入时，应成对忽略 requested/resolved，继续读流和展示正文，保留同步问答与审批。接入异步表单则必须实现结构化整批回答和完整生命周期，详见[Extra 必须明确选择处理方式](../reference/output-and-control.md)。当前三个内置 Extra 均忽略 async 控制。
+
 插件入口的形式为 `extra(context, jsonConfig)(dependencies)`。配置值放在 `jsonConfig`，应用函数放在 `dependencies`。插件与这些函数运行在同一进程中。
 
 插件通过 `ctx.kernel.invoke` 调用共享 Kernel，通过 `ctx.onDispose` 注册清理函数，通过 `ctx.onStatus` 提供业务状态，通过 `ctx.log` 记录诊断信息。应用通过这些公开接口管理插件，不需要访问插件内部对象或另外建立执行转发接口。

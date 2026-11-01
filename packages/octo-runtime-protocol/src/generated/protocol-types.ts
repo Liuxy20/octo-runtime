@@ -83,6 +83,9 @@ export type RunProtocolErrorCode =
   | "NATIVE_METHOD_UNSUPPORTED"
   | "NATIVE_RESPONSE_INVALID"
   | "INTERACTION_NOT_ACTIVE"
+  | "INVALID_QUESTION_RESPONSE"
+  | "ASYNC_ANSWER_REJECTED"
+  | "OPERATION_OUTCOME_UNKNOWN"
   | "HOST_EXECUTION_FAILED"
   | "HOST_ENDED_WITHOUT_TERMINAL"
   | "PROVIDER_MESSAGE_TOO_LARGE"
@@ -258,6 +261,13 @@ export type AgentSource = "preset" | "provisioned";
  * via the `definition` "McpServers".
  */
 export type McpServers = Record<string, McpServer>;
+/**
+ * Provider-neutral interaction. Omitted delivery retains synchronous blocking semantics; async questions allow continued work. Only Adapter-owned automatic approvals may omit external responses; this does not imply completion.
+ *
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "InteractionRequestedPayload".
+ */
+export type InteractionRequestedPayload = InteractionRequestedPayload1;
 /**
  * Display-only fields permitted by assertApprovalRequest. Values remain inert provider metadata and do not redefine commands, permissions or grant scope.
  *
@@ -461,6 +471,16 @@ export interface CanonicalEventWire {
  * via the `definition` "CanonicalEventPayload".
  */
 export interface CanonicalEventPayload {
+  /**
+   * Async questions do not block provider work. Omitted for existing synchronous interactions.
+   */
+  delivery?: "async";
+  /**
+   * Message snapshot only; an active interaction.requested authorizes submission.
+   *
+   * @maxItems 50
+   */
+  questions?: AsyncUserInputQuestion[];
   providerSession?: ProviderSession;
   channel?: MessageChannel;
   exposure?: MessageExposure;
@@ -497,6 +517,17 @@ export interface CanonicalEventPayload {
   [k: string]: unknown;
 }
 /**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "AsyncUserInputQuestion".
+ */
+export interface AsyncUserInputQuestion {
+  title: string;
+  /**
+   * @maxItems 50
+   */
+  options: string[] | null;
+}
+/**
  * Provider-owned session resume data. Core treats sessionId and adapter extension fields as opaque.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -511,6 +542,10 @@ export interface ProviderSession {
    * Whether the provider declares that later invocations can resume this session.
    */
   resumable?: boolean;
+  /**
+   * Require the original provider session; adapters must reject rather than start a fresh fallback. Currently implemented by Codex.
+   */
+  requireResume?: boolean;
   /**
    * Continuity outcome for this session update. Compaction applies to the next turn; fresh fallback applies to the current turn.
    */
@@ -2413,14 +2448,79 @@ export interface AgentConfig {
   [k: string]: unknown;
 }
 /**
- * Provider-neutral interaction for an active invocation. The Adapter may own an automatic approval response; that does not imply execution completion.
+ * Non-blocking question batch. IDs are positions scoped to this interaction, not provider-native question IDs.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "InteractionRequestedPayload".
+ * via the `definition` "QuestionRequest".
  */
-export interface InteractionRequestedPayload {
+export interface QuestionRequest {
+  schema: "octo.question-request/v1";
+  messageId: string;
+  /**
+   * @minItems 1
+   * @maxItems 50
+   */
+  questions: [
+    {
+      id: string;
+      title: string;
+      /**
+       * @maxItems 50
+       */
+      options: string[] | null;
+      allowCustom: true;
+    },
+    ...{
+      id: string;
+      title: string;
+      /**
+       * @maxItems 50
+       */
+      options: string[] | null;
+      allowCustom: true;
+    }[]
+  ];
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "QuestionResponse".
+ */
+export interface QuestionResponse {
+  schema: "octo.question-response/v1";
+  /**
+   * @minItems 1
+   * @maxItems 50
+   */
+  answers: [
+    {
+      questionId: string;
+      text: string;
+    },
+    ...{
+      questionId: string;
+      text: string;
+    }[]
+  ];
+}
+/**
+ * Host-owned supplement state, never stored by Kernel. Submitting or unknown records cannot be replayed.
+ *
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "AsyncQuestionReplySnapshot".
+ */
+export interface AsyncQuestionReplySnapshot {
+  schema: "octo.async-question-reply/v1";
+  ref: KernelRunRef;
+  question: InteractionRequestedPayload;
+  providerSession: ProviderSession;
+  providerEpoch?: number;
+  completed: boolean;
+  phase: "pending" | "submitting" | "answered" | "cancelled" | "invalidated" | "unknown";
+}
+export interface InteractionRequestedPayload1 {
+  delivery?: "async";
   executionInstanceId: string;
-  expiresAt: string;
+  expiresAt?: string;
   /**
    * Stable invocation-scoped interaction identifier.
    */

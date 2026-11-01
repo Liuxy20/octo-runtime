@@ -117,7 +117,8 @@ export class InvocationExperience {
       output.push(
         ...this.#finish(`tool:${event.payload.id}`, canonicalTerminalStatus(payload.status))
       );
-    if (event.type === "interaction.requested")
+    // 异步问题等待的是用户回答，不表示 Provider 暂停执行。
+    if (event.type === "interaction.requested" && event.payload.delivery !== "async")
       output.push(
         ...this.#begin(
           `interaction:${event.payload.interactionId}`,

@@ -199,7 +199,12 @@ export class InvocationWatchdog {
       toolChanged = this.#tools.delete(id);
       this.#finishSubjectActivities("tool", id);
     }
-    if (event.type === "interaction.requested" && typeof event.payload.interactionId === "string") {
+    // 非阻塞问题不授予等待豁免；原模型/工具仍按真实进度计时。
+    if (
+      event.type === "interaction.requested" &&
+      event.payload.delivery !== "async" &&
+      typeof event.payload.interactionId === "string"
+    ) {
       this.#interaction(event.payload.interactionId, true);
     }
     if (event.type === "interaction.resolved" && typeof event.payload.interactionId === "string") {

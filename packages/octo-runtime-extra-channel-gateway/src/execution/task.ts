@@ -281,12 +281,30 @@ export class ImTask {
         this.attempts.push(attempt);
         let terminal: CanonicalEvent | undefined;
         let completion: AttemptCompletion = "unresolved";
+        const ignoredAsyncQuestions = new Set<string>();
         try {
           for await (const event of this.kernel.invoke(request, {
             ...this.environment,
             signal: this.#signal
           })) {
             if (terminal) throw new Error("IM_FRAME_AFTER_TERMINAL");
+            // Gateway 尚不接入异步表单；成对忽略交互事件，避免暂停等待钟或改变卡片状态。
+            // 消息正文仍正常投影，原流继续消费；已出现交互的尝试仍禁止自动重放。
+            if (event.type === "interaction.requested" && event.payload.delivery === "async") {
+              this.#replaySafe = false;
+              if (
+                ignoredAsyncQuestions.size >= 64 &&
+                !ignoredAsyncQuestions.has(event.payload.interactionId)
+              )
+                throw new Error("IM_INTERACTION_CAPACITY_EXHAUSTED");
+              ignoredAsyncQuestions.add(event.payload.interactionId);
+              continue;
+            }
+            if (
+              event.type === "interaction.resolved" &&
+              ignoredAsyncQuestions.delete(event.payload.interactionId)
+            )
+              continue;
             this.#observe(event);
             if (event.type === "session.update")
               request = {

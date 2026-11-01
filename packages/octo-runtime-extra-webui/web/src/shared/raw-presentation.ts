@@ -9,6 +9,7 @@ export class RawRunPresentation {
   readonly items = new Map<string, Row>()
   readonly steps = new Map<string, Row>()
   readonly interactions = new Map<string, Row>()
+  private readonly ignoredAsyncQuestions = new Set<string>()
   readonly activities = new Map<string, Row>()
   readonly plans = new Map<string, Row>()
   readonly progress = new Map<string, Row>()
@@ -44,6 +45,17 @@ export class RawRunPresentation {
     const source = object(params.event), payload = object(source.payload)
     if (source.run_id !== this.runId || source.seq !== seq || typeof source.type !== 'string') throw new Error('Invalid raw Run event identity')
     this.after = seq;this.updated = Date.now()
+    // WebUI 尚未接入异步表单；推进源游标后成对过滤交互控制，正文仍按消息投影。
+    // resolved 不带 delivery，用本 Run 的身份集合识别，不能改变已有同步问答或审批。
+    if (source.type === 'interaction.requested' && payload.delivery === 'async') {
+      const id = String(payload.interactionId ?? '')
+      if (id) {
+        if (!this.ignoredAsyncQuestions.has(id) && this.ignoredAsyncQuestions.size >= 128) throw new Error('PRODUCT_PRESENTATION_CAPACITY_EXHAUSTED')
+        this.ignoredAsyncQuestions.add(id)
+      }
+      return undefined
+    }
+    if (source.type === 'interaction.resolved' && this.ignoredAsyncQuestions.delete(String(payload.interactionId ?? ''))) return undefined
     let result: PublicRunEvent | undefined
     if (source.type.startsWith('message.')) {
       const channel = payload.channel

@@ -64,6 +64,10 @@ Driver 维护唯一控制者，响应写入确认后才发布 resolved；重复 
 范围、过期及终态后响应均拒绝。full_access 自动处理只作用于本次请求；问题与 elicitation
 仍通过 pending 请求响应。取消/丢失时 Driver 和 Host 使未完成的交互失效。
 
+旁路 async question 的 canonical expiresAt 可省略，正常 Run 完成不使未答问题失效；宿主保存原请求和 pending 状态，通过公开 AsyncQuestionReply 在活动时 steer、正常完成后同会话新 AgentRun。低层响应仍不能控制已结束 Run，native 同步 pending 期限不变。详见 [交互合同](protocol-design.md#交互与取消)。
+
+**Extra 兼容性强制要求：消费交互事件前必须按 `delivery: async` 分流，不能把新增 async question 直接送进旧同步交互处理器。** 未接入异步表单时，在登记、秘密输入检查、提示/卡片生成和等待状态投影之前过滤 requested，并按原 Run/interactionId 配对过滤不带 delivery 的 resolved；保持流游标连续及正文展示，不自动答复、不暂停、不覆盖同步等待。接入时必须支持原题身份、结构化整批回答、自定义文本及完整投递生命周期。缺 expiresAt 合法，不能靠删除期限守卫或传字符串伪装支持；responseRequired=false 也不能充当 async 标识。内置 Gateway、WeCom、WebUI 均采用成对过滤策略。公共说明见[Extra 处理合同](../../docs/zh-CN/reference/output-and-control.md#extra-必须明确选择处理方式)。
+
 canonical `interaction.requested.payload.responseRequired` 和 native pending interaction control 的
 可选布尔 `responseRequired` 表示外部是否需要回答。缺字段按 true 处理；仅 Adapter 已承担的
 自动审批可标 false，canonical question/elicitation 不得标 false，native 非 pending 不携带此字段。

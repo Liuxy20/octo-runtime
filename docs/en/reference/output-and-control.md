@@ -38,7 +38,9 @@ The cancellation API returns `{accepted}` to indicate whether the cancellation r
 
 ## Reply to Approvals and User Questions
 
-In canonical mode, `interaction.requested` tells the application that user interaction is needed. It contains `interactionId`, `executionInstanceId`, `expiresAt` (an ISO timestamp), and `request`. Its `kind` is `approval`, `question`, or `elicitation`, which requests additional user information.
+> **Extra compatibility requirement:** Check `payload.delivery` before registering or presenting an interaction. `delivery: "async"` is optional supplemental input, not a blocking question. Do not route it into an existing synchronous form, `/respond` command, or waiting-state handler without implementing the async contract below.
+
+In canonical mode, `interaction.requested` carries `interactionId`, `executionInstanceId`, and `request`. Its `kind` is `approval`, `question`, or `elicitation`, which requests additional user information. Synchronous requests require `expiresAt` (an ISO timestamp); async questions may omit it. The following response flow describes synchronous interactions:
 
 1. Present `request` in the application's interaction UI.
 2. Collect the user's decision or answer.
@@ -54,6 +56,33 @@ In native mode, save the Provider request ID and call `respondNativeInteraction(
 HostFrame control messages report interaction states: `pending`, `resolved`, `expired`, and `invalidated`. A pending control uses a Unix timestamp in milliseconds for its deadline. After a response is accepted, subsequent notifications update its state. Replies fail if the request expired, was already answered, belongs to an old execution, uses the wrong mode, or its execution ended. Cancellation or execution loss also invalidates pending interactions.
 
 The `full_access` policy can handle supported approvals, but does not answer user questions or requests for additional information.
+
+### Async Question Contract
+
+Codex can emit `interaction.requested` with `kind: "question"` and `delivery: "async"` while continuing work. Keep reading events while the form is open. Its request is `{schema: "octo.question-request/v1", messageId, questions: [{id, title, options, allowCustom: true}]}`. Options may be `null` or empty; custom text is always allowed. The original request and host-owned pending state authorize a reply; a message snapshot alone does not. Associate both by `messageId` to display one form.
+
+Submit the entire batch once: `outcome: "answered"`, `value: {schema: "octo.question-response/v1", answers: [{questionId: "q:0", text: "option or custom answer"}]}`. Supply every positional question ID exactly once. Each answer must be nonblank and at most 4096 Unicode code points. See [asyncQuestionForm](../../examples/interactions.mts), which imports only public SDK APIs.
+
+Runtime sends one `turn/steer` to the original active turn. The Promise succeeds and `interaction.resolved` reports `resolved/answered/provider_accepted` only after a matching RPC reply. This proves acceptance, not persistence, model consumption, or task completion. `ASYNC_ANSWER_REJECTED` means explicit rejection; `OPERATION_OUTCOME_UNKNOWN` means sent but unconfirmed. Do not automatically retry either. `INVALID_QUESTION_RESPONSE` permits correction before sending; `INTERACTION_NOT_ACTIVE` rejects duplicate or inactive answers.
+
+Async ask is optional supplemental input. Leaving it unanswered does not block completion. The public `/executor-kernel` `AsyncQuestionReply` steers the original active run, or uses the existing `client.invoke` to create a new AgentRun after confirmed normal completion. The host supplies current continuation input with the same session/generation/provider binding and its current Context/configuration. The SDK assigns new execution IDs and replaces input with the original questions and answers. Codex continuation sets `providerSession.requireResume=true`: failed resume fails instead of starting a fresh provider session.
+
+A `route: "steer"` response confirms provider acceptance. A `route: "new_run"` response supplies an `events` stream: consumption starts submission, and returning the stream does not confirm delivery. Runtime admission, provider acceptance, model consumption, and completion are separate facts. See [asyncSupplementForm](../../examples/interactions.mts). Low-level respond still targets active runs only.
+
+Async questions have no default expiry; optional `expiresAt` is enforced, while synchronous interactions still require a deadline. Cancellation dismisses the form without cancelling model work. A single host controller owns storage and calls `observe` on original terminal/interaction frames before saving `snapshot()`. A persisted pending/completed snapshot can start a continuation after restart; a running or unknown submission cannot be replayed. Reset generations and changed provider bindings reject stale forms. Unknown steer delivery never falls back to a new Run or retries. The SDK provides neither a host database transaction nor exactly-once delivery across controllers.
+
+The shared limit is 16 active interactions, with at most 50 questions per batch, 50 options per question, and 4096 code points per title/option. Oversized or malformed snapshots fail explicitly. Synchronous questions, elicitation, approvals and `full_access` behavior remain unchanged. Host UI integration is still required; no Markdown parsing is needed.
+
+### Required Handling in Extras
+
+**Every Extra that consumes interaction events must explicitly choose one of these policies:**
+
+- **Without async form support:** Ignore async `interaction.requested` before interaction registration, secret-input handling, command/card generation, or waiting-state projection. Track its `interactionId` within the original Run and also ignore its `interaction.resolved`, which does not carry `delivery`. Continue consuming the stream, advance the original cursor, and display ordinary message text. Do not submit an automatic answer, pause execution, or let an ignored resolution clear a synchronous interaction's waiting state. Bound and clean up the identity tracking with the Run.
+- **With async form support:** Preserve the original request, question IDs, provider/session binding and submission state. Collect a complete `octo.question-response/v1` batch, support custom text and cancellation, and use the public `AsyncQuestionReply` lifecycle above. Handle expiry, duplicate submissions, stale bindings, restart and unknown delivery explicitly. Active runs use steer; confirmed normal completion permits a new AgentRun in the same session. Report delivery only when the provider accepts it.
+
+**Do not remove expiry checks or pass a plain answer string to make an old synchronous handler appear compatible.** Missing async `expiresAt` is valid, not evidence of expiry; async replies require the structured batch. `delivery` controls this distinction, not `kind`, `full_access`, message wording, or the presence of options. `responseRequired: false` is reserved for automatic approvals and is not an async-question discriminator.
+
+The built-in `channel-gateway`, `channel-wecom` and `webui` use the first policy: they display message text without async forms, answer commands, or waiting-state changes. Their synchronous questions, approvals and elicitation keep their existing behavior. New Extras and custom interaction renderers must make this choice explicitly; receiving the public protocol does not provide async UI support automatically. See [Extra development](../guides/extras.md).
 
 ## Errors and Recovery
 

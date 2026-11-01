@@ -477,6 +477,7 @@ export class ImRuntime {
       !entry ||
       entry.key !== key ||
       entry.senderId !== message.senderId ||
+      entry.request.expiresAt === undefined ||
       !Number.isFinite(Date.parse(entry.request.expiresAt)) ||
       Date.parse(entry.request.expiresAt) <= Date.now()
     ) {
@@ -600,6 +601,7 @@ export class ImRuntime {
     let presentationFailed = false;
     let executionStarted = false;
     let localFailure: FailureEnvelope | undefined;
+    const ignoredAsyncQuestions = new Set<string>();
     try {
       presentation = message.beginPresentation?.(
         request.runId,
@@ -613,6 +615,22 @@ export class ImRuntime {
         signal: this.#signal
       })) {
         if (this.#closed || this.#signal.aborted) break;
+        // 企微尚未接入异步表单；在登记、提示和状态投影前成对过滤，正文继续正常交付。
+        // resolved 不带 delivery，须用本轮 requested 的身份识别，避免覆盖同步交互的等待状态。
+        if (event.type === "interaction.requested" && event.payload.delivery === "async") {
+          if (
+            ignoredAsyncQuestions.size >= 64 &&
+            !ignoredAsyncQuestions.has(event.payload.interactionId)
+          )
+            throw new Error("IM_INTERACTION_CAPACITY_EXHAUSTED");
+          ignoredAsyncQuestions.add(event.payload.interactionId);
+          continue;
+        }
+        if (
+          event.type === "interaction.resolved" &&
+          ignoredAsyncQuestions.delete(event.payload.interactionId)
+        )
+          continue;
         if (event.type === "session.update" && session.id === request.sessionId) {
           session.providerSession = event.payload.providerSession;
           this.#saveBinding(key, session);

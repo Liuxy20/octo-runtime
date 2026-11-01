@@ -18,6 +18,7 @@ import {
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { codexEnvironmentConfig } from "./environment.js";
+import { CodexAsyncQuestions, asyncQuestionMetadata } from "./async-questions.js";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
 import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 /**
@@ -76,6 +77,8 @@ interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
   timer: NodeJS.Timeout;
+  accept?: (value: unknown) => void;
+  rejected?: (error: Error) => void;
 }
 
 interface PendingInteraction {
@@ -264,6 +267,7 @@ export async function* runCodexAppServerTurn({
         );
         resumed = true;
       } catch (error) {
+        if (request.providerSession?.requireResume === true) throw error;
         // A failed resume does not abort this turn; record a low-cardinality reason and fall back to a fresh thread.
         resumeFallback = rpcFailureReason(error);
       }
@@ -278,6 +282,8 @@ export async function* runCodexAppServerTurn({
 
     let threadId = extractThreadId(threadResult);
     if (!threadId) throw new Error("codex thread start/resume returned no thread id");
+    if (request.providerSession?.requireResume === true && threadId !== requestedSessionId)
+      throw new Error("codex required session resume returned a different thread id");
     client.setActiveThread(threadId);
     // 名称属于调用方；只命名本轮新建 thread，恢复时保留原生标题与句柄。
     if (!resumed && request.sessionName)
@@ -318,7 +324,8 @@ export async function* runCodexAppServerTurn({
       });
     } catch (error) {
       // Some corrupt sessions pass thread/resume but only reveal the missing rollout at turn/start.
-      if (!resumed || !isThreadNotFound(error)) throw error;
+      if (!resumed || !isThreadNotFound(error) || request.providerSession?.requireResume === true)
+        throw error;
       resumeFallback = "turn_start_thread_not_found";
       resumed = false;
       threadResult = await client.request(
@@ -1196,6 +1203,7 @@ class CodexAppServerClient {
   readonly #native: boolean;
   readonly #pending = new Map<RpcId, PendingRequest>();
   readonly #interactions = new Map<string, PendingInteraction>();
+  readonly #asyncQuestions: CodexAsyncQuestions;
   readonly #nativeRequestIds = new Set<RpcId>();
   readonly #requestTimeoutMs: number;
   readonly #interactive: boolean;
@@ -1271,9 +1279,15 @@ class CodexAppServerClient {
     const item = recordValue(params.item);
     const id = stringValue(item?.id);
     if (id) this.#openItems.delete(id);
+    // 旁路消息不是最终收尾；completed-only 通知也必须撤销先前的收尾猜测。
+    if (item?.type === "agentMessage" && item.delivery === "async") {
+      this.#clearFinalizationTimer();
+      return;
+    }
     if (
       item?.type !== "agentMessage" ||
       item.phase !== "final_answer" ||
+      item.delivery === "async" ||
       params.threadId !== this.#activeThreadId ||
       notificationTurnId(params) !== this.#activeTurnId ||
       this.#openItems.size ||
@@ -1296,6 +1310,7 @@ class CodexAppServerClient {
       // RPC acknowledgement is not a turn terminal; await the notification separately.
       this.#finalizationGraceTimer = setTimeout(() => {
         if (this.#terminal || this.#closed) return;
+        this.#invalidateInteractions("run_terminal");
         this.#terminal = true;
         this.#queue.push(this.#finalizationFailure());
         if (this.#native)
@@ -1364,6 +1379,20 @@ class CodexAppServerClient {
       boundary: "codex.event_queue"
     });
     this.#native = context?.protocolMode === "native";
+    this.#asyncQuestions = new CodexAsyncQuestions(
+      invocation.invocationId,
+      (event) => this.#queue.push(event),
+      (params, accept, rejected) =>
+        this.request(
+          "turn/steer",
+          params,
+          this.#requestTimeoutMs,
+          undefined,
+          undefined,
+          accept,
+          rejected
+        )
+    );
     if (!this.#native) this.#normalizer = new CodexEventNormalizer();
     this.#requestTimeoutMs = requestTimeoutMs;
     this.#interactive = interactive;
@@ -1390,7 +1419,13 @@ class CodexAppServerClient {
       signalProcessTree(this.#child, "SIGTERM");
     });
     this.#reader = createInterface({ input: this.#child.stdout });
-    this.#reader.on("line", (line) => this.#handleLine(line));
+    this.#reader.on("line", (line) => {
+      try {
+        this.#handleLine(line);
+      } catch (error) {
+        this.#handleProcessError(error instanceof Error ? error : new Error(String(error)));
+      }
+    });
     this.#child.stderr.setEncoding("utf8");
     this.#child.stderr.on("data", (chunk: string | Buffer) => {
       this.#stderr = (this.#stderr + chunk.toString()).slice(-STDERR_TAIL_LIMIT);
@@ -1520,6 +1555,11 @@ class CodexAppServerClient {
 
   /** Resume one provider reverse request after the durable Worker response reaches this invocation. */
   respondInteraction(response: InteractionResponse): Promise<void> {
+    if (response.interactionId.startsWith("codex:async:")) {
+      if (this.#native || this.#closed || this.#exited || this.#terminal)
+        return Promise.reject(protocolError("INTERACTION_NOT_ACTIVE"));
+      return this.#asyncQuestions.respond(response);
+    }
     if (this.#closed || this.#exited || this.#terminal) {
       return Promise.reject(new Error("codex interaction is no longer active"));
     }
@@ -1580,11 +1620,20 @@ class CodexAppServerClient {
     params: unknown,
     timeoutMs = this.#requestTimeoutMs,
     onWritten?: () => void,
-    requestId?: RpcId
+    requestId?: RpcId,
+    accept?: (value: unknown) => void,
+    rejected?: (error: Error) => void
   ): Promise<unknown> {
-    if (this.#transportFailure) return Promise.reject(this.#transportFailure);
+    if (this.#transportFailure)
+      return Promise.reject(
+        Object.assign(new Error("codex transport unavailable", { cause: this.#transportFailure }), {
+          deliveryNotAttempted: true
+        })
+      );
     if (this.#closed || this.#exited) {
-      return Promise.reject(new Error("codex app-server is closed"));
+      return Promise.reject(
+        Object.assign(new Error("codex app-server is closed"), { deliveryNotAttempted: true })
+      );
     }
     const id = requestId ?? this.reserveRequestId();
     if (this.#pending.has(id)) {
@@ -1605,7 +1654,14 @@ class CodexAppServerClient {
           })
         );
       }, timeoutMs);
-      this.#pending.set(id, { method, resolve, reject, timer });
+      this.#pending.set(id, {
+        method,
+        resolve,
+        reject,
+        timer,
+        ...(accept ? { accept } : {}),
+        ...(rejected ? { rejected } : {})
+      });
       // onWritten is deliberately passed through to #write instead of running
       // before it; callers use it as the transport-written observation boundary.
       this.#write(
@@ -1719,7 +1775,9 @@ class CodexAppServerClient {
     if (this.#native) {
       this.#queue.push({ kind: "native", messageKind: "notification", payload: message });
       if (method === "turn/completed") {
-        this.#invalidateInteractions("run_terminal");
+        this.#invalidateInteractions(
+          recordValue(params.turn)?.status === "completed" ? "run_completed" : "run_terminal"
+        );
         this.#terminal = true;
         this.#clearFinalizationTimer();
         if (this.#finalizationGraceTimer) clearTimeout(this.#finalizationGraceTimer);
@@ -1743,7 +1801,9 @@ class CodexAppServerClient {
     this.context?.reportConversion?.();
     for (const event of this.#normalizer!.normalize({ method, params })) {
       if (isTerminalEvent(event)) {
-        this.#invalidateInteractions("run_terminal");
+        this.#invalidateInteractions(
+          event.type === "run.completed" ? "run_completed" : "run_terminal"
+        );
         this.#terminal = true;
         this.#clearFinalizationTimer();
         if (this.#finalizationGraceTimer) clearTimeout(this.#finalizationGraceTimer);
@@ -1754,6 +1814,21 @@ class CodexAppServerClient {
         );
         this.#queue.close();
       } else this.#queue.push(event);
+    }
+    if (
+      method === "item/completed" &&
+      !this.#terminal &&
+      params.threadId === this.#activeThreadId &&
+      notificationTurnId(params) === this.#activeTurnId
+    ) {
+      const item = recordValue(params.item);
+      if (item?.type === "agentMessage" && this.#activeThreadId && this.#activeTurnId)
+        this.#asyncQuestions.register(
+          item,
+          this.#activeThreadId,
+          this.#activeTurnId,
+          this.#interactions.size
+        );
     }
   }
 
@@ -1819,17 +1894,22 @@ class CodexAppServerClient {
     this.context?.reportActivity?.({ kind: "transport_response", method: "rpc_response" });
     const error = recordValue(message.error);
     if (error) {
-      pending.reject(
-        new CodexAppServerRpcError(
-          pending.method,
-          numberValue(error.code) ?? -32000,
-          stringValue(error.message) || "unknown app-server error",
-          error.data
-        )
+      const rejected = new CodexAppServerRpcError(
+        pending.method,
+        numberValue(error.code) ?? -32000,
+        stringValue(error.message) || "unknown app-server error",
+        error.data
       );
+      pending.rejected?.(rejected);
+      pending.reject(rejected);
       return;
     }
-    pending.resolve(message.result);
+    try {
+      pending.accept?.(message.result);
+      pending.resolve(message.result);
+    } catch (error) {
+      pending.reject(error instanceof Error ? error : new Error(String(error)));
+    }
   }
 
   #handleServerRequest(id: RpcId, method: string, params: JsonRecord, message: JsonRecord): void {
@@ -1867,7 +1947,7 @@ class CodexAppServerClient {
       this.#queue.fail(new Error("APPROVAL_GRANT_SCOPE_UNSUPPORTED"));
       return;
     }
-    if (this.#interactions.size >= 16) {
+    if (this.#interactions.size + this.#asyncQuestions.size >= 16) {
       this.#rejectServerRequest(id, method);
       this.#queue.fail(new Error("APPROVAL_PENDING_LIMIT_EXCEEDED"));
       return;
@@ -2112,6 +2192,7 @@ class CodexAppServerClient {
   }
 
   #invalidateInteractions(reasonCode: string): void {
+    this.#asyncQuestions.invalidate(reasonCode);
     for (const [interactionId, pending] of this.#interactions) {
       clearTimeout(pending.timer);
       this.#interactionState(interactionId, pending.rpcId, "invalidated", reasonCode);
@@ -2306,6 +2387,7 @@ function itemStartedEvents(item: JsonRecord | undefined, stepId?: string): Canon
           role: "assistant",
           status: "streaming",
           channel,
+          ...asyncQuestionMetadata(item),
           ...(id ? { messageId: id } : {}),
           ...(stepId ? { stepId } : {})
         }
@@ -2367,6 +2449,7 @@ function itemCompletedEvents(
           role: "assistant",
           status: "completed",
           channel,
+          ...asyncQuestionMetadata(item),
           ...(id ? { messageId: id } : {}),
           ...(stepId ? { stepId } : {}),
           ...(typeof item.text === "string" ? { text: item.text } : {})

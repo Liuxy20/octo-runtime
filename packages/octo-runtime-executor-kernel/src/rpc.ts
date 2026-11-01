@@ -55,7 +55,8 @@ interface RpcMessage extends JsonRecord {
   method?: string;
   params?: JsonRecord;
   result?: unknown;
-  error?: { code?: number; message: string; data?: { code?: string } };
+  // 仅用于 Kernel ↔ worker；两端均用 camelCase。对外 socket 的 snake_case 由 server.ts 转换。
+  error?: { code?: number; message: string; data?: { code?: string; providerRpcCode?: number } };
 }
 
 interface Deferred<T> {
@@ -375,7 +376,15 @@ export class WorkerRpcServer {
           code: errorCode(error),
           message: errorMessage(error),
           ...(isRecord(error) && typeof error.code === "string"
-            ? { data: { code: error.code } }
+            ? {
+                data: {
+                  code: error.code,
+                  ...(error.code === "ASYNC_ANSWER_REJECTED" &&
+                  Number.isSafeInteger(error.providerRpcCode)
+                    ? { providerRpcCode: error.providerRpcCode as number }
+                    : {})
+                }
+              }
             : {})
         }
       });
@@ -545,7 +554,11 @@ export class WorkerRpcClient implements WorkerRpc {
     if (message.error)
       pending.reject(
         Object.assign(new Error(message.error.message), {
-          code: message.error.data?.code ?? message.error.code
+          code: message.error.data?.code ?? message.error.code,
+          ...(message.error.data?.code === "ASYNC_ANSWER_REJECTED" &&
+          Number.isSafeInteger(message.error.data.providerRpcCode)
+            ? { providerRpcCode: message.error.data.providerRpcCode }
+            : {})
         })
       );
     else pending.resolve(message.result);

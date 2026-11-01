@@ -1,5 +1,6 @@
 export {
   attachKernel,
+  AsyncQuestionReply,
   KernelError,
   isInvocationNotSubmitted,
   createKernelService,
@@ -9,6 +10,7 @@ export { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 export type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
 export type {
   KernelClient,
+  AsyncQuestionReplyResult,
   KernelInvocationRecord,
   KernelInvocationDrainResult,
   KernelInvocationLifecycle,

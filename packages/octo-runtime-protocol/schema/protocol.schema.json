@@ -190,6 +190,9 @@
         "NATIVE_METHOD_UNSUPPORTED",
         "NATIVE_RESPONSE_INVALID",
         "INTERACTION_NOT_ACTIVE",
+        "INVALID_QUESTION_RESPONSE",
+        "ASYNC_ANSWER_REJECTED",
+        "OPERATION_OUTCOME_UNKNOWN",
         "HOST_EXECUTION_FAILED",
         "HOST_ENDED_WITHOUT_TERMINAL",
         "PROVIDER_MESSAGE_TOO_LARGE",
@@ -2456,6 +2459,10 @@
           "description": "Whether the provider declares that later invocations can resume this session.",
           "type": "boolean"
         },
+        "requireResume": {
+          "description": "Require the original provider session; adapters must reject rather than start a fresh fallback. Currently implemented by Codex.",
+          "type": "boolean"
+        },
         "resumeOutcome": {
           "description": "Continuity outcome for this session update. Compaction applies to the next turn; fresh fallback applies to the current turn.",
           "type": "string",
@@ -2585,12 +2592,113 @@
         }
       }
     },
+    "AsyncUserInputQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "options"],
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "[^\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+        },
+        "options": {
+          "type": ["array", "null"],
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096,
+            "pattern": "[^\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+          }
+        }
+      }
+    },
+    "QuestionRequest": {
+      "description": "Non-blocking question batch. IDs are positions scoped to this interaction, not provider-native question IDs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "messageId", "questions"],
+      "properties": {
+        "schema": { "const": "octo.question-request/v1", "type": "string" },
+        "messageId": { "type": "string", "minLength": 1 },
+        "questions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "title", "options", "allowCustom"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^q:(0|[1-9][0-9]?)$" },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "[^\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+              },
+              "options": {
+                "type": ["array", "null"],
+                "maxItems": 50,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096,
+                  "pattern": "[^\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+                }
+              },
+              "allowCustom": { "type": "boolean", "const": true }
+            }
+          }
+        }
+      }
+    },
+    "QuestionResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema", "answers"],
+      "properties": {
+        "schema": { "type": "string", "const": "octo.question-response/v1" },
+        "answers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 50,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["questionId", "text"],
+            "properties": {
+              "questionId": { "type": "string", "pattern": "^q:(0|[1-9][0-9]?)$" },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "[^\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+              }
+            }
+          }
+        }
+      }
+    },
     "CanonicalEventPayload": {
       "title": "CanonicalEventPayload",
       "description": "Shared canonical event payload. The open dictionary carries structured tool, surface, and usage fields while common lifecycle fields remain explicit.",
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "delivery": {
+          "description": "Async questions do not block provider work. Omitted for existing synchronous interactions.",
+          "type": "string",
+          "const": "async"
+        },
+        "questions": {
+          "description": "Message snapshot only; an active interaction.requested authorizes submission.",
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/definitions/AsyncUserInputQuestion" }
+        },
         "providerSession": {
           "$ref": "#/definitions/ProviderSession"
         },
@@ -2636,13 +2744,31 @@
         }
       }
     },
-    "InteractionRequestedPayload": {
-      "title": "InteractionRequestedPayload",
-      "description": "Provider-neutral interaction for an active invocation. The Adapter may own an automatic approval response; that does not imply execution completion.",
+    "AsyncQuestionReplySnapshot": {
+      "description": "Host-owned supplement state, never stored by Kernel. Submitting or unknown records cannot be replayed.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["interactionId", "kind", "request", "executionInstanceId", "expiresAt"],
+      "required": ["schema", "ref", "question", "providerSession", "completed", "phase"],
       "properties": {
+        "schema": { "const": "octo.async-question-reply/v1" },
+        "ref": { "$ref": "#/definitions/KernelRunRef" },
+        "question": { "$ref": "#/definitions/InteractionRequestedPayload" },
+        "providerSession": { "$ref": "#/definitions/ProviderSession" },
+        "providerEpoch": { "type": "integer", "minimum": 0 },
+        "completed": { "type": "boolean" },
+        "phase": {
+          "enum": ["pending", "submitting", "answered", "cancelled", "invalidated", "unknown"]
+        }
+      }
+    },
+    "InteractionRequestedPayload": {
+      "title": "InteractionRequestedPayload",
+      "description": "Provider-neutral interaction. Omitted delivery retains synchronous blocking semantics; async questions allow continued work. Only Adapter-owned automatic approvals may omit external responses; this does not imply completion.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["interactionId", "kind", "request", "executionInstanceId"],
+      "properties": {
+        "delivery": { "type": "string", "const": "async" },
         "executionInstanceId": {
           "type": "string",
           "minLength": 1,
@@ -2673,6 +2799,18 @@
           "tsType": "Record<string, unknown>"
         }
       },
+      "allOf": [
+        {
+          "if": { "required": ["delivery"], "properties": { "delivery": { "const": "async" } } },
+          "then": {
+            "properties": {
+              "kind": { "const": "question" },
+              "request": { "$ref": "#/definitions/QuestionRequest" }
+            }
+          },
+          "else": { "required": ["expiresAt"] }
+        }
+      ],
       "if": {
         "properties": {
           "kind": {

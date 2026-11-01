@@ -91,6 +91,7 @@ export function interactionAnswer(
   action: CardAction
 ): InteractionResponse {
   if (
+    request.expiresAt === undefined ||
     !Number.isFinite(Date.parse(request.expiresAt)) ||
     Date.parse(request.expiresAt) <= Date.now()
   )

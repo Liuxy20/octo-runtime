@@ -83,6 +83,8 @@ GatewayDependencies 由 `/extras/channel-gateway` 定义，扩展既有 loadCont
 
 ## 执行、错误和状态
 
+**新建或修改 Extra 的交互消费者，必须显式处理 async 协议兼容性。** 不能将所有 interaction.requested 当作阻塞交互或复用旧字符串回答命令。按 delivery 分流：未接入异步表单的 Extra 在交互登记/展示/等待投影前成对过滤 async requested/resolved，保留正文、连续游标和原同步问答/审批；接入的 Extra 必须实现结构化整批回答及完整生命周期。三个内置 Extra 当前均忽略 async 控制。协议细节与验收边界见[输出协议强制要求](output-protocol.md)及[公共 Extra 合同](../../docs/zh-CN/reference/output-and-control.md#extra-必须明确选择处理方式)。
+
 ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list 与普通 App 使用同一合同；身份关联和恢复在 Kernel 包维护。旧 ctx.adapterHost、ExtraAdapterHost 和 extra-port 已删除，不保留兼容接口。
 
 每个 Extra 获得自己的 client，最多 128 个高层 invoke 登记（含在途/未知），只保留元数据。invoke 自动登记，原生 Extra 服务 close 自动关闭接纳、取消并核对原终态，在 4 秒共享单调期限内等待业务 onDispose 后才关闭 client；普通插件和宿主不必手动操作 invocations。已关闭或暂停的 iterator 通过 get 核对，不额外创建订阅。单纯 client.close/iterator.return 不取消；服务 close 是显式策略。未知/lost/未确认返回 incomplete，不清空登记冒充成功。执行终态不代表 delivery 或业务资源已完成，业务清理失败同样阻止替换。低层 submit 的 RunRef 仍由明确选择该原语的高级调用方自行管理。

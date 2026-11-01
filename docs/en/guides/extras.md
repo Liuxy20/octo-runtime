@@ -114,6 +114,8 @@ Your application chooses the storage implementation. Runtime does not depend on 
 
 ## Develop an Extra
 
+> **Interaction compatibility requirement:** Branch on `interaction.requested.payload.delivery` before registering or rendering controls. Async questions are optional supplemental input; existing synchronous handlers are not compatible automatically. Without dedicated async support, ignore the paired requested/resolved controls, keep reading the stream and displaying message text, and preserve synchronous questions and approvals. Supporting async forms requires structured batch replies and the full lifecycle in [Required Handling in Extras](../reference/output-and-control.md). All three built-in Extras currently ignore async controls.
+
 The plugin entry point has the form `extra(context, jsonConfig)(dependencies)`. Put configuration values in `jsonConfig` and application functions in `dependencies`. The plugin and those functions run in the same process.
 
 Use `ctx.kernel.invoke` to call the shared Kernel, `ctx.onDispose` to register cleanup, `ctx.onStatus` to report business status, and `ctx.log` for diagnostics. Applications manage the plugin through these public APIs without accessing its internals or adding another execution forwarding interface.

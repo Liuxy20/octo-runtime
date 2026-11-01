@@ -8,6 +8,7 @@ import {
   isStreamCapacityReason,
   resolveStreamLimitPolicy,
   streamCapacityError,
+  protocolError,
   type StreamLimitPolicy,
   type StreamCapacityReason,
   type HostFrame,
@@ -314,7 +315,7 @@ export class HostRunService implements WorkerRpc {
   }
   respond(runId: string, response: InteractionResponse): Promise<void> {
     const run = this.#get(runId);
-    if (run.terminal) throw new Error("INTERACTION_EXPIRED");
+    if (run.terminal) throw protocolError("INTERACTION_NOT_ACTIVE", "INTERACTION_EXPIRED");
     return this.respondInteraction(run.invocationId, response);
   }
   respondNativeRun(runId: string, response: NativeInteractionResponse): Promise<void> {

@@ -230,6 +230,8 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
       throw new TypeError("providerSession.sessionId must be a non-empty string");
     if (session.resumable !== undefined && typeof session.resumable !== "boolean")
       throw new TypeError("providerSession.resumable must be a boolean");
+    if (session.requireResume !== undefined && typeof session.requireResume !== "boolean")
+      throw new TypeError("providerSession.requireResume must be a boolean");
     if (
       session.resumeOutcome !== undefined &&
       !["new", "resumed", "fresh_fallback", "compacted"].includes(session.resumeOutcome as string)

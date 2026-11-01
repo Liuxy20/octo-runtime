@@ -72,6 +72,8 @@
 
 - [Issue 149：Provider 接入文档与所有权说明](tasks/149-provider-onboarding/brief.md)：已修正文档与注释，明确当前配置、完整会话 binding、Codex 图片及分平台进程清理；同步 main 并修复既有 OKF 格式问题，交付验证见[记录](tasks/149-provider-onboarding/validation.md)。
 
+- [Issue 265：Codex 异步问题与答案回传](tasks/265-codex-async-questions/brief.md)：已实现，见[验证](tasks/265-codex-async-questions/validation.md)与[双轴审查](tasks/265-codex-async-questions/review.md)。保留结构与生命周期，仅向原活动轮次 steer；真实选项与自定义答案往返通过，宿主 UI 待接入。
+
 - [已确认断线后的立即重连](tasks/channel-immediate-reconnect/brief.md)：用户要求从 onDisconnect 回调起尽快恢复；去掉首次固定 5 秒等待，保留失败退避、限流等待及旧连接回收约束。
 
 - [Issue 249：本地附件后的卡片终态](tasks/249-local-artifact-card-terminal/brief.md)：本地链接转纯文字，补充 SEND/EDIT 失败响应诊断和 400 后同一卡片的精简终态投递。同步 main@ed7a4c89，完成双轴审查及凭据脱敏修复；手动专项 35 项通过，全量仅一项主线同样失败的 CLI 环境隔离用例未过。用户已授权提交 PR，未授权合并或部署；[证据与未验边界](tasks/249-local-artifact-card-terminal/validation.md)。

@@ -1,4 +1,17 @@
 import { randomUUID } from "node:crypto";
+import { assertAsyncQuestions, assertQuestionRequest } from "./questions.js";
+export {
+  assertAsyncQuestions,
+  assertQuestionRequest,
+  assertQuestionResponse,
+  questionAnswerText
+} from "./questions.js";
+export type {
+  AsyncUserInputQuestion,
+  AsyncQuestionReplySnapshot,
+  QuestionRequest,
+  QuestionResponse
+} from "./generated/protocol-types.js";
 import { assertSessionName } from "./invoke-input.js";
 export { assertJsonByteLimit } from "./json-size.js";
 export { INVOKE_REQUEST_MAX_BYTES, assertInvokeRequestSize } from "./invoke-size.js";
@@ -14,6 +27,7 @@ export * from "./invoke-input.js";
 export * from "./model-context.js";
 export * from "./execution-plan.js";
 export { contextHash } from "./context-hash.js";
+export { assertJsonValue } from "./context.js";
 export type { ToolAuthorization, IssuedToolAuthorization } from "./generated/protocol-types.js";
 import { assertExperiencePayload } from "./experience.js";
 export { PROVIDER_DIAGNOSTIC_MAX_BYTES } from "./experience.js";
@@ -570,6 +584,14 @@ export function assertCanonicalEvent(event: unknown): asserts event is Canonical
   if (event.protocolVersion !== PROTOCOL_VERSION)
     throw new TypeError("canonical protocolVersion must be 2");
   const payload = isRecord(event.payload) ? event.payload : {};
+  if (event.type.startsWith("message.")) {
+    if (payload.delivery !== undefined && payload.delivery !== "async")
+      throw new TypeError("INVALID_MESSAGE_DELIVERY");
+    if (payload.questions !== undefined) {
+      if (payload.delivery !== "async") throw new TypeError("INVALID_MESSAGE_DELIVERY");
+      assertAsyncQuestions(payload.questions);
+    }
+  }
   if (event.type === "execution.update") assertExecutionEvidence(payload);
   assertExperiencePayload(event.type, payload);
   if (event.type === "run.failed" && payload.failure !== undefined) {
@@ -636,11 +658,12 @@ export function assertCanonicalEvent(event: unknown): asserts event is Canonical
   if (event.type === "interaction.requested") {
     requireEventString(payload, "interactionId", event.type);
     requireEventString(payload, "executionInstanceId", event.type);
-    requireEventString(payload, "expiresAt", event.type);
+    if (payload.delivery !== "async" || payload.expiresAt !== undefined)
+      requireEventString(payload, "expiresAt", event.type);
     if (
       Array.from(String(payload.interactionId)).length > 191 ||
       Array.from(String(payload.executionInstanceId)).length > 191 ||
-      !isInteractionTimestamp(payload.expiresAt as string)
+      (payload.expiresAt !== undefined && !isInteractionTimestamp(payload.expiresAt as string))
     )
       throw new TypeError("interaction.requested instance or expiry is invalid");
     if (
@@ -652,6 +675,11 @@ export function assertCanonicalEvent(event: unknown): asserts event is Canonical
     }
     if (!isRecord(payload.request))
       throw new TypeError("interaction.requested payload.request must be an object");
+    if (payload.delivery !== undefined) {
+      if (payload.delivery !== "async" || payload.kind !== "question")
+        throw new TypeError("INVALID_INTERACTION_DELIVERY");
+      assertQuestionRequest(payload.request);
+    }
     if (
       (Object.hasOwn(payload, "responseRequired") &&
         typeof payload.responseRequired !== "boolean") ||
