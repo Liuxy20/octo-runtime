@@ -1,0 +1,53 @@
+brief: .octospec/tasks/233-recovery-teardown/brief.md
+base: 42102c60103a9b18166c499b0c74a23e0d2295c6
+previous_base: 7fd022cd725030317feee75d27621fa6b4d996e6
+original_base: 0bcd89c528018ffd508ca8099c8ac9c6b88de35d
+spec_revision: 2
+workflow: .claude/skills/octospec-workflow/SKILL.md
+review_skill: /Users/lvsijia/.agents/skills/code-review/SKILL.md
+validation: .octospec/tasks/233-recovery-teardown/validation.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 复用分诊已读规则；规格复核 CI 范围、服务拓扑、所有权及失败事实
+  - id: runtime-engineering
+    source: repo
+    reason: 复用分诊已读规则；有界退出确认、保留原始失败、手动专项证据
+  - id: runtime-extras
+    source: repo
+    reason: 原生 Extra 仅关闭所属资源，执行依赖借用与 lost/incomplete 事实分别验收
+  - id: commit
+    source: global
+    reason: 中文内部规格；公开提交语言与提交授权以用户要求为准
+sources_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .claude/commands/octospec-plan.md
+  - test/recovery-dual-mode.test.js
+  - test/runtime-fixture.js
+  - test/recovery-im-fixture.js
+  - test-support/fixture-process.mjs
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - package.json
+  - .github/workflows/ci.yml
+  - .octospec/rules/extras.md
+  - test/kernel-fixture.js
+  - test/host-sdk-lifecycle.test.js
+  - test-support/recovery-native-host.mts
+  - test-support/recovery-dependency.mjs
+  - test-support/recovery-kernel-host.mjs
+  - test-support/recovery-gateway-host.mjs
+  - packages/octo-runtime-adapter-sdk/src/runtime-log.ts
+  - packages/octo-runtime-adapter-sdk/src/service-status.ts
+  - apps/cli/src/foreground.ts
+  - /Users/lvsijia/github.com/Mininglamp-OSS/octo-spec/global/commit.md
+files_expected:
+  - test/recovery-dual-mode.test.js
+  - test-support/recovery-cleanup.mjs
+  - test/manual/recovery-teardown.test.mjs
+  - test-support/recovery-dependency.mjs
+  - test-support/recovery-kernel-host.mjs
+  - test-support/recovery-gateway-host.mjs
+updated_at: 2026-11-01T11:00:00+08:00

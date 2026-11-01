@@ -3,20 +3,20 @@ import assert from "node:assert/strict";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
-import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import {
-  createKernelService,
-  createExtraService,
-  componentEndpoint
-} from "@mininglamp-oss/octo-runtime/host";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
 import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 import { recoveryImFixture } from "./recovery-im-fixture.js";
 import { kernelInput, frames } from "./kernel-fixture.js";
-import { waitFor, withTimeout } from "./runtime-fixture.js";
+import { waitFor } from "./runtime-fixture.js";
+import { cleanupRecovery, finishRecovery } from "../test-support/recovery-cleanup.mjs";
+import {
+  launchRecoveryChild,
+  launchRecoveryKernel,
+  recoveryOutputRows
+} from "../test-support/recovery-dependency.mjs";
 
 function inspectExtra(endpoint) {
   return new Promise((resolve, reject) => {
@@ -47,12 +47,21 @@ for (const mode of ["cli", "sdk"]) {
     },
     async (t) => {
       const home = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "or-"));
-      t.after(() => rm(home, { recursive: true, force: true }));
+      let cleanupComplete = false;
+      t.after(() => {
+        if (cleanupComplete) return rm(home, { recursive: true, force: true });
+        t.diagnostic(`Recovery cleanup incomplete; retained Home: ${home}`);
+      });
       const im = await recoveryImFixture(t);
       const startsFile = join(home, "starts");
       const endpoint = componentEndpoint(home),
         controlEndpoint = componentEndpoint(home, "channel-gateway");
-      const env = { ...process.env, OCTO_RECOVERY_STARTS_FILE: startsFile };
+      const keysFile = join(home, "keys.jsonl");
+      const env = {
+        ...process.env,
+        OCTO_RECOVERY_STARTS_FILE: startsFile,
+        OCTO_RECOVERY_KEYS_FILE: keysFile
+      };
       const config = {
         bots: [
           {
@@ -64,58 +73,44 @@ for (const mode of ["cli", "sdk"]) {
           }
         ]
       };
-      const children = [],
-        statusRows = [];
-      let kernel, extra;
-      const connectionRows = () =>
-        mode === "sdk"
-          ? statusRows
-          : (children[1]?.output ?? "").split("\n").flatMap((line) => {
-              try {
-                return [JSON.parse(line)];
-              } catch {
-                return [];
-              }
-            });
-      const launch = (component, args = []) => {
-        const child = spawn(
-          process.execPath,
-          [resolve("apps/cli/dist/index.js"), component, "run", "--home", home, "--json", ...args],
-          { env, stdio: ["ignore", "pipe", "pipe"] }
-        );
-        const exited = new Promise((resolve, reject) => {
-          child.once("exit", resolve);
-          child.once("error", reject);
-        });
-        const entry = { child, exited, output: "", errors: "" };
-        children.push(entry);
-        child.stdout.on("data", (chunk) => {
-          entry.output = (entry.output + chunk).slice(-65536);
-        });
-        child.stderr.on("data", (chunk) => {
-          entry.errors = (entry.errors + chunk).slice(-4096);
-        });
-        return entry;
-      };
+      const children = [];
+      let kernelDependency, gatewayHost, lostRef;
+      const connectionRows = () => (gatewayHost ? recoveryOutputRows(gatewayHost) : []);
       const client = attachKernel({ endpoint });
+      const failure = { failed: false, error: undefined };
+      let probe;
       try {
+        // 仅显式手动专项加载注入器；普通恢复用例不增加场景或改变服务行为。
+        if (process.env.OCTO_RECOVERY_TEARDOWN_PROBE) {
+          const { createRecoveryProbe } = await import("./manual/recovery-teardown-probe.mjs");
+          probe = createRecoveryProbe(process.env.OCTO_RECOVERY_TEARDOWN_PROBE);
+          probe.register({ home, children });
+        }
+        kernelDependency = launchRecoveryKernel(children, endpoint, env);
+        probe?.register({ home, children });
+        await waitFor(
+          async () =>
+            client.status().then(
+              (value) => value.execution_ready,
+              () => {
+                if (kernelDependency.processErrors.length || kernelDependency.exitObserved)
+                  throw new Error("Kernel dependency startup failed", {
+                    cause: kernelDependency.processErrors[0] ?? kernelDependency.errors
+                  });
+                return false;
+              }
+            ),
+          10000
+        );
         if (mode === "sdk") {
-          kernel = createKernelService({
-            endpoint,
-            workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
-            manifest: resolve("test/fixtures/recovery-adapters.json"),
-            env
-          });
-          extra = createExtraService({
-            endpoint,
-            controlEndpoint,
-            module: gateway,
-            config,
-            dependencies: {},
-            logging: { directory: join(home, "logs"), statusOutput: (row) => statusRows.push(row) }
-          });
-          await kernel.initialize();
-          await extra.initialize();
+          gatewayHost = launchRecoveryChild(
+            children,
+            "channel-gateway",
+            [resolve("test-support/recovery-gateway-host.mjs")],
+            env,
+            true
+          );
+          gatewayHost.child.send({ endpoint, controlEndpoint, config });
         } else {
           await mkdir(join(home, "extras", "channel-gateway"), { recursive: true });
           await writeFile(
@@ -123,31 +118,30 @@ for (const mode of ["cli", "sdk"]) {
             JSON.stringify({ config }),
             { mode: 0o600 }
           );
-          launch("executor-kernel", [
-            "--manifest",
-            resolve("test/fixtures/recovery-adapters.json")
-          ]);
-          await waitFor(
-            async () =>
-              client.status().then(
-                (value) => value.execution_ready,
-                () => false
-              ),
-            10000
+          gatewayHost = launchRecoveryChild(
+            children,
+            "channel-gateway",
+            [resolve("apps/cli/dist/index.js"), "channel-gateway", "run", "--home", home, "--json"],
+            env
           );
-          launch("channel-gateway");
         }
+        probe?.register({ home, children });
         let initial;
         await waitFor(async () => {
           for (const entry of children)
-            if (entry.child.exitCode !== null)
-              throw new Error(`Fixture child exited: ${entry.output} ${entry.errors}`);
+            if (entry.exitObserved || entry.processErrors.length)
+              throw new Error(`Fixture child failed: ${entry.output} ${entry.errors}`, {
+                cause: entry.processErrors[0]
+              });
           initial = await inspectExtra(controlEndpoint).catch(() => undefined);
           return initial?.status.bots?.[0]?.state === "retrying";
         }, 10000);
         const before = await client.status();
+        probe?.worker(before.worker.pid);
         assert.equal(initial.status.bots[0].connected, false);
-        assert.equal(initial.pid === process.pid, mode === "sdk");
+        assert.equal(initial.pid, gatewayHost.child.pid);
+        assert.equal(before.pid, kernelDependency.child.pid);
+        assert.equal(new Set([initial.pid, before.pid, before.worker.pid, process.pid]).size, 4);
         im.online();
         await waitFor(
           async () => (await inspectExtra(controlEndpoint)).status.bots[0].connected,
@@ -272,26 +266,36 @@ for (const mode of ["cli", "sdk"]) {
             })
           );
         }
-        im.send("wait-for-cancel");
-        await waitFor(async () => (await admissions()).length === replyCount + 1, 5000);
-        const active = await client.status();
-        process.kill(active.worker.pid, "SIGKILL");
-        await waitFor(async () => {
-          const value = await client.status();
-          return value.execution_ready && value.worker.generation > active.worker.generation;
-        }, 10000);
-        await waitFor(
-          async () => (await inspectExtra(controlEndpoint)).status.bots[0].workingTasks === 0,
-          5000
-        );
-        im.send("after worker loss");
-        await waitFor(
-          () => im.replies.filter((row) => row.content === "answer").length === replyCount + 1,
-          5000
-        );
-        const starts = await admissions();
-        assert.equal(starts.length, replyCount + 2, "lost work must not be admitted again");
-        assert.equal(new Set(starts).size, replyCount + 2);
+        if (!probe || process.env.OCTO_RECOVERY_SKIP_WORKER_LOSS !== "1") {
+          im.send("wait-for-cancel");
+          await waitFor(async () => (await admissions()).length === replyCount + 1, 5000);
+          const active = await client.status();
+          await waitFor(
+            async () =>
+              (await readFile(keysFile, "utf8")).trim().split("\n").length === replyCount + 1
+          );
+          lostRef = JSON.parse((await readFile(keysFile, "utf8")).trim().split("\n").at(-1));
+          assert.ok(lostRef, "capture the dependency run before worker loss");
+          process.kill(active.worker.pid, "SIGKILL");
+          await waitFor(async () => {
+            const value = await client.status();
+            if (value.worker?.pid) probe?.worker(value.worker.pid);
+            return value.execution_ready && value.worker.generation > active.worker.generation;
+          }, 10000);
+          assert.equal((await client.get(lostRef)).terminal.control.state, "lost");
+          await waitFor(
+            async () => (await inspectExtra(controlEndpoint)).status.bots[0].workingTasks === 0,
+            5000
+          );
+          im.send("after worker loss");
+          await waitFor(
+            () => im.replies.filter((row) => row.content === "answer").length === replyCount + 1,
+            5000
+          );
+          const starts = await admissions();
+          assert.equal(starts.length, replyCount + 2, "lost work must not be admitted again");
+          assert.equal(new Set(starts).size, replyCount + 2);
+        }
         const fresh = attachKernel({ endpoint });
         try {
           for (const observer of [client, fresh])
@@ -332,6 +336,7 @@ for (const mode of ["cli", "sdk"]) {
           "no extra connection may be created during recovery"
         );
         if (mode === "sdk") {
+          const statusRows = connectionRows();
           assert.ok(
             statusRows.some(
               (row) => row.event === "channel.retry_scheduled" && row.data.delay_ms === 5000
@@ -350,22 +355,74 @@ for (const mode of ["cli", "sdk"]) {
             /bf_fixture|session_id|run_id|invocation_id|wait-for-cancel/
           );
         }
+        if (probe) {
+          const status = await client.status();
+          await probe.beforeShutdown({ children, workerPid: status.worker.pid, client, endpoint });
+          if (process.env.OCTO_RECOVERY_TEARDOWN_BODY_FAILURE === "1")
+            throw new Error("FIXTURE_ORIGINAL_BODY_FAILURE");
+        }
+      } catch (error) {
+        failure.failed = true;
+        failure.error = error;
       } finally {
-        client.close();
-        if (extra) await extra.close();
-        if (kernel) await kernel.close();
-        for (const entry of children.reverse()) {
-          if (entry.child.exitCode === null && entry.child.signalCode === null)
-            entry.child.kill("SIGTERM");
-          try {
-            await withTimeout(entry.exited, 7000, "FIXTURE_SHUTDOWN_TIMEOUT");
-          } finally {
-            if (entry.child.exitCode === null && entry.child.signalCode === null) {
-              entry.child.kill("SIGKILL");
-              await entry.exited;
+        const gatewayCleanup = await cleanupRecovery({
+          children: gatewayHost ? [gatewayHost] : [],
+          onEvent: (event) => probe?.event(event)
+        });
+        try {
+          if (mode === "sdk" && gatewayHost?.exitObserved) {
+            const result = recoveryOutputRows(gatewayHost).find(
+              (row) => row.event === "fixture.cleanup"
+            )?.result;
+            assert.ok(result, "SDK host must report native close result");
+            if (!result.complete) {
+              assert.ok(lostRef, "incomplete runs require an injected worker loss");
+              assert.equal((await client.get(lostRef)).terminal.control.state, "lost");
+              assert.deepEqual(result.pendingResources, ["runs"]);
+              assert.deepEqual(result.errors, [
+                { resource: "runs", code: "EXTRA_CLEANUP_INCOMPLETE" }
+              ]);
+              t.diagnostic(`Expected lost-run cleanup fact: ${JSON.stringify(result)}`);
+              assert.equal(gatewayHost.child.exitCode, 1);
+            } else assert.equal(gatewayHost.child.exitCode, 0);
+          }
+          if (mode === "cli" && gatewayHost?.exitObserved && !gatewayHost.child.signalCode) {
+            if (!lostRef) assert.equal(gatewayHost.child.exitCode, 0, gatewayHost.errors);
+            else {
+              assert.ok([0, 5].includes(gatewayHost.child.exitCode), gatewayHost.errors);
+              // CLI 只公开聚合退出码，不能据此断言 SDK close 或日志已完整。
+              t.diagnostic(
+                `CLI shutdown after observed lost run: exitCode=${gatewayHost.child.exitCode}; native cleanup details unavailable`
+              );
             }
           }
+        } catch (error) {
+          gatewayCleanup.errors.push(error);
         }
+        try {
+          if (probe && kernelDependency && gatewayHost)
+            await probe.afterShutdown({ client, endpoint, gatewayHost });
+        } catch (error) {
+          gatewayCleanup.errors.push(error);
+        }
+        // 只有外层环境拥有 Kernel 回收权限；Gateway 关闭或探针失败都不能跳过它。
+        const environmentCleanup = await cleanupRecovery({
+          client,
+          children: kernelDependency ? [kernelDependency] : [],
+          onEvent: (event) => probe?.event(event)
+        });
+        const cleanup = {
+          complete: gatewayCleanup.complete && environmentCleanup.complete,
+          errors: [...gatewayCleanup.errors, ...environmentCleanup.errors]
+        };
+        if (kernelDependency?.exitObserved && kernelDependency.child.exitCode !== 0)
+          cleanup.errors.push(
+            new Error(
+              `Kernel dependency exited with ${kernelDependency.child.exitCode}: ${kernelDependency.output} ${kernelDependency.errors}`
+            )
+          );
+        cleanupComplete = cleanup.complete;
+        finishRecovery(failure, cleanup, (message) => t.diagnostic(message));
       }
     }
   );
