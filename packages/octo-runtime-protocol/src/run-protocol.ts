@@ -219,11 +219,13 @@ export function assertHostControl(value: unknown): asserts value is HostControl 
   }
   if (
     value.type === "interaction" &&
-    exactKeys(value, ["type", "requestId", "status"], ["expiresAt"]) &&
+    exactKeys(value, ["type", "requestId", "status"], ["expiresAt", "responseRequired"]) &&
     requestId(value.requestId) &&
     ["pending", "resolved", "expired", "invalidated"].includes(String(value.status)) &&
     (!Object.hasOwn(value, "expiresAt") || safeInteger(value.expiresAt, 1)) &&
-    (value.status !== "pending" || safeInteger(value.expiresAt, 1))
+    (value.status !== "pending" || safeInteger(value.expiresAt, 1)) &&
+    (!Object.hasOwn(value, "responseRequired") ||
+      (value.status === "pending" && typeof value.responseRequired === "boolean"))
   )
     return;
   if (

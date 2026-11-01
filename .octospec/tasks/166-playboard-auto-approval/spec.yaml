@@ -1,0 +1,75 @@
+schema: octospec.task-contract/v1
+task: ORT-63
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/166
+status: pr-preparation
+baseline: 8d79537deee2e8d050749d0129e6d36ec3bd7d1c
+implementation_baseline: 4a0f53b50723422d90f051944ae19eb28f60712a
+delivery_baseline: 42102c60103a9b18166c499b0c74a23e0d2295c6
+branch: fix/166-playboard-auto-approval
+scope:
+  entrypoint: apps/cli/src/playboard.ts
+  primary_provider: codex
+  modes: [canonical, native]
+  shared_approval_emitter: packages/octo-runtime-adapter-sdk/src/approval.ts
+defaults:
+  playboard:
+    approval_mode: full_access
+    apply_only_if: top_level_approvalMode_and_context_approval_policy_are_both_absent
+    explicit_policy: preserve_and_validate_existing_conflicts
+    invalid_values: reject
+    provisioned_workspace: process.cwd()
+    preset_workspace: provider_managed
+  sdk:
+    approval_mode: ask
+interaction:
+  field: responseRequired
+  type: optional_boolean
+  canonical_location: interaction.requested.payload
+  native_location: control.interaction.pending
+  false_meaning: adapter_owns_automatic_response_not_completion
+  false_canonical_allowed_kind: approval
+  true_or_absent: fail_with_PLAYBOARD_INTERACTION_REQUIRED
+  native_payload: preserve_original
+  success: completed_and_cleanup_complete
+  resolution: retain_existing_write_confirmation_and_identity
+  prohibit: [policy_only_skip, timer_based_classification, cli_auto_reply, repeated_invoke]
+compatibility:
+  absent_field: external_response_required
+  strict_old_clients: no_cross_version_compatibility_guarantee
+  schema_versions: {run: 7, context: octo.context-envelope/v3, ipc: 1, adapter_transport: 2}
+acceptance:
+  A1: CLI explicit and default full_access complete in both modes, three repetitions each
+  A2: Explicit policy sources and invalid or conflicting values preserve their contracts
+  A3: Questions and elicitation fail within 5000ms after the interaction frame in both modes
+  A4: TS and Go/Python codecs enforce valid optional fields and conservative legacy events
+  A5: SDK explicit full_access completes, default ask remains answerable, IPC preserves fields
+  A6: Automatic response failure never produces successful CLI exit
+  A7: Cancellation and owned resource cleanup retain existing failure semantics
+  A8: Actual provisioned cwd matches CLI cwd and explicit or preset settings remain intact
+  A9: Non-gating real Codex tool receipt and terminal state, with separate Windows evidence
+  A10: Generated artifacts and existing checks pass without expanding CI scope
+verification:
+  new_manual_entrypoint: scripts/manual/166-playboard-auto-approval.mjs
+  existing_checks: [pnpm build, pnpm typecheck, pnpm lint, pnpm lint:names, pnpm test]
+  generated_check: node native/codegen/generate.mjs --check
+  live: non-gating
+  missing_environment: BLOCKED
+  not_executed: NOT RUN
+  expand_ci: false
+decisions_for_review:
+  D1: Optional responseRequired fact, absent means external response required
+  D2: CLI-only full_access default and provider-managed preset cwd exception
+  D3: Codex plus shared canonical broker, without claiming all native providers are covered
+readiness:
+  score: 96
+  remaining_points:
+    propagation_mapping: 2
+    cross_language_conditional_validation: 1
+    real_provider_and_windows_environment: 1
+authorization:
+  current: commit_push_and_create_pr
+  implementation: true
+  commit: true
+  push: true
+  create_pr: true
+  merge: false

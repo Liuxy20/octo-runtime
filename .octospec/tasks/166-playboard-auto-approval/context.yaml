@@ -1,0 +1,38 @@
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+guides:
+  - .octospec/index.md
+  - .octospec/guides/provider-live-acceptance.md
+workflow:
+  - AGENTS.md
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/tasks/_brief.template.md
+  - /Users/lvsijia/.agents/skills/octo-shared/SKILL.md
+  - /Users/lvsijia/.agents/skills/octo-loop/SKILL.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - .claude/commands/octospec-go.md
+sources:
+  github: https://github.com/Mininglamp-OSS/octo-runtime/issues/166
+  defaults_comment: https://github.com/Mininglamp-OSS/octo-runtime/issues/166#issuecomment-6513424328
+  loop_triage_comment: cb537bd8-1f19-4226-a4c2-9f7bcb910827
+  baseline: 8d79537deee2e8d050749d0129e6d36ec3bd7d1c
+  implementation_baseline: 4a0f53b50723422d90f051944ae19eb28f60712a
+  delivery_baseline: 42102c60103a9b18166c499b0c74a23e0d2295c6
+overrides:
+  - User requires YAML in the spec; supply Markdown frontmatter and standalone spec.yaml.
+  - Do not expand GitHub CI scope or default test entrypoints.
+  - GitHub issues, PRs and commit messages must use English for this OSS repository.
+  - Commits require explicit authorization and configured author attribution plus the Codex trailer.
+  - User subsequently authorizes implementation and verification, then update to latest main, commit, push and create PR; merging remains unauthorized.

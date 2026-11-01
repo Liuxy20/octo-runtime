@@ -103,7 +103,9 @@ octo-runtime playboard <<'JSON'
 JSON
 ```
 
-需要已安装并认证的真实 Provider。输出为 NDJSON，执行诊断写 stderr；待交互请求按开发入口合同明确失败。Provider、模型、权限等通过 Context 的既有执行项设置。
+需要已安装并认证的真实 Provider。输出为 NDJSON，执行诊断写 stderr。Playboard 未显式提供顶层 approvalMode 或 Context approval_policy 时默认 full_access；SDK 的默认值仍为 ask。普通执行缺省工作目录是启动 CLI 的 process.cwd()，显式目录和 preset Provider 自有目录保持原语义。
+
+Adapter 自动处理的审批会继续到真实终态；需要外部回答的审批或追问以 PLAYBOARD_INTERACTION_REQUIRED 失败。自动处理通知不代表批准已写入或执行已完成。Provider、模型、权限等通过 Context 的既有执行项设置。
 
 ## 返回码
 

@@ -484,6 +484,10 @@
             "status": {
               "enum": ["pending", "resolved", "expired", "invalidated"]
             },
+            "responseRequired": {
+              "description": "Whether an external response is required. Omission means required; false does not imply resolution or completion.",
+              "type": "boolean"
+            },
             "expiresAt": {
               "type": "integer",
               "minimum": 1,
@@ -499,6 +503,9 @@
           },
           "then": {
             "required": ["expiresAt"]
+          },
+          "else": {
+            "not": { "required": ["responseRequired"] }
           }
         },
         {
@@ -2631,7 +2638,7 @@
     },
     "InteractionRequestedPayload": {
       "title": "InteractionRequestedPayload",
-      "description": "Provider-neutral request that pauses one active invocation until an interaction response is returned through the Adapter Host.",
+      "description": "Provider-neutral interaction for an active invocation. The Adapter may own an automatic approval response; that does not imply execution completion.",
       "type": "object",
       "additionalProperties": false,
       "required": ["interactionId", "kind", "request", "executionInstanceId", "expiresAt"],
@@ -2655,6 +2662,10 @@
           "type": "string",
           "enum": ["approval", "question", "elicitation"]
         },
+        "responseRequired": {
+          "description": "Whether an external response is required. Omission means required; only an Adapter-owned automatic approval may set false.",
+          "type": "boolean"
+        },
         "request": {
           "description": "Display-safe provider request projected for the responding product.",
           "type": "object",
@@ -2676,6 +2687,9 @@
             "$ref": "#/definitions/ApprovalRequest"
           }
         }
+      },
+      "else": {
+        "properties": { "responseRequired": { "const": true } }
       }
     },
     "ApprovalRequest": {

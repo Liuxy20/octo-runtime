@@ -60,6 +60,8 @@ octo-runtime playboard < request.json
 
 遇到需要回复的交互时，会以 `PLAYBOARD_INTERACTION_REQUIRED` 结束；应用需要回答审批或追问时，应使用 SDK。Provider 无法启动或认证被拒绝时，先检查同一操作系统账号下的安装和登录状态；错误码见[故障排查](../guides/troubleshooting.md)。这个本地请求不需要 `octo-cli` 或 IM Bot。
 
+顶层 `approvalMode` 和 Context `octo.security/approval_policy` 均省略时，Playboard 默认 `full_access`；SDK 仍默认 `ask`。显式策略保留原有校验。Adapter 自动处理的审批继续到真实终态，通知不证明执行完成；即使在 `full_access` 下，问题与 elicitation 仍需外部回答。普通 provisioned 执行缺省工作目录为 CLI 进程的 `process.cwd()`；显式工作区及 preset Provider 自有目录保持原语义。
+
 修改 `payload.type` 可以选择其他已安装的 Harness。OpenClaw 还需要指定 `provider_agent_id`，例如 `main`；OpenCode 当前要求审批模式为 `full_access`，工具执行无需逐项审批，选择前请查看 [Provider 支持范围](../reference/providers.md)。
 
 ## 启动 Executor Kernel

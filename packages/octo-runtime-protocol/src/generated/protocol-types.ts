@@ -59,6 +59,10 @@ export type HostControl =
       type: "interaction";
       requestId: string | number;
       status: "pending" | "resolved" | "expired" | "invalidated";
+      /**
+       * Whether an external response is required. Omission means required; false does not imply resolution or completion.
+       */
+      responseRequired?: boolean;
       expiresAt?: number;
     }
   | {
@@ -2409,7 +2413,7 @@ export interface AgentConfig {
   [k: string]: unknown;
 }
 /**
- * Provider-neutral request that pauses one active invocation until an interaction response is returned through the Adapter Host.
+ * Provider-neutral interaction for an active invocation. The Adapter may own an automatic approval response; that does not imply execution completion.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "InteractionRequestedPayload".
@@ -2422,6 +2426,10 @@ export interface InteractionRequestedPayload {
    */
   interactionId: string;
   kind: "approval" | "question" | "elicitation";
+  /**
+   * Whether an external response is required. Omission means required; only an Adapter-owned automatic approval may set false.
+   */
+  responseRequired?: boolean;
   /**
    * Display-safe provider request projected for the responding product.
    */

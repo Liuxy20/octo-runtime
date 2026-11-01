@@ -64,6 +64,13 @@ Driver 维护唯一控制者，响应写入确认后才发布 resolved；重复 
 范围、过期及终态后响应均拒绝。full_access 自动处理只作用于本次请求；问题与 elicitation
 仍通过 pending 请求响应。取消/丢失时 Driver 和 Host 使未完成的交互失效。
 
+canonical `interaction.requested.payload.responseRequired` 和 native pending interaction control 的
+可选布尔 `responseRequired` 表示外部是否需要回答。缺字段按 true 处理；仅 Adapter 已承担的
+自动审批可标 false，canonical question/elicitation 不得标 false，native 非 pending 不携带此字段。
+false 不表示已批准、已写入或执行成功，resolved 仍等本次响应写入确认。Provider native payload
+保持原样。Playboard 仅在此字段为 false 时继续消费，其他 pending/requested 立即报
+PLAYBOARD_INTERACTION_REQUIRED；不依赖全局 full_access 猜测，也不自动回答问题。
+
 `gap` 携带 `requested_after_seq / oldest_seq / latest_seq`。
 运行时要求确实存在缺口，且窗口下界不超过 `latest_seq + 1`；JSON Schema 只校验字段形态和数值范围。
 所有序号、代次、数值请求 ID 与期限均要求 JavaScript 安全整数。

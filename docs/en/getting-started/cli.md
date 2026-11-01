@@ -60,6 +60,8 @@ octo-runtime playboard < request.json
 
 An interaction requiring a reply ends with `PLAYBOARD_INTERACTION_REQUIRED`; use the SDK when your application needs to answer approvals or questions. If the Provider cannot start or rejects authentication, check its installation and sign-in under the same OS account. See [Troubleshooting](../guides/troubleshooting.md) for error codes. This local request does not need `octo-cli` or an IM Bot.
 
+When neither top-level `approvalMode` nor Context `octo.security/approval_policy` is supplied, Playboard defaults to `full_access`; the SDK still defaults to `ask`. Explicit policies retain their existing validation. Adapter-owned automatic approvals continue to the real terminal state; their notifications do not prove completion. Questions and elicitation still require external answers, even under `full_access`. Provisioned execution defaults to the CLI process working directory (`process.cwd()`); explicit workspaces and Provider-managed preset directories keep their existing behavior.
+
 Change `payload.type` to select another installed Harness. OpenClaw also needs `provider_agent_id`, for example `main`. OpenCode currently requires approval mode `full_access`, which allows tools without individual approval; review [Provider support](../reference/providers.md) before selecting it.
 
 ## Start Executor Kernel

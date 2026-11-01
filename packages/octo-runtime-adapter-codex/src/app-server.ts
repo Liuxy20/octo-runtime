@@ -1901,11 +1901,20 @@ class CodexAppServerClient {
       timer,
       expiresAt
     });
+    // 自动审批的响应仍由 Driver 写入并确认；pending 只声明外部是否需要回答，
+    // 不能让消费者将“正在自动处理”误判为已批准或执行完成。
+    const responseRequired = this.#interactive || kind !== "approval";
     if (this.#native) {
       this.#queue.push({ kind: "native", messageKind: "request", payload: message });
       this.#queue.push({
         kind: "control",
-        control: { type: "interaction", requestId: id, status: "pending", expiresAt }
+        control: {
+          type: "interaction",
+          requestId: id,
+          status: "pending",
+          expiresAt,
+          responseRequired
+        }
       });
     } else {
       const display = displaySafeInteractionRequest(method, params);
@@ -1915,6 +1924,7 @@ class CodexAppServerClient {
         payload: {
           interactionId,
           kind,
+          responseRequired,
           executionInstanceId: this.invocation.invocationId,
           expiresAt: new Date(expiresAt).toISOString(),
           request:

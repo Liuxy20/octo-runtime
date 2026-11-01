@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 166：Playboard 自动审批](tasks/166-playboard-auto-approval/brief.md)：仅 CLI 默认 full_access，自动审批与外部回答分离；[验证](tasks/166-playboard-auto-approval/validation.md)记录 19 项手动专项、全量及真实 Codex 两模式结果，等待验证审查。
+
 当前修复：[REST 使用 Manager 生效凭据](tasks/channel-rest-manager-credentials/brief.md)、[长任务跨连接恢复后的最终回复](tasks/channel-reconnect-final-delivery/brief.md)、[切网后 REST 进度卡继续更新](tasks/channel-rest-card-lifetime/brief.md)。
 
 当前实现基准为 Git `df63c8f` 与本次工作树。当前合同依据源码核对，历史证据独立记录；不把旧设计或曾经通过的测试当作现有功能。工程说明使用中文。

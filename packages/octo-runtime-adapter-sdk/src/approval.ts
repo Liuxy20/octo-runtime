@@ -141,6 +141,8 @@ export class AcpApprovalBridge {
       payload: {
         interactionId,
         kind: "approval",
+        // 自动响应仍须等待 responseWritten 确认；此字段只说明回答的所有者。
+        responseRequired: !automatic,
         executionInstanceId: this.request.invocationId,
         expiresAt: new Date(expiresAt).toISOString(),
         request: {

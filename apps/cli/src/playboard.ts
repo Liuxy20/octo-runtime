@@ -71,6 +71,18 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("playboard stdin must contain one JSON input object");
   const input = identifyInvokeInput(value as InvokeInput);
+  // full_access 是本 CLI 宿主的缺省策略；显式策略（包括非法值）交给共享入口校验，
+  // 不覆盖 Context，也不改变 SDK 的 ask 默认值。
+  if (
+    !Object.hasOwn(input, "approvalMode") &&
+    !(
+      Array.isArray(input.contexts?.items) &&
+      input.contexts.items.some(
+        (item) => item?.namespace === "octo.security" && item.name === "approval_policy"
+      )
+    )
+  )
+    input.approvalMode = "full_access";
   const profile = options.profile ?? "default";
   const home = options.home ?? defaultRuntimeHome(options.env);
   runtimePaths(home, profile); // Validate the selected profile before starting resources.
@@ -130,8 +142,11 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
         ("kind" in frame &&
           frame.kind === "control" &&
           frame.control.type === "interaction" &&
-          frame.control.status === "pending") ||
-        (!("kind" in frame) && frame.type === "interaction.requested")
+          frame.control.status === "pending" &&
+          frame.control.responseRequired !== false) ||
+        (!("kind" in frame) &&
+          frame.type === "interaction.requested" &&
+          frame.payload.responseRequired !== false)
       ) {
         throw new Error(
           "PLAYBOARD_INTERACTION_REQUIRED: one-shot stdin cannot answer provider interactions"

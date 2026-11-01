@@ -362,7 +362,10 @@ for (const protocolMode of ["native", "canonical"]) {
   });
   test(`${protocolMode} pending interaction fails without hanging or auto-approving`, async (t) => {
     const settings = await fixture(t);
-    const result = await execute(settings, input("approval", { protocol_mode: protocolMode }));
+    const result = await execute(
+      settings,
+      input("approval", { protocol_mode: protocolMode, approvalMode: "ask" })
+    );
     assert.equal(result.code, 1);
     assert.match(result.stderr, /PLAYBOARD_INTERACTION_REQUIRED/);
     assert.ok(result.frames.length > 0);
@@ -405,7 +408,7 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
     for (const [request, expected] of [
       [echoInput("normal"), "completed"],
       [echoInput("fail"), "failed"],
-      [input("approval", { protocol_mode: "canonical" }), "pending"]
+      [input("approval", { protocol_mode: "canonical", approvalMode: "ask" }), "pending"]
     ]) {
       const result = await execute(settings, request, { cleanupFailure, env });
       assert.notEqual(result.code, 0, result.stderr);

@@ -58,6 +58,8 @@ AgentExecutor.invoke、worker RPC 和公开 KernelClient.invoke 使用相同 inp
 
 `signal` 不属于 JSON，通过 `invoke(input, {signal})` 的本地环境传入。CLI/HTTP 自行产生取消信号，body.signal 拒绝。内部 protocolVersion 固定为 2，其余原 InvokeRequest 字段均有上表映射。调用方的身份、权限、租约和 mandatory 约束仍在原边界校验。
 
+Playboard 是宿主默认值例外：顶层 approvalMode 与 Context approval_policy 均省略时，仅在 CLI 入口补 full_access。显式非法值及冲突继续拒绝，共享解析器和 SDK 仍默认 ask。普通执行缺省 cwd 为 CLI process.cwd()，不使用临时 Kernel 目录；preset 保留 Provider 管理目录。
+
 ## 多模态 Part
 
 | 字段 | 含义 |
