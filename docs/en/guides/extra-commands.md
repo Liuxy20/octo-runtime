@@ -73,16 +73,10 @@ Legacy root-level `octo-runtime extraset <extra>` / `extraget <extra>` remain hi
 Complete Gateway and WeCom JSON examples are in [CLI setup](../getting-started/cli.md). Both include `config.bots[].adapter.model` and `effort`: either may be omitted to use the selected Harness framework’s own defaults. `configure` preserves existing values when flags are omitted; to restore Harness defaults, remove the corresponding fields from a full declaration and save it with `extraset`.
 
 ```sh
-octo-runtime channel-gateway extraset \
-  < channel-gateway-declaration.json
 octo-runtime channel-gateway extraget
 
-octo-runtime channel-wecom extraset \
-  < channel-wecom-declaration.json
 octo-runtime channel-wecom extraget
 
-octo-runtime webui extraset \
-  < webui-declaration.json
 octo-runtime webui extraget
 ```
 

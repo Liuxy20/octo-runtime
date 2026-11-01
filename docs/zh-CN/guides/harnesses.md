@@ -6,6 +6,27 @@ Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、�
 
 运行已安装的 Runtime CLI 或 SDK 需要 Node.js **24.x 或 26.x**（`^24.0.0 || ^26.0.0`），这不是仅针对源码编译的要求。Node.js 22 不在支持范围内，请先升级到 Node.js 24。
 
+## Harness 专题
+
+每个内置 Harness 均有独立的安装、认证、Channel Gateway 样例和代理说明。先读[完整 Gateway 声明与代理隔离](harnesses/channel-gateway.md)，再选择框架；不要将 Antigravity 的实测结果视为其他框架的验收。
+
+- [Codex](harnesses/codex.md)
+- [Claude Code](harnesses/claude-code.md)
+- [CodeBuddy](harnesses/codebuddy.md)
+- [Hermes Agent](harnesses/hermes.md)
+- [Kimi Code](harnesses/kimi-code.md)
+- [MiniMax Code](harnesses/mcode.md)
+- [Qoder CLI](harnesses/qodercli.md)
+- [Qoder CN CLI](harnesses/qoderclicn.md)
+- [OpenCode](harnesses/opencode.md)
+- [OpenClaw](harnesses/openclaw.md)
+- [ZCode](harnesses/zcode-gui.md)
+- [Antigravity](harnesses/antigravity.md)
+- [DeepSeek Harness](harnesses/dsh.md)
+- [Grok Build](harnesses/grok-build.md)
+
+通用 ACP 工厂不是独立 Harness，也未在默认 CLI 注册。自定义 Harness 通过工厂和清单接入，详见[Adapter 开发指南](../../../.octospec/guides/adapter-authoring.md)；不能仅把 Bot 的 adapter_type 改成 acp 就认为已安装。
+
 ## 选择 Harness
 
 每项简述安装配置方式，并附官网链接。“Runtime 启动方式”记录当前源码默认使用的命令，协议参数和任务内容由 Runtime 提供。
@@ -20,7 +41,7 @@ Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、�
 | `mcode`       | `mcode acp`                                                               | 按 [MiniMax Code 官方安装指南](https://github.com/MiniMax-AI/minimax-code#readme)安装，运行 `mcode login`，国际账号则使用 `mcode login --region global`。模型在 MCode 中选择，当前 Adapter 不支持逐轮显式覆盖模型。                                  |
 | `qodercli`    | `qodercli --acp`                                                          | 按 [Qoder CLI 官方指南](https://docs.qoder.com/cli/installation)安装并登录。新版安装使用 `qoder` 命令，而当前 Adapter 查找 `qodercli`；请使用兼容安装，或提供一个将参数转发给支持 `--acp` 版本的可执行包装程序。                                     |
 | `qoderclicn`  | `qoderclicn --acp`                                                        | 按 [Qoder CN 官方指南](https://docs.qoder.cn/cli/installation)安装中国区版本并登录。确保 Runtime 能执行支持 ACP 的 `qoderclicn`，上游发行方式变化时需核对实际命令名。                                                                                |
-| `opencode`    | `opencode run --format json --thinking --auto …`                          | 按[官方指南](https://dev.opencode.ai/docs/)安装兼容的 OpenCode CLI，并在交互界面通过 `/connect` 配置模型账号。请确认所装版本支持这些参数，当前 Adapter 只接受 `full_access` 审批模式。                                                               |
+| `opencode` | full_access 用 `opencode run …`；ask 用 `opencode acp` | 按[官方指南](https://dev.opencode.ai/docs/)安装 `>=2.1.3 <3` 的 OpenCode，并通过 `/connect` 配置模型账号。不支持 assisted；具体参数见 [OpenCode 专题](harnesses/opencode.md)。 |
 | `openclaw`    | 连接已运行的 Gateway                                                      | 按 [OpenClaw 官方入门指南](https://docs.openclaw.ai/start/getting-started)安装、完成初始化并启动 Gateway。配置 Runtime 连接并指定 `provider_agent_id`，例如 `main`；启动 Executor Kernel 不会同时启动该 Gateway。                                    |
 | `zcode-gui`   | ZCode Desktop 内置客户端                                                  | 安装 [ZCode Desktop](https://zcode.z.ai/cn/docs/install)，在应用中配置模型账号。Adapter 依次检查 `ZCODE_BIN`、`PATH` 和桌面安装目录，未能自动识别客户端时可设置 `ZCODE_BIN`。                                                                        |
 | `antigravity` | `agy` 的 stream-json 无头模式                                             | 按 [Antigravity 官方指南](https://antigravity.google/docs/getting-started?tab=cli)安装 CLI，先交互运行一次 `agy` 完成认证。确保 Runtime 的 `PATH` 能找到该可执行文件，所需 CLI 能力见[无头模式文档](https://antigravity.google/docs/cli/headless/)。 |

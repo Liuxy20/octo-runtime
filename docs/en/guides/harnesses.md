@@ -6,6 +6,27 @@ A Harness is the Agent program behind an Adapter: it manages model calls, tools,
 
 Running the installed Runtime CLI or SDK requires Node.js **24.x or 26.x** (`^24.0.0 || ^26.0.0`), not just when compiling from source. Node.js 22 is unsupported; upgrade to Node.js 24 first.
 
+## Harness Topics
+
+Each bundled Harness has a topic covering installation, authentication, a Channel Gateway example, and proxy scope. Start with [complete Gateway declarations and proxy isolation](harnesses/channel-gateway.md), then choose a Harness. Antigravity acceptance does not establish acceptance for another Harness.
+
+- [Codex](harnesses/codex.md)
+- [Claude Code](harnesses/claude-code.md)
+- [CodeBuddy](harnesses/codebuddy.md)
+- [Hermes Agent](harnesses/hermes.md)
+- [Kimi Code](harnesses/kimi-code.md)
+- [MiniMax Code](harnesses/mcode.md)
+- [Qoder CLI](harnesses/qodercli.md)
+- [Qoder CN CLI](harnesses/qoderclicn.md)
+- [OpenCode](harnesses/opencode.md)
+- [OpenClaw](harnesses/openclaw.md)
+- [ZCode](harnesses/zcode-gui.md)
+- [Antigravity](harnesses/antigravity.md)
+- [DeepSeek Harness](harnesses/dsh.md)
+- [Grok Build](harnesses/grok-build.md)
+
+The generic ACP factory is not a separate Harness or a default CLI registration. Integrate a custom Harness through the factory and a manifest; see [Adapter authoring](../../../.octospec/guides/adapter-authoring.md). Setting a Bot's adapter_type to acp alone does not install it.
+
 ## Choose a Harness
 
 Each row gives a short setup summary and the official documentation. The launch column records this source revision's default command; Runtime supplies the protocol flags and task content.
@@ -20,7 +41,7 @@ Each row gives a short setup summary and the official documentation. The launch 
 | `mcode`       | `mcode acp`                                                               | Install MiniMax Code using its [official installation guide](https://github.com/MiniMax-AI/minimax-code#readme), then run `mcode login` or `mcode login --region global` for the matching account. Select its model inside MCode; this Adapter does not support an explicit per-invocation model override.     |
 | `qodercli`    | `qodercli --acp`                                                          | Follow the [Qoder CLI installation and sign-in guide](https://docs.qoder.com/cli/installation). New installations use the `qoder` command, while this Adapter expects `qodercli`; use a compatible installation or an executable wrapper forwarding arguments to a version that supports `--acp`.              |
 | `qoderclicn`  | `qoderclicn --acp`                                                        | Install and sign in to the China distribution using the [Qoder CN guide](https://docs.qoder.cn/cli/installation). Ensure Runtime can execute `qoderclicn` with ACP support; verify the installed command name because upstream distributions can change.                                                       |
-| `opencode`    | `opencode run --format json --thinking --auto …`                          | Install the compatible OpenCode CLI and configure a model account through `/connect`, following the [official guide](https://dev.opencode.ai/docs/). Check support for these flags in the installed version; the current Adapter only accepts approval mode `full_access`.                                     |
+| `opencode` | full_access uses `opencode run …`; ask uses `opencode acp` | Install OpenCode `>=2.1.3 <3` using the [official guide](https://dev.opencode.ai/docs/) and configure a model account with `/connect`. assisted is unsupported; see the [OpenCode topic](harnesses/opencode.md) for launch details. |
 | `openclaw`    | Connects to an existing Gateway                                           | Install OpenClaw, complete onboarding, and start its Gateway using the [official getting-started guide](https://docs.openclaw.ai/start/getting-started). Configure the Runtime connection and specify `provider_agent_id`, such as `main`; starting Executor Kernel does not start that Gateway.               |
 | `zcode-gui`   | ZCode Desktop's embedded client                                           | Install [ZCode Desktop](https://zcode.z.ai/cn/docs/install) and configure the model account in the application. The Adapter checks `ZCODE_BIN`, then `PATH`, then desktop installation locations; use `ZCODE_BIN` if the client is not detected.                                                               |
 | `antigravity` | `agy` in stream-json headless mode                                        | Install Antigravity CLI using the [official setup guide](https://antigravity.google/docs/getting-started?tab=cli), then run interactive `agy` once to authenticate. Keep the executable on Runtime's `PATH`; see the [headless guide](https://antigravity.google/docs/cli/headless/) for required CLI support. |

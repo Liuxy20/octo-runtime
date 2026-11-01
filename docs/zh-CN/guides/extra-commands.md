@@ -75,16 +75,10 @@ octo-runtime channel-gateway extraset <<< '{
 Gateway 和 WeCom 的完整 JSON 示例见 [CLI 入门](../getting-started/cli.md)，均列出 `config.bots[].adapter.model` 和 `effort`。这两项都可省略，省略时使用所选 Harness 框架本身的默认值。`configure` 更新时省略参数会保留已有值；若要恢复 Harness 默认值，应从完整声明中删除对应字段，再通过 `extraset` 保存。
 
 ```sh
-octo-runtime channel-gateway extraset \
-  < channel-gateway-declaration.json
 octo-runtime channel-gateway extraget
 
-octo-runtime channel-wecom extraset \
-  < channel-wecom-declaration.json
 octo-runtime channel-wecom extraget
 
-octo-runtime webui extraset \
-  < webui-declaration.json
 octo-runtime webui extraget
 ```
 

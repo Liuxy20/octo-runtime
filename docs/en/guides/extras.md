@@ -52,6 +52,10 @@ const extra = createGatewayExample(process.env, asyncLoader);
 
 Choose `asyncLoader` or `syncLoader` for the last argument. The synchronous form returns `ContextItem[]`; the asynchronous form returns a Promise and passes the cancellation signal to file IO. Both construct `octo.control/instructions` with `payload.entries`, outside the reserved `extra.im` namespace. The application must initialize and close `extra` as shown in the runnable file. Updating the file or the variable read by the synchronous closure affects the next task without reconnecting. Replacing configuration or the function reference still requires closing and recreating the whole Extra.
 
+## Proxy Only the Provider
+
+Configure `octo.execution/envs` in the selected Bot's `context.items` to inject proxy variables into its Provider process without changing the Extra's environment. See [Gateway proxies for Harnesses](harnesses/channel-gateway.md) for complete declarations, reload steps, non-TUN limits, and the OpenClaw exception. Global host exports do not provide this isolation.
+
 ## Load Business Data Each Turn
 
 ```mermaid

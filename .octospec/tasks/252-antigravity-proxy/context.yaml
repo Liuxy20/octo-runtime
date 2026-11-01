@@ -1,0 +1,38 @@
+task: 252-antigravity-proxy
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/252
+loop_task: ORT-78
+baseline: 3f2a810b61fefeafa6ad1571f68362b73494b85a
+live_verification_baseline: 85411725
+scope: live-verification-and-documentation
+rules_read:
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/engineering.md
+sources:
+  - packages/octo-runtime-extra-channel-gateway/config-schema.json
+  - packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts
+  - packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts
+  - packages/octo-runtime-adapter-sdk/src/environment.ts
+  - packages/octo-runtime-adapter-antigravity/src/index.ts
+  - apps/cli/dist/manifest.json
+  - docs/zh-CN/guides/harnesses.md
+  - docs/zh-CN/guides/extra-commands.md
+  - docs/zh-CN/guides/extras.md
+  - scripts/check-developer-docs.mjs
+  - scripts/verify-codebuddy-model-im-live.mjs
+skills:
+  - octo-shared
+  - octo-loop
+  - octo-messaging
+  - technical-writing-zh
+  - code-review
+decisions:
+  - User authorized testing followed by documentation implementation.
+  - Non-TUN; do not change system proxy settings or running user services.
+  - User subsequently authorized local CI, review, update, commit, push, and PR creation.
+  - No merge or CI expansion authorization.
+  - ZCode V4 model and effort integration is tracked separately in GitHub issue 286.

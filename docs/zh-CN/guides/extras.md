@@ -52,6 +52,10 @@ const extra = createGatewayExample(process.env, asyncLoader);
 
 最后一个参数选择 `asyncLoader` 或 `syncLoader`。同步实现返回 `ContextItem[]`，异步实现返回 Promise，并将取消信号传给文件 IO。两者构造带 `payload.entries` 的 `octo.control/instructions`，不使用保留的 `extra.im` 命名空间。应用仍需按可运行文件中的方式初始化、关闭 `extra`。修改文件或同步闭包读取的变量，下一轮即可取得新内容，无需重连；更换配置或函数引用仍需关闭并重新创建整个 Extra。
 
+## 仅 Provider 使用代理
+
+在对应 Bot 的 `context.items` 中配置 `octo.execution/envs`，可向本轮 Provider 子进程注入代理变量，不修改 Extra 的进程环境。完整声明、导入重启步骤、非 TUN 边界及 OpenClaw 例外见 [Harness 的 Gateway 代理指南](harnesses/channel-gateway.md)。不要在宿主全局 export 代理来实现此隔离。
+
 ## 每轮加载业务数据
 
 ```mermaid

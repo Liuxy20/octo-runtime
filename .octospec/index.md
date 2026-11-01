@@ -59,6 +59,8 @@
 
 ## 当前任务
 
+- [Issue 252：Antigravity 代理与 Harness 专题](tasks/252-antigravity-proxy/brief.md)：非 TUN 下 Bot Context→独立 Kernel→真实 agy 已通过且宿主 env 不变；14 个内置 Harness 双语专题已补充，完整 QA IM 因凭据认证阻塞，实际 Extra TCP 直连未验。[验证与限制](tasks/252-antigravity-proxy/validation.md)。
+
 - [Issue 22：既有 Secret Scan 修复验收与收尾](tasks/ort-10-secret-scan-closeout/brief.md)：45 个原指纹及最新 main 扫描证据已核对；[验收记录](tasks/ort-10-secret-scan-closeout/validation.md)、[审查整改](tasks/ort-10-secret-scan-closeout/review.md)和[journal](journal/shared/2026-11-01-22-secret-scan-closeout.md)记录 PR #275 的元数据补齐。英文评论仍为草稿，原 Issue 未关闭。
 
 - [Issue 145：公共 SDK 示例与协议说明](tasks/145-sdk-protocol-docs/brief.md)：文档与专项实现完成；手动 8 项及相关回归通过，双轴审查已修复。已补强 YAML 强制约束并补齐历史文档；同步最新主线后复验并按授权交付 PR，专项仅手动本地运行。

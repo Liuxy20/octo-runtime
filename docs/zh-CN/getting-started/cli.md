@@ -179,19 +179,12 @@ octo-runtime webui configure \
 
 进阶用法：通过对应 Extra 的 `extraset/extraget` 子命令读写包含 `config`、可选 `module`/`enabled` 的完整 JSON 声明。业务配置操作以该 Extra 自己声明的子命令为准；内置 Extra 不再提供 `config set/get`。
 
-```sh
-octo-runtime channel-gateway extraset \
-  < channel-gateway-declaration.json
-octo-runtime channel-gateway extraget
-```
-
 `extraset` 直接替换整份声明，不按 bot_id 合并，也不保留省略字段。读取命令返回完整对应 JSON（渠道含凭据）。保存后仍需重启已运行的 Extra。
 
 各 Extra 使用各自的配置结构。Octo Gateway 完整声明示例：
 
 ```bash
-octo-runtime channel-gateway extraset <<'JSON'
-{
+octo-runtime channel-gateway extraset <<< '{
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
   "config": {
     "bots": [
@@ -219,8 +212,7 @@ octo-runtime channel-gateway extraset <<'JSON'
       }
     ]
   }
-}
-JSON
+}'
 ```
 
 `model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。

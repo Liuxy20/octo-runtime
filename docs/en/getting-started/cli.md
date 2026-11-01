@@ -177,19 +177,12 @@ Root help retains the version, commit, and build time at the top. Commands prior
 
 Advanced usage: use the Extra’s `extraset/extraget` subcommands for a complete JSON declaration containing `config` and optional `module`/`enabled`. Business commands are defined by each Extra; built-in Extras no longer provide `config set/get`.
 
-```sh
-octo-runtime channel-gateway extraset \
-  < channel-gateway-declaration.json
-octo-runtime channel-gateway extraget
-```
-
 `extraset` replaces the entire declaration without merging by bot_id or preserving omitted fields. Read commands return their complete JSON, including channel credentials. Restart a running Extra after saving.
 
 Each Extra has its own configuration schema. Complete Octo Gateway declaration:
 
 ```bash
-octo-runtime channel-gateway extraset <<'JSON'
-{
+octo-runtime channel-gateway extraset <<< '{
   "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
   "config": {
     "bots": [
@@ -217,8 +210,7 @@ octo-runtime channel-gateway extraset <<'JSON'
       }
     ]
   }
-}
-JSON
+}'
 ```
 
 Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
