@@ -191,6 +191,8 @@ export type {
 export {
   FAILURE_CATALOG,
   classifyFailure,
+  isCodexLocalFailureReason,
+  isCodexLocalFailure,
   failureMessage,
   failurePayload,
   isFailureEnvelope,

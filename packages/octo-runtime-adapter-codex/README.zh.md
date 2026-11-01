@@ -57,6 +57,13 @@ const input = InvokeInput.check({
 - turn 回执、一段文本、子进程退出，都不证明执行成功或清理完成。
 - native 模式下必须同时读 Runtime 控制帧和 Provider 负载。
 
+
+人工审批额度按每次调用的「等待决定」计数，上限 256；第 257 条收到明确拒绝，已接纳审批保持有效。接受合法决定后立即释放额度；自动审批不占此额度。问题与 MCP elicitation 保留独立的 16 条未完成额度。`full_access` 仍使用 Codex `untrusted` 策略，由 Runtime 自动处理支持的审批，以保留动态 MCP 行为。
+
+同一 app-server 的所有 stdin 帧共用有界发送器：普通队列最多 4096 条 / 64 MiB（含在途帧），协议拒绝与中断另留 8 条 / 64 KiB；人工额度拒绝走普通队列，避免正常超额突发挤满控制预留。按序等待写回调，并在 `write=false` 时等待 `drain`；连续 5 秒无写入进展或入队后 30 秒未完成投递即失败。人工决定期限仍为 10 分钟。resolved 仅表示本地写回调成功，不代表 Provider 已读取或工具执行完成。取消会删除尚未发送的响应；已进入管道的字节无法撤回。
+
+本地容量、写入和超时故障使用结构化原因，优先于无关插件 stderr 中的 Unauthorized。native 的 `HOST_EXECUTION_FAILED.failure` 与 canonical 失败保留相同原因；真实 Provider 认证拒绝仍按凭据错误处理。
+
 ## 自有进程清理
 
 默认 POSIX spawn 创建自有独立进程组。清理会 await 有界的 `SIGTERM` → `SIGKILL` 升级及进程组退出确认；app-server leader 已退出但工具仍在时也会清理该组。注入的 `spawnFn` child 不推定拥有进程组，清理目标是直接子进程。

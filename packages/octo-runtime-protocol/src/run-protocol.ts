@@ -1,7 +1,7 @@
 import { assertJsonValue } from "./context.js";
 import { assertExecutionEvidence } from "./actmode.js";
 import { assertCanonicalEvent, assertFailureEnvelope, type CanonicalEvent } from "./index.js";
-import { safeCapacityEvidence } from "./failure.js";
+import { safeCapacityEvidence, isCodexLocalFailure } from "./failure.js";
 import { isStreamCapacityReason } from "./stream-limits.js";
 import type {
   ProtocolMode,
@@ -186,9 +186,11 @@ export function assertHostControl(value: unknown): asserts value is HostControl 
       try {
         assertFailureEnvelope(value.failure);
         const evidence = safeCapacityEvidence(value.failure.params);
+        const localCodex =
+          value.code === "HOST_EXECUTION_FAILED" && isCodexLocalFailure(value.failure);
         if (
-          !isStreamCapacityReason(value.code) ||
-          value.failure.reasonCode !== value.code ||
+          (!localCodex &&
+            (!isStreamCapacityReason(value.code) || value.failure.reasonCode !== value.code)) ||
           !exactKeys(
             value.failure,
             [

@@ -37,6 +37,7 @@ import {
   assertInteractionResponse,
   assertInvokeRequest,
   failurePayload,
+  isCodexLocalFailure,
   isStreamCapacityReason,
   resolveStreamLimitPolicy,
   streamCapacityError,
@@ -988,7 +989,10 @@ export class AgentExecutor {
                     ? nativeFailureCode
                     : "HOST_EXECUTION_FAILED",
               message: String(failure.message),
-              ...(isStreamCapacityReason(nativeFailureCode) ? { failure: failure.failure } : {})
+              ...(isStreamCapacityReason(nativeFailureCode) ||
+              (adapterType === "codex" && isCodexLocalFailure(failure.failure))
+                ? { failure: failure.failure }
+                : {})
             }
           };
         yield {

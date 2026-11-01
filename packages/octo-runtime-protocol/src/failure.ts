@@ -310,6 +310,48 @@ export const FAILURE_CATALOG = Object.freeze({
 
 export type PublicFailureCode = keyof typeof FAILURE_CATALOG;
 
+/** Codex 本地审批/发送失败的封闭原因表；与 Provider 原生 RPC 错误分别处理。 */
+const CODEX_LOCAL_FAILURES: Readonly<Record<string, PublicFailureCode>> = Object.freeze({
+  APPROVAL_PENDING_LIMIT_EXCEEDED: "OH-ADP-3004",
+  CODEX_INTERACTION_PENDING_LIMIT_EXCEEDED: "OH-ADP-3004",
+  INTERACTION_PENDING_LIMIT_EXCEEDED: "OH-ADP-3004",
+  CODEX_INTERACTION_BYTES_EXCEEDED: "OH-ADP-3004",
+  CODEX_STDIN_QUEUE_ITEMS_EXCEEDED: "OH-ADP-3004",
+  CODEX_STDIN_QUEUE_BYTES_EXCEEDED: "OH-ADP-3004",
+  CODEX_STDIN_WRITE_FAILED: "OH-ADP-3004",
+  CODEX_TRANSPORT_FAILED: "OH-ADP-3004",
+  CODEX_STDIN_STALLED: "OH-ADP-3013",
+  CODEX_STDIN_DELIVERY_TIMEOUT: "OH-ADP-3013",
+  INTERACTION_EXPIRED: "OH-ADP-3004",
+  APPROVAL_GRANT_SCOPE_UNSUPPORTED: "OH-ADP-3004",
+  APPROVAL_OPERATION_UNSUPPORTED: "OH-ADP-3004"
+});
+
+export function isCodexLocalFailureReason(value: unknown): value is string {
+  return typeof value === "string" && Object.hasOwn(CODEX_LOCAL_FAILURES, value);
+}
+
+/** native 仅允许中央目录的本地失败；不开放任意 params 或 Provider 自报错误提升。 */
+export function isCodexLocalFailure(failure: FailureEnvelope): boolean {
+  const reason = failure.reasonCode;
+  if (!isCodexLocalFailureReason(reason)) return false;
+  const catalog = FAILURE_CATALOG[CODEX_LOCAL_FAILURES[reason]];
+  return (
+    failure.source.component === "octo-runtime" &&
+    failure.source.adapter === "codex" &&
+    failure.code === CODEX_LOCAL_FAILURES[reason] &&
+    failure.category === catalog.category &&
+    failure.messageKey === catalog.messageKey &&
+    failure.retryable === false &&
+    failure.action.type === "contact_admin" &&
+    failure.action.labelKey === "action.contact_admin" &&
+    failure.retryAfterMs === undefined &&
+    Object.keys(failure.params).length === 0 &&
+    (failure.cause === undefined ||
+      (failure.cause.reasonCode === reason && failure.cause.httpStatus === undefined))
+  );
+}
+
 /** Classify untrusted adapter/provider error data without copying raw messages or secrets into the result. */
 export function classifyFailure(
   input: unknown,
@@ -334,8 +376,10 @@ export function classifyFailure(
           : undefined;
   const classification = channelCode
     ? result(channelCode, evidence.explicitCode!)
-    : classify(evidence, context.defaultDomain);
+    : classify(evidence, context.defaultDomain, context.source?.adapter);
   const catalog = FAILURE_CATALOG[classification.code];
+  const codexLocal =
+    context.source?.adapter === "codex" && isCodexLocalFailureReason(classification.reasonCode);
   return {
     schemaVersion: 1,
     code: classification.code,
@@ -343,21 +387,28 @@ export function classifyFailure(
     category: catalog.category,
     stage: context.stage,
     messageKey: catalog.messageKey,
-    params:
-      classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
+    params: codexLocal
+      ? {}
+      : classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
         ? {
             configParameter: "execution_profile.agent_config.providerOptions.finalizationTimeoutMs"
           }
         : timeoutConfiguration(classification.code, context.source?.adapter),
     retryable:
-      classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT" ? false : catalog.retryable,
+      codexLocal || classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
+        ? false
+        : catalog.retryable,
     ...(catalog.retryAfterMs === undefined ? {} : { retryAfterMs: catalog.retryAfterMs }),
-    action: catalog.action,
+    action: codexLocal
+      ? { type: "contact_admin", labelKey: "action.contact_admin" }
+      : catalog.action,
     diagnosticId: diagnosticIdForContext(context),
     source: context.source ?? { component: "octo-runtime" },
     cause: {
       reasonCode: classification.reasonCode,
-      ...(evidence.httpStatus === undefined ? {} : { httpStatus: evidence.httpStatus })
+      ...(codexLocal || evidence.httpStatus === undefined
+        ? {}
+        : { httpStatus: evidence.httpStatus })
     },
     occurredAt: context.occurredAt ?? new Date().toISOString()
   };
@@ -616,10 +667,13 @@ function failureEvidence(input: unknown): FailureEvidence {
 
 function classify(
   evidence: FailureEvidence,
-  defaultDomain: FailureDomain
+  defaultDomain: FailureDomain,
+  adapter?: string
 ): { code: PublicFailureCode; reasonCode: string } {
   const text = evidence.fingerprint;
   const explicit = evidence.explicitCode?.toUpperCase();
+  if (adapter === "codex" && isCodexLocalFailureReason(explicit))
+    return result(CODEX_LOCAL_FAILURES[explicit], explicit);
   // ACP 已明确声明失败；meta 仅作诊断，不从其中的状态码或文字猜测其他类别。
   if (explicit === "ACP_MODEL_REQUEST_FAILED") return result("OH-PRV-4010", explicit);
   for (const [reason, code] of Object.entries({

@@ -53,6 +53,7 @@ native 帧的 `messageKind` 为 `response / notification / request / message`。
 容量错误控制帧可携带由中央 failure 机制创建的可选 `failure`，保留公开码、诊断编号、时间和安全测量；
 `params` 仅接受 `boundary / measuredBytes / limitBytes / itemCount / limitItems` 白名单。
 canonical 视图将该事实及测量透传到异常，不把 Host 投递失败伪造为 Provider 的 `run.failed` 或成功结果。
+Codex 本地审批/传输错误的 `HOST_EXECUTION_FAILED` 也可携带中央分类的 `failure`：仅接受已登记原因、对应公开码、`octo-runtime`/`codex` 来源、空 params、不可重试及固定 action。不得据此开放任意 HOST_EXECUTION_FAILED 附件。该分支复用现有可选字段，不改变 Schema 或协议版本。
 无 `failure` 的既有错误控制帧仍有效；接收新增字段需同步更新 Schema、生成类型及运行时校验器。
 `lost` 表达执行联系丢失，不能作为成功依据。`isHostTerminal` 只识别 Host 终态控制帧；
 即使 native payload 含有 `result` 或 `completed`，公共层也不据此推断执行终态。

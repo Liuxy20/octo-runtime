@@ -2,6 +2,7 @@
 
 ## 2026-11-01
 
+- [Issue 289 实施](journal/shared/2026-11-01-289-approval-delivery-plan.md)：独立上游 worktree 基于 main@148d737d，按追加授权实现审批额度/投递队列/背压/错误归因并执行两轴审查。全量离线测试通过，真实 Codex shell 观察到 20/27 条待写回突发并成功完成；动态 MCP 两模式各完成 32 次调用。未扩大 CI。
 - [Issue 265 旁路 ask 修订](tasks/265-codex-async-questions/brief.md)：按用户最新意图保留正常完成后的补答资格，公开 SDK 活动 steer / 完成后同会话新 AgentRun；修复 async final_answer 收尾误杀。49 项手动（含 4 项真实）、全量 Node 2389 项及 WebUI 35 项通过，双轴审查确认问题均修复；不扩大 CI，不合并。
 
 - [Issue 132](journal/shared/2026-11-01-132-openclaw-invalid-frames.md)：实现无效帧采样日志与跳过；本地双轴及 verified-review 复审闭环，按后续授权提交并同步 main@dc14c094，29 项严格专项、163 项含 GC 回归复验通过。未扩大 CI；PR 与实际合并状态见 ORT-38 交付评论。

@@ -1,0 +1,55 @@
+task: 289-approval-delivery
+phase: reviewed-pr-ready
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/289
+related_issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/288
+baseline: dc14c094e123886fda3999e7c1ed779f2d060099
+original_baseline: 148d737d3ee14f0453ae5018c563b08d6b21ec5b
+branch: codex/289-approval-delivery-plan
+inherits: octo-spec@1.2.0
+global_source_revision: d456507bbd37cd4e3ac58671d07b89a61af35579
+workflow:
+  - AGENTS.md
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/guides/provider-live-acceptance.md
+skills:
+  - technical-writing-zh
+  - code-review
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/_global/security.md
+  - .octospec/_global/pr.md
+  - .octospec/_global/comprehension-gate.md
+  - .octospec/_global/review.md
+rule_scope:
+  current_changes: implementation, manual verification, contracts and knowledge records
+  anticipated_implementation: codex adapter, protocol failure/control validation, executor-core native error projection
+  broad_rules: context, environment, MCP, OpenClaw, reasoning and session rules read due to path/tag matching; no changes to those contracts planned
+overrides:
+  - User requests an independent upstream worktree from latest main and an OctoSpec plan with readiness above 95.
+  - User subsequently authorized implementation, code-review, commits and a PR; merging is not authorized.
+  - Do not modify the Work App Runtime submodule or consume an unmerged private patch.
+  - Do not expand GitHub CI scope, default test discovery, required checks or gate dependencies.
+  - GitHub issues, PRs and commit messages use English; local planning documents use Chinese.
+  - Preserve configured Git author and add the exact Codex trailer only for subsequently authorized Codex-contributed commits.
+  - Preserve Runtime Home, profile, identity, credentials, provider configuration and application databases.
