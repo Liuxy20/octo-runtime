@@ -114,6 +114,21 @@ The plugin entry point has the form `extra(context, jsonConfig)(dependencies)`. 
 
 Use `ctx.kernel.invoke` to call the shared Kernel, `ctx.onDispose` to register cleanup, `ctx.onStatus` to report business status, and `ctx.log` for diagnostics. Applications manage the plugin through these public APIs without accessing its internals or adding another execution forwarding interface.
 
+## Use Providers or External Services Through Host Dependencies
+
+Querying a model catalog or passing business data to an external service is unrelated to Kernel. The host has two options:
+
+1. **Call the Provider or external service directly**, without Extra.
+2. **Let Extra call a host-injected dependency**, whose implementation queries the Provider or passes data to the external service.
+
+Extra is optional. Users can implement their own lambda or reuse a Provider integration function; the Provider does not need a new extension mechanism. Neither path goes through Kernel.
+
+For example, a model selection Extra can call an injected catalog function to obtain options for the selected official service, proxy, or custom endpoint. To publish that catalog or other business results to an external service, it calls a corresponding publication function. These queries and publications belong to that Extra's business dependencies, not a unified Kernel model catalog API. A Provider can supply an integration implementation without exposing the Adapter instance inside the worker to Extra.
+
+The specific Extra must define and consume the dependency. Once that entry point exists, users only need to supply an implementation. The host selects the implementation and encapsulates configuration, credentials, and authorization; Extra calls it under the business contract and handles results, errors, and cancellation. Functions run in Extra's process and may access external services over the network. They do not belong in JSON or travel through Kernel IPC. The framework does not discover Provider functions or decide sending, retry, and confirmation semantics. Existing dependency shutdown and actual in-flight tracking still apply; callers must pass `signal` explicitly.
+
+This preserves Provider/host ownership of model catalogs while allowing Extra to use real business capabilities. See [Model Catalog and Selection Ownership](../concepts/architecture.md) and the [Extra rules](../../../.octospec/rules/extras.md).
+
 ## Close an Extra
 
 ```mermaid

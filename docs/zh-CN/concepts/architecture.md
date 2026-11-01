@@ -44,6 +44,26 @@ Adapter 与 Extra 由接入入口选择。SDK 宿主原生 import 和组装，�
 
 Provider harness 的登录、授权及凭据准备归使用者、宿主与 harness。Runtime 传递普通执行环境并完成必要的协议握手，包括使用 harness 广告的受支持方式进行 ACP 认证；不检查 Provider 专属认证环境变量或凭据文件，不因某个变量缺失而推断未登录，也不代办登录和凭据刷新。harness 自行解析认证来源并判断认证是否成功，Runtime 如实返回失败。框架自身安全及 Extra 显式业务凭据合同仍按各自规则执行。
 
+## 模型目录与选模归属
+
+模型目录等业务数据可以由宿主直接查询和传递，也可以由 Extra 调用宿主通过 `dependencies` 注入的函数来处理。两种方式均与 Kernel 无关，Extra 不是必经入口，也不要求 Provider 增加依赖扩展机制。接入方式见[Extra 指南](../guides/extras.md)。
+
+模型目录由 Provider 及其实际后端定义；接入宿主选择目录来源并管理展示。Runtime 负责按执行合同传递显式模型、完成原生适配并返回实际结果，不提供统一模型/effort 目录服务。
+
+例如，同一个 Codex harness 和 Adapter 可能连接官方服务、第三方代理站或自定义 endpoint。不同后端或账号可能使用不同的模型 ID、别名、默认值和推理选项。兼容同一种执行协议不代表提供模型枚举接口，官方模型列表也不能代表代理站。不能从 CLI 名称、版本或 Adapter 可用状态推导模型集合。
+
+| 责任方                    | 负责什么                                                                                      |
+| ------------------------- | --------------------------------------------------------------------------------------------- |
+| Provider / 服务或代理后端 | 原生模型标识、可选查询接口及其语义、执行时的真实接受或拒绝                                    |
+| 接入宿主                  | endpoint 和账号配置，选择后端查询、管理员配置或用户输入作为选项来源，管理刷新、失败及界面展示 |
+| Runtime / Adapter         | 显式执行输入的原生映射、必要协议校验和结果返回                                                |
+
+宿主没有可靠目录时，可以按产品需要允许手工输入、只展示 Provider 默认或说明目录不可用。Runtime 不通过静态列表、私有凭据扫描、额外登录或探测会话补齐目录，也不把目录缺失等同于不能执行显式模型。
+
+这不取消 Provider 原生协议的约束。例如 CodeBuddy 在执行会话中要求按原生广告目录选择并确认模型，Adapter 仍须执行这些步骤；但会话内校验不构成公共目录服务。省略模型时保留既有默认语义，effort 仍按既有映射报告实际应用情况，不承诺目录内模型对当前账号一定可调用。
+
+[Issue 193](https://github.com/Mininglamp-OSS/octo-runtime/issues/193) 是这一边界的典型案例：客户端需要模型选择器，不意味着执行基础设施需要生产模型目录。此责任划分不因某个 Provider 新增查询接口而自动改变。工程约束见 [Octospec 架构规则](../../../.octospec/rules/architecture.md)，IPC 边界见 [Kernel IPC](../reference/kernel-ipc.md)。
+
 ## Channel Context 与历史
 
 Channel Gateway 负责 IM Context 的稳定规则、当前消息事实和历史查询。Host SDK、Kernel、Core、renderer 与 Provider Adapter 消费已提交输入，不自行选择或去重业务历史；OpenClaw、Codex、Claude Code 共用该责任边界。

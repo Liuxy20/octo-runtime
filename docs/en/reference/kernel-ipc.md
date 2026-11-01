@@ -39,7 +39,7 @@ Initialization failure throws `ServiceInitializationError` with the original `ca
 | `cancelInvocation(invocationId, reason?)`          | Cancel an invocation started through invoke on this client; returns `{accepted}`.                                              |
 | `respondInteraction(invocationId, response)`       | Reply to that invocation's canonical interaction.                                                                              |
 | `respondNativeInteraction(invocationId, response)` | Reply to that invocation's Provider-native interaction.                                                                        |
-| `status()` / `list()`                              | Query Kernel/worker state and registered Adapter metadata respectively. Check Provider installation and login separately.      |
+| `status()` / `list()`                              | Query Kernel/worker state or registered Adapter metadata with Provider probe results, respectively. Probing does not establish login or model access. |
 | `close()`                                          | Close client connections without cancelling submitted executions or closing the Kernel service.                                |
 
 Use these lower-level methods only when managing submission and subscription yourself:
@@ -51,6 +51,18 @@ Use these lower-level methods only when managing submission and subscription you
 | `subscribe(ref, afterSeq = 0, signal?)`                   | Read HostFrames after a sequence number. The signal only stops the subscription.                             |
 | `cancel(ref, reason?)`                                    | Cancel by complete ref. The result says whether the request was accepted; read output for the final outcome. |
 | `respond(ref, response)` / `respondNative(ref, response)` | Reply to an interaction by complete ref.                                                                     |
+
+## Model Catalog Boundary
+
+The host queries catalogs and passes business data directly, or lets Extra call a host-injected dependency. Neither path goes through Kernel or requires an additional IPC method.
+
+`adapter.list` / `KernelClient.list()` returns registered Adapter metadata and actual probe information, not a model catalog or proof of account access to a model. Public IPC and Go/Python clients do not own unified model or effort catalog discovery, completion, or maintenance. A catalog is not a missing execution prerequisite.
+
+Hosts and Extras using the public `KernelClient` receive one list contract: registered Adapter metadata and Provider probe results, including `available`, `unavailableReason`, `providerPath`, and `providerVersion`. Only the Adapters assembled into that Kernel are listed. Probe results do not enumerate models or establish login or account authorization.
+
+The integrating host obtains or configures model options for its Provider, actual endpoint, and account. Official services, third-party proxies, and custom endpoints may expose different models or no catalog API while using the same Adapter. The host handles unavailable catalogs and query failures without fabricating successful empty lists or requiring consumers to use Runtime to scan private credentials or start discovery sessions.
+
+Callers continue to express explicit models through existing invoke inputs. Omitting a model retains existing default semantics. Adapter-native selection validation, confirmation, and error reporting still apply; this does not add a Runtime catalog allowlist or dynamic capability admission. See [Model Catalog and Selection Ownership](../concepts/architecture.md).
 
 ## Manage Unfinished Client Invocations
 
@@ -73,7 +85,7 @@ Ordinary requests end the connection after their response. A subscription receiv
 | Wire method                | Params                                                 | Successful result                                                            |
 | -------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
 | `status`                   | `{}`                                                   | KernelStatus including `kernel_instance_id`, `execution_ready`, worker state |
-| `adapter.list`             | `{}`                                                   | Registered Adapter metadata array                                            |
+| `adapter.list`             | `{}`                                                   | Registered Adapter metadata array including `available`, `unavailableReason`, `providerPath`, and `providerVersion` |
 | `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`; receipt is the accepted execution identity  |
 | `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                                   |
 | `agent_run.subscribe`      | `{ref, after_seq}`                                     | Snapshot ACK, then ordered event notifications                               |

@@ -1,0 +1,21 @@
+stage: pr-review-fix
+contract: .octospec/tasks/193-adapter-model-catalog/spec.yaml
+review_head: 1184c04cfe17ed819cd33ef36c0d1cd3d802e6f7
+ci_fix_head: 82a88313ebad8c2c43c2f3267b8084cfb1445a4f
+baseline: a5a32835882deab5e2364b559dd06bf1675c1335
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/extras.md
+workflow_read:
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+decision_sources:
+  - 用户对 Provider/宿主职责、第三方代理站和自定义后端的审查反馈
+  - 用户明确要求刷新 spec、架构约束及 docs，不修改代码

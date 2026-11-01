@@ -1,0 +1,65 @@
+schema: octospec.task-contract/v1
+task: ORT-66
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/193
+status: pr-review-fix
+branch: feat/193-adapter-model-catalog
+review_baseline: 1184c04cfe17ed819cd33ef36c0d1cd3d802e6f7
+ci_fix_baseline: 82a88313ebad8c2c43c2f3267b8084cfb1445a4f
+brief: brief.md
+scope:
+  kind: documentation_only
+  product_code: false
+  public_api: false
+  generated_bindings: false
+  ci_expansion: false
+ownership:
+  provider_backend: native_model_facts_and_actual_execution_acceptance
+  host: endpoint_account_option_sources_refresh_and_presentation
+  runtime_adapter: explicit_execution_mapping_native_validation_and_actual_results
+business_paths:
+  options:
+    - host_calls_provider_or_external_service_directly
+    - optional_extra_consumes_host_injected_dependency
+  kernel_business_rpc: false
+  provider_extension_required: false
+  functions_in_json_or_ipc: false
+preserve:
+  - explicit_model_forwarding_and_omitted_model_defaults
+  - native_session_model_validation_and_confirmation
+  - existing_effort_mapping_and_application_reporting
+  - authentication_and_service_lifecycle
+public_catalog:
+  add_operation: false
+  static_fallback: false
+  credential_scanning: false
+  discovery_sessions: false
+list_contract:
+  core_agent_executor_list: registered_metadata_and_protocol_support_only
+  kernel_adapter_list: worker_list_rpc_calls_agent_executor_describe_with_provider_probes
+  model_enumeration: false
+acceptance:
+  A1: Provider/backend, host, Runtime ownership is explicit in rules and bilingual docs
+  A2: Official service, proxy and custom endpoint differences are explained
+  A3: No permanent claim about a CLI lacking model discovery
+  A4: No catalog API, bindings, static fallback or discovery side effects added
+  A5: Existing execution, defaults, effort and lifecycle contracts preserved
+  A6: Old triage superseded, bilingual semantics and local links consistent
+  A7: Documentation checks and scope verification recorded with actual limitations
+  A8: Brief attachment and workflow outcome recorded in Loop
+  A9: Host direct and optional Extra dependency paths both exclude Kernel business RPC
+verification:
+  evidence: validation.md
+  review: review.md
+  okf_frontmatter_required: true
+  full_okf_lint: .octospec/scripts/lint.py
+  full_developer_docs: pnpm docs:check
+  prerequisite_build: pnpm build
+  scoped_document_links: scripts/lib/developer-doc-links.mjs
+  code_review: source_trace_of_public_and_core_list_entrypoints
+  runtime_evidence: local_kernel_ipc_list_and_running_installation_adapter_list
+  model_invocation_and_native_tests: not_run_documentation_only
+authorization:
+  commit: true
+  push: true
+  update_pr: true
+  merge: false

@@ -21,6 +21,9 @@
 - [Issue 159](journal/shared/2026-11-01-159-live-script-executor.md)：恢复两处 Core 导入、三脚本离线入口；手动 20 项与真实 Codex act-mode/forwarding 通过，双轴审查 0 项。用户授权检查 metadata 并交付 PR，同步主线消除 #267 文档阻塞，复验后交付；IM QA 缺项继续披露，未扩大 CI。
 
 - [Issue 158](journal/shared/2026-11-01-158-launchd-query-ownership.md)：launchd 查询失败传播并保留定义，仅明确缺失可幂等卸载；CLI 错误状态自启 unknown。相关回归 84 通过/13 Windows 跳过，手动专项 22 通过，原生 macOS 1 通过；双轴审查修正后无未解决项，未扩大 CI，未提交或推送。
+- [Issue 193 业务传递案例](tasks/193-adapter-model-catalog/brief.md#经典扩展场景provider-dependency-供-extra-使用)：宿主直接查询/传递，或 Extra 调用宿主注入的 dependency，两条路径均与 Kernel 无关；Extra 可选，不要求 Provider 增加扩展机制。同步架构、Extra 规则和双语文档。
+
+- [Issue 193](journal/shared/2026-11-01-193-model-catalog-ownership.md)：用户明确模型目录事实归 Provider/实际后端、来源与展示归宿主；同一 Adapter 的官方/代理/自定义 endpoint 可能不同，不能将客户端选项需求下沉为 Runtime 统一目录。撤回初次分诊 API 建议，刷新 brief、架构与 Adapter 规则、双语架构和 IPC docs；不修改产品代码或 CI。
 
 - [Issue 263](journal/shared/2026-11-01-263-long-running-invocations.md)：默认整轮预算 24 小时、最大七天，保留独立无响应检测；手动长时、原生协议及真实 DSH 验证通过，隔离既有环境问题后全量通过。修复四份 frontmatter，双轴审查问题闭环；未扩大 CI，未提交或推送，外部宿主验收独立记录。
 

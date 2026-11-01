@@ -49,6 +49,16 @@ CLI `<extra> extraset` 整份替换 <home>/extras/<name>/config.json，POSIX 060
 
 CLI 安装、自启、未安装与显式禁用的行为统一遵循[本地生命周期合同](runtime-lifecycle.md#cli)；Extra 操作指南和仓库 Skill 的示例须与该合同一致。SDK 原生装配不继承 CLI 的系统服务安装要求。
 
+## Provider 与外部服务依赖的经典场景
+
+查询 Provider 或向外部服务传递业务数据与 Kernel 无关：宿主可以在自己的业务代码中直接查询、传递，无需 Extra；也可以在需要 Extra 承载业务时，通过 `dependencies` 注入函数供 Extra 调用。两条路径均不经过 Kernel，Extra 不是必需中间层。
+
+采用 Extra 路径时，宿主可以自定义 lambda，也可复用 Provider 集成模块提供的实现；不要求 Provider 新增 dependency 机制。调用链为 Extra → dependency → Provider/外部服务，例如查询所选代理后端的模型目录，或向外部服务发布业务结果。通用框架不理解模型目录或发布协议。
+
+具体 Extra 定义依赖的输入、输出、错误和副作用语义，并在需要时显式调用；依赖入口已存在时，用户只需提供实现。宿主负责实现来源、配置、凭据和授权；Provider 集成或用户函数负责真实访问。函数留在 Extra 所在进程，不进入 JSON 或 Kernel；不要求把内部 worker 的 Adapter 实例传给 Extra，也不新增通用 dependency 注册中心。结果校验、调用截止和取消由业务调用合同明确；框架沿用下述实际在途和关闭约束，不自动注入 signal 或重试外部写操作。
+
+完整动机见[Issue 193 的架构案例](architecture.md#通过-extra-dependency-使用-provider-或外部服务)。
+
 ## 动态函数与实际在途
 
 loadContexts: (jsonConfig,{signal}) => readonly ContextItem[] | Promise<readonly ContextItem[]> 保持同步/异步合同。每轮任务准备时调用同一函数，读取当前数据；数据变化无需重载连接。原生服务直接注入函数，函数留在服务所在的调用进程，不进入配置或 Kernel。

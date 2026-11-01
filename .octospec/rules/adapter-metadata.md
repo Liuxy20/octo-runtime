@@ -32,6 +32,12 @@ Agent 定义由业务方管理。Adapter 元数据与 probe 分别描述执行�
 
 SDK、全部内置 Adapter、Host 加载与发现已删除标签字段，不再导出标签常量或审批标签转换函数。Codex 的 computer-use 标签专用探测也已删除，见[F4 实现记录](../journal/shared/2026-10-16-remove-computer-use-probe.md)。决定依据见[记录](../journal/shared/2026-10-16-adapter-forwarding-ownership.md)，本地构建和真实 Provider 验收分别记录，不代表远端 Worker 已发布。
 
+## 模型目录不是 Adapter 发现元数据
+
+模型目录归 Provider 及实际服务后端，来源和展示归接入宿主。相同 Adapter 可连接不同官方服务、代理站或自定义 endpoint，不能从 Adapter 类型、版本或安装可用性推导模型、默认值、账号权限或 effort 集合。不得为选择器新增统一模型目录方法、静态模型表或发现投影，也不为补齐列表额外启动探测会话、准备认证或扫描私有凭据。
+
+Adapter 仍按现有执行合同消费显式模型，完成原生映射及必要校验并报告真实拒绝。CodeBuddy 等在本次执行会话中校验原生广告目录的行为继续有效；这是原生选模合同，不是公共目录服务。不得把“没有统一模型白名单”误解为跳过 Provider 要求的模型确认。完整案例和责任划分见[模型目录归 Provider 与宿主](architecture.md#模型目录归-provider-与宿主以-issue-193-为例)。
+
 ## 来源
 
 | 值 | 语义 |

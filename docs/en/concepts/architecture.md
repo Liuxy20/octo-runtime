@@ -44,6 +44,26 @@ Local SDK invocation can use Kernel alone, without an Extra, cloud login, or IM 
 
 Provider harness login, authorization, and credential preparation belong to the user, host application, and harness. Runtime passes the ordinary execution environment and performs required protocol handshakes, including ACP authentication using supported methods advertised by the harness. It does not inspect Provider-specific authentication environment variables or credential files, infer login state from a missing variable, or log in and refresh credentials on the user's behalf. The harness resolves its own credential sources and reports whether authentication succeeds; Runtime reports real failures. This does not change Runtime's own security or an Extra's explicit business credential contract.
 
+## Model Catalog and Selection Ownership
+
+The host can query and pass business data such as model catalogs directly, or let Extra call a function injected through `dependencies`. Neither path involves Kernel. Extra is optional, and the Provider does not need a dependency extension mechanism. See the [Extra guide](../guides/extras.md).
+
+The Provider and its actual backend define the model catalog. The integrating host chooses catalog sources and manages presentation. Runtime forwards explicit model selections under the execution contract, performs native adaptation, and returns actual results; it does not provide a unified model or effort catalog service.
+
+For example, the same Codex harness and Adapter may connect to an official service, a third-party proxy, or a custom endpoint. Backends and accounts may differ in model IDs, aliases, defaults, and reasoning options. Compatibility with an execution protocol does not guarantee a model enumeration API, and an official catalog does not describe every proxy. CLI identity, version, and Adapter availability cannot establish the model set.
+
+| Owner                               | Responsibility                                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider / service or proxy backend | Native model identifiers, any query API and its semantics, actual acceptance or rejection during execution                                                      |
+| Integrating host                    | Endpoint and account configuration; choosing backend queries, administrator configuration, or user input as option sources; refresh, failures, and presentation |
+| Runtime / Adapter                   | Native mapping of explicit execution inputs, required protocol validation, and result reporting                                                                 |
+
+Without a reliable catalog, the host can allow manual entry, offer only the Provider default, or report that the catalog is unavailable. Runtime must not fill the gap with static lists, private credential scans, additional login, or discovery sessions. An unavailable catalog does not by itself prevent execution with an explicit model.
+
+Native protocol requirements still apply. For example, CodeBuddy requires selection and confirmation against the catalog advertised within an execution session; the Adapter must preserve those steps. Session validation does not establish a public catalog service. Omitting a model keeps existing default semantics, and effort follows existing mappings and actual application reporting. A catalog entry does not guarantee account access.
+
+[Issue 193](https://github.com/Mininglamp-OSS/octo-runtime/issues/193) illustrates the boundary: a client needs a model selector, but that does not make the execution infrastructure responsible for producing a model catalog. A new query API in one Provider does not automatically change this ownership. See the [Octospec architecture rule](../../../.octospec/rules/architecture.md) and the [Kernel IPC catalog boundary](../reference/kernel-ipc.md).
+
 ## Channel Context and History
 
 Channel Gateway owns IM Context preparation: stable rules, current-message facts, and history retrieval. Host SDK, Kernel, Core, the renderer, and Provider Adapters consume the supplied input without choosing or deduplicating business history. This boundary is shared by OpenClaw, Codex, and Claude Code.

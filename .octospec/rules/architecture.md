@@ -55,7 +55,7 @@ OpenClaw 远端产物转换为 Gateway 可读取 HTTPS 资源的方案已接受�
 #46 将唯一执行实现收敛到 `octo-runtime-executor-core` 的 `AgentExecutor`。主发行物公开
 `@mininglamp-oss/octo-runtime/executor-core`，宿主可显式注册 Adapter 并直接执行，不需要
 Kernel、IPC、Extra、云端账号或进程信号接线。默认链路由 executor-kernel 监督独立
-worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 AdapterHost 类别名已删除。
+worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 AgentExecutor 类别名已删除。
 
 直接执行与宿主共享进程故障域，不能隔离 process.exit、OOM 或同步阻塞。Core 负责输入准备、
 本轮固定渲染、接纳身份、执行、交互路由、取消和正常终态；不加载业务、安装 Provider 或保存
@@ -147,6 +147,47 @@ octo-cli 是 Octo 场景的重要产品能力。用户明确：对使用 Octo Ru
 6. 每项默认、降级、重试和自动动作依据哪个明确合同及当前授权？没有依据的动作从 Runtime 方案中移除，归还业务方决定。
 
 任一职责无法说明时，不得以“体验更完整”“框架统一管理”或“不加会出问题”为由扩大 Runtime 职责。范围检查不要求用户重新批准已授权的常规工作，应在现有边界内推进。两次误判及修正见[产品意图归属记录](../journal/shared/2026-10-16-product-intent-ownership.md)。
+
+## 模型目录归 Provider 与宿主：以 Issue 193 为例
+
+2026-11-01 用户明确：模型目录的提供与真实性归 Provider 及其实际后端，目录来源、维护和选项展示归接入宿主；Runtime 不承担统一模型目录的发现、补齐或维护。这是执行基础设施不得代替产品决策的具体约束，适用于 SDK、Kernel、Core、Adapter 及生成的原生客户端。
+
+### 为什么不能从 Adapter 推导模型目录
+
+同一个 Codex 等 Provider harness、同一 Adapter 和版本，可能由宿主配置为连接官方服务、第三方代理站或自定义 endpoint。实际模型 ID、别名、账号权限、默认模型和推理选项可能不同；协议兼容不保证提供目录查询，官方目录也不能代表代理后端。Provider CLI 是否存在查询命令、某版本协议是否提供查询方法，必须按实际接入核实，不能写成永久假设。
+
+[Issue 193](https://github.com/Mininglamp-OSS/octo-runtime/issues/193) 希望通过 Kernel IPC 返回模型及 effort 目录，其客户端展示诉求有价值，但“消费者需要列表”不能推出“Runtime 必须生产或发现列表”。`adapter.list` 描述宿主已装配的执行实现及实际探测状态，不是后端模型目录。某个 Provider 的执行响应含有模型选项，也不能推出其他 Provider 或后端具备相同的独立只读查询能力。
+
+公共 Kernel `adapter.list` / `KernelClient.list()` 经 worker RPC 调用 Core 的 `AgentExecutor.describe()`，因此包含 Provider 探测结果；进程内 `AgentExecutor.list()` 仅返回注册元数据与协议支持。不能因方法同名而混淆这两个入口，也不能将 Provider 安装可用性解释为模型目录或账号权限。
+
+| 责任方 | 模型目录相关责任 |
+| --- | --- |
+| Provider harness / 实际服务或代理后端 | 定义并解释原生模型标识、查询接口及其可见范围；按实际协议接受或拒绝执行，不要求其必然提供目录接口 |
+| 接入宿主（CLI、桌面或业务服务） | 选择 endpoint、账号和配置，决定从后端接口、管理员配置或用户输入取得选项，管理来源、刷新和展示，并解释目录不可得或查询失败 |
+| Runtime / Adapter | 消费显式执行输入，完成必要的原生映射、协议校验和真实结果返回；不为宿主补造目录、推导账号权限或选择产品默认模型 |
+
+### 必须保留的边界
+
+- 不为模型选择器在公共 Kernel IPC、Adapter metadata 或 Go/Python 绑定中建立统一模型/effort 目录合同；不能以“只读”“Provider-neutral”或可选接口为理由改变归属。
+- 不从 Adapter 名称、安装版本、官方静态列表或一次握手推断任意后端的模型集合；不得为补齐目录额外扫描私有凭据、触发登录/认证准备、创建探测会话或发送推理请求。
+- 宿主需要目录时，在自己的 Provider 集成边界选择来源并处理权限、失败与缓存。没有可靠目录时，由宿主决定允许手工输入、只提供 Provider 默认或显示目录不可用；不伪造成功空列表，不将这一状态解释为 Runtime 执行不可用。
+- 显式模型按现有执行合同传递，省略模型时沿用既有默认语义。Runtime 不以自建目录为白名单，也不因目录不可得拒绝本来有效的显式调用；必要的原生协议约束仍然有效。例如 CodeBuddy 在执行会话中按原生广告目录确认模型属于适配责任，不应绕过，也不因此对外扩展为目录服务。
+- 原生模型所支持的 effort、Runtime 已实现的参数映射和本次实际应用结果分别判断。现有四挡映射与未应用提示遵守[思考强度规则](reasoning.md)，不根据目录隐藏选项、增加动态能力准入或擅自改变执行默认。
+
+审查类似需求时，先确认数据由谁定义、实际 endpoint 与账号由谁配置、Provider 是否真的提供查询合同，以及缺少目录是否妨碍执行。消费方缺少产品选项来源，不构成将 Provider/宿主职责下沉到 Runtime 的依据。后续即使某个 Provider 新增目录接口，仍由宿主按具体集成需求使用，不自动扩展 Runtime 公共合同。
+
+### 通过 Extra dependency 使用 Provider 或外部服务
+
+模型目录或其他业务数据的查询、传递与发布与 Kernel 无关。宿主按实际需要选择以下两种方式，二者都不经过 Kernel：
+
+1. **宿主直接传递**：宿主自己的业务代码查询 Provider 或将数据传给外部服务，无需 Extra。
+2. **通过 Extra dependency 传递**：业务逻辑由 Extra 承载时，宿主通过既有 `extra(context, jsonConfig)(dependencies)` 注入函数，Extra 调用该函数完成查询或传递。
+
+Extra 是可选的业务组织方式，不是访问外部服务的必经入口。函数可以由宿主自行实现，也可复用 Provider 集成模块；不要求 Provider 新增 dependency 机制。结果和错误按对应业务合同处理。
+
+以模型目录为例，宿主可注入 Provider 集成模块提供的查询函数，Extra 在需要选项时调用；如需将目录或其他业务结果交给外部服务，则注入相应的发布函数，由其实现具体传输。具体 Extra 必须先定义并消费该依赖；已有依赖入口时，用户只需提供实现，框架不自动发现函数，也不自动调用任意 Provider 方法。这里的 Provider 实现可以是宿主进程中的集成对象，不要求暴露 worker 内的 Adapter 实例。
+
+依赖接口和数据语义归具体 Extra 的业务合同，Provider 集成实现负责实际协议，宿主负责装配和授权；通用 Extra 框架只负责注入及既有生命周期管理。不把函数放入 JSON、不通过 Kernel 传输函数，不为这一场景新增通用 Provider dependency 注册中心或 Kernel 业务 RPC。函数在 Extra 所在进程调用，具体实现可以自行访问外部服务；有副作用的发送、重试和确认语义必须由该业务合同明确，框架不据此自动重试。取消、超时和实际在途遵守[Extra 依赖规则](extras.md#动态函数与实际在途)。
 
 ## 配置来源归宿主，SDK 消费配置值
 
