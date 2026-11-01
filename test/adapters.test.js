@@ -1202,98 +1202,116 @@ test("text adapters prefer the exact modelInput over the display prompt", async 
   assert.equal(openclaw.agentParams.message, "MODEL_INPUT_OK");
 });
 
-test("OpenClaw Gateway client authenticates, handles accepted/final responses, aborts, and rejects malformed JSON", async (t) => {
-  const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
-  await once(server, "listening");
-  t.after(() => new Promise((resolve) => server.close(resolve)));
-  const address = server.address();
-  assert.notEqual(typeof address, "string");
-  const requests = [];
-  let connectionRequestId;
-  server.on("connection", (socket, request) => {
-    connectionRequestId = request.headers["x-request-id"];
-    socket.send(
-      JSON.stringify({
-        type: "event",
-        event: "connect.challenge",
-        payload: { nonce: "fixture-nonce", ts: Date.now() }
-      })
-    );
-    socket.on("message", (data) => {
-      const frame = JSON.parse(Buffer.from(data).toString("utf8"));
-      requests.push(frame);
-      if (frame.method === "connect") {
-        assert.equal(frame.params.auth.token, "fixture-token");
-        assert.ok(
-          frame.params.caps.includes("exec-approvals"),
-          "Gateway must recognize this CLI as an approval recipient"
+test(
+  "OpenClaw Gateway client authenticates, handles accepted/final responses, aborts, and skips malformed JSON",
+  { timeout: 5000 },
+  async (t) => {
+    const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+    let client;
+    // 先关客户端，再回收服务端；断言失败时也不能等待仍打开的 socket。
+    t.after(async () => {
+      try {
+        await client?.close();
+      } finally {
+        for (const socket of server.clients) socket.terminate();
+        await new Promise((resolve, reject) =>
+          server.close((error) => (error ? reject(error) : resolve()))
         );
-        assert.match(frame.params.device.signature, /^[A-Za-z0-9_-]+$/);
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: { type: "hello-ok", protocol: 4, features: { methods: [], events: [] } }
-          })
-        );
-      } else if (frame.method === "stream") {
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: { status: "accepted", runId: "run-fixture" }
-          })
-        );
-        socket.send(
-          JSON.stringify({
-            type: "res",
-            id: frame.id,
-            ok: true,
-            payload: { status: "ok", runId: "run-fixture" }
-          })
-        );
-      } else if (frame.method === "malformed") {
-        socket.send("{");
       }
     });
-  });
+    await once(server, "listening");
+    const address = server.address();
+    assert.notEqual(typeof address, "string");
+    const requests = [];
+    let connectionRequestId;
+    server.on("connection", (socket, request) => {
+      connectionRequestId = request.headers["x-request-id"];
+      socket.send(
+        JSON.stringify({
+          type: "event",
+          event: "connect.challenge",
+          payload: { nonce: "fixture-nonce", ts: Date.now() }
+        })
+      );
+      socket.on("message", (data) => {
+        const frame = JSON.parse(Buffer.from(data).toString("utf8"));
+        requests.push(frame);
+        if (frame.method === "connect") {
+          assert.equal(frame.params.auth.token, "fixture-token");
+          assert.ok(
+            frame.params.caps.includes("exec-approvals"),
+            "Gateway must recognize this CLI as an approval recipient"
+          );
+          assert.match(frame.params.device.signature, /^[A-Za-z0-9_-]+$/);
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok: true,
+              payload: { type: "hello-ok", protocol: 4, features: { methods: [], events: [] } }
+            })
+          );
+        } else if (frame.method === "stream") {
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok: true,
+              payload: { status: "accepted", runId: "run-fixture" }
+            })
+          );
+          socket.send(
+            JSON.stringify({
+              type: "res",
+              id: frame.id,
+              ok: true,
+              payload: { status: "ok", runId: "run-fixture" }
+            })
+          );
+        } else if (frame.method === "malformed") {
+          socket.send("{");
+          socket.send(
+            JSON.stringify({ type: "res", id: frame.id, ok: true, payload: { status: "ok" } })
+          );
+        }
+      });
+    });
 
-  const client = new OpenClawGatewayClient({
-    url: `ws://127.0.0.1:${address.port}`,
-    token: "fixture-token",
-    device: createOpenClawDeviceIdentity()
-  });
-  t.after(() => client.close());
-  assert.equal((await client.connect()).protocol, 4);
-  assert.match(connectionRequestId, /^req_[0-9a-f]{32}$/);
+    client = new OpenClawGatewayClient({
+      url: `ws://127.0.0.1:${address.port}`,
+      token: "fixture-token",
+      device: createOpenClawDeviceIdentity(),
+      requestTimeoutMs: 1000
+    });
+    assert.equal((await client.connect()).protocol, 4);
+    assert.match(connectionRequestId, /^req_[0-9a-f]{32}$/);
 
-  const abort = new AbortController();
-  const pending = client.request("never", {}, { signal: abort.signal });
-  abort.abort();
-  await assert.rejects(pending, /request never aborted/);
+    const abort = new AbortController();
+    const pending = client.request("never", {}, { signal: abort.signal });
+    abort.abort();
+    await assert.rejects(pending, /request never aborted/);
 
-  const accepted = [];
-  assert.deepEqual(
-    await client.request(
-      "stream",
-      {},
-      {
-        expectFinal: true,
-        onAccepted: (value) => accepted.push(value)
-      }
-    ),
-    { status: "ok", runId: "run-fixture" }
-  );
-  assert.deepEqual(accepted, [{ status: "accepted", runId: "run-fixture" }]);
+    const accepted = [];
+    assert.deepEqual(
+      await client.request(
+        "stream",
+        {},
+        {
+          expectFinal: true,
+          onAccepted: (value) => accepted.push(value)
+        }
+      ),
+      { status: "ok", runId: "run-fixture" }
+    );
+    assert.deepEqual(accepted, [{ status: "accepted", runId: "run-fixture" }]);
 
-  await assert.rejects(client.request("malformed", {}), /malformed JSON/);
-  assert.deepEqual(
-    requests.map((frame) => frame.method),
-    ["connect", "never", "stream", "malformed"]
-  );
-});
+    assert.deepEqual(await client.request("malformed", {}), { status: "ok" });
+    assert.deepEqual(
+      requests.map((frame) => frame.method),
+      ["connect", "never", "stream", "malformed"]
+    );
+  }
+);
 
 test("OpenClaw Gateway adapter isolates run events, deduplicates seq, and streams tools", async () => {
   let listener = () => {};

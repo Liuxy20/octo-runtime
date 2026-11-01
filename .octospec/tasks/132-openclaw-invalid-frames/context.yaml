@@ -1,0 +1,48 @@
+status: verification-review
+baseline: 148d737d3ee14f0453ae5018c563b08d6b21ec5b
+delivery_baseline: dc14c094e123886fda3999e7c1ed779f2d060099
+branch: triage/ort-38-openclaw-frames
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/132
+loop_task: ORT-38
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-adapter-metadata
+  - runtime-openclaw
+  - runtime-local-execution
+  - runtime-engineering
+  - commit
+sources:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - packages/octo-runtime-adapter-openclaw/src/gateway.ts
+  - packages/octo-runtime-adapter-openclaw/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/runtime-log.ts
+  - packages/octo-runtime-adapter-sdk/src/activity.ts
+  - packages/octo-runtime-adapter-dsh/src/index.ts
+  - test/openclaw-gateway-client.test.js
+decisions:
+  invalid_frame_policy: log-and-ignore
+  invalid_json_policy: log-and-ignore
+  disconnect_on_invalid_frame: false
+  reset_deadline_on_invalid_frame: false
+  replay_requests: false
+  raw_frame_logging: false
+  expand_github_ci: false
+  arbitrary_callback_exception_suppression: false
+  executable_readiness_score: 96
+  implementation_authorized: true
+  commit_push_authorized: true
+  create_pr_authorized: true
+  merge_authorized: true

@@ -10,7 +10,8 @@ import {
   type AdapterInvocationContext,
   type AdapterProbeOptions,
   type CanonicalEvent,
-  type InvokeRequest
+  type InvokeRequest,
+  type RuntimeLog
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
@@ -1384,13 +1385,14 @@ async function* invokeOpenClawGateway(
 }
 
 export function createOpenClawAdapter({
-  clientFactory = (options) => new OpenClawGatewayClient(options)
-}: { clientFactory?: GatewayClientFactory } = {}) {
+  clientFactory = (options) => new OpenClawGatewayClient(options),
+  log
+}: { clientFactory?: GatewayClientFactory; log?: RuntimeLog } = {}) {
   const responders = new Map<string, AcpApprovalBridge>();
   const probeGateway = async (options?: AdapterProbeOptions) => {
     let client: OpenClawGatewayClientLike | undefined;
     try {
-      client = clientFactory(await resolveOpenClawGateway(options?.providerOptions));
+      client = clientFactory({ ...(await resolveOpenClawGateway(options?.providerOptions)), log });
       resolveGatewayContract(await client.connect());
       await client.request("agents.list", {});
       return { available: true, command: "openclaw-gateway" };
@@ -1439,6 +1441,8 @@ export function createOpenClawAdapter({
         }
       };
       const invocation = buildOpenClawGatewayInvocation(req);
+      // 本轮及其对账/取消恢复连接共用本轮 sink；probe 则只使用工厂 sink。
+      invocation.gateway.log = context?.log ?? log;
       const bridge = new AcpApprovalBridge(req, 600_000, {
         providerDecisions: true,
         providerManagedExpiry: true

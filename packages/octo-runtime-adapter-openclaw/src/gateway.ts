@@ -1,4 +1,6 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
+import { writeSync } from "node:fs";
+import type { RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import WebSocket, { type RawData } from "ws";
 import { isGatewayRunPending } from "./compatibility.js";
 
@@ -14,6 +16,8 @@ export interface OpenClawGatewayOptions {
   device: OpenClawDeviceIdentity;
   connectTimeoutMs?: number;
   requestTimeoutMs?: number;
+  /** 元数据诊断 sink；缺省写 stderr，不写 worker 的 stdout RPC 通道。 */
+  log?: RuntimeLog;
 }
 
 export interface OpenClawGatewayEvent {
@@ -40,6 +44,13 @@ interface PendingRequest {
 }
 
 type GatewayFrame = Record<string, unknown>;
+type InvalidFrameReason =
+  | "invalid_message"
+  | "invalid_json"
+  | "invalid_shape"
+  | "unknown_type"
+  | "invalid_event"
+  | "invalid_response";
 
 const PROTOCOL_VERSION = 4;
 const CLIENT_ID = "cli";
@@ -150,7 +161,7 @@ export class OpenClawGatewayClient {
   #socket?: WebSocket;
   #hello?: OpenClawGatewayHello;
   #connectPromise?: Promise<OpenClawGatewayHello>;
-  #connectionRequestId?: string;
+  #invalidFrameCount = 0;
 
   constructor(options: OpenClawGatewayOptions) {
     this.#options = options;
@@ -172,13 +183,12 @@ export class OpenClawGatewayClient {
 
   async #open(): Promise<OpenClawGatewayHello> {
     const requestId = `req_${randomUUID().replaceAll("-", "")}`;
-    this.#connectionRequestId = requestId;
     const socket = new WebSocket(this.#options.url, {
       headers: { [REQUEST_ID_HEADER]: requestId },
       maxPayload: 25 * 1024 * 1024
     });
     this.#socket = socket;
-    socket.on("message", (data) => this.#onMessage(messageText(data)));
+    socket.on("message", (data) => this.#onMessage(data));
     socket.on("close", (code, reason) =>
       this.#failPending(
         withRequestId(
@@ -357,27 +367,68 @@ export class OpenClawGatewayClient {
     });
   }
 
-  #onMessage(text: string): void {
-    let frame: GatewayFrame;
+  /** 跳过坏消息不改变连接、pending 或原期限；仅诊断采样，不能当作执行进度。 */
+  #ignoreFrame(reason: InvalidFrameReason): void {
+    if (this.#invalidFrameCount === Number.MAX_SAFE_INTEGER) return;
+    const count = ++this.#invalidFrameCount;
+    if (count > 10 && count % 100 !== 0) return;
+    const data = { adapter_type: "openclaw", reason_code: reason, frame_count: count };
     try {
-      frame = JSON.parse(text) as GatewayFrame;
+      if (this.#options.log) {
+        const result: unknown = this.#options.log("warn", "openclaw.gateway.invalid_frame", data);
+        // void sink 也可由 async 函数实现；只观察拒绝，不等待、不重试日志。
+        if (result && typeof (result as PromiseLike<unknown>).then === "function")
+          void Promise.resolve(result).catch(() => undefined);
+      } else {
+        // 固定、小于 512 字节的元数据；同步写避免后台排队，EPIPE 等仅丢失本条诊断。
+        writeSync(
+          2,
+          `${JSON.stringify({ level: "warn", event: "openclaw.gateway.invalid_frame", ...data })}\n`
+        );
+      }
     } catch {
-      const error = this.#connectionRequestId
-        ? withRequestId(
-            new Error("OpenClaw Gateway sent malformed JSON"),
-            this.#connectionRequestId
-          )
-        : new Error("OpenClaw Gateway sent malformed JSON");
-      this.#failPending(error);
-      this.#socket?.close(1002, "malformed JSON");
+      /* 日志失败不影响本消息的跳过，更不能打断下一条合法消息。 */
+    }
+  }
+
+  #onMessage(data: RawData): void {
+    let text: string;
+    try {
+      text = messageText(data);
+    } catch {
+      this.#ignoreFrame("invalid_message");
       return;
     }
-    if (frame.type === "event" && typeof frame.event === "string") {
+    let value: unknown;
+    try {
+      value = JSON.parse(text);
+    } catch {
+      this.#ignoreFrame("invalid_json");
+      return;
+    }
+    const frame = record(value);
+    if (!frame || typeof frame.type !== "string") {
+      this.#ignoreFrame("invalid_shape");
+      return;
+    }
+    // 只验证路由字段，扩展字段与 payload 保持原生合同；业务回调不在解析 catch 内。
+    if (frame.type === "event") {
+      if (typeof frame.event !== "string" || !frame.event) {
+        this.#ignoreFrame("invalid_event");
+        return;
+      }
       for (const listener of this.#listeners)
         listener({ event: frame.event, payload: frame.payload });
       return;
     }
-    if (frame.type !== "res" || typeof frame.id !== "string") return;
+    if (frame.type !== "res") {
+      this.#ignoreFrame("unknown_type");
+      return;
+    }
+    if (typeof frame.id !== "string" || !frame.id || typeof frame.ok !== "boolean") {
+      this.#ignoreFrame("invalid_response");
+      return;
+    }
     const pending = this.#pending.get(frame.id);
     if (!pending) return;
     const payload = record(frame.payload);

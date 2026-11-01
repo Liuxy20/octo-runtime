@@ -4,6 +4,8 @@
 
 - [Issue 265 旁路 ask 修订](tasks/265-codex-async-questions/brief.md)：按用户最新意图保留正常完成后的补答资格，公开 SDK 活动 steer / 完成后同会话新 AgentRun；修复 async final_answer 收尾误杀。49 项手动（含 4 项真实）、全量 Node 2389 项及 WebUI 35 项通过，双轴审查确认问题均修复；不扩大 CI，不合并。
 
+- [Issue 132](journal/shared/2026-11-01-132-openclaw-invalid-frames.md)：实现无效帧采样日志与跳过；本地双轴及 verified-review 复审闭环，按后续授权提交并同步 main@dc14c094，29 项严格专项、163 项含 GC 回归复验通过。未扩大 CI；PR 与实际合并状态见 ORT-38 交付评论。
+
 - [Issue 161](journal/shared/2026-11-01-161-extra-platform-temp.md)：Extra 测试夹具改用平台临时目录，保留业务断言及 after 清理；按用户授权同步 main@28c3ffa2 后构建、类型、lint、命名、格式、定向测试及正常/失败清理通过，两轴复审各 0 项，准备提交 PR。Windows 原生未验，15 个历史 metadata 字段缺项独立报告，未扩大 CI；交付引用见 Loop 结果评论。
 
 - [Issue 136](journal/shared/2026-11-01-136-configuration-snapshot.md)：先快进最新 main，再将每轮配置解析收敛到提交前；5 项手动专项、50 项相关回归及类型/lint/命名通过，双轴审查各 0 项实现问题。未扩大 CI，未提交或推送，等待验证审查。

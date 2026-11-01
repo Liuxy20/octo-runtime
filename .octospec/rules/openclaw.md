@@ -130,6 +130,12 @@ RPC expectFinal、终态归一化和 wait 共用中间回执判定：accepted／
 
 流式与持久过程正文按消息序列对账并映射既有 commentary；同一步多个正文片段不能把整份持久正文重复放进最后一片。成功收尾只发布一份最终回答到 final，IM finalMsg 不包含过程正文、thinking 或工具内容。原生 `meta.finalAssistantVisibleText` 优先于 payload 列表（7.1 列表可能丢失 reasoning 标记），其显式空值也必须保留；没有元数据时排除 reasoning/commentary/error payload，再兼容当前步已完成的原生 final_answer 或旧版末尾正文，不拼接所有模型轮次。原生 phase 可选，canonical commentary 不依赖每帧具备该字段。消息/工具/答复身份表均有调用内数量上限，超限明确失败。专项仅手动验证，真实多版本 Playboard 证据及边界见 [Issue 245 验收](../tasks/245-openclaw-model-steps/validation.md)。
 
+## Gateway 无效消息隔离
+
+WebSocket 消息先解析为 unknown，再验证非 null、非数组对象和最小路由字段：event 的 event 为非空字符串，res 的 id 为非空字符串且 ok 为 boolean。转换失败、破损 JSON、错误结构与未知 type 均记录安全诊断后跳过，不关闭连接、不结算 pending、不重放、不刷新进度或延长原期限；后续合法消息继续处理。合法 `ok:false`、真实 transport error/close、原有超时和取消继续失败。业务监听器错误不能用解析 catch 一并吞掉。
+
+诊断复用 RuntimeLog，invoke 及其恢复使用本轮 sink，probe 使用工厂 sink；无 sink 时尝试固定 stderr，禁止写 stdout 或原消息正文。每连接前 10 条记录，此后每累计 100 条采样一次，计数饱和后停止；sink 同步异常和 rejected thenable 不影响执行。证据与未验范围见 [Issue 132 验证](../tasks/132-openclaw-invalid-frames/validation.md)。
+
 ## 操作入口
 
 CLI 不再提供 adapter connect；宿主使用既有 SDK 连接配置接口。CLI executor-kernel 启动时复用已保存连接，首次发现可通过 OPENCLAW_HOME 或成对的 OPENCLAW_GATEWAY_URL / OPENCLAW_GATEWAY_TOKEN 环境变量指定来源。已有身份与连接不自动重置，旧格式由宿主显式迁移。
