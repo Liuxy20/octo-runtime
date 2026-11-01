@@ -1,0 +1,50 @@
+status: pr-ready
+delivery_baseline: 88fe84ef
+baseline: 4a0f53b50723422d90f051944ae19eb28f60712a
+planning_baseline: 0bcd89c528018ffd508ca8099c8ac9c6b88de35d
+rules:
+  - runtime-architecture
+  - runtime-protocol-design
+  - runtime-local-execution
+  - runtime-invoke-input
+  - runtime-output-protocol
+  - runtime-stateless
+  - runtime-context-extensions
+  - runtime-engineering
+  - runtime-lifecycle
+sources:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .claude/commands/octospec-go.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/invoke-request-size-budget/brief.md
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+  - test/host-stream-policy.test.js
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - test/kernel-fixture.js
+  - test/invoke-size-budget.test.js
+decisions:
+  resolver_reads_per_submission: 1
+  snapshot_scope: one-agentrun
+  host_options_override_input: true
+  mutate_host_configuration: false
+  expand_github_ci: false
+  commit_push_authorized: true
+  create_pr_authorized: true
+  target_branch: main

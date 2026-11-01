@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "adapters": [
+    { "type": "snapshot", "module": "./136-configuration-adapter.mjs", "export": "adapter" },
+    { "type": "codex", "module": "./136-configuration-adapter.mjs", "export": "defaultAdapter" }
+  ]
+}

@@ -765,7 +765,8 @@ function traceFrame(message: RpcMessage, raw: string): string {
   });
 }
 
-function probeOptions(value: unknown): AdapterProbeOptions | undefined {
+/** Kernel 配置与 worker 探测共用的配置形态校验；不修改调用方对象。 */
+export function probeOptions(value: unknown): AdapterProbeOptions | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("invalid probe options");

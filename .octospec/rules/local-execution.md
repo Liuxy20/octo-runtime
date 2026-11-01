@@ -38,6 +38,8 @@ invocations 只登记本 client 的高层 invoke 元数据，最多 128（包括
 
 environment.streamLimits 在现有 Kernel wire 不支持，显式传入拒绝 KERNEL_STREAM_LIMITS_UNSUPPORTED；直接 Core 仍支持。执行终态与 delivery/业务写入完成分别验证，SDK 继续等待 onDispose 的剩余期限。当前实现和证据见 [#69 实施](../tasks/69-kernel-client-invoke/implementation.md)。
 
+Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本轮 runtimeId 和 Adapter 选择配置；Provider 选项与流限制使用同一份经校验的自有快照。宿主选项仍覆盖输入同名项，合并后检查整请求预算，再传给 worker 和重放窗口。更新原配置不影响在途 AgentRun，后续 AgentRun 独立读取；list/probe 独立取值，订阅、重放、取消和交互不重新读取本轮配置。框架不冻结宿主原对象，不持久化或按会话复用配置快照。实现与显式本地专项见 [Issue 136 验证](../tasks/136-configuration-snapshot/validation.md)。
+
 ## IPC v1
 
 一条连接发送一条 UTF-8 LF 结尾 JSON-RPC 请求，不接受 batch。status/list、invoke/get/subscribe/cancel/respond/native.respond 形状由 [wire Schema](../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json) 定义。共享 [protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json) 定义 LookupKey、RunRef、Snapshot 和 Status；主包公开原始 JSON。

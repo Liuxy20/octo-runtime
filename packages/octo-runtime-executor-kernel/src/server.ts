@@ -15,12 +15,14 @@ import {
   contextItem,
   INVOKE_REQUEST_MAX_BYTES,
   HOST_RPC_MAX_LINE_BYTES,
+  resolveStreamLimitPolicy,
   type InvokeInput,
   type InvokeEnvironment
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { HostRunService } from "./host-run-service.js";
 import { WorkerSupervisor } from "./supervisor.js";
 import type { WorkerRpc } from "./rpc.js";
+import { probeOptions } from "./rpc.js";
 import { acquireEndpoint } from "./endpoint.js";
 import { InvocationManifest } from "./invocation-manifest.js";
 import {
@@ -137,11 +139,21 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     (pid) => manifest?.setWorker(pid, options.workerEntrypoint) ?? Promise.resolve(),
     logging.kernel
   );
+  // 每轮只读取一次宿主配置；复制后冻结自有快照，不冻结宿主持有的原对象。
   const configure = (input: InvokeInput) => {
     const type = contextItem(input.contexts, "octo.execution", "adapter")?.payload.type;
-    return (options.configurations?.(
-      typeof input.runMetadata?.runtimeId === "string" ? input.runMetadata.runtimeId : undefined
-    ) ?? options.adapterConfigurations)?.[typeof type === "string" ? type : "codex"];
+    const config = probeOptions(
+      (options.configurations?.(
+        typeof input.runMetadata?.runtimeId === "string" ? input.runMetadata.runtimeId : undefined
+      ) ?? options.adapterConfigurations)?.[typeof type === "string" ? type : "codex"]
+    );
+    return (
+      config &&
+      Object.freeze({
+        providerOptions: config.providerOptions && Object.freeze({ ...config.providerOptions }),
+        streamLimits: resolveStreamLimitPolicy(config.streamLimits)
+      })
+    );
   };
   const transport: WorkerRpc = {
     list: (configs) =>
@@ -151,26 +163,9 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     respondInteraction: (id, response) => worker.client.respondInteraction(id, response),
     respondNative: (id, response) => worker.client.respondNative(id, response),
     invoke: createInputInvoke((input, environment) => transport.invokeFrames(input, environment)),
-    async *invokeFrames(input, environment) {
-      const config = configure(input);
-      yield* worker.client.invokeFrames(
-        config
-          ? {
-              ...input,
-              agentConfig: {
-                ...input.agentConfig,
-                providerOptions: {
-                  ...input.agentConfig?.providerOptions,
-                  ...config.providerOptions
-                }
-              }
-            }
-          : input,
-        environment
-      );
-    }
+    invokeFrames: (input, environment) => worker.client.invokeFrames(input, environment)
   };
-  const runs = new HostRunService(transport, (input) => configure(input)?.streamLimits);
+  const runs = new HostRunService(transport);
   const sockets = new Set<net.Socket>();
   let closing: Promise<void> | undefined;
   let listening = false;
@@ -258,7 +253,23 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
                 : "KERNEL_UNAVAILABLE",
               { invocation_not_submitted: true }
             );
-          const receipt = await runs.submit(params.input as InvokeInput, {
+          const input = params.input as InvokeInput;
+          const config = configure(input);
+          // 选项先合并再进入 HostRunService 的整请求预算检查；策略沿同一调用传给 worker 和重放窗口。
+          const configuredInput = config
+            ? {
+                ...input,
+                agentConfig: {
+                  ...input.agentConfig,
+                  providerOptions: {
+                    ...input.agentConfig?.providerOptions,
+                    ...config.providerOptions
+                  }
+                }
+              }
+            : input;
+          const receipt = await runs.submit(configuredInput, {
+            streamLimits: config?.streamLimits,
             executionEnvOverrides:
               params.executionEnvOverrides as InvokeEnvironment["executionEnvOverrides"]
           });

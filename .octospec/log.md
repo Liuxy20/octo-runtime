@@ -2,6 +2,8 @@
 
 ## 2026-11-01
 
+- [Issue 136](journal/shared/2026-11-01-136-configuration-snapshot.md)：先快进最新 main，再将每轮配置解析收敛到提交前；5 项手动专项、50 项相关回归及类型/lint/命名通过，双轴审查各 0 项实现问题。未扩大 CI，未提交或推送，等待验证审查。
+
 - [Issue 22 / PR 275](journal/shared/2026-11-01-22-secret-scan-closeout.md)：核对既有 45 条历史处置和 main 扫描证据，准备英文收尾草稿。按用户及远端审查补齐 frontmatter、Validation 类型、独立 review/journal 与索引入口，实际执行知识检查；检测行为和 CI 范围不变，原 Issue 未关闭。
 
 - [Issue 144](journal/shared/2026-11-01-144-handshake-capacity.md)：修正待握手容量夹具，全部 128 次成功终态、输出保留、精确 TTL 边界与 fresh 完成均有断言；7 项通过、两次负向实验捕获、双轴审查各 0 发现。类型/构建、lint 与知识检查通过，CI 范围不变，按授权准备 PR。
