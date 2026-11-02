@@ -1,0 +1,39 @@
+brief: .octospec/tasks/237-windows-kernel-startup/brief.md
+baseline: 84e025053b93e8f23063ef702441925a5007138d
+injected:
+  - id: runtime-architecture
+    path: .octospec/rules/architecture.md
+    reason: 原生装配、资源所有权、公共 API、产品意图与 CI 范围
+  - id: runtime-local-execution
+    path: .octospec/rules/local-execution.md
+    reason: RPC、原生 owner、取消与真实清理事实
+  - id: runtime-lifecycle
+    path: .octospec/rules/runtime-lifecycle.md
+    reason: 初始化回滚、迟到 bind、关闭期限与显式替换
+  - id: runtime-engineering
+    path: .octospec/rules/engineering.md
+    reason: 手动验收、错误诊断、隔离环境和版本绑定证据
+  - id: commit
+    path: .octospec/rules/collaboration.md
+    reason: 中文内部记录；本次不执行提交或发布
+  - id: runtime-protocol-design
+    path: .octospec/rules/protocol-design.md
+    reason: Kernel 路径命中；仅改变初始化诊断，不改变 RPC 或执行协议
+  - id: runtime-invoke-input
+    path: .octospec/rules/invoke-input.md
+    reason: Kernel 路径命中；保留原输入和 signal 执行语义
+  - id: runtime-output-protocol
+    path: .octospec/rules/output-protocol.md
+    reason: Kernel 路径命中；不改变 native/canonical 源帧或终态
+  - id: runtime-context-extensions
+    path: .octospec/rules/context-extensions.md
+    reason: Kernel 路径命中；不改变 Context 消费
+  - id: runtime-stateless
+    path: .octospec/rules/stateless-execution.md
+    reason: Kernel 路径命中；不扩持久化或业务历史
+files_expected:
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - test/manual/kernel-startup-237.test.mjs
+  - .octospec/tasks/237-windows-kernel-startup/
+  - .octospec/journal/shared/2026-11-02-237-windows-kernel-startup.md
+updated_at: 2026-11-02T10:55:00Z

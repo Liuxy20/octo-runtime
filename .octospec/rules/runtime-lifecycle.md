@@ -3,7 +3,7 @@ type: Rule
 title: 本地身份、生命周期与就绪事实
 description: Home、账号与租户 profile 的身份隔离及本地 SDK 生命周期。
 tags: ["runtime","identity","lifecycle"]
-timestamp: 2026-10-23T00:00:00Z
+timestamp: 2026-11-02T11:00:00Z
 implementation_baseline: fix/75-cli-lifecycle
 id: runtime-lifecycle
 tier: repo
@@ -54,6 +54,8 @@ Home 表示本地设备实例的状态边界，machine_id 是安装分组，不�
 close 关闭接纳并立即取消所属调用；初始化进入可清理状态后，并发等待源调用排空和插件 dispose。插件 disposer 须先等待自己的消费者、保存与投递任务，再清理自己的资源。取消通知不立即封锁注入依赖；插件清理结束或共享截止到期后撤销调用权限，再等待全部实际依赖。单项失败仍尝试独立资源。重复调用等待同一清理操作。失败记录保留所有权；同 endpoint/name 的 Extra 或同 endpoint 的 Kernel 替换必须确认旧实例完整关闭。不同 Home/endpoint 的同名 Extra 独立。
 
 初始化观察 signal 和 close：先登记取消意图，取消初始化等待，异步创建后检查停止状态，不得建立迟到端点或报告 ready。ServiceInitializationError 保留 cause 和 cleanup；回滚失败保留资源所有权。close-before-initialize 永久关闭该对象，重复 initialize 复用原 Promise。服务没有 restart，完整关闭后重新构造。服务 status.pid 必须等于调用进程 PID。
+
+取消可能先于启动回滚失败赢得等待竞态。initialize 等待 close 后，若已取得独立的启动回滚 AggregateError，须同时保留首次取消原因和完整回滚异常链（包括原始 errno），不能只保留取消原因与概括的 incomplete 码。普通取消仍保留原 cause；到期后才结束的实际操作不倒改已返回的结果，也不推定其未来成功。显式手动回归与版本边界见 [Issue 237 验证](../tasks/237-windows-kernel-startup/validation.md)。
 
 加载器因初始化失败 abort 插件 signal 时，Extra 服务立即停止 invoke 准入并启动缓存的取消/排空操作，不能等加载器完成 disposer 后再开始；此通知不替换原始初始化 cause。bind Promise 也是服务资源：Kernel 串行等绑定完成后检查取消并回滚；Extra 控制 socket 清理显式等待 bind，清理超时后仍继续回收迟到的监听句柄，结果保持 incomplete，端点租约不提前释放。
 

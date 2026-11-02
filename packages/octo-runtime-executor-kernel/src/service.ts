@@ -119,7 +119,17 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
         });
       initialized = Promise.race([starting, cancelled])
         .catch(async (error: unknown) => {
-          throw new ServiceInitializationError(error, await close());
+          const cleanup = await close();
+          // 取消可能先赢得 race，而实际启动回滚随后失败；等待 close 后再合并已确认的错误。
+          // 保留最初取消原因和 server 的完整清理链，不把 incomplete 简化成只有取消原因。
+          // 截止时仍未结束的回滚继续由 starting 观察，不改写已经返回的清理结果。
+          const cause =
+            startupFailure instanceof AggregateError && startupFailure !== error
+              ? new AggregateError([error, startupFailure], "KERNEL_START_CLEANUP_INCOMPLETE", {
+                  cause: error
+                })
+              : error;
+          throw new ServiceInitializationError(cause, cleanup);
         })
         .finally(() => combined.removeEventListener("abort", onAbort));
       return initialized;
