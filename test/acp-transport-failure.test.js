@@ -94,8 +94,13 @@ test(
       );
       assert.equal((await host.client.status()).execution_ready, true);
     } finally {
-      // next() rejection does not prove Adapter finally completed; native owner reports this fact.
-      await assert.rejects(host.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
+      // ACP 已确认本轮传输关闭；原生 Kernel 必须完整释放所有权，不能把启动失败留为未确认清理。
+      assert.deepEqual(await host.kernel.close(), {
+        complete: true,
+        errors: [],
+        pendingResources: []
+      });
+      await host.close();
     }
   }
 );

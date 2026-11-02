@@ -14,14 +14,14 @@ upstream: "https://github.com/Mininglamp-OSS/octo-runtime/issues/236"
 ## 责任与承重合同
 
 - 业务目标、配置、Provider 安装选择归宿主；本次只有执行故障与资源清理行为，无业务默认值变化。
-- 拓扑保持 Host/Kernel → 独立 worker/AgentExecutor → ACP Adapter → Provider 子进程。composition root、公共 SDK、协议与部署不变，没有 API 删除或迁移。
-- Adapter 拥有本轮传输与响应桥清理，Core 拥有 invocation ownership；Kernel 拥有 worker、endpoint、lease 与 manifest。首个违反合同的组件负责修复。
+- 当前拓扑遵循 main 的 #295/#294：宿主构造 Adapter 并注入 Kernel；业务 → KernelClient/RPC → 同进程 AgentExecutor → ACP Adapter → Provider 子进程。公共装配迁移属于上游 #295，本修复不恢复 worker 或增加接入 API。
+- Adapter 拥有本轮传输与响应桥清理，Core 拥有 invocation ownership；Kernel 拥有 endpoint、lease 与原生 owner manifest。首个违反合同的组件负责修复。
 - 已接纳调用失败、执行终态、迭代器关闭、OS 进程树回收分别确认。真正失败、挂起或未确认的 finalizer 仍须 incomplete 并保留 ownership。
 - 不吞错、不提前释放 ownership、不增大原测试超时、不扩大 CI 或默认测试集合，不改其他 checkout、在线 Bot、既有 Home/身份/配置。
 
 ## 验收
 
-- 记录最新 main、Windows 普通用户、实际 Node/PATH、pnpm 与原文件基线错误；追踪 Core owner、ACP close、worker drain 和 Kernel 关闭。
+- 记录最新 main、Windows 普通用户、实际 Node/PATH、pnpm 与基线错误；追踪 Core owner、ACP close 和 Kernel 关闭。旧 worker drain 只作为 `58332b3` 的历史证据。
 - Node 24.19.0 与 26.13.0 重复执行完整 `test/acp-transport-failure.test.js`，确认所属 PID 退出及原有并行/后续调用断言。
 - 每版 Node 至少三轮执行原组合 `test/invocation-manifest.test.js test/component-startup.test.js`，保留每轮结果与具体 cause；只有证实同根才纳入修复。
 - 增加显式手动回归覆盖原始错误、成功清理和真实 incomplete；运行相关构建、类型、lint、命名、格式、知识检查及相称回归，完整默认套件的已知独立失败分别记录。
@@ -30,3 +30,5 @@ upstream: "https://github.com/Mininglamp-OSS/octo-runtime/issues/236"
 ## 基线
 
 `origin/main@58332b3bcf5651f58e674fa236184dc6a0d927ca`，修复分支 `fix/windows-acp-cleanup-236`。2026-11-02 查询 #236/#237 仍 open；#295 为未合并架构重构，不替代当前 main 的修复。交接证据已读，1854 文件原快照完整性及历史结果仅作线索。
+
+以上为首次实施基线。用户随后授权 rebase；现对齐已合入 #295 的 `origin/main@f06546e9`。冲突保留 main 原生清单收尾约定并加入 ACP 失败终态规则；手动专项迁移到真实原生 Kernel/RPC，原 ACP 文件将上游为已知缺陷保留的 incomplete 断言改为要求完整清理。生产修复仍是 ACP 的原22行，当前复测与旧基线结果分别记录。

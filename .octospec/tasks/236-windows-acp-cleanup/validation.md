@@ -6,7 +6,37 @@ tags: [windows, adapter, lifecycle, testing]
 timestamp: 2026-11-02T08:53:00Z
 ---
 
-# 版本与环境
+# 当前验证：rebase 至 f06546e9
+
+用户授权将 PR #297 rebase 至已合入 #295 的 main，并补充一个提交。旧远端 head 为 `eded521ce1d9a13fb74326e39bd4fb3012267754`，新基线为 `f06546e915b155224a402703e5dae123daf854a5`；推送需使用绑定上述旧 SHA 的 force-with-lease，不能覆盖并发更新。
+
+## 冲突与迁移
+
+- 唯一文本冲突是 local-execution.md：保留 main 的原生 owner 清单收尾规则与全部原生装配合同，再加入本 PR 的 ACP spawn 失败终态规则，没有恢复 worker 监督/回收约定。
+- 生产文件与 rebase 前完全相同，仍是 ACP 成功 close 后发布 native spawn 失败终态的22行；不改 Core、Kernel、公共签名、依赖、锁文件或 CI。
+- main 的 ACP 原文件已由 worker fixture 改为原生 Kernel/RPC，并为未修复的缺陷暂时预期 close incomplete。本 PR 保留并行、后续调用、execution_ready 和原超时，改为要求完整 ServiceCleanupResult，再执行原宿主清理；这是对修复结果的更强断言。
+- 手动专项删除已不存在的 spawnWorker、worker PID 和 drain 消息断言。当前直接注入 Adapter，验证真实失败 spawn 未创建 PID、ChildProcess close/管道关闭、原生 owner 清单释放、宿主仍存活及端点复用；拒绝/延迟清理和 Core 遗留 owner 检查继续保留。
+
+## 当前基线对照与重复验证
+
+普通用户原生 Windows 11 build 22621、PowerShell 7.6.5、pnpm11.19.0、Node24.19.0/26.13.0，继续使用 checkout 外隔离 Home/TEMP/TMP 和 fake Provider。先 frozen 安装新 main 锁文件，再完整构建/类型检查，保证没有运行旧 worker 产物。
+
+仅在有界对照期间，将 ACP 源文件替换为 `origin/main@f06546e9` 的原实现并构建；当前两个回归文件在 Node24 为7 pass / 5 fail，分别捕获 Kernel/Core 清理不完整或 spawn 错误 reject。对照结束恢复修复源码与构建产物；不修改 Core 清理保护。
+
+| 当前命令文件 | Node24.19.0，三轮 | Node26.13.0，三轮 |
+| --- | --- | --- |
+| acp-transport-failure + manual/acp-cleanup-236 | 每轮12 pass、0 fail、0 skip | 每轮12 pass、0 fail、0 skip |
+| invocation-manifest + component-startup | 每轮5 pass、0 fail、0 skip | 每轮5 pass、0 fail、0 skip |
+
+第二行是 main 已迁移的原生 owner/启动取消场景；不把新夹具通过表述为旧 worker、旧 manifest rename EPERM 或历史 #237 根因已修复。#237 和 #14 继续只关联。
+
+当前扩展回归在两版 Node 均为149 pass、0 fail、0 skip，覆盖 ACP approval/message segments、Core、cleanup budget、原生装配、Kernel clients、Host SDK 生命周期、native Host 和 CodeBuddy model-selection/outcomes。全部自然结束，未触发运行器超时或强制终止。
+
+当前 `pnpm typecheck`（含全 workspace build）、ESLint、命名、全范围格式检查和 diff 空白检查通过；知识元数据/链接校验通过（614个单元、20条规则、3860个本地链接）。安装、构建、门禁与逐轮 TAP 均以 `rebase` 前缀保存在本次隔离证据目录。没有全仓默认套件、真实 Provider/IM、Windows10 或 macOS/Linux 的本轮实测；旧完整默认套件失败仅绑定下节旧基线，不据此宣称当前全仓通过或失败。
+
+# 历史验证：58332b3（rebase 前）
+
+## 版本与环境
 
 - 验证基线：`origin/main@58332b3bcf5651f58e674fa236184dc6a0d927ca`；独立正式 Git checkout，分支 `fix/windows-acp-cleanup-236`。下列测试在该基线加本次未提交修复上执行；PR 准备时重新 fetch，main 未变化。
 - Windows 11 Enterprise 10.0.22621 x64，普通用户（管理员角色 false），PowerShell 7.6.5，Git 2.55.0.windows.5，Codex CLI 0.163.0。

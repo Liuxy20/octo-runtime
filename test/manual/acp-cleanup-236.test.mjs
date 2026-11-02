@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm, access } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdtemp, rm, access, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import test from "node:test";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
-import { spawnWorker, createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { AcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest, preparedFrames } from "../runtime-fixture.js";
@@ -125,27 +127,37 @@ test("non-spawn structured errors still reject with the original object", async 
   );
 });
 
-test("worker confirms complete drain and owned process/pipe cleanup after missing ACP", async (t) => {
-  const worker = await spawnWorker({ entrypoint: resolve("test/fixtures/acp-failure-host.js") });
-  t.after(() => worker.close());
-  const messages = [];
-  worker.child.on("message", (message) => messages.push(message));
-  const pid = worker.child.pid;
-  const frames = await collect(worker.client, "worker-missing");
+test("native ACP spawn failure closes its ChildProcess pipes without creating a provider PID", async (t) => {
+  const core = new AgentExecutor();
+  const closed = Promise.withResolvers();
+  let child;
+  core.register(
+    createAcpAdapter(definition, {
+      acpClientFactory: () => {
+        child = spawn(join(process.cwd(), randomUUID()), [], {
+          stdio: ["pipe", "pipe", "pipe"],
+          windowsHide: true
+        });
+        child.once("close", closed.resolve);
+        return new AcpClient({ child });
+      }
+    })
+  );
+  const frames = await collect(core, "native-spawn-missing");
+  await closed.promise;
   assert.equal(frames.filter((frame) => frame.event?.type === "run.failed").length, 1);
-  await worker.close();
-  if (process.platform === "win32")
-    assert.ok(
-      messages.some(
-        (message) => message.type === "worker.drained" && message.cleanup === "complete"
-      )
-    );
-  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
-  assert.equal(worker.child.connected, false);
-  assert.equal(worker.child.stdin.destroyed, true);
-  assert.equal(worker.child.stdout.destroyed, true);
-  assert.equal(worker.child.stderr.destroyed, true);
-  t.diagnostic(JSON.stringify({ pid, messages, exited: true, pipesClosed: true }));
+  assert.equal(
+    frames.find((frame) => frame.event?.type === "run.failed").event.payload.code,
+    "ENOENT"
+  );
+  assert.equal(child.pid, undefined);
+  assert.equal(child.stdin.destroyed, true);
+  assert.equal(child.stdout.destroyed, true);
+  assert.equal(child.stderr.destroyed, true);
+  assert.equal((await core.shutdown()).cleanup, "complete");
+  t.diagnostic(
+    JSON.stringify({ providerCreated: false, childCloseObserved: true, pipesClosed: true })
+  );
 });
 
 test("native Kernel closes manifest, endpoint and lease after failed ACP invocation", async (t) => {
@@ -154,15 +166,17 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
   const service = createKernelService({
     endpoint,
     stateDirectory: home,
-    workerEntrypoint: resolve("test/fixtures/acp-failure-host.js")
+    adapters: [createAcpAdapter({ ...definition, command: join(process.cwd(), randomUUID()) })]
   });
   t.after(async () => {
     assert.equal((await service.close()).complete, true);
     await rm(home, { recursive: true, force: true });
   });
   await service.initialize();
-  const pid = (await service.status()).kernel.worker.pid;
-  assert.ok(Number.isSafeInteger(pid) && pid > 0);
+  assert.equal((await service.status()).pid, process.pid);
+  const ownership = JSON.parse(await readFile(join(home, "kernel-invocations.json"), "utf8"));
+  assert.equal(ownership.nativeOwner, true);
+  assert.equal(ownership.worker, undefined);
   const events = await Array.fromAsync(
     service.client.invoke(
       invocationInput(
@@ -175,7 +189,7 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
   assert.equal(events.find((event) => event.type === "run.failed").payload.code, "ENOENT");
   const cleanup = await service.close();
   assert.deepEqual(cleanup, { complete: true, errors: [], pendingResources: [] });
-  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
+  assert.equal(process.kill(process.pid, 0), true);
   await assert.rejects(access(join(home, "kernel-invocations.json")), { code: "ENOENT" });
   if (process.platform !== "win32") {
     await assert.rejects(access(endpoint), { code: "ENOENT" });
@@ -184,10 +198,12 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
   const replacement = createKernelService({
     endpoint,
     stateDirectory: home,
-    workerEntrypoint: resolve("test/fixtures/acp-failure-host.js")
+    adapters: [createAcpAdapter({ ...definition, command: join(process.cwd(), randomUUID()) })]
   });
   t.after(() => replacement.close());
   await replacement.initialize();
   assert.equal((await replacement.close()).complete, true);
-  t.diagnostic(JSON.stringify({ pid, exited: true, cleanup, replacementInitialized: true }));
+  t.diagnostic(
+    JSON.stringify({ hostPid: process.pid, hostAlive: true, cleanup, replacementInitialized: true })
+  );
 });

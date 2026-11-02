@@ -3,7 +3,7 @@ injected:
   - { id: runtime-architecture, source: repo, reason: "责任归属、进程拓扑、CI 范围" }
   - { id: runtime-protocol-design, source: repo, reason: "调用错误、终态与清理分别确认" }
   - { id: runtime-adapter-metadata, source: repo, reason: "ACP Adapter 执行与原始错误" }
-  - { id: runtime-local-execution, source: repo, reason: "worker EOF 排空、树回收与所有权" }
+  - { id: runtime-local-execution, source: repo, reason: "rebase 后的原生 Kernel/Core 排空与所有权；旧 worker 只作历史证据" }
   - { id: runtime-lifecycle, source: repo, reason: "启动取消回滚、共享期限与 lease" }
   - { id: runtime-invoke-input, source: repo, reason: "保留公共输入和取消合同" }
   - { id: runtime-output-protocol, source: repo, reason: "canonical 失败与源终态" }
@@ -14,8 +14,9 @@ injected:
   - { id: runtime-mcp, source: repo, reason: "Adapter 路径匹配，保持 MCP 合同" }
   - { id: runtime-reasoning, source: repo, reason: "Adapter 路径匹配，不改强度映射" }
   - { id: runtime-engineering, source: repo, reason: "中文核心注释、测试证据与检查" }
-  - { id: commit, source: repo, reason: "内部中文记录；本次不提交" }
+  - { id: commit, source: repo, reason: "用户授权 rebase、补充提交及绑定旧 SHA 的 force-with-lease" }
 files_expected:
   - packages/octo-runtime-adapter-acp/src/index.ts
   - test/manual/acp-cleanup-236.test.mjs
-updated_at: 2026-11-02T08:40:00Z
+  - test/acp-transport-failure.test.js
+updated_at: 2026-11-02T09:52:00Z
