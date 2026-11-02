@@ -605,6 +605,28 @@ export function createAcpAdapter(
       await client.close();
     }
     if (invocationFailed) {
+      // 原生 spawn 拒绝属于启动失败；只有上面的 close 成功后才发布失败终态。
+      // 若继续抛出，Core 无法区分执行错误与生成器 finally 失败，会保留未确认 owner。
+      // 不推广到任意迭代错误：清理异常仍从 finally 抛出，容量等错误仍保留原对象。
+      if (
+        invocationError instanceof Error &&
+        "code" in invocationError &&
+        typeof invocationError.code === "string" &&
+        "syscall" in invocationError &&
+        typeof invocationError.syscall === "string" &&
+        invocationError.syscall.startsWith("spawn ")
+      ) {
+        yield {
+          protocolVersion: 2,
+          type: "run.failed",
+          payload: {
+            code: invocationError.code,
+            message: invocationError.message,
+            adapterType: definition.type
+          }
+        };
+        return;
+      }
       // 有明确错误码的容量等结构化错误保留原对象；普通内建子类仍交给适配器归一化。
       if (
         invocationError instanceof Error &&
