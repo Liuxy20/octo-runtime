@@ -126,7 +126,7 @@
       "title": "KernelStatus",
       "type": "object",
       "additionalProperties": false,
-      "required": ["ipc_version", "kernel_instance_id", "pid", "worker", "execution_ready"],
+      "required": ["ipc_version", "kernel_instance_id", "pid", "execution_ready"],
       "properties": {
         "ipc_version": {
           "const": 1
@@ -141,42 +141,6 @@
         },
         "execution_ready": {
           "type": "boolean"
-        },
-        "worker": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["generation", "state", "restart_attempt"],
-          "properties": {
-            "pid": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "generation": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "restart_attempt": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "recovery": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": ["trigger", "stage", "code", "occurred_at"],
-              "properties": {
-                "trigger": { "enum": ["exit", "error", "heartbeat", "ipc"] },
-                "stage": { "enum": ["cleanup", "manifest", "starting", "backoff"] },
-                "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,95}$" },
-                "occurred_at": { "type": "string", "format": "date-time" },
-                "retry_at": { "type": "string", "format": "date-time" },
-                "exit_code": { "type": "integer" },
-                "signal": { "type": "string", "pattern": "^SIG[A-Z0-9]+$" }
-              }
-            },
-            "state": {
-              "enum": ["starting", "ready", "recovering", "stopped", "exhausted"]
-            }
-          }
         }
       }
     },

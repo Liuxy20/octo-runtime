@@ -45,7 +45,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 ### F2：97
 
-`packages/octo-runtime-adapter-host/src/index.ts:201` 起存在审批、图片、回答标签准入；保留 responder 方法和执行身份检查的边界正确。共享 ACP 已有 assisted 拒绝，OpenClaw、ZCode、Antigravity 有各自限制；Claude/CodeBuddy 当前命令映射不传图片，计划的显式拒绝防止移除 Host 检查后静默丢失图片。计划覆盖 direct builder、公开 Driver、recovery-only 图片和无 Provider 副作用路径，没有增加新的功能表。
+`packages/octo-runtime-adapter-host/src/index.ts:201` 起存在审批、图片、回答标签准入；保留 responder 方法和执行身份检查的边界正确。共享 ACP 已有 assisted 拒绝，OpenClaw、Antigravity 有各自限制；Claude/CodeBuddy 当前命令映射不传图片，计划的显式拒绝防止移除 Host 检查后静默丢失图片。计划覆盖 direct builder、公开 Driver、recovery-only 图片和无 Provider 副作用路径，没有增加新的功能表。
 
 具体实现扣 1 分：拒绝前副作用需按各入口实际 await/命令构造位置确认。测试扣 2 分：逐 Adapter 路径尚未执行行为断言；这属于实施时可验证的不确定性，不是未决产品决策。
 

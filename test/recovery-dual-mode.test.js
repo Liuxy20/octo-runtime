@@ -40,7 +40,7 @@ function inspectExtra(endpoint) {
 const simulateOutages = process.env.OCTO_RECOVERY_OUTAGE === "1";
 for (const mode of ["cli", "sdk"]) {
   test(
-    `${mode}: offline startup, WS loss and active worker loss recover fresh IM work without recreating services`,
+    `${mode}: offline startup, WS loss recover fresh IM work without recreating services`,
     {
       timeout: simulateOutages ? 240000 : 60000,
       skip: mode === "cli" && process.platform === "win32"
@@ -74,7 +74,7 @@ for (const mode of ["cli", "sdk"]) {
         ]
       };
       const children = [];
-      let kernelDependency, gatewayHost, lostRef;
+      let kernelDependency, gatewayHost;
       const connectionRows = () => (gatewayHost ? recoveryOutputRows(gatewayHost) : []);
       const client = attachKernel({ endpoint });
       const failure = { failed: false, error: undefined };
@@ -137,11 +137,10 @@ for (const mode of ["cli", "sdk"]) {
           return initial?.status.bots?.[0]?.state === "retrying";
         }, 10000);
         const before = await client.status();
-        probe?.worker(before.worker.pid);
         assert.equal(initial.status.bots[0].connected, false);
         assert.equal(initial.pid, gatewayHost.child.pid);
         assert.equal(before.pid, kernelDependency.child.pid);
-        assert.equal(new Set([initial.pid, before.pid, before.worker.pid, process.pid]).size, 4);
+        assert.equal(new Set([initial.pid, before.pid, process.pid]).size, 3);
         im.online();
         await waitFor(
           async () => (await inspectExtra(controlEndpoint)).status.bots[0].connected,
@@ -266,36 +265,6 @@ for (const mode of ["cli", "sdk"]) {
             })
           );
         }
-        if (!probe || process.env.OCTO_RECOVERY_SKIP_WORKER_LOSS !== "1") {
-          im.send("wait-for-cancel");
-          await waitFor(async () => (await admissions()).length === replyCount + 1, 5000);
-          const active = await client.status();
-          await waitFor(
-            async () =>
-              (await readFile(keysFile, "utf8")).trim().split("\n").length === replyCount + 1
-          );
-          lostRef = JSON.parse((await readFile(keysFile, "utf8")).trim().split("\n").at(-1));
-          assert.ok(lostRef, "capture the dependency run before worker loss");
-          process.kill(active.worker.pid, "SIGKILL");
-          await waitFor(async () => {
-            const value = await client.status();
-            if (value.worker?.pid) probe?.worker(value.worker.pid);
-            return value.execution_ready && value.worker.generation > active.worker.generation;
-          }, 10000);
-          assert.equal((await client.get(lostRef)).terminal.control.state, "lost");
-          await waitFor(
-            async () => (await inspectExtra(controlEndpoint)).status.bots[0].workingTasks === 0,
-            5000
-          );
-          im.send("after worker loss");
-          await waitFor(
-            () => im.replies.filter((row) => row.content === "answer").length === replyCount + 1,
-            5000
-          );
-          const starts = await admissions();
-          assert.equal(starts.length, replyCount + 2, "lost work must not be admitted again");
-          assert.equal(new Set(starts).size, replyCount + 2);
-        }
         const fresh = attachKernel({ endpoint });
         try {
           for (const observer of [client, fresh])
@@ -356,8 +325,7 @@ for (const mode of ["cli", "sdk"]) {
           );
         }
         if (probe) {
-          const status = await client.status();
-          await probe.beforeShutdown({ children, workerPid: status.worker.pid, client, endpoint });
+          await probe.beforeShutdown({ children, client, endpoint });
           if (process.env.OCTO_RECOVERY_TEARDOWN_BODY_FAILURE === "1")
             throw new Error("FIXTURE_ORIGINAL_BODY_FAILURE");
         }
@@ -375,26 +343,11 @@ for (const mode of ["cli", "sdk"]) {
               (row) => row.event === "fixture.cleanup"
             )?.result;
             assert.ok(result, "SDK host must report native close result");
-            if (!result.complete) {
-              assert.ok(lostRef, "incomplete runs require an injected worker loss");
-              assert.equal((await client.get(lostRef)).terminal.control.state, "lost");
-              assert.deepEqual(result.pendingResources, ["runs"]);
-              assert.deepEqual(result.errors, [
-                { resource: "runs", code: "EXTRA_CLEANUP_INCOMPLETE" }
-              ]);
-              t.diagnostic(`Expected lost-run cleanup fact: ${JSON.stringify(result)}`);
-              assert.equal(gatewayHost.child.exitCode, 1);
-            } else assert.equal(gatewayHost.child.exitCode, 0);
+            assert.equal(result.complete, true, JSON.stringify(result));
+            assert.equal(gatewayHost.child.exitCode, 0);
           }
           if (mode === "cli" && gatewayHost?.exitObserved && !gatewayHost.child.signalCode) {
-            if (!lostRef) assert.equal(gatewayHost.child.exitCode, 0, gatewayHost.errors);
-            else {
-              assert.ok([0, 5].includes(gatewayHost.child.exitCode), gatewayHost.errors);
-              // CLI 只公开聚合退出码，不能据此断言 SDK close 或日志已完整。
-              t.diagnostic(
-                `CLI shutdown after observed lost run: exitCode=${gatewayHost.child.exitCode}; native cleanup details unavailable`
-              );
-            }
+            assert.equal(gatewayHost.child.exitCode, 0, gatewayHost.errors);
           }
         } catch (error) {
           gatewayCleanup.errors.push(error);

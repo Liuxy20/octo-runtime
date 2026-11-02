@@ -46,7 +46,6 @@ tags: [invoke, context, protocol, testing]
 | OpenClaw | 待验 | 待验 | 待核对适用分支 |
 | Qoder CLI | 待验 | 待验 | 待核对适用分支 |
 | Qoder CLI CN | 待验 | 待验 | 待核对适用分支 |
-| ZCode GUI | 待验 | 待验 | 待核对适用分支 |
 | Antigravity | 待验 | 待验 | 待核对适用分支 |
 
 - [ ] 使用预算内的长指令连续调用两轮，观察 Provider 原生请求；第二轮不再次发送整份 system，也不把它转成用户正文。

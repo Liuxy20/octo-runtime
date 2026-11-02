@@ -60,7 +60,7 @@ The adapter resolves the configured module's real path, validates that target, a
 
 The Runtime CLI is a host: before starting either its persistent Kernel or `playboard`, it automatically selects the first existing `dsh` candidate on its PATH and resolves the npm package's JavaScript entry from `@deepseek-ai/dsh` package metadata. Only absent candidate paths are skipped; a broken symlink, inaccessible or non-executable command, non-file candidate, or invalid npm metadata stops discovery without selecting another installation. This handles npm symlinks and adjacent npm shims, including Windows `dsh.cmd`, without executing the wrapper. Both discovery and invocation receive the resolved `dshBin` through Kernel configuration. Set `adapters.dsh.execution.provider_options.dshBin` in `<home>/<profile>/config.json` to override selection; a missing or incompatible explicit entry never falls back to PATH. SDK applications own their own selection policy; the Adapter and shared Kernel do not inherit CLI auto-detection.
 
-Electron hosts use their own runtime executable, without a separate Node installation. The adapter adds `ELECTRON_RUN_AS_NODE=1` only to its child environment when running in Electron; the host must also enable Node mode for its Kernel worker and use an Electron build that supports it. Windows uses the same JavaScript entry contract, without a shell wrapper. The SDK profile is `sdk`; no Desktop window or existing Desktop process is required.
+Electron hosts use their own runtime executable, without a separate Node installation. The adapter adds `ELECTRON_RUN_AS_NODE=1` only to its Provider child environment when running in Electron; the Electron build must support that mode. Kernel runs natively in the host and starts no execution worker. Windows uses the same JavaScript entry contract, without a shell wrapper. The SDK profile is `sdk`; no Desktop window or existing Desktop process is required.
 
 DSH also has native runtime compatibility requirements. A previous local macOS arm64 check found that DSH `0.2.1-rc.3` rejects Electron `39.8.10` during SDK initialization with `unsupported Electron runtime fingerprint`, even though `--version` succeeds. This upstream rejection is distinct from installation discovery; enabling Node mode alone does not make that Electron build compatible. The same historical check passed with Electron `44.7.0` (Node `24.21.0`); it does not establish compatibility for later DSH releases.
 
@@ -68,7 +68,7 @@ DSH also has native runtime compatibility requirements. A previous local macOS a
 
 - An explicit session is resumed **before** the working directory is updated and the turn is sent. A failed resume does not silently start a new session.
 - New-session control instructions are separate user text blocks, not a native system prompt. No application history is reconstructed.
-- Upstream pre-parse input, stderr, and session maps have no Runtime-added memory bounds, and upstream close confirms the direct child only — not every tool descendant. Kernel worker isolation does not remove these limits.
+- Upstream pre-parse input, stderr, and session maps have no Runtime-added memory bounds, and upstream close confirms the direct child only — not every tool descendant. Kernel RPC does not remove these limits.
 - Using a host-owned API key means selecting `deepseek-official` explicitly. Missing environment variables never decide native login state.
 
 ## Verification

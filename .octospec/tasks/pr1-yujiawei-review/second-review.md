@@ -6,6 +6,8 @@ tags: [review, lifecycle, ci, testing]
 timestamp: 2026-10-17T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 第二轮评审
 
 两份新评审均针对 55e977f249b6b0fae85d43c79748db1ff35bb719。当前状态：R06b 已实现，新增回归及本地门禁结果见下文；R07 经公司规范核对后改为证据回应，保留 @v1；此前本地测试通过记录仍有效，但不表示已覆盖以下新发现。本次已实施 R06b；R07 保留公司规范的 @v1，已按用户授权发表评审说明，不修改 workflow。
@@ -27,7 +29,7 @@ reviewer 明确确认 ACP 启动失败、共享 Host 兄弟任务存活、ACP/ND
 
 reviewer 通过 public runCodexAppServerTurn、生产 defaultSpawn 与合成 app-server 复现取消和正常完成两种场景，每种三次；返回后 300 ms 内后代继续写文件 13–14 次。上述写入次数来自 reviewer；本轮另用生产 defaultSpawn 和合成协议独立复现 4 个失败场景，详见下文，不将其记录为真实 Codex 模型验收。
 
-之前实现覆盖：ACP 与公共 NDJSON 已接入回收函数，Claude Code 使用 spawnJsonLines，随公共实现生效；Host、ZCode 已接入；Codex 仅补管道错误隔离，独立关闭流程漏接。上一轮“同类整改完整完成”的总结过早。
+之前实现覆盖：ACP 与公共 NDJSON 已接入回收函数，Claude Code 使用 spawnJsonLines，随公共实现生效；Host 已接入；Codex 仅补管道错误隔离，独立关闭流程漏接。上一轮“同类整改完整完成”的总结过早。
 
 方案与验收：
 

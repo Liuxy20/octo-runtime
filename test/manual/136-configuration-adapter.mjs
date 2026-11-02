@@ -1,4 +1,4 @@
-// 仅由配置快照手动专项加载，观察真实 worker 收到的配置与启动次数。
+// 仅由配置快照手动专项加载，观察原生 Adapter 收到的配置与启动次数。
 import { appendFile, access } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
 

@@ -26,6 +26,8 @@ import { markSubmissionRejected } from "./submission-error.js";
 
 /**
  * 连接本机 socket/Windows Pipe，返回不拥有 Kernel 进程的客户端。
+ * 宿主接入层只在 CLI 模式跨进程连接已有服务时显式调用；原生 SDK 使用 kernel.client。
+ * Kernel/Extra 服务内部也复用本函数构造 RPC 客户端，不要求 SDK 调用方额外 attach。
  * invoke 提供登记、取消和尾流观察；关闭连接或迭代器不会隐式取消已接纳 Run。
  */
 export function attachKernel(options: { endpoint: string }): KernelClient {

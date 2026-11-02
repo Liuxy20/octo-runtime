@@ -6,11 +6,13 @@ tags: [review, lifecycle, testing, documentation]
 timestamp: 2026-10-17T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 交付
 
 按用户授权分别修复和本地提交，每项 commit 正文标明 reviewer、编号、决策及验证。yujiawei 的 R01/R02 通过删除无消费者的群资料/上传 API 处理，保留图片解析；R03 以系统账号为本地信任边界，仅补架构与接入说明；R04 以 Node 24 检查证据回应。
 
-Jerry-Xin 的 R05/R06 分别修复 ACP 传输错误逃逸和 leader 退出后的受管组残留。S01–S05 是据此开展的同类检查，并非 reviewer 直接提出的五条意见；已覆盖 Codex 管道错误、Host 启动失败、Host/ZCode 组清理以及 ACP/ZCode 有界接收缓冲。正常退出保留已接纳终态，实际超限才清空积压并失败。
+Jerry-Xin 的 R05/R06 分别修复 ACP 传输错误逃逸和 leader 退出后的受管组残留。S01–S05 是据此开展的同类检查，并非 reviewer 直接提出的五条意见；已覆盖 Codex 管道错误、Host 启动失败、Host 组清理以及 ACP 有界接收缓冲。正常退出保留已接纳终态，实际超限才清空积压并失败。
 
 可复用合同已回写[本地执行](../../rules/local-execution.md#本次执行资源的错误隔离与回收)与[有界状态](../../rules/stateless-execution.md#provider-接收缓冲)。具体上限、清理预算、原始缺陷及平台边界见[实施记录](../../tasks/pr1-yujiawei-review/implementation.md)。
 

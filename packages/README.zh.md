@@ -2,7 +2,7 @@
 
 [English](README.md) | [开发者文档](../docs/zh-CN/README.md)
 
-Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 CLI 和可选业务接入共用它。宿主决定 Adapter、配置和 Extra。Executor Core 里的 `AgentExecutor` 干活；Executor Kernel 加上本地 IPC 和独立 worker 的监督；Host SDK 负责把可选 Extra 装配在周围。
+Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 CLI 和可选业务接入共用它。宿主决定 Adapter、配置和 Extra。Executor Core 里的 `AgentExecutor` 干活；Executor Kernel 在同一宿主进程内负责本地 RPC、Run 接纳、观察、控制和有界回放；Host SDK 负责把可选 Extra 装配在周围。
 
 这个目录放的是 private workspace 包。每个包的 README 说明用途、接入入口和边界；Core 与 Kernel 提供执行示例，Adapter 页面展示注册与输入准备。
 
@@ -10,8 +10,8 @@ Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 C
 
 | 你想…                  | 从这里看                                                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| 在自己的进程里跑 Agent | [Executor Core](octo-runtime-executor-core/README.zh.md)                                                                   |
-| 隔离运行，要监督和回放 | [Executor Kernel](octo-runtime-executor-kernel/README.zh.md)                                                               |
+| 在 Electron 或 Node 应用中原生接入 Runtime | [Executor Kernel](octo-runtime-executor-kernel/README.zh.md)                                                                   |
+| 显式使用低层执行原语 | [Executor Core](octo-runtime-executor-core/README.zh.md)                                                               |
 | 接某个 Provider 的 CLI | 下面的 Provider 表                                                                                                         |
 | 写一个新的 Adapter     | [Adapter SDK](octo-runtime-adapter-sdk/README.zh.md)，再读 [ACP Adapter](octo-runtime-adapter-acp/README.zh.md)            |
 | 接 Octo IM 或企业微信  | [Channel Gateway](octo-runtime-extra-channel-gateway/README.zh.md)、[WeCom](octo-runtime-extra-channel-wecom/README.zh.md) |
@@ -23,10 +23,11 @@ Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 C
 ```text
 应用或 Extra
   -> KernelClient -> 本地 IPC
-  -> 独立 worker -> AgentExecutor -> 选中的 Adapter -> Provider
+  -> ExecutorKernel / HostRunService
+  -> Kernel 宿主内的 AgentExecutor -> 已注入的 Adapter -> Provider
 ```
 
-Kernel 和 Extra 的服务对象都在调用进程里构造。Electron 宿主可以在主进程里两个都构造；CLI 用同一套工厂把 Kernel 和 Extra 部署成独立服务。Core 也可以直接嵌入，代价是共用宿主的故障域。Extra 是可选的。
+原生 SDK 宿主 import 并构造 Adapter，将对象交给 `createKernelService({ endpoint, adapters })`，初始化后使用 `kernel.client`。即使同进程，业务调用也经过真实本地 RPC。Electron 宿主可在主进程创建 Kernel 和可选 Extra；CLI 通过相同工厂部署独立服务宿主。裸 Core 是显式低层 API，不是普通同进程 SDK 接入入口。
 
 ## 协议
 
@@ -54,23 +55,22 @@ Kernel 和 Extra 的服务对象都在调用进程里构造。Electron 宿主可
 | OpenClaw         | [octo-runtime-adapter-openclaw](octo-runtime-adapter-openclaw/README.zh.md)       | Gateway WebSocket RPC                   | canonical；调用远端已有 Agent                           |
 | Grok Build       | [octo-runtime-adapter-grok-build](octo-runtime-adapter-grok-build/README.zh.md)   | ACP stdio，自带认证协商                 | canonical；`>=1.0.67 <2`                                |
 | Antigravity      | [octo-runtime-adapter-antigravity](octo-runtime-adapter-antigravity/README.zh.md) | `agy` stream-json stdio                 | canonical；只支持 `full_access`                         |
-| ZCode            | [octo-runtime-adapter-zcode-gui](octo-runtime-adapter-zcode-gui/README.zh.md)     | 自带 app-server 的 NDJSON stdio         | canonical；没有单次调用选模                             |
 | Hermes           | [octo-runtime-adapter-hermes](octo-runtime-adapter-hermes/README.zh.md)           | `hermes acp`                            | canonical；空 load 结果视为会话丢失                     |
 | Kimi Code        | [octo-runtime-adapter-kimi-code](octo-runtime-adapter-kimi-code/README.zh.md)     | `kimi acp`                              | canonical；模型来自广告的 `configOptions`               |
 | MCode            | [octo-runtime-adapter-mcode](octo-runtime-adapter-mcode/README.zh.md)             | `mcode acp`                             | canonical；MiniMax 自己选模                             |
 | Qoder CLI        | [octo-runtime-adapter-qodercli](octo-runtime-adapter-qodercli/README.zh.md)       | `qodercli --acp`                        | canonical；只有 `full_access` 才加 `--yolo`             |
 | Qoder CLI CN     | [octo-runtime-adapter-qoderclicn](octo-runtime-adapter-qoderclicn/README.zh.md)   | `qoderclicn --acp`                      | canonical；独立二进制与 Adapter 类型                    |
 
-Adapter 由宿主选择并提供。走 Kernel 时，由 worker import 并注册。每个 Adapter 的 README 写了它自己的 Provider 前提和验证边界；出现在这张表里，不代表它的某个功能或平台通过了真实联调。
+宿主 import 并构造 Adapter 实例，Kernel 在本进程注册这些对象，不序列化其方法或依赖。CLI 宿主负责 manifest 解析、动态 import、工厂调用和配置加载。Kernel 不接收模块 manifest，不启动执行 worker。Adapter 可以启动 Provider 子进程，并负责其清理。每个 Adapter 的 README 写了它自己的 Provider 前提和验证边界；出现在这张表里，不代表它的某个功能或平台通过了真实联调。
 
 ## 执行器
 
 | 包                                                                        | 作用                                                                        | 注意                                 |
 | ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------------------------------------ |
 | [octo-runtime-executor-core](octo-runtime-executor-core/README.zh.md)     | 唯一的 `AgentExecutor`：输入准备、渲染、输出校验、取消、清理                | 共用宿主事件循环和故障域             |
-| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.zh.md) | `createKernelService`、`KernelClient`、本地 JSON-RPC、worker 监督、有界回放 | 不回放被打断的 Run，也不持有业务历史 |
+| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.zh.md) | `createKernelService`、`KernelClient`、本地 JSON-RPC、Run 接纳与控制、有界回放 | 不回放被打断的 Run，也不持有业务历史 |
 
-Kernel worker 和直接嵌入跑的是同一个 Core。替换 worker 恢复的是新 Run 的容量，不是被打断的那一个。有界的源流回放窗口不是持久历史。
+Kernel 在宿主进程使用唯一 Core 实现。Kernel、Core 和注入的 Adapter 共用宿主事件循环、内存和故障域：RPC 不能隔离同步阻塞、`process.exit()`、OOM 或宿主崩溃。宿主重启由应用或 CLI 负责；重建会产生新的 Kernel 实例，不重新执行此前已接纳的 Run。重连只能回放原存活实例仍保留的事件；有界回放窗口不是持久历史。
 
 ## Extra
 
@@ -99,7 +99,7 @@ Host SDK 依赖 Kernel；Core 和 Kernel 不依赖 Host SDK。本地执行不需
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `octo-runtime-protocol`              | `/protocol`，以及 `/protocol/schema.json`                                                                    |
 | `octo-runtime-executor-core`         | `/executor-core`：`AgentExecutor`                                                                            |
-| `octo-runtime-executor-kernel`       | `/executor-kernel`：`attachKernel`、`createKernelService`、`serveWorker`、`/executor-kernel/ipc-schema.json` |
+| `octo-runtime-executor-kernel`       | `/executor-kernel`：`attachKernel`、`createKernelService`、`/executor-kernel/ipc-schema.json` |
 | `octo-runtime-host-sdk`              | `/host`：`createExtraService`、`componentEndpoint`；`/extra`：插件类型                                       |
 | `octo-runtime-adapter-dsh`           | `/adapters/dsh`：`dshAdapter`、`createDshAdapter`                                                            |
 | `octo-runtime-extra-channel-gateway` | `/extras/channel-gateway`                                                                                    |

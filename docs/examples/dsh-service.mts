@@ -1,12 +1,12 @@
 import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
 
-/** 宿主维护 endpoint、worker 和 npm DSH JS 入口；同一配置用于 discovery 与每次执行。 */
-export function createDshKernel(endpoint: string, workerEntrypoint: string, dshBin: string) {
-  // 宿主负责 initialize、消费调用终态和业务尾流，退出时 close 并检查 complete。
+/** 宿主原生装配实例与 endpoint；DSH 内部负责启动 Provider，Kernel 不启动 worker。 */
+export function createDshKernel(endpoint: string, dshBin: string) {
+  // 宿主负责 initialize、消费终态和业务尾流，退出时 close 并检查 complete。
   return createKernelService({
     endpoint,
-    workerEntrypoint,
-    adapterConfigurations: { dsh: { providerOptions: { dshBin } } },
-    ...(process.versions.electron ? { env: { ELECTRON_RUN_AS_NODE: "1" } } : {})
+    adapters: [dshAdapter],
+    adapterConfigurations: { dsh: { providerOptions: { dshBin } } }
   });
 }

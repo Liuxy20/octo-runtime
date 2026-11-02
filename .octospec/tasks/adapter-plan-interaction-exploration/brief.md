@@ -69,7 +69,6 @@ IM Channel Gateway 当前产品决定始终普通/default，不配置或接入 P
 | --- | --- | --- |
 | codex | app-server collaborationMode、requestUserInput | 显式 default/plan 映射、应用证据与原生问答 |
 | claude-code | 原生 plan、AskUserQuestion、权限参数 | 模式与授权如何同时表达；进入/退出原生 Plan 的事实 |
-| zcode-gui | 产品有 Plan，当前 adapter 有 session mode 参数 | 当前 app-server 真实取值与问答载体 |
 | codebuddy | ACP / CLI permission-mode | 实际原生模式入口，不用审批值猜模式 |
 | hermes | 共享 ACP | 当前版本发布的 modes/configOptions 与交互 |
 | kimi-code | 共享 ACP | 同上；区分权限回调和用户问题 |
@@ -100,7 +99,7 @@ IM Channel Gateway 当前产品决定始终普通/default，不配置或接入 P
 ### E1：版本与能力证据
 
 - [x] 固定已有 adapters 范围、Context v3 / Run 7、actmode 命名与产品意图归属。
-- [x] 初步核对 Codex、Claude Code、ZCode、OpenCode 和 ACP 资料；不将文档能力等同于本机支持。
+- [x] 初步核对 Codex、Claude Code、OpenCode 和 ACP 资料；不将文档能力等同于本机支持。
 - [ ] 记录实际安装版本、原生发现结果、显式参数作用域和当前接线；缺认证/工具标未测，不隐式安装。
 
 ### E2：合同与端到端传递
@@ -149,7 +148,6 @@ IM Channel Gateway 当前产品决定始终普通/default，不配置或接入 P
 
 - [Codex app-server](https://learn.chatgpt.com/docs/app-server)
 - [Claude Code 权限与 Plan](https://code.claude.com/docs/zh-CN/agent-sdk/permissions)
-- [ZCode Agent](https://zcode.z.ai/en/docs/agents)
 - [OpenCode agents](https://opencode.ai/docs/agents/)
 - [ACP v1 session modes](https://agentclientprotocol.com/protocol/v1/session-modes)
 - [ACP v2 migration](https://agentclientprotocol.com/protocol/v2/migration)

@@ -34,7 +34,6 @@
     "@mininglamp-oss/octo-runtime-adapter-opencode": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-qodercli": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-qoderclicn": "workspace:*",
-    "@mininglamp-oss/octo-runtime-adapter-zcode-gui": "workspace:*",
     "@mininglamp-oss/octo-runtime-extra-channel-wecom": "workspace:*",
     "@mininglamp-oss/octo-runtime-extra-webui": "workspace:*"
   }

@@ -5,6 +5,8 @@ description: 四项修复的实际 Windows 证据、基线对照与未覆盖边�
 tags: [runtime, lifecycle, adapter, envs, installation, testing]
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 实施结果
 
 基线为 `origin/main@8af8360`，分支为 `fix/windows-runtime-reliability`。本机为 Windows Server 2022 Datacenter 10.0.20348 x64、Node 24.22.0、pnpm 11.19.0。四项均已实施。本地验证完成后，用户授权英文提交、正式 PR 及按门禁合入 main；已执行 fetch 和 rebase，最新 main 仍为 `8af8360`，无冲突，后续远端结果单独记录。
@@ -81,7 +83,7 @@ node --unhandled-rejections=strict --test --test-name-pattern='Windows|environme
 
 # 5049add 后续评审验收
 
-按[后续评审处置](review-fixes.md#5049add-后续评审)补齐 OpenCode/ZCode 环境消费者，并在同类检查中修复 Codex Home；明确模块清单参数的既有作用，清理已失效确认文件。新增 9 项，总定向回归 38 项全部通过。测试验证命令构建和真实临时桌面入口文件发现，不将其表述为真实 OpenCode/ZCode/Codex Provider 调用。
+按[后续评审处置](review-fixes.md#5049add-后续评审)补齐 OpenCode 环境消费者，并在同类检查中修复 Codex Home；明确模块清单参数的既有作用，清理已失效确认文件。新增 9 项，总定向回归 38 项全部通过。测试验证命令构建和真实临时桌面入口文件发现，不将其表述为真实 OpenCode/Codex Provider 调用。
 
 构建、最终源代码类型检查、lint、命名、format、docs 和 diff 检查通过；OctoSpec 为同样 7 处基线错误。完整 UI 35 通过，Node 1846 项：1682 通过、94 失败、70 跳过、0 取消；失败名称与 `5049add` 的 94 项完全相同，没有分支独有失败。相对最新 main 新增共 34 项全部通过；main 原全量额外 1 项启动预算断言的单独复验结果沿用上节记录，不重复把全量记成通过。5 项原生服务测试全部通过。
 

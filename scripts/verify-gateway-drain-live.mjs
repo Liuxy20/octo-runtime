@@ -192,10 +192,17 @@ try {
     const endpoint = componentEndpoint(directory);
     kernel = createKernelService({
       endpoint,
-      manifest,
       configurations: () =>
         dshFault ? { dsh: { providerOptions: { command: join(directory, "absent-dsh") } } } : {},
-      workerEntrypoint: absolute("../packages/octo-runtime-executor-kernel/dist/runner.js")
+      adapters: await (
+        await import("../apps/cli/dist/adapters.js")
+      ).loadCliAdapters(
+        (
+          await (
+            await import("../packages/octo-runtime-adapter-sdk/dist/module-manifest.js")
+          ).readModuleManifest(manifest, { legacy: true })
+        ).adapters
+      )
     });
     await kernel.initialize();
     const sibling = await kernel.client.submit(kernelInput("wait-for-host-exit"));

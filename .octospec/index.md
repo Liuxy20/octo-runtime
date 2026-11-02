@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 294：原生 Adapter 装配与统一 RPC](tasks/294-native-kernel-sdk/brief.md)：工作树已实现宿主注入 Adapter、Kernel 原生托管与统一 RPC，CLI 装配同步迁移；流程和职责案例见[计划](tasks/294-native-kernel-sdk/plan.md)。提交与合并按用户授权推进，验证边界见任务记录。
+
 - [Issue 166：Playboard 自动审批](tasks/166-playboard-auto-approval/brief.md)：仅 CLI 默认 full_access，自动审批与外部回答分离；[验证](tasks/166-playboard-auto-approval/validation.md)记录 19 项手动专项、全量及真实 Codex 两模式结果，等待验证审查。
 
 当前修复：[REST 使用 Manager 生效凭据](tasks/channel-rest-manager-credentials/brief.md)、[长任务跨连接恢复后的最终回复](tasks/channel-reconnect-final-delivery/brief.md)、[切网后 REST 进度卡继续更新](tasks/channel-rest-card-lifetime/brief.md)。
@@ -11,6 +13,7 @@
 | 主题 | 入口 |
 | --- | --- |
 | SDK 主要接入、CLI 特殊宿主、产品意图、Context v3 与模块责任归属 | [基础架构](rules/architecture.md) |
+| 宿主装配 Adapter、Kernel 不处理模块 manifest、同进程统一 RPC 与目标签名 | [Issue 294 架构约束](rules/architecture.md#sdk-原生装配与统一-rpc) |
 | 严禁提交凭据值；测试占位值仅运行期生成，真实认证由宿主从仓库外注入 | [凭据禁止入库](rules/architecture.md#凭据值严禁进入代码仓库) |
 | CLI 面向普通用户：start 自动安装、install 默认自启、独立启动、用途帮助与文本优先 | [CLI 产品默认值](rules/architecture.md#cli-面向普通用户的产品默认值) |
 | 产品默认推荐 KernelClient；与进程内 AgentExecutor 共用输入但生命周期不同 | [两种接入方式](rules/architecture.md#kernelclient-与-agentexecutor-的选型合同) |

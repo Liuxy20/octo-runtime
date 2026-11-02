@@ -32,7 +32,7 @@ export const echoAdapter = defineAdapter({
 });
 ```
 
-Register it like any other Adapter: `serveWorker([echoAdapter])` inside a Kernel worker, or `executor.register(echoAdapter)` for direct Core.
+Register it like any other Adapter: `createKernelService({ endpoint, adapters: [echoAdapter] })` in the host, or `executor.register(echoAdapter)` for direct Core.
 
 `Adapter` and `AdapterMetadata` describe authoring input, where `protocolSupport` is optional. `defineAdapter()` and `createJsonCliAdapter()` return `DefinedAdapter` with required protocol metadata. Omitting it defaults to protocol `${type}.canonical`, modes `["canonical"]`, and no native methods. Keep the inferred factory return type when passing the result to Core. A hand-written `HostedAdapter` must explicitly supply `protocolSupport`: registration validates it without adding defaults. Callers of canonical-only Adapters must explicitly select canonical mode.
 

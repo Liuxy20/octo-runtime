@@ -3,7 +3,7 @@ import {
   type HostedAdapter,
   type HostedAdapterMetadata
 } from "@mininglamp-oss/octo-runtime/executor-core";
-import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
 import {
   createJsonCliAdapter,
   defineAdapter,
@@ -25,13 +25,13 @@ export function checkAdapterProtocolContract(executor: AgentExecutor): void {
   // @ts-expect-error 未规范化的编写输入不能直接注册。
   executor.register(definition);
   // @ts-expect-error worker 与 Core 的注册要求一致。
-  serveWorker([definition]);
+  createKernelService({ endpoint: "/unused", adapters: [definition] });
 
   const adapter = defineAdapter(definition);
   const support: AdapterProtocolSupport = adapter.metadata.protocolSupport;
   const hosted: HostedAdapter = adapter;
   executor.register(adapter);
-  serveWorker([adapter]);
+  createKernelService({ endpoint: "/unused", adapters: [adapter] });
 
   const undefinedSupport = defineAdapter({
     ...definition,
@@ -72,7 +72,7 @@ export function checkAdapterProtocolContract(executor: AgentExecutor): void {
   });
   const cliSupport: AdapterProtocolSupport = cli.metadata.protocolSupport;
   executor.register(cli);
-  serveWorker([cli]);
+  createKernelService({ endpoint: "/unused", adapters: [cli] });
   void [
     missing,
     support,

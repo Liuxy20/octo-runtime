@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { appendFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { performance } from "node:perf_hooks";
 import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
 import { kernelInput, frames } from "../kernel-fixture.js";
 import { waitFor, withTimeout } from "../runtime-fixture.js";
@@ -28,7 +29,7 @@ export function createRecoveryProbe(directory) {
     }
     appendFileSync(
       join(directory, "events.jsonl"),
-      `${JSON.stringify({ ...row, at: Date.now() })}\n`
+      `${JSON.stringify({ ...row, at: Date.now(), monotonicAt: performance.now() })}\n`
     );
   };
   return {
@@ -40,17 +41,9 @@ export function createRecoveryProbe(directory) {
       };
       publish();
     },
-    worker(pid) {
-      if (!state.workers.includes(pid)) {
-        state.workers.push(pid);
-        publish();
-      }
-    },
-    async beforeShutdown({ children, workerPid, endpoint }) {
-      assert.ok(state.workers.includes(workerPid));
+    async beforeShutdown({ children, endpoint }) {
       assert.equal(children.length, 2);
       for (const { child } of children) process.kill(child.pid, 0);
-      process.kill(workerPid, 0);
       observer = attachKernel({ endpoint });
       before = await observer.status();
       const { ref } = await observer.submit(
@@ -72,7 +65,7 @@ export function createRecoveryProbe(directory) {
       if (action === "pause") {
         assert.equal(children[1].child.kill("SIGSTOP"), true);
         await executeFresh();
-        event({ event: "paused", workerPid, rpcSucceeded: true });
+        event({ event: "paused", kernelPid: before.pid, rpcSucceeded: true });
       } else if (action === "kill") {
         assert.equal(children[1].child.kill("SIGKILL"), true);
       }

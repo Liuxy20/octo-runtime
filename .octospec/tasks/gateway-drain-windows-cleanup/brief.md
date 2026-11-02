@@ -32,7 +32,7 @@ PR72 在 `816ad54` 的后续 P2 按用户要求修复：真实 Kernel 可在订�
 | Gateway 先断连接后收尾 | `im-channel.ts` 的 close 先 closed/abort/connector.close，事件循环和 finalReply 又检查 closed/aborted | 前一轮同 SHA 的受控探针观察到取消但最终回复次数为 0；不等于真实 IM 已复现 |
 | owner abort 传播至业务资源 | manager 将 Extra signal 与自身 abort 合并传给 ImRuntime；runner 在 stopAdmission 后先 cancelOwned，再 plugins.close | 只改 connector.close 顺序不足以修复完整链路 |
 | Windows 仅按活 leader 清树 | process-cleanup.ts 仅在 !exited() 时运行 taskkill /T，非进程组 exists 只检查 child 本身 | 已确认实现缺口；本轮没有 Windows 真机复现结果 |
-| 调用点保护不一致 | ACP、NDJSON、Codex、ZCode 与 Host/worker 使用不同 cleanup 参数 | 仅修改 Host 的 processTree 参数不能证明 Provider 后代已回收 |
+| 调用点保护不一致 | ACP、NDJSON、Codex 与 Host/worker 使用不同 cleanup 参数 | 仅修改 Host 的 processTree 参数不能证明 Provider 后代已回收 |
 
 rebase后重新核对Gateway close/事件循环/finalReply，提前中断链路仍存在；新增rulesContext按session/generation/revision条件更新的合同必须保留。
 初始探针仍只作为初始SHA证据，不转写为新基线的产品测试成绩。

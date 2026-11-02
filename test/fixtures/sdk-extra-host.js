@@ -1,9 +1,8 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
 import { fileURLToPath } from "node:url";
 import { testAdapter } from "./test-adapter.js";
 
-serveWorker([
+export const adapters = [
   {
     ...testAdapter,
     async *invoke(request) {
@@ -28,4 +27,4 @@ serveWorker([
       fileURLToPath(new URL("../../test-support/fake-native-codex.mjs", import.meta.url))
     ]
   })
-]);
+];

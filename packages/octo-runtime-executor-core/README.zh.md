@@ -2,15 +2,15 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-`AgentExecutor` 是 Octo Runtime 里真正执行 Agent 的唯一位置。注册你随包发布的 Adapter，交给它一个 `InvokeInput`，它负责准备本轮输入、调用选中的 Provider，并把结果流式返回。Kernel 在自己的独立 worker 里跑的就是这个类，所以进程内直接嵌入和走 Kernel 不会长成两套执行行为。
+`AgentExecutor` 是 Octo Runtime 里真正执行 Agent 的唯一位置。注册你随包发布的 Adapter，交给它一个 `InvokeInput`，它负责准备本轮输入、调用选中的 Provider，并把结果流式返回。Kernel 在同一宿主进程使用这个类。标准 Electron/CLI 接入统一经 KernelClient/RPC；下文仅说明底层执行 API。
 
 ## 什么时候用它
 
 整轮期限默认 24 小时，最大七天。72 小时调用显式传 `runtimeLimits: { runTimeoutMs: 259200000 }` 或 Context `octo.execution/limits` 的 `run_timeout_ms: 259200000`。首帧、模型空闲和工具空闲检测保持独立，见[输入优先级与范围](../../docs/zh-CN/reference/invoke-input.md)。
 
-- 你要在自己的进程里执行，并且接受共用事件循环、内存和故障域。
-- 你在写 Kernel 的 worker 入口——`serveWorker` 会替你构造 `AgentExecutor`。
-- 你需要进程隔离、监督或流回放：改用 [Kernel](../octo-runtime-executor-kernel/README.zh.md)。
+- Core 供内核实现及执行语义测试使用；同进程不构成绕过 Kernel 的理由。
+- 标准宿主接入使用 [Kernel](../octo-runtime-executor-kernel/README.zh.md)，保留 RPC、Run 接纳与观察管理。
+- Kernel 提供有界回放和控制，不提供同进程崩溃隔离。
 
 ## 发起一次调用
 
@@ -89,18 +89,20 @@ Provider 终态排空和迭代器关闭共用一个单调的 `cancelGraceMs` 预
 
 Core 最多保留 1,024 条调用身份记录，并在 120 秒后回收非活动记录。活动、暂停、未清理完的调用不会被回收，所以泄漏的所有权最终会耗尽容量。这些记录是关联状态，不是历史，也不是输出回放缓冲。
 
+`shutdown()` 同时等待已发起的实际 Adapter probe。`describe()` 的展示超时不表示探测已结束；probe 仍在途时返回 `cleanup: "incomplete"`，此时 invocation 身份列表可以为空。关闭后不再发起新 probe；探测正常完成或拒绝后释放在途记录。
+
 ## 直接 Core 还是 Kernel
 
 | 关注点                     | 直接 `AgentExecutor`                                        | `KernelClient`                    |
 | -------------------------- | ----------------------------------------------------------- | --------------------------------- |
-| 执行位置                   | 你的进程                                                    | Kernel 的独立 worker              |
-| 故障域                     | 共用事件循环；`process.exit`、OOM、同步阻塞会连宿主一起带走 | worker 故障被隔离，服务本身还活着 |
+| 执行位置                   | 你的进程                                                    | Kernel 所在宿主进程              |
+| 故障域                     | 共用事件循环；`process.exit`、OOM、同步阻塞会连宿主一起带走 | 同样共享宿主故障域 |
 | 提前结束迭代               | 请求取消                                                    | 仅停止观察                        |
 | 回放                       | 无                                                          | 有界，按原始身份与序号            |
 | `environment.streamLimits` | 支持                                                        | 拒绝                              |
 | 关闭                       | `shutdown()` 后看 `cleanup`                                 | `close()` 后看 `complete`         |
 
-长期驻留的桌面宿主建议走 Kernel，这是推荐路径。选直接 Core 应当是有意的：你接受共用故障域，并且自己管理执行器生命周期。两条路都不需要 Extra。
+Electron、Node SDK 与 CLI 宿主统一使用 KernelClient 经本地 RPC 调用。直接 Core 是供内核集成和执行语义测试使用的底层实现，不提供 Kernel 的接纳、观察和回放管理。两条路都不需要 Extra。
 
 ## 导入与分发
 

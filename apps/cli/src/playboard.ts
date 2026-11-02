@@ -1,3 +1,4 @@
+import { loadCliAdapters } from "./adapters.js";
 import {
   defaultRuntimeHome,
   runtimePaths,
@@ -11,7 +12,6 @@ import {
   createKernelService,
   type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { fileURLToPath } from "node:url";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,6 +26,8 @@ import {
 import { INVOKE_REQUEST_MAX_BYTES } from "@mininglamp-oss/octo-runtime-protocol";
 
 export interface PlayboardOptions {
+  /** CLI 可执行入口已接管强退时关闭本函数的协作信号监听；不在此退出宿主。 */
+  handleSignals?: boolean;
   input: NodeJS.ReadableStream;
   output?: (line: string) => void | Promise<void>;
   env?: NodeJS.ProcessEnv;
@@ -107,8 +109,10 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     controller.abort(error);
   };
   if (!options.output) process.stdout.on("error", onOutputError);
-  process.once("SIGINT", onInterrupt);
-  process.once("SIGTERM", onTerminate);
+  if (options.handleSignals !== false) {
+    process.once("SIGINT", onInterrupt);
+    process.once("SIGTERM", onTerminate);
+  }
   let kernel: KernelService | undefined;
   let outcome: number | undefined;
   let primaryFailure: { error: unknown } | undefined;
@@ -120,13 +124,10 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     kernel = createKernelService({
       endpoint:
         process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
-      workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),
-      adapterModules: resolveAdapterModules(manifest),
-      env: {
-        ...(options.env ?? process.env),
-        OCTO_RUNTIME_CLI_PROFILE_ROOT: paths.profileRoot,
-        OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "0"
-      },
+      adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
+        profileRoot: paths.profileRoot,
+        syncOpenClawTools: false
+      }),
       adapterConfigurations: await readCliAdapterConfigurations(
         paths.profileRoot,
         configuration?.adapters,

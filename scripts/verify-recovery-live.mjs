@@ -291,7 +291,13 @@ try {
     restoreFaults = recoveryLiveFaults({ controlFile, eventsFile });
     kernel = createKernelService({
       endpoint,
-      workerEntrypoint: absolute("../test-support/recovery-live-worker.mjs")
+      adapters: (
+        await import(
+          (await import("node:url")).pathToFileURL(
+            absolute("../test-support/recovery-live-worker.mjs")
+          ).href
+        )
+      ).adapters
     });
     extra = createExtraService({
       endpoint,
@@ -473,54 +479,7 @@ try {
     60000
   );
   report.userKeyReplyReadback = true;
-  stage = "active-worker-loss";
-  const prompt =
-    "Use the shell tool to run sleep 45. After it finishes reply DONE. Do not modify any files or send messages with tools.";
-  const activeInput = invocationInput(
-    invokeRequest({
-      invocationId: randomUUID(),
-      runId: randomUUID(),
-      agentSessionId: randomUUID(),
-      prompt,
-      modelInput: prompt,
-      controlInstructions: "Execute only the test command. Never read credentials or other files.",
-      approvalMode: "full_access",
-      workdir: directory
-    }),
-    "canonical",
-    "codex"
-  );
-  let toolStarted = false;
-  const activeResult = (async () => {
-    try {
-      let terminal;
-      for await (const event of client.invoke(activeInput, {
-        signal: AbortSignal.timeout(90000)
-      })) {
-        if (event.type === "tool_call.create") toolStarted = true;
-        if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
-          terminal = event.type;
-      }
-      return { terminal };
-    } catch (error) {
-      return { error: safeCode(error) };
-    }
-  })();
-  await waitFor(() => toolStarted, "QA_REAL_TOOL_NOT_STARTED", 60000);
-  const activeStatus = await client.status();
-  process.kill(activeStatus.worker.pid, "SIGKILL");
-  const oldResult = await activeResult;
-  check(oldResult.error === "RUN_OUTCOME_UNKNOWN", "QA_OLD_RUN_NOT_LOST");
-  await waitFor(
-    async () => {
-      const s = await client.status();
-      return s.execution_ready && s.worker.generation > activeStatus.worker.generation;
-    },
-    "QA_WORKER_RECOVERY_FAILED",
-    20000
-  );
-  report.oldRun = { ...oldResult, resubmitted: false };
-  await imProbe("AFTER_WORKER_LOSS");
+  // #294 原生服务不具备内部 worker 重启；本脚本保留网络恢复与新请求验收。
   stage = "four-direct-combinations";
   const fresh = attachKernel({ endpoint });
   try {
@@ -581,7 +540,7 @@ try {
   );
   check(gatewayAfter.status.bots[0].workingTasks === 0, "QA_TASKS_REMAIN");
   report.servicesPreserved = true;
-  report.workerGenerationAdvanced = after.worker.generation > before.worker.generation;
+  report.nativeKernel = after.pid === before.pid;
   report.faultEvents = await faults();
   report.pass = true;
 } catch (error) {

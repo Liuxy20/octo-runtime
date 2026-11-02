@@ -1,3 +1,4 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setTimeout as delay } from "node:timers/promises";
@@ -159,7 +160,7 @@ test("lost remains unresolved; stalled query ends at shared deadline and creates
 });
 
 test("real owner drain cancels abandoned iterator only, without replay subscriptions", async (t) => {
-  const f = await kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+  const f = await kernelFixture(t, { adapters: [invokeAdapter] });
   const { kernelRelay } = await import("./kernel-relay.js");
   const relay = await kernelRelay(t, f);
   const other = await f.client.submit(kernelInput("wait-for-cancel"));
@@ -186,7 +187,7 @@ test("real owner drain cancels abandoned iterator only, without replay subscript
 });
 
 test("real owner drains sixteen paused subscriptions and a rejected seventeenth observer", async (t) => {
-  const f = await kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+  const f = await kernelFixture(t, { adapters: [invokeAdapter] });
   const { kernelRelay } = await import("./kernel-relay.js");
   const relay = await kernelRelay(t, f),
     iterators = [];

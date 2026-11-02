@@ -4,7 +4,7 @@
 
 Octo Runtime gives applications a common interface to Agent execution programs such as Codex and Claude Code. This guide calls those programs **Providers** and the integrating application the **host application**. Each Provider has an **Adapter** that translates inputs, outputs, and control messages.
 
-Applications normally invoke `KernelClient.invoke`. Kernel receives the request, runs it in a separate worker process, and returns output to the client. This guide calls one execution a Run. The application handles output and interactions, Kernel manages worker startup and supervision, and KernelClient handles output subscriptions and reconnection.
+Applications normally invoke `KernelClient.invoke`. Kernel receives the request through local RPC, drives its in-process AgentExecutor, and returns output to the client. This guide calls one execution a Run. The application handles output and interactions, Kernel owns admission and execution lifecycle, and KernelClient handles output subscriptions and reconnection.
 
 The root [architecture document](../../../ARCHITECTURE.md) explains the motivation: IM integrations, desktop applications, and task systems can share execution capabilities instead of each implementing Provider integration.
 
@@ -18,12 +18,12 @@ flowchart TB
   Business[Business code] --> Client[KernelClient.invoke]
   Extra --> Client
   Client -->|local IPC| Kernel
-  Kernel -->|stdio NDJSON| Worker[Independent worker: AgentExecutor]
-  Worker --> Adapter[Provider Adapter]
+  Kernel --> Core[AgentExecutor in host process]
+  Core --> Adapter[Provider Adapter]
   Adapter --> Provider[Provider CLI / server]
 ```
 
-`createKernelService` creates the Kernel service and IPC endpoint in the calling process. AgentExecutor runs in a worker process started by Kernel. A native application can create Kernel in its main process without separately running the Runtime CLI. It can also connect to an existing service with `attachKernel({ endpoint })`.
+`createKernelService` creates the Kernel service and IPC endpoint in the calling process. AgentExecutor and host-injected Adapter objects share the Kernel host process. A native application can create Kernel in its main process without separately running the Runtime CLI and use `kernel.client`. An independent application in another process uses `attachKernel({ endpoint })` to connect to an existing Kernel.
 
 The CLI stores a device instance's identity and configuration in its Home directory. The workdir is the Agent's working directory and has a different purpose. SDK applications choose their own configuration and state locations.
 
@@ -35,7 +35,7 @@ Adapter and Extra selection belongs to the integration entry point. SDK hosts us
 | ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
 | Host application | Install/authenticate Providers, supply configuration, history and databases, start and close services  | Translate Provider protocols                           |
 | Host SDK         | Create Kernel and Extra services, supply dependencies, report initialization and cleanup results       | Manage application database schemas or migrations      |
-| Executor Kernel  | Expose IPC, supervise workers, retain output for reading after a disconnect                            | Store business history or automatically rerun requests |
+| Executor Kernel  | Expose IPC, own Core execution and Run lifecycle, retain output for reading after a disconnect                            | Store business history or automatically rerun requests |
 | AgentExecutor    | Prepare input, drive an execution, handle interactions, cancellation and final status                  | Retrieve business background or install Providers      |
 | Provider Adapter | Convert Runtime settings to Provider configuration, handle native output, clean up execution resources | Decide business permissions or fill in chat history    |
 | Extra            | Receive business requests, load Context, invoke Kernel, deliver results to business systems            | Close a shared Kernel or another module's invocations  |
@@ -83,7 +83,7 @@ sequenceDiagram
   participant App as Business code
   participant Client as KernelClient
   participant Kernel
-  participant Core as worker / AgentExecutor
+  participant Core as AgentExecutor
   participant Provider
   App->>Client: consume invoke(input)
   Client->>Kernel: submit once
@@ -99,45 +99,21 @@ sequenceDiagram
   Client-->>App: events in selected format
 ```
 
-A submission receipt confirms that the request was received; read the output stream for its result. A submitted execution continues if the client disconnects. On reconnection, the client queries that execution and reads output still retained by Kernel, without invoking again. Worker loss marks unfinished executions as `lost`; a replacement worker handles new requests only.
+A submission receipt confirms that the request was received; read the output stream for its result. A submitted execution continues if the client disconnects. On reconnection, the client queries that execution and reads output still retained by Kernel, without invoking again. Host loss reports an unknown outcome; rebuilding the service does not replay old requests.
 
-## KernelClient or Direct Core
+## Native Composition and Unified RPC
 
-| Property                                | KernelClient                                | AgentExecutor                           |
-| --------------------------------------- | ------------------------------------------- | --------------------------------------- |
-| Execution location                      | Independent worker supervised by Kernel     | Calling process                         |
-| Fault isolation                         | Worker isolation; host owns Kernel service  | Shares host failure/blocking/OOM domain |
-| Early iterator closure                  | Stops receiving output; execution continues | Requests execution cancellation         |
-| Reading after a disconnect              | Original output within the retention window | No Kernel output cache                  |
-| Local `streamLimits` environment option | Rejected                                    | Supported                               |
-| Shutdown                                | Service `close()`, inspect `complete`       | `shutdown()`, inspect `cleanup`         |
+Electron imports and constructs Adapter objects in its main process. CLI owns manifest reading, resolution, imports, and factory calls. Both pass actual objects to `createKernelService({ endpoint, adapters })`, await initialization, and execute through `kernel.client`. Kernel never loads product modules or accepts a module manifest, module path, or execution-worker entrypoint.
 
-Choose KernelClient for most integrations. Use AgentExecutor directly only when you need execution in the calling process and accept that blocking or crashes can affect the application process. Both offer `invoke(input, environment?)`, but differ in iterator closure, output recovery, and resource cleanup. See [Kernel IPC](../reference/kernel-ipc.md) and the [Core package](../../../packages/octo-runtime-executor-core/README.md).
+`endpoint` is a local communication address; Home is a host-owned configuration directory. `componentEndpoint(home)` only derives an address. Even same-process calls follow `KernelClient -> RPC -> Kernel -> AgentExecutor -> Adapter`. Object injection is composition; RPC carries invocation data rather than methods or closures.
 
-## Worker Failure and Shutdown
+Kernel preserves admission, identity checks, bounded replay, interactions, cancellation, and cleanup. Ending observation does not cancel execution. Lost ACKs are resolved by querying the original identity, never by repeating invocation. Direct Core is a low-level implementation/testing API, not an alternative standard Electron/CLI integration.
 
-```mermaid
-flowchart TB
-  Ready[Worker ready] --> Failure[Heartbeat or execution-process failure]
-  Failure --> Lost[Mark unfinished executions lost]
-  Lost --> Cleanup{Execution resources reclaimed?}
-  Cleanup -->|no| Block[Do not replace conflicting worker]
-  Cleanup -->|yes| Budget{Fast retry available?}
-  Budget -->|yes| Backoff[Wait then start a new worker]
-  Backoff --> Attempt
-  Budget -->|no| Cooldown[Wait 15 seconds before one startup attempt]
-  Cooldown --> Attempt[Start one worker]
-  Attempt -->|ready| Ready
-  Attempt -->|failed| Rollback{Startup resources reclaimed?}
-  Rollback -->|yes| Budget
-  Rollback -->|no| Block
-```
+## Failure Boundaries and Shutdown
 
-Kernel checks the worker's main-loop heartbeat every second and considers it lost after 5 seconds without a response. Worker startup allows 15 seconds for readiness. Before replacement, Kernel cleans up the old worker's execution resources. Incomplete cleanup blocks creation of a worker that could conflict with those resources.
+Kernel, Core, and Adapters share the host event loop. RPC does not isolate crashes. Execution-worker heartbeat, restart, and generation state have been removed. Adapters can still launch and reclaim Provider subprocesses. A crashed or OOM-killed host cannot continue serving; reconstruction creates a new `kernel_instance_id` without replaying old Runs.
 
-Fast replacement backoff is 250, 1000, and 4000 ms, with at most three fast attempts in 60 seconds of observed active time. After that budget is spent, Kernel stays `recovering` and waits 15 seconds before each single startup attempt. Startup and cleanup finish before the next wait begins. Slow recovery persists across short-lived workers; 60 seconds of observed health restores the fast budget. Unconfirmed cleanup or ownership blocks recovery in `exhausted` and remains a close failure. Closing cancels the wait. The Kernel process, instance and local listener remain intact throughout recovery and do not depend on network connectivity. A new worker does not rerun old requests.
-
-After creating Kernel, await `initialize()` before using `kernel.client`. At shutdown, close the application's Extras, wait for result consumption and delivery, then close the Kernel it created. A client obtained through `attachKernel` closes its connections without closing the service. A cleanup result of `complete=false` means some resources are not confirmed released; inspect the returned errors and pending resources.
+Await initialization before serving business calls. Stop admission, close owned Extras, and drain business delivery before closing Kernel. Kernel cancels Core, waits for Adapter cleanup, and releases its endpoint under one five-second deadline. `complete=false` preserves unconfirmed cleanup; terminal outcome, cancellation ACK, and resource release are separate facts. In-process blocking code cannot be forcibly killed; deadlines require a schedulable event loop.
 
 ## Access Permissions
 

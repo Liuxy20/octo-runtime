@@ -1,8 +1,7 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
 import { approvalFixture, until } from "./codex-approval-fixture.js";
 
-serveWorker([
+export const adapters = [
   createCodexAdapter({
     command: "fixture",
     spawnFn: () => {
@@ -30,4 +29,4 @@ serveWorker([
       return f.child;
     }
   })
-]);
+];

@@ -4,9 +4,11 @@ import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
+import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
+import { readModuleManifest } from "../packages/octo-runtime-adapter-sdk/dist/module-manifest.js";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { resolveAdapterModuleSpecifier } from "../packages/octo-runtime-executor-kernel/dist/module-specifier.js";
+import { resolveModuleSpecifier as resolveAdapterModuleSpecifier } from "../packages/octo-runtime-adapter-sdk/dist/module-manifest.js";
 import { invokeRequest, withTimeout } from "./runtime-fixture.js";
 
 const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
@@ -100,12 +102,9 @@ async function writeManifest(manifest, module, exportName = "testAdapter") {
 }
 
 async function startHost(t, root, manifest) {
-  const host = await spawnWorker({
-    entrypoint,
-    manifest,
-    env: { ...process.env, OCTO_RUNTIME_HOME: root, OCTO_RUNTIME_LOGS_DIRECTORY: "" },
-    readyTimeoutMs: 5_000
-  });
+  const host = await nativeHost(
+    await loadCliAdapters((await readModuleManifest(manifest, { legacy: true })).adapters)
+  );
   t.after(() => host.close());
   return host;
 }
@@ -167,7 +166,7 @@ for (const [name, moduleSpecifier] of forms) {
         "Handled: manifest regression"
       );
       await withTimeout(host.close(), 3_000, "manifest Host close timed out");
-      assert.ok(host.child.exitCode !== null || host.child.signalCode !== null);
+      assert.equal((await host.kernel.status()).phase, "closed");
     }
   );
 }

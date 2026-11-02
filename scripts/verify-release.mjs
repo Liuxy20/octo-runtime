@@ -107,7 +107,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const moduleManifest = JSON.parse(
       await readFile(join(installed, "apps/cli/dist/manifest.json"), "utf8")
     );
-    assert.equal(moduleManifest.adapters.length, 14);
+    assert.equal(moduleManifest.adapters.length, 13);
     const dshEntry = moduleManifest.adapters.find((entry) => entry.type === "dsh");
     assert.equal(dshEntry?.module, "@mininglamp-oss/octo-runtime-adapter-dsh");
     const dshModule = await import(`${pathToFileURL(installed).href}/dist/public/dsh.js`);
@@ -312,11 +312,6 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { cwd: consumer, timeout: 30_000, label: "Compile documentation examples" }
     );
     await cp(join(root, "test/fixtures/invoke-adapter.js"), join(consumer, "docs-adapter.mjs"));
-    await writeFile(
-      join(consumer, "docs-worker.mjs"),
-      'import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";\n' +
-        'import { testAdapter } from "./docs-adapter.mjs";\nserveWorker([testAdapter]);\n'
-    );
     await execute(
       process.execPath,
       [
@@ -326,11 +321,12 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       import assert from "node:assert/strict";
       import { resolve } from "node:path";
       import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+      import { testAdapter } from "./docs-adapter.mjs";
       import { runOwnedInvocation } from "./docs-examples/service.mts";
       let completed = false;
       await runOwnedInvocation({
         endpoint: componentEndpoint(resolve("docs-home")),
-        workerEntrypoint: resolve("docs-worker.mjs")
+        adapters: [testAdapter]
       }, {
         inputs: [{type: "text", text: "documentation package example"}],
         contexts: {schema: "octo.context-envelope/v3", items: [
@@ -429,7 +425,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         adapters.map((adapter) => adapter.type).sort(),
         moduleManifest.adapters.map((adapter) => adapter.type).sort()
       );
-      // Windows 的 SIGTERM 会直接杀掉 leader，之后无法再沿原 PID 找到 worker 树。
+      // Windows 的 SIGTERM 会直接杀掉 leader，之后无法再沿原 PID 找到所属后代树。
       if (process.platform === "win32") await stopReleaseProcess(child);
       else child.kill("SIGTERM");
       await Promise.race([

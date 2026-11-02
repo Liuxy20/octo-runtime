@@ -12,8 +12,6 @@ const PROVIDER_NAMES: Record<string, string> = {
   openclaw: 'OpenClaw',
   qodercli: 'Qoder CLI',
   qoderclicn: 'Qoder CLI CN',
-  'zcode-gui': 'ZCode',
-  zcode: 'ZCode',
   antigravity: 'Antigravity',
   acp: 'ACP',
 }

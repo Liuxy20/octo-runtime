@@ -1,22 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import adapter from "./fixtures/codex-async-adapter.mjs";
 import { attachKernel, createKernelService } from "../../dist/public/executor-kernel.js";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
 
-const options = {
-  manifest: undefined,
-  adapterModules: [
-    {
-      type: "codex",
-      module: resolve("test/manual/fixtures/codex-async-adapter.mjs"),
-      export: "default"
-    }
-  ]
-};
+// 测试宿主直接注入原生 Adapter；重建 Kernel 时仍使用同一 fake Provider。
+const options = { adapters: [adapter] };
 const input = (extra = {}) =>
   invocationInput(
     invokeRequest({
@@ -79,7 +71,7 @@ test(
 );
 
 test(
-  "Kernel and worker restart reject the original question reference",
+  "Kernel reconstruction rejects the original question reference",
   { timeout: 15000 },
   async (t) => {
     const f = await kernelFixture(t, options);
@@ -88,7 +80,6 @@ test(
     assert.equal((await f.server.close()).complete, true);
     const restarted = createKernelService({
       endpoint: f.endpoint,
-      workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
       ...options
     });
     t.after(() => restarted.close());
@@ -102,14 +93,14 @@ test(
 );
 
 test(
-  "worker rejection crosses Kernel socket with the public snake_case provider diagnostic",
+  "Adapter rejection crosses Kernel socket with the public snake_case provider diagnostic",
   { timeout: 15000 },
   async (t) => {
     const f = await kernelFixture(t, options);
     const { ref } = await f.client.submit(input({ prompt: "reject", modelInput: "reject" }));
     const q = await question(f.client, ref);
     await assert.rejects(f.client.respond(ref, answer(q.interactionId)), (error) => {
-      // 真实 worker RPC 用 camelCase；公开 socket 统一转为 snake_case，不能跨层对比字段名。
+      // Adapter 错误携带 camelCase；公开 socket 统一转为 snake_case，不能跨层对比字段名。
       assert.equal(error.code, "ASYNC_ANSWER_REJECTED");
       assert.equal(error.data.provider_rpc_code, -32602);
       assert.equal(error.data.providerRpcCode, undefined);

@@ -299,7 +299,7 @@ test(
     const kernelStatus = await client.status();
     const instance = kernelStatus.kernel_instance_id;
     assert.equal(kernelStatus.pid, kernel.pid);
-    assert.ok(kernelStatus.worker.pid);
+    assert.equal("worker" in kernelStatus, false);
     for (const component of ["executor-kernel", "channel-gateway"]) {
       for (const action of ["start", "restart"]) {
         const before = calls.length;
@@ -319,7 +319,7 @@ test(
     stage("gateway restarted");
     assert.equal((await status())["channel-gateway"].runtime.status.kernel_available, true);
     const kernelExit = await stop(kernel);
-    assert.throws(() => process.kill(kernelStatus.worker.pid, 0), { code: "ESRCH" });
+    assert.equal(kernelStatus.pid, kernel.pid);
     assert.equal((await status())["channel-gateway"].runtime.status.kernel_available, false);
     stage("final status checked");
     assert.equal(next.child.exitCode, null);

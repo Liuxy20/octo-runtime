@@ -45,15 +45,6 @@ test(
     await writeFile(join(directory, "package.json"), '{"type":"module"}');
     for (const file of ["native-loading-host.mts", "native-loading-extra.mjs", "test-adapter.js"])
       await cp(join(root, "test/fixtures", file), join(directory, file));
-    // 这是宿主维护的 worker 代码；原生 import、注册所选 Adapter，不经内置 JSON runner。
-    await writeFile(
-      join(directory, "native-worker.mjs"),
-      `
-    import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
-    import { testAdapter } from "./test-adapter.js";
-    serveWorker([testAdapter]);
-  `
-    );
     const tsc = join(root, "node_modules/typescript/bin/tsc");
     await execute(
       process.execPath,

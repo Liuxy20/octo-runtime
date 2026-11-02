@@ -62,11 +62,6 @@
       "export": "qoderCliCnAdapter"
     },
     {
-      "type": "zcode-gui",
-      "module": "@mininglamp-oss/octo-runtime-adapter-zcode-gui",
-      "export": "zcodeGuiAdapter"
-    },
-    {
       "type": "antigravity",
       "module": "@mininglamp-oss/octo-runtime-adapter-antigravity",
       "export": "antigravityAdapter"

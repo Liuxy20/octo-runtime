@@ -1,5 +1,4 @@
-// 仅由显式专项启动，复用生产 Adapter 和同一个 AgentExecutor/worker。
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+// 仅由显式专项宿主 import，提供生产 Adapter 给原生 Kernel。
 import { createOpenClawAdapter } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
 
-serveWorker([createOpenClawAdapter()]);
+export const adapters = [createOpenClawAdapter()];

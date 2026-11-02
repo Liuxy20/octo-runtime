@@ -1,5 +1,6 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
-// 源码 workspace 宿主拥有此入口，编译后交给 Kernel；不加载 CLI manifest。
-serveWorker([grokBuildAdapter]);
+/** 宿主选择 endpoint；初始化后通过 client 调用，退出时检查 close 的 complete。 */
+export const createGrokKernel = (endpoint: string) =>
+  createKernelService({ endpoint, adapters: [grokBuildAdapter] });

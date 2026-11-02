@@ -56,7 +56,7 @@ Adapter 不发现 npm 安装、不搜索 PATH、不使用 Desktop/ASAR 代码。
 
 上述 `hostSelectedDshEntry` 由宿主管理，例如所选全局 `@deepseek-ai/dsh` 安装内的 `lib/bin.js` 绝对路径。不能传 `dsh.cmd`、`npx.cmd`、Desktop 可执行文件或相对路径。Kernel 宿主在 `createKernelService` 设置 `adapterConfigurations: { dsh: { providerOptions: { dshBin: hostSelectedDshEntry } } }`，使 `kernel.client.list()` 与调用使用同一入口。Runtime CLI 宿主通过 `<home>/<profile>/config.json` 的 `adapters.dsh.execution.provider_options.dshBin` 配置；不会自动迁移既有配置。
 
-Electron 宿主使用自带 runtime executable，无需另装 Node。Adapter 检测到 Electron 时仅在子进程环境中固定 `ELECTRON_RUN_AS_NODE=1`；宿主也须为 Kernel worker 开启 Node mode，且所选 Electron 构建须支持此模式。Windows 同样传入 JS 入口，不使用 shell wrapper。SDK profile 为 `sdk`；无需 Desktop 窗口或已有 Desktop 进程。
+Electron 宿主使用自带 runtime executable，无需另装 Node。Adapter 检测到 Electron 时仅在 Provider 子进程环境中固定 `ELECTRON_RUN_AS_NODE=1`；所选 Electron 构建须支持此模式。Kernel 原生运行于宿主，不启动执行 worker。Windows 同样传入 JS 入口，不使用 shell wrapper。SDK profile 为 `sdk`；无需 Desktop 窗口或已有 Desktop 进程。
 
 DSH 本身还有原生 runtime 兼容要求。此前本地 macOS arm64 实测中，DSH `0.2.1-rc.3` 的 `--version` 成功，但 SDK 初始化以 `unsupported Electron runtime fingerprint` 拒绝 Electron `39.8.10`。此上游拒绝与安装发现不同，单独开启 Node mode 不会使该 Electron 构建兼容。同一历史验证在 Electron `44.7.0`（Node `24.21.0`）通过，不代表更高 DSH 版本已验证兼容。
 
@@ -64,7 +64,7 @@ DSH 本身还有原生 runtime 兼容要求。此前本地 macOS arm64 实测中
 
 - 显式会话**先续接**，再更新工作目录、发送本轮输入。续接失败不会悄悄新开一个会话。
 - 新会话的控制指令是独立的用户文本块，不是原生 system prompt。不重建任何应用历史。
-- 上游在预解析输入、stderr、session map 上没有 Runtime 追加的内存边界；上游的 close 只确认直接子进程，不覆盖所有工具后代。Kernel worker 隔离去不掉这些限制。
+- 上游在预解析输入、stderr、session map 上没有 Runtime 追加的内存边界；上游的 close 只确认直接子进程，不覆盖所有工具后代。Kernel RPC 不消除这些限制。
 - 用宿主自己的 API key 时要显式选 `deepseek-official`。环境变量缺失从来不作为原生登录状态的判断依据。
 
 ## 验证

@@ -242,7 +242,6 @@ for (const { mode, action, bodyFailure = false } of [
             OCTO_RECOVERY_OUTAGE: "0",
             OCTO_RECOVERY_TEARDOWN_PROBE: directory,
             OCTO_RECOVERY_GATEWAY_STOP: action,
-            OCTO_RECOVERY_SKIP_WORKER_LOSS: action === "pause" ? "0" : "1",
             OCTO_RECOVERY_TEARDOWN_BODY_FAILURE: bodyFailure ? "1" : "0"
           },
           stdio: ["ignore", "pipe", "pipe"]
@@ -285,7 +284,10 @@ for (const { mode, action, bodyFailure = false } of [
             term >= 0 && kill > term && gatewayExit > kill && kernelTerm > gatewayExit,
             JSON.stringify(events)
           );
-          assert.ok(events[kill].at - events[term].at >= 7000);
+          // 预算从关闭操作开始计时；磁盘事件记录晚于起点，不能用两条 wall clock 相减。
+          // Node 对小数毫秒 timer 截断，允许不足 1 ms 的调度精度差，不缩短 7000 ms 预算。
+          assert.equal(events[term].gracefulUntil, events[term].gracefulStartedAt + 7000);
+          assert.ok(events[kill].monotonicAt + 1 >= events[term].gracefulUntil);
           assert.equal(events[kill].kernelAlive, true);
           assert.ok(events.some((row) => row.event === "paused" && row.rpcSucceeded));
         }
@@ -294,7 +296,7 @@ for (const { mode, action, bodyFailure = false } of [
         assert.equal(events[independent].unrelatedCompleted, true);
         assert.equal(events[independent].freshCompleted, true);
         assert.ok(index("executor-kernel", "graceful-exit", "done") > kernelTerm);
-        assert.ok(state.workers.length >= (action === "pause" ? 2 : 1), "track worker generations");
+        assert.deepEqual(state.workers, [], "native Kernel starts no execution workers");
         for (const pid of [...state.children.map((row) => row.pid), ...state.workers])
           assert.equal(alive(pid), false, `leaked pid ${pid}`);
         assert.equal(alive(state.testPid), false, "test-file runner must also exit");

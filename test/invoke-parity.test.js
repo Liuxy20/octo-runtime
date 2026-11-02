@@ -1,33 +1,25 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PassThrough } from "node:stream";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { kernelFixture } from "./kernel-fixture.js";
+import { kernelRelay } from "./kernel-relay.js";
 import { waitFor } from "./runtime-fixture.js";
 
-function fixture(t, invoke) {
-  const host = new AgentExecutor();
-  host.register({
+async function fixture(t, invoke) {
+  const adapter = {
     metadata: {
       type: "fixture",
       agentSources: ["provisioned"],
       protocolSupport: { protocol: "fixture", modes: ["native", "canonical"], nativeMethods: [] }
     },
     invoke
-  });
-  const input = new PassThrough(),
-    output = new PassThrough(),
-    wire = [];
-  input.on("data", (chunk) => wire.push(JSON.parse(chunk.toString())));
-  new WorkerRpcServer({ host, output }).listen(input);
-  const client = new WorkerRpcClient({ input: output, output: input });
-  t.after(async () => {
-    client.close();
-    input.destroy();
-    output.destroy();
-    await host.shutdown();
-  });
-  return { host, client, wire };
+  };
+  const host = new AgentExecutor();
+  host.register(adapter);
+  t.after(() => host.shutdown());
+  const kernel = await kernelFixture(t, { adapters: [adapter] });
+  const relay = await kernelRelay(t, kernel);
+  return { host, client: relay.client, wire: relay.requests };
 }
 
 const input = (mode = "canonical") => ({
@@ -63,8 +55,8 @@ for (const mode of ["native", "canonical"])
         yield { kind: "control", control: { type: "state", state: "completed" } };
       else yield { protocolVersion: 2, type: "run.completed", payload: {} };
     };
-    const local = fixture(t, invoke),
-      remote = fixture(t, invoke),
+    const local = await fixture(t, invoke),
+      remote = await fixture(t, invoke),
       value = input(mode),
       before = structuredClone(value);
     const localEvents = [],
@@ -77,8 +69,8 @@ for (const mode of ["native", "canonical"])
     assert.equal(remoteRequest.sessionName, value.sessionName);
     assert.equal(remoteRequest.workdir, process.cwd());
     assert.deepEqual(value, before);
-    const call = remote.wire.find((message) => message.method === "invoke");
-    assert.deepEqual(call.params, { input: value });
+    const call = remote.wire.find((message) => message.method === "agent_run.invoke");
+    assert.deepEqual(call.params.input, value);
     assert.ok(localEvents.length > 0 && remoteEvents.length > 0);
     assert.equal(
       mode === "native" ? remoteEvents.at(-1).control.state : remoteEvents.at(-1).type,
@@ -88,7 +80,7 @@ for (const mode of ["native", "canonical"])
 
 test("local and RPC pre-abort never start a Provider or transmit an invocation", async (t) => {
   let calls = 0;
-  const { host, client, wire } = fixture(t, async function* () {
+  const { host, client, wire } = await fixture(t, async function* () {
     calls++;
   });
   const controller = new AbortController();
@@ -107,7 +99,7 @@ test("local and RPC active signal cancellation reaches Provider and closes the s
   for (const route of ["host", "client"]) {
     let started = false,
       stopped = false;
-    const handles = fixture(t, async function* (request) {
+    const handles = await fixture(t, async function* (request) {
       started = true;
       await new Promise((resolve) =>
         request.signal.addEventListener("abort", resolve, { once: true })
@@ -126,6 +118,7 @@ test("local and RPC active signal cancellation reaches Provider and closes the s
     controller.abort(reason);
     await rejected;
     await waitFor(() => stopped);
-    if (route === "client") assert.ok(handles.wire.some((message) => message.method === "cancel"));
+    if (route === "client")
+      assert.ok(handles.wire.some((message) => message.method === "agent_run.cancel"));
   }
 });

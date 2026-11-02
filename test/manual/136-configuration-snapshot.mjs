@@ -2,17 +2,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { setTimeout } from "node:timers/promises";
 import { kernelFixture, frames } from "../kernel-fixture.js";
-import { WorkerRpcClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { adapter, defaultAdapter } from "./136-configuration-adapter.mjs";
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
   INVOKE_REQUEST_MAX_BYTES
 } from "@mininglamp-oss/octo-runtime-protocol";
 
-const manifest = resolve("test/manual/136-configuration-adapters.json");
+const adapters = [adapter, defaultAdapter];
 const config = (revision) => ({
   providerOptions: { revision: String(revision), shared: "host" },
   streamLimits: { hostFrameMaxBytes: revision === 1 ? 5120 : 6144 }
@@ -62,11 +63,11 @@ test("A1/A2: changing resolver matches one fixed revision for options, limits an
   for (const selected of [1, 2]) {
     let calls = 0;
     const changing = await kernelFixture(t, {
-      manifest,
+      adapters,
       configurations: () => ({ snapshot: config(calls++ === 0 ? selected : 3 - selected) })
     });
     const fixed = await kernelFixture(t, {
-      manifest,
+      adapters,
       adapterConfigurations: { snapshot: config(selected) }
     });
     const actual = await run(changing.client, input("large"));
@@ -88,7 +89,7 @@ test("A1/A2: changing resolver matches one fixed revision for options, limits an
       assert.ok(bytes > 5120 && bytes <= 6144, `complete frame: ${bytes}`);
       t.diagnostic(`complete output frame: ${bytes} bytes`);
     }
-    // 保持专项的 worker 数量有界；fixture after 仍确认同一个幂等 close 的结果。
+    // 保持专项的原生 Kernel 实例数量有界；fixture after 仍确认同一个幂等 close 的结果。
     assert.equal((await changing.server.close()).complete, true);
     assert.equal((await fixed.server.close()).complete, true);
   }
@@ -99,7 +100,7 @@ test("A3/A4/A7: active runs keep copies while subsequent/concurrent runs and lis
   let calls = 0;
   const runtimes = [];
   const f = await kernelFixture(t, {
-    manifest,
+    adapters,
     configurations: (runtimeId) => {
       calls++;
       runtimes.push(runtimeId);
@@ -155,7 +156,7 @@ test("A5: static/default/missing configuration and option precedence preserve ca
     [{ adapterConfigurations: staticConfig, configurations: () => ({}) }, undefined],
     [{}, undefined]
   ]) {
-    const f = await kernelFixture(t, { manifest, ...extra });
+    const f = await kernelFixture(t, { adapters, ...extra });
     const value = input("report", {
       agentConfig: { providerOptions: { shared: "input", keep: "yes" } }
     });
@@ -174,16 +175,16 @@ test("A5: static/default/missing configuration and option precedence preserve ca
   }
 });
 
-test("A6: invalid/throwing configurations fail before worker invoke, without disturbing another run", async (t) => {
+test("A6: invalid/throwing configurations fail before Core invoke, without disturbing another run", async (t) => {
   let submissions = 0;
-  const invokeFrames = WorkerRpcClient.prototype.invokeFrames;
-  t.mock.method(WorkerRpcClient.prototype, "invokeFrames", function (...args) {
+  const invokeFrames = AgentExecutor.prototype.invokeFrames;
+  t.mock.method(AgentExecutor.prototype, "invokeFrames", function (...args) {
     submissions++;
     return invokeFrames.apply(this, args);
   });
   let current = config(2);
   const f = await kernelFixture(t, {
-    manifest,
+    adapters,
     configurations: () => {
       if (current instanceof Error) throw current;
       return { snapshot: current };
@@ -207,7 +208,7 @@ test("A6: invalid/throwing configurations fail before worker invoke, without dis
       f.client.submit(input("report", { runMetadata: { startsFile } })),
       invalid?.providerOptions?.padding ? /INVOKE_REQUEST_TOO_LARGE/ : undefined
     );
-    assert.equal(submissions, 1, "invalid configurations must not reach worker invoke");
+    assert.equal(submissions, 1, "invalid configurations must not reach Core invoke");
     assert.equal(await readFile(startsFile, "utf8"), "start\n");
   }
   current = config(2);
@@ -219,7 +220,7 @@ test("A6: invalid/throwing configurations fail before worker invoke, without dis
 test("A5: omitted Adapter selects codex configuration using this invocation's runtimeId", async (t) => {
   const runtimes = [];
   const f = await kernelFixture(t, {
-    manifest,
+    adapters,
     configurations: (runtimeId) => {
       runtimes.push(runtimeId);
       return { codex: config(runtimeId === "first" ? 1 : 2), snapshot: config(2) };

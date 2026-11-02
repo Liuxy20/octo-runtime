@@ -29,10 +29,8 @@ async function ready(path) {
   throw new Error("fixture did not become ready");
 }
 
-for (const transport of ["ACP", "NDJSON", "Host"])
-  for (const mode of transport === "Host"
-    ? ["normal"]
-    : ["normal", "ignore-term", "parent-exits"]) {
+for (const transport of ["ACP", "NDJSON"])
+  for (const mode of ["normal", "ignore-term", "parent-exits"]) {
     test(
       `${transport} reaps group after ${mode}; concurrent closes await same cleanup`,
       { skip: process.platform === "win32", timeout: 5000 },
@@ -51,14 +49,7 @@ for (const transport of ["ACP", "NDJSON", "Host"])
               mode
             ]
           };
-          if (transport === "Host") {
-            const { spawnWorker } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
-            client = await spawnWorker({
-              entrypoint: options.args[0],
-              env: { ...process.env, OCTO_REVIEW_READY: readyPath, OCTO_REVIEW_TICKS: tickPath }
-            });
-            close = () => client.close();
-          } else if (transport === "ACP") {
+          if (transport === "ACP") {
             client = spawnAcpClient(options);
             close = () => client.close();
           } else {
@@ -110,44 +101,6 @@ test("cleanup reports timeout instead of success when an owned process cannot be
   await assert.rejects(close(), { code: "PROCESS_CLEANUP_TIMEOUT" });
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
 });
-
-test(
-  "ZCode completed turn reaps tools even after the provider leader exits",
-  { skip: process.platform === "win32", timeout: 5000 },
-  async () => {
-    const { createZcodeGuiAdapter } =
-      await import("@mininglamp-oss/octo-runtime-adapter-zcode-gui");
-    const { invokeRequest } = await import("./runtime-fixture.js");
-    const directory = await mkdtemp(join(tmpdir(), "octo-zcode-tree-"));
-    const readyPath = join(directory, "ready.json"),
-      tickPath = join(directory, "ticks");
-    let pids;
-    try {
-      const adapter = createZcodeGuiAdapter({
-        command: process.execPath,
-        appServerArgs: [
-          new URL("../test-support/fake-owned-process-tree.mjs", import.meta.url).pathname,
-          readyPath,
-          tickPath,
-          "zcode"
-        ]
-      });
-      const events = [];
-      for await (const event of adapter.invoke(
-        invokeRequest({ approvalMode: "full_access", signal: AbortSignal.timeout(4000) })
-      ))
-        events.push(event);
-      pids = await ready(readyPath);
-      assert.equal(alive(pids.parentPid), false);
-      assert.equal(alive(pids.childPid), false);
-      assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
-    } finally {
-      pids ??= await ready(readyPath).catch(() => undefined);
-      if (pids) await Promise.all([pids.parentPid, pids.childPid].map(terminateFixtureProcess));
-      await rm(directory, { recursive: true, force: true });
-    }
-  }
-);
 
 for (const disappears of [true, false]) {
   test(

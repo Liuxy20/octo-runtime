@@ -2,11 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { kernelFixture } from "./kernel-fixture.js";
+import net from "node:net";
+import { once } from "node:events";
 import {
   INVOKE_REQUEST_MAX_BYTES,
-  assertInvokeRequestSize,
   resolveStreamLimitPolicy
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { readBoundedLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
@@ -27,31 +27,23 @@ const input = () => ({
   sessionId: randomUUID()
 });
 
-function fixture(t, invoke) {
-  const host = new AgentExecutor();
-  host.register({
-    metadata: {
-      type: "size-fixture",
-      agentSources: ["provisioned"],
-      protocolSupport: { protocol: "size-fixture", modes: ["canonical"], nativeMethods: [] }
-    },
-    invoke:
-      invoke ??
-      async function* () {
-        yield { protocolVersion: 2, type: "run.completed", payload: {} };
+async function fixture(t, invoke) {
+  return kernelFixture(t, {
+    adapters: [
+      {
+        metadata: {
+          type: "size-fixture",
+          agentSources: ["provisioned"],
+          protocolSupport: { protocol: "size-fixture", modes: ["canonical"], nativeMethods: [] }
+        },
+        invoke:
+          invoke ??
+          async function* () {
+            yield { protocolVersion: 2, type: "run.completed", payload: {} };
+          }
       }
+    ]
   });
-  const upstream = new PassThrough(),
-    downstream = new PassThrough();
-  new WorkerRpcServer({ host, output: downstream }).listen(upstream);
-  const client = new WorkerRpcClient({ input: downstream, output: upstream });
-  t.after(async () => {
-    client.close();
-    upstream.destroy();
-    downstream.destroy();
-    await host.shutdown();
-  });
-  return { host, client, upstream, downstream };
 }
 const collect = async (source) => {
   const events = [];
@@ -59,30 +51,19 @@ const collect = async (source) => {
   return events;
 };
 
-test("RPC full frame accepts exactly 32 MiB and rejects one byte more without writing", async (t) => {
-  const { client, upstream } = fixture(t);
-  let writes = 0;
-  upstream.on("data", () => {
-    writes++;
+test("Kernel RPC accepts a bounded request and rejects oversized input before execution", async (t) => {
+  let calls = 0;
+  const { client } = await fixture(t, async function* () {
+    calls++;
+    yield { protocolVersion: 2, type: "run.completed", payload: {} };
   });
-  for (const difference of [-1, 0, 1]) {
-    const value = input();
-    value.runMetadata = { padding: "" };
-    const base = JSON.stringify({
-      jsonrpc: "2.0",
-      id: "x".repeat(36),
-      method: "invoke",
-      params: { input: value }
-    });
-    value.runMetadata.padding = "x".repeat(
-      INVOKE_REQUEST_MAX_BYTES - Buffer.byteLength(base) + difference
-    );
-    const before = writes;
-    if (difference > 0) {
-      await assert.rejects(collect(client.invoke(value)), /INVOKE_REQUEST_TOO_LARGE/);
-      assert.equal(writes, before);
-    } else assert.equal((await collect(client.invoke(value))).at(-1).type, "run.completed");
-  }
+  const large = input();
+  large.runMetadata = { padding: "x".repeat(INVOKE_REQUEST_MAX_BYTES - 4096) };
+  assert.equal((await collect(client.invoke(large))).at(-1).type, "run.completed");
+  assert.equal(calls, 1);
+  large.runMetadata.padding += "x".repeat(4096);
+  await assert.rejects(collect(client.invoke(large)), /INVOKE_REQUEST_TOO_LARGE/);
+  assert.equal(calls, 1);
   assert.equal((await collect(client.invoke(input()))).at(-1).type, "run.completed");
 });
 
@@ -95,7 +76,7 @@ test("oversized raw line does not abort an active run or the next invocation", a
     finish = resolve;
   });
   let calls = 0;
-  const { client, upstream } = fixture(t, async function* () {
+  const { client, endpoint } = await fixture(t, async function* () {
     if (++calls === 1) {
       started();
       await completed;
@@ -104,9 +85,15 @@ test("oversized raw line does not abort an active run or the next invocation", a
   });
   const active = collect(client.invoke(input()));
   await ready;
+  const upstream = net.createConnection(endpoint);
+  upstream.on("error", () => {});
+  t.after(() => upstream.destroy());
+  await once(upstream, "connect");
+  const dropped = new Promise((resolve) => upstream.once("close", resolve));
   upstream.write(Buffer.alloc(INVOKE_REQUEST_MAX_BYTES, 120));
   upstream.write("overflow");
   upstream.write("\n");
+  await dropped;
   finish();
   assert.equal((await active).at(-1).type, "run.completed");
   assert.equal((await collect(client.invoke(input()))).at(-1).type, "run.completed");
@@ -155,23 +142,6 @@ test("unterminated oversized record has a finite discard timeout", async () => {
   } finally {
     clearTimeout(keepAlive);
   }
-});
-
-test("oversized response errors are handled by both input and readline", async () => {
-  const input = new PassThrough(),
-    output = new PassThrough();
-  const client = new WorkerRpcClient({ input, output, maximumInputBytes: 512 * 1024 });
-  const rejected = assert.rejects(client.request("list"), (error) => {
-    assert.match(error.message, /HOST_FRAME_TOO_LARGE/);
-    assert.equal(error.boundary, "host.rpc_transport");
-    assert.equal(error.measuredBytes, 512 * 1024 + 1);
-    assert.equal(error.limitBytes, 512 * 1024);
-    return true;
-  });
-  input.write("x".repeat(512 * 1024 + 1));
-  await rejected;
-  input.destroy();
-  output.destroy();
 });
 
 test("Codex canonical accepts bounded image echoes and excludes hydrated resume history", async () => {

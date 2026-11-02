@@ -17,7 +17,7 @@ Extra 用于把业务系统接到 Kernel。例如，IM Extra 接收聊天消息�
 
 ## 连接 Channel Gateway
 
-使用已有 Kernel，并在其机器上安装、登录 Codex Provider。在 [SDK 入门](../getting-started/sdk.md)的独立 npm 目录下载 [gateway.mts](../../examples/gateway.mts)。它从公开的 `/host` 和 `/extras/channel-gateway` 入口导入，通过 `createExtraService` 构造完整 Bot 声明。
+先按 [SDK 接入](../getting-started/sdk.md)原生创建 Kernel，并准备 Codex Provider。主进程装配方式见该页的 ChannelGateway 章节；[gateway.mts](../../examples/gateway.mts) 另展示使用公开 `/host` 和 `/extras/channel-gateway` 入口的完整可运行宿主例子，可放在自己的消费工程中运行。
 
 在示例宿主的运行环境中准备以下变量；这些不是新增的 Runtime 配置字段：
 
@@ -129,7 +129,7 @@ Gateway 将已确认的用户/Bot 名称与身份类型缓存在内存中，按 
 
 Extra 是可选路径。用户可以自行实现 lambda，也可复用 Provider 集成模块的函数；不要求 Provider 新增扩展机制，两种方式都不经过 Kernel。
 
-例如，模型选项 Extra 可以调用宿主注入的目录查询函数，获得所选官方服务、代理站或自定义 endpoint 的选项；需要将目录或业务结果发布到外部服务时，则调用对应的发布函数。查询和发布属于该 Extra 的业务依赖，不是 Kernel 的统一模型目录接口。Provider 可以提供集成实现，不需要将 worker 内的 Adapter 实例暴露给 Extra。
+例如，模型选项 Extra 可以调用宿主注入的目录查询函数，获得所选官方服务、代理站或自定义 endpoint 的选项；需要将目录或业务结果发布到外部服务时，则调用对应的发布函数。查询和发布属于该 Extra 的业务依赖，不是 Kernel 的统一模型目录接口。Provider 可以提供集成实现，不需要将 Kernel 所使用的 Adapter 实例暴露给 Extra。
 
 具体 Extra 必须定义并消费对应依赖；入口存在时，用户只需提供实现。宿主选择实现并封装配置、凭据和授权，Extra 按业务合同调用并处理结果、错误和取消。函数在 Extra 所在进程中运行，可以通过网络访问外部服务，不放进 JSON，也不通过 Kernel IPC 传输；框架不自动发现 Provider 函数或代替业务决定发送、重试与确认语义。现有依赖关闭及实际在途管理继续生效，`signal` 需要调用方显式传递。
 

@@ -119,7 +119,7 @@ entries.map(entry => entry.text).join("\n")
 
 普通 Context 继续按现有合同逐轮处理，不能因为系统指令只在新会话注入而一并省略。系统指令也不能改成每轮附加的普通 Context 来绕开错误。
 
-覆盖当前全部具体 Adapter：Codex、Claude Code、CodeBuddy、Hermes、Kimi Code、MCode、OpenCode、OpenClaw、Qoder CLI、Qoder CLI CN、ZCode GUI、Antigravity，以及复用的 ACP 实现。各 Provider 的原生映射不同，本计划不假定它们都有独立 system 字段；验收必须确认各自映射和新会话/续聊行为。
+覆盖当前全部具体 Adapter：Codex、Claude Code、CodeBuddy、Hermes、Kimi Code、MCode、OpenCode、OpenClaw、Qoder CLI、Qoder CLI CN、Antigravity，以及复用的 ACP 实现。各 Provider 的原生映射不同，本计划不假定它们都有独立 system 字段；验收必须确认各自映射和新会话/续聊行为。
 
 ### 4. 失败展示与连接状态分开
 

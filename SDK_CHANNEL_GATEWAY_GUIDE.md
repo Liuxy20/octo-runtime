@@ -14,7 +14,7 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 
 ## 装配顺序
 
-1. 宿主准备 Provider 和自己的 worker 入口，createKernelService 后 initialize，或 attachKernel 连接已有服务。
+1. 宿主原生导入并构造 Adapter，传给 createKernelService 后 initialize；原生 SDK 使用 kernel.client，Gateway 的独立 RPC client 由 ExtraService 内部管理，宿主无需 attachKernel。显式 attach 用于另一个进程中的独立应用连接已有 Kernel，CLI 客户端是其中一种。
 2. 从受保护配置源取得 Bot 值，并导入 Gateway 模块。
 3. createExtraService({endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
 4. extra.status() 的 plugin 为插件 JSON；Bot online 与 kernel_available 分别判断。
@@ -112,7 +112,7 @@ Electron 主进程 createExtraService({ module: gateway, config, dependencies })
   -> Gateway 的 binding/reset/occurrence/gap/rules 读写进入宿主实现
 ```
 
-store 无需另行注册成 Extra，不放进 JSON config，也不传给 Kernel/worker。可同时提供 loadContexts，从同一个宿主数据库读取本轮材料；两个入口彼此独立，工厂返回的对象由 Gateway 持有。
+store 无需另行注册成 Extra，不放进 JSON config，也不传给 Kernel。可同时提供 loadContexts，从同一个宿主数据库读取本轮材料；两个入口彼此独立，工厂返回的对象由 Gateway 持有。
 
 ### 宿主实现与类型边界
 
@@ -139,7 +139,7 @@ store 无需另行注册成 Extra，不放进 JSON config，也不传给 Kernel/
 
 ### 可运行的无数据库样例
 
-[gateway-store.mts](test-support/public-extra/gateway-store.mts) 提供完整的宿主内存后端、全部接口方法、工厂装配和关闭断言；[host.mts](test-support/public-extra/host.mts) 与 [worker.mts](test-support/public-extra/worker.mts) 提供真实 Kernel 启动入口。该样例无 SQLite 依赖、不使用 IM 凭据，证明公共类型和加载/所有权；内存后端不证明文件落盘或 Provider 真实续聊，生产宿主仍需实现容量与保留策略。
+[gateway-store.mts](test-support/public-extra/gateway-store.mts) 提供完整的宿主内存后端、全部接口方法、工厂装配和关闭断言；[host.mts](test-support/public-extra/host.mts) 原生装配 Adapter 并启动 Kernel，通过真实 RPC 验证调用。该样例无 SQLite 依赖、不使用 IM 凭据，证明公共类型和加载/所有权；内存后端不证明文件落盘或 Provider 真实续聊，生产宿主仍需实现容量与保留策略。
 
 在本仓根目录执行：
 

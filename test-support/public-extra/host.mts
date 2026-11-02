@@ -1,3 +1,4 @@
+import { adapters } from "./worker.mjs";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { readFile } from "node:fs/promises";
@@ -19,7 +20,7 @@ import { recoveryProbe } from "./recovery-kernel-probe.mjs";
 const endpoint = componentEndpoint(resolve("h"));
 const owner = createKernelService({
   endpoint,
-  workerEntrypoint: resolve("compiled/worker.mjs")
+  adapters
 });
 await owner.initialize();
 assert.equal((await owner.client.status()).pid, process.pid);

@@ -121,7 +121,7 @@ interface InvocationOwner {
 
 /**
  * 唯一的进程内执行实现：校验输入/Adapter 输出、补齐消息生命周期、约束单个终态并传递取消。
- * Kernel worker 和显式进程内接入共用本类；它不拥有独立 Kernel、业务会话或 IM 投递。
+ * 由 Kernel 在宿主进程持有；它不拥有 RPC 端点、业务会话或 IM 投递。
  * 接入方须消费流并在退出时检查 shutdown 的 cleanup 结果；终态不能替代资源回收确认。
  */
 export class AgentExecutor {
@@ -149,6 +149,8 @@ export class AgentExecutor {
   readonly #activeAdapters = new Map<string, HostedAdapter>();
   // 资源所有权独立于活动执行/终态：清理未确认的 owner 必须留存，供 shutdown 返回真实遗留项。
   readonly #owners = new Map<string, InvocationOwner>();
+  // probe 的展示超时只结束等待；底层宿主函数仍在运行，必须计入实际关闭事实。
+  readonly #probes = new Set<Promise<unknown>>();
   #state: "open" | "closing" | "closed" = "open";
   #shutdownAttempt: Promise<ExecutorShutdownResult> | undefined;
   #shutdownResult: ExecutorShutdownResult | undefined;
@@ -182,6 +184,7 @@ export class AgentExecutor {
   async describe(
     configurations: Record<string, AdapterProbeOptions> = {}
   ): Promise<HostedAdapterMetadata[]> {
+    this.#assertOpen();
     return Promise.all(
       [...this.#adapters.values()].map(async (adapter) => {
         let probe: Record<string, unknown> = {};
@@ -189,7 +192,11 @@ export class AgentExecutor {
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const result: unknown = await Promise.race([
-            Promise.resolve().then(() => adapter.probe?.(configurations[adapter.metadata.type])),
+            Promise.resolve().then(() =>
+              adapter.probe
+                ? this.probe(adapter.metadata.type, configurations[adapter.metadata.type])
+                : undefined
+            ),
             new Promise<undefined>((resolve) => {
               timer = setTimeout(() => {
                 unavailableReason = "probe_timeout";
@@ -1037,12 +1044,27 @@ export class AgentExecutor {
     }
   }
 
-  /** Run the adapter's own environment probe; return an unchecked-available status when there is no probe. */
+  /** 保留 Adapter 的 this 与同步返回合同；实际异步探测完成前由 Core 持有，关闭后不再发起探测。 */
   probe(adapterType: string, options?: AdapterProbeOptions): unknown {
+    this.#assertOpen();
     const adapter = this.#adapters.get(adapterType);
     if (!adapter) throw new Error(`unknown adapter: ${adapterType}`);
     if (!adapter.probe) return { available: true, adapterType, unchecked: true };
-    return adapter.probe(options);
+    const result = adapter.probe(options);
+    if (
+      result === null ||
+      (typeof result !== "object" && typeof result !== "function") ||
+      typeof (result as { then?: unknown }).then !== "function"
+    )
+      return result;
+    // 统一 Promise/thenable，调用方也消费同一 Promise，不能重复驱动一次性的 thenable。
+    const pending = Promise.resolve(result);
+    this.#probes.add(pending);
+    const settled = () => {
+      this.#probes.delete(pending);
+    };
+    void pending.then(settled, settled);
+    return pending;
   }
 
   /** 请求取消活动执行；true 仅表示已触发 abort，仍须消费终态并等待 Adapter 清理。 */
@@ -1082,7 +1104,7 @@ export class AgentExecutor {
   }
 
   /**
-   * 停止接纳并取消未终结执行，在 timeoutMs 内等待 Adapter 清理；不负责业务投递收尾。
+   * 停止接纳并取消未终结执行，在 timeoutMs 内等待 Adapter 清理及实际 probe；不负责业务投递收尾。
    * 并发调用共用当前尝试；超时或清理失败返回 incomplete 和遗留身份，不冒充资源已回收。
    */
   shutdown(reason = "executor shutdown", timeoutMs = 2_500): Promise<ExecutorShutdownResult> {
@@ -1091,7 +1113,7 @@ export class AgentExecutor {
     if (this.#shutdownAttempt) return this.#shutdownAttempt;
     if (this.#shutdownResult?.cleanup === "complete") return Promise.resolve(this.#shutdownResult);
     this.#state = "closing";
-    const pending: Promise<unknown>[] = [];
+    const pending: Promise<unknown>[] = [...this.#probes];
     for (const [id, owner] of this.#owners) {
       if (!this.#acceptedTerminals.has(id)) owner.controller.abort(reason);
       pending.push(this.#cleanupOwner(id, owner));
@@ -1104,7 +1126,8 @@ export class AgentExecutor {
       );
       const result: ExecutorShutdownResult = Object.freeze({
         state: "closed",
-        cleanup: unresolvedInvocationIds.length ? "incomplete" : "complete",
+        // probe 不属于某个 invocation，不能伪造 invocationId；仍在途时独立阻止 complete。
+        cleanup: unresolvedInvocationIds.length || this.#probes.size ? "incomplete" : "complete",
         unresolvedInvocationIds,
         failedCleanupInvocationIds
       });

@@ -1,4 +1,4 @@
-import type { WorkerRpc } from "./rpc.js";
+import type { ExecutionSource } from "./execution-source.js";
 import {
   createInputInvoke,
   assertInvokeRequestSize,
@@ -41,10 +41,10 @@ interface Run {
 const TTL = 120_000;
 
 /**
- * Kernel 内唯一的 Run 事件源：从 worker 消费一次，按原 stream/seq 有界缓存供多个订阅观察。
+ * Kernel 内唯一的 Run 事件源：从同进程 Core 消费一次，按原 stream/seq 有界缓存供多个订阅观察。
  * 接纳、执行与观察分离；订阅退出不取消源执行，缓存过期只报告缺口，不重跑 Provider。
  */
-export class HostRunService implements WorkerRpc {
+export class HostRunService implements ExecutionSource {
   readonly invoke = createInputInvoke((input, environment) =>
     this.invokeFrames(input, environment)
   );
@@ -56,7 +56,7 @@ export class HostRunService implements WorkerRpc {
   #starting = new Set<string>();
   readonly #cleanup: NodeJS.Timeout;
   constructor(
-    readonly transport: WorkerRpc,
+    readonly transport: ExecutionSource,
     private readonly resolveStreamLimits?: (input: InvokeInput) => InvokeEnvironment["streamLimits"]
   ) {
     this.#cleanup = setInterval(() => this.#prune(), 10_000);
@@ -69,13 +69,13 @@ export class HostRunService implements WorkerRpc {
       admittingRuns: this.#starting.size
     };
   }
-  list(...args: Parameters<WorkerRpc["list"]>): ReturnType<WorkerRpc["list"]> {
+  list(...args: Parameters<ExecutionSource["list"]>): ReturnType<ExecutionSource["list"]> {
     return this.transport.list(...args);
   }
-  probe(...args: Parameters<WorkerRpc["probe"]>): Promise<unknown> {
+  probe(...args: Parameters<ExecutionSource["probe"]>): Promise<unknown> {
     return this.transport.probe(...args);
   }
-  cancel(invocationId: string, reason?: string): ReturnType<WorkerRpc["cancel"]> {
+  cancel(invocationId: string, reason?: string): ReturnType<ExecutionSource["cancel"]> {
     return this.transport.cancel(invocationId, reason);
   }
   respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
@@ -310,7 +310,7 @@ export class HostRunService implements WorkerRpc {
         .map((event) => structuredClone(event))
     };
   }
-  cancelRun(runId: string, reason?: string): ReturnType<WorkerRpc["cancel"]> {
+  cancelRun(runId: string, reason?: string): ReturnType<ExecutionSource["cancel"]> {
     return this.cancel(this.#get(runId).invocationId, reason);
   }
   respond(runId: string, response: InteractionResponse): Promise<void> {

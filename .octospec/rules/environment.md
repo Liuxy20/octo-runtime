@@ -60,7 +60,7 @@ supersedes: []
 | 执行路径 | 行为 |
 | --- | --- |
 | Codex | 注入 app-server 进程；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 变量白名单。配置读取失败则停止调用，不伪装为已应用。 |
-| Claude Code、CodeBuddy、通用 ACP、ZCode、Antigravity、通用 CLI | 注入每次调用新建的 Provider 子进程。Provider 启动的 CLI/stdio MCP 依其原生继承规则获得变量。 |
+| Claude Code、CodeBuddy、通用 ACP、Antigravity、通用 CLI | 注入每次调用新建的 Provider 子进程。Provider 启动的 CLI/stdio MCP 依其原生继承规则获得变量。 |
 | OpenClaw Gateway | 非空 envs 返回 `CONTEXT_ENVS_UNSUPPORTED`，因为当前 Gateway 没有本次调用的环境变量载体。空 envs 不影响调用。 |
 | 远程 HTTP MCP、远程 executor MCP | 不把本机环境直接传给远端进程。HTTP MCP 可以通过 Provider 已配置的环境变量引用取得客户端认证信息；不会自动新增 header。 |
 
@@ -70,11 +70,11 @@ Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 
 
 ## Channel Gateway 的工具环境
 
-渠道为 octo-cli 提供的规范 token、兼容 token 别名及 API 地址使用独立 `InvokeEnvironment.executionEnvOverrides`，不写入 Context envs。Core 将其复制到内部 InvokeRequest 的同名字段，Host RPC 使用 `invoke.with-environment` 传递；旧 Host 不认识该方法时明确拒绝，不回退普通 invoke。条目格式沿用 env payload，独立限制 128 项和 65,536 字节，已识别值必须校验。
+渠道为 octo-cli 提供的规范 token、兼容 token 别名及 API 地址使用独立 `InvokeEnvironment.executionEnvOverrides`，不写入 Context envs。Kernel RPC 将其作为 agent_run.invoke 的独立参数交给 Core，Core 复制到内部 InvokeRequest 的同名字段；不写入全局 process.env。条目格式沿用 env payload，独立限制 128 项和 65,536 字节，已识别值必须校验。
 
 Adapter SDK 合并顺序为继承环境、Context envs、独立覆盖、Adapter 固定传输设置。Codex 原生 shell 与本地 MCP 白名单使用合并后的本轮值。内部字段不由 `invocationInput` 转为公共 JSON，不进入 Context hash、模型输入或渠道业务快照；带覆盖的 RPC 请求只记录脱敏摘要。该字段不是远程授权机制。
 
-Windows 在 Adapter 启动环境合并时按不区分大小写的变量名逐层覆盖，每个名字只保留一个最终拼写；JSON-lines、通用 ACP 和 Grok ACP 最终 spawn 再合并继承值时也遵守同一规则，不能重新引入 PATH/path 别名。MCP 展开、命令发现、OpenCode 内联配置、ZCode 桌面路径与 Codex Home 等进程环境消费者通过 processEnvironmentValue 按相同身份只读自有属性，不能固定读取某种大小写拼写。Adapter 追加固定环境设置时继续使用同一合并规则，不能因固定 CODEX_HOME 再生成别名。POSIX 保持大小写敏感。该转换只针对实际进程环境，不改变协议列表、Context hash 或 mandatory 的跨平台键合同；每次返回独立对象，不修改宿主 process.env。
+Windows 在 Adapter 启动环境合并时按不区分大小写的变量名逐层覆盖，每个名字只保留一个最终拼写；JSON-lines、通用 ACP 和 Grok ACP 最终 spawn 再合并继承值时也遵守同一规则，不能重新引入 PATH/path 别名。MCP 展开、命令发现、OpenCode 内联配置、Codex Home 等进程环境消费者通过 processEnvironmentValue 按相同身份只读自有属性，不能固定读取某种大小写拼写。Adapter 追加固定环境设置时继续使用同一合并规则，不能因固定 CODEX_HOME 再生成别名。POSIX 保持大小写敏感。该转换只针对实际进程环境，不改变协议列表、Context hash 或 mandatory 的跨平台键合同；每次返回独立对象，不修改宿主 process.env。
 
 OpenClaw 使用 CLI dotenv 预配置，保持每轮非空 envs 不支持的现状；共享文件按配置顺序后写覆盖前写，不承诺多 Bot 按轮隔离，详见 [渠道合同](channel-integration.md)。桌面应用的身份选择及 Context envs 用法保留。
 

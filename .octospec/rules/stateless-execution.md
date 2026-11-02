@@ -37,17 +37,17 @@ Runtime 接收已准备的请求、校验执行配置、调用 Provider、传递
 
 超过窗口淘汰旧帧，游标缺口和过期明确报错。保留不依赖消费者 ACK；不能用慢连接固定占住无限旧帧。字节上限不是进程 RSS 上限，Provider、对象、队列和复制还有额外开销。
 
-Kernel/worker 重启后旧 stream 不恢复，不自动重放业务请求，不从历史补模型上下文。终态和过期状态必须按窗口合同释放；停止时回收执行资源。
+Kernel 宿主重启后旧 stream 不恢复，不自动重放业务请求，不从历史补模型上下文。终态和过期状态必须按窗口合同释放；停止时回收执行资源。
 
 ## Provider 接收缓冲
 
-ACP 的每个 session 更新队列、ZCode 的每次客户端事件队列复用 DriverQueue：默认单项不超过 20 MiB，排队不超过 4096 条，排队序列化总量不超过 32 MiB。单项、累计字节和条数分别返回 `STREAM_QUEUE_ITEM_TOO_LARGE`、`STREAM_QUEUE_BYTES_EXCEEDED`、`STREAM_QUEUE_ITEMS_EXCEEDED`，清空积压并关闭当前传输；不静默丢事件后报告成功，不影响其他客户端。这些是序列化字节及条数上限，不是整个进程的 RSS 上限。
+ACP 的每个 session 更新队列使用 DriverQueue：默认单项不超过 20 MiB，排队不超过 4096 条，排队序列化总量不超过 32 MiB。单项、累计字节和条数分别返回 `STREAM_QUEUE_ITEM_TOO_LARGE`、`STREAM_QUEUE_BYTES_EXCEEDED`、`STREAM_QUEUE_ITEMS_EXCEEDED`，清空积压并关闭当前传输；不静默丢事件后报告成功，不影响其他客户端。这些是序列化字节及条数上限，不是整个进程的 RSS 上限。
 
-普通协议行在 readline / JSON.parse 前默认限制为 16 MiB，包括尚未收到换行的数据；超限返回 `PROVIDER_MESSAGE_TOO_LARGE`。ACP 当前 prompt 显式包含原生图片时，原生行按既有 `INVOKE_REQUEST_MAX_BYTES`（32 MiB）限制，以容纳输入回显；prompt 结束恢复本 invocation 的有效上限，事件队列预算始终不变。ZCode 当前不支持图片输入，协议行始终使用有效普通上限。
+普通协议行在 readline / JSON.parse 前默认限制为 16 MiB，包括尚未收到换行的数据；超限返回 `PROVIDER_MESSAGE_TOO_LARGE`。ACP 当前 prompt 显式包含原生图片时，原生行按既有 `INVOKE_REQUEST_MAX_BYTES`（32 MiB）限制，以容纳输入回显；prompt 结束恢复本 invocation 的有效上限，事件队列预算始终不变。
 
 各 Adapter 同类限制继承中央默认值，可由受信 `execution.stream_limits` 显式覆盖；每项硬最大值为默认值两倍，关系矛盾或越界配置直接拒绝，不静默裁剪。策略在 invocation 开始时冻结，不读取 Context、聊天正文或 Provider 参数。全局重放清理采用活跃策略中的最高受信预算，较低覆盖不得淘汰其他 Adapter 已保留的帧。
 
-超限是本次调用的真实失败，清理队列、reader、pending 和受管进程。正常结束时已接纳的终态仍须交给消费者；不能把正常退出等同于容量溢出。具体实现、回归及边界见 [S04 实施记录](../tasks/pr1-yujiawei-review/implementation.md#s04acp--zcode-接收缓冲)。
+超限是本次调用的真实失败，清理队列、reader、pending 和受管进程。正常结束时已接纳的终态仍须交给消费者；不能把正常退出等同于容量溢出。当前回归见 [Provider 缓冲测试](../../test/provider-buffer-limits.test.js)。
 
 ## 插件状态
 
@@ -73,11 +73,11 @@ Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 rese
 
 ## 受管日志
 
-F31 已实施统一内核与 Extra 元数据日志。SDK Extra 显式指定 logging.directory，worker 可通过 OCTO_RUNTIME_LOGS_DIRECTORY 配置；当前 CLI 使用 home/logs，不提供 --logs-dir。未配置的 SDK 实例不创建日志资源。Extra 经加载器绑定来源的 ctx.log 输出事件，内核只记生命周期、身份、稳定错误码和本轮输入/非 Adapter Context 项数，Adapter 只记安全执行选择。正文、原始错误、完整配置、凭据、预览及内容哈希均不记录。SDK/launcher 不重复落盘原始进程输出。
+F31 已实施统一内核与 Extra 元数据日志。SDK Kernel/Extra 显式指定 logging.directory；当前 CLI 使用 home/logs，不提供 --logs-dir。未配置的 SDK 实例不创建日志资源。Extra 经加载器绑定来源的 ctx.log 输出事件，内核只记生命周期、身份、稳定错误码和本轮输入/非 Adapter Context 项数，Adapter 只记安全执行选择。正文、原始错误、完整配置、凭据、预览及内容哈希均不记录。SDK/launcher 不重复落盘原始进程输出。
 
 F31 已确认并实施：按 UTC 小时命名，每序列保留最近 3 个实际文件（包含当前文件），单文件 100 MiB；不按最近 3 小时年龄删除，跨天停机后仍保留最后文件。新小时实际写入第四个文件时淘汰最旧归档，不创建无日志小时的空文件。专用 Worker 隔离磁盘写入，每进程最多 128 条在途和 128 个序列，满额、锁竞争或写入失败可丢诊断，不保证审计完整性；关闭最多等待 1 秒，不影响 Agent 执行。轮转沿用非等待互斥和普通文件校验，不删除身份、Provider 文件、用户文件或旧固定日志。详情与原生服务定义更新见[运维](../guides/operations.md)及[实施记录](../tasks/gateway-august-feature-assessment/implementation.md#f31-核心改造已实施)。
 
-正常关闭应提供上述既有有界排空机会；健康回归场景要求关闭后预期记录完整。目录可写且未触发容量限制仍不等于日志必达：Worker 超时、写入失败、锁竞争继续按可丢弃诊断处理，不能转成执行失败或无限等待。Windows worker 通过内部 EOF 进入现有 shutdown/logging.close，调用方职责不变；实现及故障回归见 [#38 记录](../journal/shared/2026-10-20-windows-host-log-close.md)。
+正常关闭应提供上述既有有界排空机会；健康回归场景要求关闭后预期记录完整。目录可写且未触发容量限制仍不等于日志必达：Worker 超时、写入失败、锁竞争继续按可丢弃诊断处理，不能转成执行失败或无限等待。Kernel owner 在 Core 排空后关闭日志，沿用共享截止时间；旧 Windows worker 的 EOF 路径仅属历史实现，见 [#38 记录](../journal/shared/2026-10-20-windows-host-log-close.md)。
 
 ## 核对入口
 

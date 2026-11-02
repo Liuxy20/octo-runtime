@@ -122,10 +122,7 @@ deadline 只限制 Core 的等待，不证明底层操作已经停止，pending/
 在已有失败时及时返回且观察其他步骤的拒绝，避免等待阻塞兄弟项才能报错。respond 保留原写入
 失败与清理失败。真实 TCP listener 回归确认源资源得到释放，阻塞 return 也不会隐藏关闭失败。
 
-ZCode 的 client.close 拒绝原本跳过 spec.cleanup；现两项均尝试，单项错误原样返回，多项错误
-聚合。纯模拟 child 故障注入不发送 OS 信号，并确认原初始化失败事实仍在事件中。
-
-本轮新增 22 项回归（Core预算/迟到拒绝14、Native6、ZCode2），Windows专项一并运行。
+本轮新增 22 项回归，Windows专项一并运行。
 修复前已有隔离复现证据；本轮针对性22项已通过。最终全量 Node 1317 项中 1307 通过、
 10 跳过、0 失败，UI 35 通过；typecheck/build、lint、lint:names、format:check 和 diff 空白
 检查通过。重新 pack-release 与仓库外 verify-release 通过，含公开 Core、离线安装与卸载

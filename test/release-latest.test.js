@@ -449,10 +449,6 @@ test("Windows 发行验收覆盖独立组件和进程树清理", async () => {
   const verifier = await readFile(resolve(root, "scripts/verify-release.mjs"), "utf8");
   const workflow = await readFile(resolve(root, ".github/workflows/ci.yml"), "utf8");
   const cliManifest = JSON.parse(await readFile(resolve(root, "apps/cli/package.json"), "utf8"));
-  const invocationManifest = await readFile(
-    resolve(root, "packages/octo-runtime-executor-kernel/src/invocation-manifest.ts"),
-    "utf8"
-  );
   assert.match(verifier, /stopReleaseProcess\(child\)/);
   assert.match(verifier, /compiled\/host\.mjs/);
   assert.match(
@@ -462,6 +458,5 @@ test("Windows 发行验收覆盖独立组件和进程树清理", async () => {
   assert.match(workflow, /git config --global core\.autocrlf false/);
   assert.match(workflow, /node scripts\/verify-windows-release\.mjs/);
   assert.match(workflow, /needs: \[check, verify-windows-release\]/);
-  assert.match(invocationManifest, /encoding: "utf8", timeout: 40_000, windowsHide: true/);
   assert.doesNotMatch(cliManifest.scripts.build, /\bchmod\b/);
 });

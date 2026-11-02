@@ -131,7 +131,7 @@ Runtime 按以下顺序合并环境变量，后面的同名变量覆盖前面的
 | Claude Code                                            | stdio、Streamable HTTP                                   | 不支持上述四个可选字段；替换后的值不能包含字面量 `${`。              |
 | ACP、Hermes、Kimi Code、MCode、Qoder CLI、Qoder CLI CN | stdio；Provider 声明支持 HTTP 时也可使用 Streamable HTTP | 不支持上述四个可选字段。                                             |
 | OpenCode                                               | stdio、Streamable HTTP                                   | 支持 `toolTimeoutMs`，不支持 `cwd`、`required`、`startupTimeoutMs`。 |
-| CodeBuddy、OpenClaw、ZCode GUI、Antigravity            | 不支持通过本轮调用配置 MCP                               | 提供非空 MCP 配置时返回 `MCP_UNSUPPORTED`。                          |
+| CodeBuddy、OpenClaw、Antigravity            | 不支持通过本轮调用配置 MCP                               | 提供非空 MCP 配置时返回 `MCP_UNSUPPORTED`。                          |
 
 服务名称应与 Provider 已有的 MCP 配置区分开。Codex 遇到同名服务会返回 `MCP_SERVER_NAME_CONFLICT`，即使已有服务被禁用，或两者使用不同的连接方式，也不会覆盖。Claude Code 和 OpenCode 按各自的配置加载规则处理同名服务。
 

@@ -9,10 +9,10 @@
 | 接入方式 | Adapter 选择 | Extra 选择 |
 | --- | --- | --- |
 | CLI | 内置 manifest 加用户扩展 manifest | 内置、Home 与同环境全局包，由显式组件启动和业务配置控制激活 |
-| SDK，包括 Electron | 宿主代码 import 所需 Adapter，在自己的 worker 入口注册 | 宿主代码 import 所需 Extra 模块，传入 `createExtraService` |
+| SDK，包括 Electron | 宿主代码 import 所需 Adapter，原生传入 createKernelService 的 adapters | 宿主代码 import 所需 Extra 模块，传入 `createExtraService` |
 | FDE 交付 | 业务方复制所需代码并自行处理依赖 | 业务方选择依赖和部署方式 |
 
-SDK 不得要求、读取、复制或生成永久或临时 manifest。Electron 主进程直接构造 Kernel 和 Extra 服务；Adapter 实例属于宿主提供的执行 worker，不跨进程序列化模块对象和业务函数。见[架构](architecture.md)和 [SDK 接入](../getting-started/sdk.md)。
+SDK 不得要求、读取、复制或生成永久或临时 manifest。Electron 主进程直接构造 Kernel 和 Extra 服务；Adapter 实例留在同一宿主进程，不跨进程序列化模块对象和业务函数。见[架构](architecture.md)和 [SDK 接入](../getting-started/sdk.md)。
 
 Kernel、Core、Host SDK 不得依赖具体 Provider Adapter 或业务 Extra；框架公共工具和共享传输实现可以保留。默认 App/CLI 发行继续携带完整默认集合。SDK 仅加载宿主显式选择的集合，仓库新增模块不自动加入每个产品。
 
@@ -58,13 +58,13 @@ Adapter 项使用 `type`、`module`、`export` 和现有可选 `factory`/`option
 5. 查找失败后不从进程 cwd、Kernel 包、另一份清单或全局包目录尝试第二套解析。
 6. 空数组表示该来源没有条目。CLI `--manifest` 保留完整替换语义，不自动叠加内置、Home 或全局来源；旧 Adapter-only 显式文件规范化为 Extra 空数组。
 
-旧式显式清单还允许 Adapter 省略 `type`。CLI 自有执行 worker 只实例化所选模块一次，按实例的真实 `metadata.type` 完成 OpenClaw 连接发现和凭据刷新，再进入现有就绪握手；CLI Kernel 与 Playboard 使用同一装配顺序。不会按包名猜测类型或为了判断类型而导入未选 Provider。
+旧式显式清单还允许 Adapter 省略 `type`。CLI 宿主装配层只实例化所选模块一次，按实例的真实 `metadata.type` 完成 OpenClaw 连接发现和凭据刷新，再调用 createKernelService 并初始化；CLI Kernel 与 Playboard 使用同一装配顺序。不会按包名猜测类型或为了判断类型而导入未选 Provider。
 
 例如，用户清单中的 `./plugins/example-extra.mjs` 指向指定 Home 内的文件；内置清单中的包名从 CLI 安装位置解析。合并后两者的解析锚点均不能改变。
 
 ## 加载与激活分别处理
 
-Kernel 的 worker 加载选中 Adapter，不 import 或管理 Extra。CLI 合并并解析所选 Adapter 后，通过既有内部 Node IPC 发送 JSON 快照。worker 恢复复用该快照，不重读清单、不重放 Run；这是内部执行 worker 的初始化，不是 SDK 服务启动器。
+CLI 负责合并、解析并 import 所选 Adapter，再把实例数组传给 Kernel。Kernel 不读取 manifest，不接收模块描述，不启动 worker，也不管理 Extra。运行中不重读清单或自动替换实例。
 
 只有显式启动且启用某个 Extra 服务时才导入并初始化该模块。默认清单列出所有 Extra 不代表全部启动；未使用 Extra 的包缺失不得阻止 Kernel 启动。
 
@@ -85,7 +85,7 @@ Extra 配置可省略 `module`，由有效目录声明模块：
 
 不自动安装模块，不运行期间热加载；保留现有 invoke、取消、资源所有权与清理合同。一个 Extra 的失败不应停止无关服务。
 
-SDK 不得使用外部 Node 进程加载模块或代启顶层 Kernel/Extra 服务，不提供 `startOwnedKernel` 接入。宿主在本进程 import Extra，自己的 worker 入口 import 所选 Adapter 后调用 `serveWorker`。无 CLI、无未选包的调用、取消、宿主 PID 和清理验证见[隔离原生 SDK fixture](../../../test/fixtures/native-loading-host.mts)。
+SDK 不得使用外部 Node 进程加载模块或代启顶层 Kernel/Extra 服务，不提供 `startOwnedKernel` 接入。宿主在本进程 import Extra 和所选 Adapter，分别传入对应服务工厂。无 CLI、无未选包的调用、取消、宿主 PID 和清理验证见[隔离原生 SDK fixture](../../../test/fixtures/native-loading-host.mts)。
 
 具体实施与验证见 [OctoSpec](../../../.octospec/tasks/85-provider-decoupling/brief.md)，规范责任边界见[基础架构规则](../../../.octospec/rules/architecture.md)。
 

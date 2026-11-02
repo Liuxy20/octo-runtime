@@ -1,3 +1,4 @@
+import { adapters } from "./fixtures/dsh-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs, { cp, mkdir, mkdtemp, realpath, rm, symlink, unlink, writeFile } from "node:fs/promises";
@@ -148,11 +149,15 @@ for (const [mode, reason] of [
   ["version-exit", "DSH_START_FAILED"]
 ])
   test(`DSH Kernel list and invocation share host configuration: ${mode}`, async (t) => {
+    const previous = process.env.OCTO_DSH_FIXTURE;
+    process.env.OCTO_DSH_FIXTURE = mode;
+    t.after(() => {
+      if (previous === undefined) delete process.env.OCTO_DSH_FIXTURE;
+      else process.env.OCTO_DSH_FIXTURE = previous;
+    });
     const { client, directory } = await kernelFixture(t, {
-      workerEntrypoint: fileURLToPath(new URL("./fixtures/dsh-worker.mjs", import.meta.url)),
-      manifest: undefined,
-      adapterConfigurations: { dsh: { providerOptions: { dshBin: fixture } } },
-      env: { ...process.env, OCTO_DSH_FIXTURE: mode }
+      adapters: adapters,
+      adapterConfigurations: { dsh: { providerOptions: { dshBin: fixture } } }
     });
     const discovered = (await client.list()).find((entry) => entry.type === "dsh");
     assert.equal(discovered.available, reason === null);

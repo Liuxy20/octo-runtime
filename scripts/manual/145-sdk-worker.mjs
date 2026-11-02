@@ -1,7 +1,5 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
-
 // 仅手动合同验证使用：无 Provider、网络账号或安装发现，等待项由本轮取消释放。
-serveWorker([
+export const adapters = [
   {
     metadata: {
       type: "docs",
@@ -20,4 +18,4 @@ serveWorker([
       yield { kind: "control", control: { type: "state", state: "completed" } };
     }
   }
-]);
+];

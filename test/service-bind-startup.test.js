@@ -1,3 +1,4 @@
+import { testAdapter } from "./fixtures/test-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
@@ -56,7 +57,7 @@ for (const mode of ["success", "failure", "late-failure"])
       const bind = await delayedBind(t);
       const options = {
         endpoint: bind.endpoint,
-        workerEntrypoint: resolve("test/fixtures/direct-adapter-host.js")
+        adapters: [testAdapter]
       };
       const kernel = createKernelService(options);
       const controller = new AbortController();

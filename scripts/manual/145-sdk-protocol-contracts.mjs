@@ -24,7 +24,7 @@ import {
 
 // 独立手动入口，不加入默认测试 glob、docs:check 或 CI；所有测试使用本次构建产物。
 const root = fileURLToPath(new URL("../../", import.meta.url));
-const workerEntrypoint = fileURLToPath(new URL("145-sdk-worker.mjs", import.meta.url));
+const { adapters } = await import("./145-sdk-worker.mjs");
 const source = (path) => readFile(join(root, path), "utf8");
 const collect = async (stream) => {
   const values = [];
@@ -391,7 +391,10 @@ test(
       join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ort145-")
     );
     const endpoint = componentEndpoint(directory);
-    const service = createKernelService({ endpoint, workerEntrypoint });
+    const service = createKernelService({
+      endpoint,
+      adapters
+    });
     const sockets = new Set();
     const errors = [];
     let client;
@@ -467,9 +470,13 @@ test("A7: bilingual signatures and shared capacity match the documented public c
   for (const language of ["en", "zh-CN"]) {
     for (const page of ["getting-started/sdk", "concepts/architecture"]) {
       const text = await source(`docs/${language}/${page}.md`);
-      assert.ok(text.includes("attachKernel({ endpoint })"));
+      // 原生宿主使用自己的 RPC client；独立应用跨进程 attach 的示例在 CLI 章节。
+      assert.ok(text.includes("createKernelService"));
+      assert.ok(text.includes("kernel.client"));
       assert.ok(!text.includes("attachKernel(endpoint)"));
     }
+    const cli = await source(`docs/${language}/getting-started/cli.md`);
+    assert.ok(cli.includes("attachKernel({ endpoint"));
     const capacity = await source(`docs/${language}/reference/kernel-ipc.md`);
     assert.match(
       capacity,

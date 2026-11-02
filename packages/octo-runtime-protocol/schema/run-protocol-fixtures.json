@@ -6,27 +6,13 @@
         "ipc_version": 1,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
-        "execution_ready": true,
-        "worker": { "generation": 1, "state": "ready", "restart_attempt": 0 }
+        "execution_ready": true
       },
       {
         "ipc_version": 1,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
-        "execution_ready": false,
-        "worker": {
-          "generation": 1,
-          "state": "exhausted",
-          "restart_attempt": 0,
-          "recovery": {
-            "trigger": "exit",
-            "stage": "cleanup",
-            "code": "WORKER_PROCESS_GROUP_UNCONFIRMED",
-            "occurred_at": "2026-10-27T00:00:00Z",
-            "retry_at": "2026-10-27T00:00:01Z",
-            "signal": "SIGKILL"
-          }
-        }
+        "execution_ready": false
       }
     ],
     "HostInvokeOptions": [
@@ -303,34 +289,13 @@
         "ipc_version": 1,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
-        "execution_ready": false,
-        "worker": {
-          "generation": 1,
-          "state": "exhausted",
-          "restart_attempt": 0,
-          "recovery": {
-            "trigger": "exit",
-            "stage": "unknown",
-            "code": "WORKER_PROCESS_GROUP_UNCONFIRMED",
-            "occurred_at": "2026-10-27T00:00:00Z"
-          }
-        }
+        "execution_ready": "ready"
       },
       {
         "ipc_version": 1,
         "kernel_instance_id": "kernel-fixture",
-        "pid": 1,
-        "execution_ready": false,
-        "worker": {
-          "generation": 1,
-          "state": "exhausted",
-          "restart_attempt": 0,
-          "recovery": {
-            "trigger": "exit",
-            "stage": "cleanup",
-            "occurred_at": "2026-10-27T00:00:00Z"
-          }
-        }
+        "pid": 0,
+        "execution_ready": false
       }
     ],
     "HostInvokeOptions": [

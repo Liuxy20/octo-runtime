@@ -1,4 +1,5 @@
-import { preparedFrames } from "./runtime-fixture.js";
+import { nativeHost } from "./native-host-fixture.js";
+import { adapter } from "./fixtures/tool-environment-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from "node:fs/promises";
@@ -6,11 +7,9 @@ import { assertPrivateFile } from "../test-support/file-protection.mjs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseEnv } from "node:util";
-import { PassThrough } from "node:stream";
 import { randomUUID } from "node:crypto";
 import { octoCliEnvironment } from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
 import { configureCliOpenClaw, syncCliOpenClawToolEnvironment } from "../apps/cli/dist/openclaw.js";
-import { spawnWorker, WorkerRpcClient } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   assertInvokeRequest,
   invocationInput,
@@ -103,7 +102,7 @@ test("CLI dotenv and Gateway preserve URL normalization parity for repeated sepa
   }
 });
 
-test("tool overrides cross a real Host subprocess and reach child tools without changing Context", async (t) => {
+test("tool overrides cross real Kernel RPC and reach child tools without changing Context", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "octo-tool-env-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const manifest = join(root, "adapters.json");
@@ -120,18 +119,7 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
       ]
     })
   );
-  const host = await spawnWorker({
-    entrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
-    manifest,
-    env: {
-      ...process.env,
-      OCTO_RUNTIME_HOME: root,
-      OCTO_RUNTIME_LOGS_DIRECTORY: join(root, "logs"),
-      OCTO_BOT_TOKEN: "wrong-device",
-      OCTO_TOKEN: randomUUID(),
-      OCTO_API_BASE_URL: "wrong-device"
-    }
-  });
+  const host = await nativeHost([adapter], { logging: { directory: join(root, "logs") } });
   t.after(() => host.close());
   const original = structuredClone(context);
   const execute = async (value, index) => {
@@ -200,38 +188,6 @@ test("tool overrides cross a real Host subprocess and reach child tools without 
     { env_variables: [{ key: "X", value: "a".repeat(65536) }] }
   ])
     assert.throws(() => assertInvokeRequest({ ...request, executionEnvOverrides: invalid }));
-});
-
-test("old Host cannot silently ignore the tool environment", async (t) => {
-  const input = new PassThrough(),
-    output = new PassThrough();
-  const client = new WorkerRpcClient({ input, output });
-  t.after(() => {
-    client.close();
-    input.destroy();
-    output.destroy();
-  });
-  let method;
-  output.on("data", (bytes) => {
-    const message = JSON.parse(bytes.toString());
-    method = message.method;
-    input.write(
-      JSON.stringify({
-        jsonrpc: "2.0",
-        id: message.id,
-        error: { code: -32601, message: "unknown method" }
-      }) + "\n"
-    );
-  });
-  await assert.rejects(async () => {
-    for await (const frame of preparedFrames(
-      client,
-      "test",
-      invokeRequest({ executionEnvOverrides: octoCliEnvironment(base, token) })
-    ))
-      void frame;
-  }, /unknown method/);
-  assert.equal(method, "invoke.with-environment");
 });
 
 test("F24: OpenClaw CLI updates only two dotenv keys, last enabled OpenClaw Bot wins", async (t) => {

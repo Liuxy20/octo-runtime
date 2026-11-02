@@ -188,7 +188,7 @@ for (const component of [extra, "executor-kernel"])
     const logDirectory = kernel ? join(home, "logs") : directory;
     const prefix = kernel ? "kernel" : extra;
     const events = kernel
-      ? ["worker.lost", "worker.retry_scheduled", "worker.ready"]
+      ? ["kernel.closing", "kernel.execution_drained", "kernel.ready"]
       : ["service.ready", "channel.retry_scheduled", "channel.connected"];
     const row = (event, data) =>
       kernel ? `${JSON.stringify(kernelStatusRecord("info", event, data))}\n` : line(event, data);

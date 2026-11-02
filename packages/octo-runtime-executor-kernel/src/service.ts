@@ -20,14 +20,28 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
   readonly client: KernelClient;
 }
 
-/** 服务 socket 直接属于调用进程；只允许 server 内部创建执行 worker。 */
+/**
+ * 宿主传入本地 RPC 地址和已装配的 Adapter；initialize 注册成功后才开放 client。
+ * socket、Core 和本服务创建的日志由 close 回收；宿主依赖仍由宿主拥有。
+ * 即使与调用方同进程，client 也始终通过 RPC，不能绕过 Run 接纳和观察管理。
+ */
 export function createKernelService(options: KernelServiceOptions): KernelService {
+  if (
+    !options ||
+    typeof options.endpoint !== "string" ||
+    !options.endpoint ||
+    !Array.isArray(options.adapters)
+  )
+    throw new TypeError("Kernel requires endpoint and adapters");
+  // 旧 JS 接入不能静默退回文件加载或忽略 worker 环境；模块装配完全归宿主。
+  for (const field of ["workerEntrypoint", "manifest", "adapterModules", "env"])
+    if (field in options)
+      throw new TypeError(`Kernel does not accept ${field}; compose adapters in the host`);
   const configuration = {
     ...options,
-    adapterModules: options.adapterModules && structuredClone(options.adapterModules),
+    adapters: [...(options.adapters as KernelServiceOptions["adapters"])],
     adapterConfigurations:
       options.adapterConfigurations && structuredClone(options.adapterConfigurations),
-    env: options.env && { ...options.env },
     logging: options.logging && { ...options.logging }
   };
   const owner = new AbortController();

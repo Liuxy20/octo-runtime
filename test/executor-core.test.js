@@ -6,7 +6,7 @@ import { setImmediate as nextTurn } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { readFile, readdir } from "node:fs/promises";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
 import { assertHostFrame, isHostTerminal } from "@mininglamp-oss/octo-runtime-protocol";
 import { createExecutorFixture } from "../test-support/executor-adapter.mjs";
 import { deferred } from "./runtime-fixture.js";
@@ -36,6 +36,43 @@ const executor = (t, invoke) => {
   return core;
 };
 const raw = { kind: "native", messageKind: "notification", payload: { exact: true } };
+
+test("Core probe preserves synchronous values and tracks a thenable only once through shutdown", async () => {
+  const core = new AgentExecutor();
+  const value = { available: true, command: "fixture" };
+  let thenCalls = 0,
+    finish;
+  const adapter = {
+    ...createExecutorFixture(),
+    probe() {
+      return value;
+    }
+  };
+  core.register(adapter);
+  assert.equal(core.probe(adapter.metadata.type), value);
+  adapter.probe = () => {
+    throw new Error("probe failed");
+  };
+  assert.throws(() => core.probe(adapter.metadata.type), /probe failed/);
+  adapter.probe = () => ({
+    then(_resolve, reject) {
+      thenCalls++;
+      finish = reject;
+    }
+  });
+  const probe = core.probe(adapter.metadata.type);
+  const rejection = assert.rejects(probe, /asynchronous probe failed/);
+  await nextTurn();
+  assert.equal(thenCalls, 1);
+  assert.equal((await core.shutdown("probe test", 20)).cleanup, "incomplete");
+  assert.throws(() => core.probe(adapter.metadata.type), /EXECUTOR_CLOSED/);
+  await assert.rejects(core.describe(), /EXECUTOR_CLOSED/);
+  finish(new Error("asynchronous probe failed"));
+  await rejection;
+  assert.equal((await core.shutdown()).cleanup, "complete");
+  assert.equal(thenCalls, 1);
+});
+
 const progress = (mode) =>
   mode === "native"
     ? raw
@@ -478,11 +515,9 @@ test("failed cleanup stays owned and does not skip sibling cleanup or reopen adm
 });
 
 for (const mode of ["native", "canonical"]) {
-  test(`${mode}: direct and isolated worker route original interactions and cancel receipt-only runs`, async (t) => {
+  test(`${mode}: direct and native Kernel RPC route original interactions and cancel receipt-only runs`, async (t) => {
     const core = executor(t);
-    const worker = await spawnWorker({
-      entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
-    });
+    const worker = await nativeHost([createExecutorFixture()]);
     t.after(() => worker.close());
     for (const target of [core, worker.client]) {
       const value = input("approval", mode, "approval");
@@ -536,20 +571,14 @@ for (const mode of ["native", "canonical"]) {
     }
   });
 
-  test(`${mode}: real NDJSON worker uses identical Core and preserves frame identity and input`, async (t) => {
+  test(`${mode}: native socket RPC uses identical Core and preserves frame identity and input`, async (t) => {
     const core = executor(t);
-    const worker = await spawnWorker({
-      entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
-    });
+    const worker = await nativeHost([createExecutorFixture()]);
     t.after(async () => {
-      if (process.platform === "win32") {
-        // 失败 fixture 的未完成清理在 Core 与 worker 都应可见，不能把 launcher 的拒绝吞掉。
-        assert.equal((await core.shutdown()).cleanup, "incomplete");
-        await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
-        assert.equal(worker.child.exitCode, 1);
-      } else await worker.close();
+      const result = await worker.kernel.close();
+      assert.equal(result.complete, (await core.shutdown()).cleanup === "complete");
     });
-    assert.notEqual(worker.child.pid, process.pid);
+    assert.equal((await worker.client.status()).pid, process.pid);
     for (const scenario of [
       "answer",
       "throw",
@@ -616,51 +645,4 @@ test("a failed terminal ends cancellation while unresolved cleanup remains owned
   assert.equal(core.cancel("invoke-one"), false);
   assert.equal((await core.shutdown()).cleanup, "incomplete");
   assert.equal(cleanups, 1);
-});
-
-test("worker shutdown reports incomplete cleanup with a failing exit status", async (t) => {
-  const worker = await spawnWorker({
-    entrypoint: fileURLToPath(new URL("./fixtures/executor-incomplete-worker.mjs", import.meta.url))
-  });
-  t.after(async () => {
-    if (process.platform === "win32")
-      await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
-    else await worker.close();
-  });
-  const ready = deferred();
-  const consume = (async () => {
-    for await (const frame of worker.client.invokeFrames(input()))
-      if (frame.kind === "native") ready.resolve();
-  })();
-  const rejected = assert.rejects(consume, /closed|exit|ended/i);
-  await ready.promise;
-  const exited = once(worker.child, "exit");
-  // Windows EOF 排空后保留 leader，由 close 清树；失败结果与非零退出都必须可见。
-  if (process.platform === "win32")
-    await assert.rejects(worker.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
-  else worker.child.stdin.end();
-  assert.equal((await exited)[0], 1);
-  await rejected;
-});
-
-test("a shared worker crash fails its active streams without replaying them in the parent", async (t) => {
-  const worker = await spawnWorker({
-    entrypoint: fileURLToPath(new URL("./fixtures/executor-worker.mjs", import.meta.url))
-  });
-  t.after(() => worker.close());
-  const ready = deferred();
-  const sibling = (async () => {
-    for await (const frame of worker.client.invokeFrames(input("sibling", "native", "hold")))
-      if (frame.kind === "native") ready.resolve();
-  })();
-  const rejected = assert.rejects(sibling, /closed|exit|ended/i);
-  await ready.promise;
-  const exited = once(worker.child, "exit");
-  await assert.rejects(
-    collect(worker.client.invokeFrames(input("crash", "native", "terminate-worker"))),
-    /closed|exit|ended/i
-  );
-  assert.equal((await exited)[0], 23);
-  await rejected;
-  assert.notEqual(worker.child.pid, process.pid);
 });

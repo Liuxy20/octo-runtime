@@ -10,7 +10,13 @@ if (process.env.OCTO_RUN_CODEX_APPROVAL_LIVE !== "1")
 const directory = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "oa-"));
 const kernel = createKernelService({
   endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
-  workerEntrypoint: resolve("test/manual/codex-approval-live-worker.mjs")
+  adapters: (
+    await import(
+      (await import("node:url")).pathToFileURL(
+        resolve("test/manual/codex-approval-live-worker.mjs")
+      ).href
+    )
+  ).adapters
 });
 let passed = true;
 try {

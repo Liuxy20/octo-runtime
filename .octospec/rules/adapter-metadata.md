@@ -38,6 +38,10 @@ SDK、全部内置 Adapter、Host 加载与发现已删除标签字段，不再�
 
 Adapter 仍按现有执行合同消费显式模型，完成原生映射及必要校验并报告真实拒绝。CodeBuddy 等在本次执行会话中校验原生广告目录的行为继续有效；这是原生选模合同，不是公共目录服务。不得把“没有统一模型白名单”误解为跳过 Provider 要求的模型确认。完整案例和责任划分见[模型目录归 Provider 与宿主](architecture.md#模型目录归-provider-与宿主以-issue-193-为例)。
 
+## 原生装配责任
+
+[#294](architecture.md#sdk-原生装配与统一-rpc)要求宿主完成 import 和对象构造，再向 createKernelService 注入 Adapter。模块 manifest、来源解析、动态 import 和选中工厂调用全部归 CLI 这类宿主，executor-kernel 不参与。Electron 原生 import 与 CLI 动态 import 只影响装配来源；执行都经过 KernelClient/RPC，由 Kernel 本进程的唯一 AgentExecutor 使用已注入对象。当前工作树已按此边界实施，验证范围见 #294 任务。
+
 ## 来源
 
 | 值 | 语义 |
@@ -64,7 +68,7 @@ OpenClaw 声明两种来源，Adapter 边界都要求有效目标；公共 `Invo
 - 编写输入 `Adapter` / `AdapterMetadata` 允许省略 `protocolSupport`；这是工厂的输入约定，不表示注册时可缺失。
 - `defineAdapter()` 和 `createJsonCliAdapter()` 必须返回 `DefinedAdapter`，静态类型保证 `metadata.protocolSupport` 必有。工厂、派生工厂及接入代码不得以宽泛的编写输入类型重新注解返回值，丢失已经补齐的保证。
 - 工厂省略时仅沿用 `${type}.canonical`、`modes: ["canonical"]` 和空 `nativeMethods` 默认值；不得从缺省信息推断 native 支持，不得改变调用方的请求模式。
-- 注册输入 `HostedAdapterMetadata.protocolSupport` 必填。`AgentExecutor.register()` 和 `serveWorker()` 接收完整声明，不隐式补值；即使编译期已要求完整，运行时仍必须拒绝缺失或非法声明。
+- 注册输入 `HostedAdapterMetadata.protocolSupport` 必填。`AgentExecutor.register()` 接收完整声明，不隐式补值；Kernel 注册宿主注入对象时沿用此校验；即使编译期已要求完整，运行时仍必须拒绝缺失或非法声明。
 - 修改相关类型或工厂时，必须显式验证：缺字段的直接注册在编译期拒绝、工厂默认值可直接注册、自定义字段保留，以及 canonical-only 不被误授 native 支持。专项验证在本地显式运行，不据此扩大 CI 范围。
 
 以上约束须同时维护于字段/工厂的就近代码注释和本规则；不得仅记录在 issue、PR 或历史 journal 中。
@@ -85,7 +89,7 @@ Host 按执行合同校验来源、输出模式和实际交互 responder；审�
 
 - 执行计划不再定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知执行计划字段拒绝，不进行改名转换。
 - 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。通过既有 adapter 选择执行实现，Provider Agent 目标仍使用 `providerAgentId`。
-- SDK、worker 加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
+- SDK、宿主加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。
 

@@ -1,3 +1,5 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
+import { adapter } from "./fixture-adapter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve, join } from "node:path";
@@ -10,7 +12,7 @@ const input = (prompt = "normal", mode = "native") => ({
   ...kernelInput(prompt),
   protocol_mode: mode
 });
-const fixture = (t) => kernelFixture(t, { manifest: resolve("native/tests/adapters.json") });
+const fixture = (t) => kernelFixture(t, { adapters: [testAdapter, adapter] });
 test(`${language} admission, recovery, controls and observation semantics`, async (t) => {
   build(language);
   await t.test(
@@ -245,31 +247,5 @@ test(`${language} admission, recovery, controls and observation semantics`, asyn
     assert.equal(relay.count("agent_run.cancel"), 1);
     assert.equal(relay.count("agent_run.subscribe"), 1);
   });
-  for (const mode of ["native", "canonical"])
-    await t.test(`${mode} actual worker loss remains unknown`, async (t) => {
-      const f = await fixture(t);
-      let killed = false;
-      const relay = await kernelRelay(t, f, {
-        async response(v, c) {
-          if (!killed && c.request.method === "agent_run.subscribe" && v.result) {
-            killed = true;
-            process.kill((await f.client.status()).worker.pid, "SIGKILL");
-          }
-        }
-      });
-      const r = await call(language, {
-        endpoint: relay.endpoint,
-        op: "invoke",
-        input: input("wait-for-cancel", mode)
-      });
-      assert.equal(r.error, "RUN_OUTCOME_UNKNOWN", JSON.stringify(r));
-      assert.equal(relay.count("agent_run.invoke"), 1);
-      assert.equal(r.registry.length, 1);
-      if (mode === "native") assert.equal(r.events.at(-1).control.state, "lost");
-      else
-        assert.equal(
-          r.events.some((x) => x.type === "run.completed"),
-          false
-        );
-    });
+
 });

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
 import {
   createCodexAdapter,
   CodexEventNormalizer
@@ -318,10 +318,10 @@ for (const mode of ["ask", "full_access"])
     }
   });
 
-test("RPC native admission rejects unsupported mode before ACK; genuine native frames cross RPC without payload logs", async () => {
-  const host = codexHost();
+test("RPC native admission rejects unsupported mode before ACK; genuine native frames cross RPC with their original payload", async () => {
+  const adapters = [createCodexAdapter({ command: process.execPath, appServerArgs: [codex] })];
   let invokes = 0;
-  host.register({
+  adapters.push({
     metadata: {
       protocolSupport: {
         protocol: "canonical-only" + ".canonical",
@@ -335,15 +335,8 @@ test("RPC native admission rejects unsupported mode before ACK; genuine native f
       invokes++;
     }
   });
-  const upstream = new PassThrough(),
-    downstream = new PassThrough(),
-    trace = [];
-  new WorkerRpcServer({
-    host,
-    output: downstream,
-    trace: (_direction, frame) => trace.push(frame)
-  }).listen(upstream);
-  const client = new WorkerRpcClient({ input: downstream, output: upstream });
+  const host = await nativeHost(adapters);
+  const client = host.client;
   try {
     await assert.rejects(
       collect(
@@ -357,15 +350,8 @@ test("RPC native admission rejects unsupported mode before ACK; genuine native f
     );
     assert.equal(frames.at(-1).control.state, "completed");
     assert.ok(frames.some((frame) => frame.kind === "native"));
-    assert.doesNotMatch(
-      trace.join("\n"),
-      /not canonical|native-item-id|Provider model input|Keep changes scoped/
-    );
   } finally {
-    client.close();
-    upstream.end();
-    downstream.end();
-    await host.shutdown();
+    await host.close();
   }
 });
 

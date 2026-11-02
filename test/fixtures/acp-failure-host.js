@@ -1,7 +1,6 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
-serveWorker([
+export const adapters = [
   createAcpAdapter({ type: "broken-acp", provider: "fixture", command: "/octo-missing-R05" }),
   {
     metadata: {
@@ -19,4 +18,4 @@ serveWorker([
       yield { protocolVersion: 2, type: "run.completed", payload: {} };
     }
   }
-]);
+];

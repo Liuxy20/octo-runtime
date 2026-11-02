@@ -9,7 +9,7 @@ implementation_baseline: feat/executor-kernel-host-lifecycle
 
 # 工作区与开发组织
 
-当前包边界见 [Runtime 合同](../rules/runtime-lifecycle.md)。CLI 与 SDK 宿主通过相同的 `createKernelService` / `createExtraService` 在调用进程原生构造服务；宿主决定对象的创建/关闭顺序，并管理宿主进程和部署。Kernel 只监督内部执行 worker，worker 使用唯一 AgentExecutor；Extra 只连接指定 Kernel，不启动或停止 Kernel。SDK 宿主不依赖 apps/cli 或未选用的业务 Extra。
+当前包边界见 [Runtime 合同](../rules/runtime-lifecycle.md)。CLI 与 SDK 宿主通过相同的 `createKernelService` / `createExtraService` 在调用进程原生构造服务；宿主决定对象的创建/关闭顺序，并管理宿主进程和部署。Kernel 在本进程使用唯一 AgentExecutor 和宿主注入的 Adapter；Extra 只连接指定 Kernel，不启动或停止 Kernel。SDK 宿主不依赖 apps/cli 或未选用的业务 Extra。
 
 Octo Runtime 使用 pnpm workspace 管理多项目。workspace 边界由根目录 [pnpm-workspace.yaml](../../pnpm-workspace.yaml) 定义：
 
@@ -34,7 +34,7 @@ packages/
   octo-runtime-extra-channel-gateway/ optional Octo IM integration
   octo-runtime-extra-channel-wecom/   optional WeCom integration
   octo-runtime-extra-webui/           optional local WebUI with canonical SSE
-  octo-runtime-executor-kernel/      Kernel IPC/client、worker 监督、源流窗口
+  octo-runtime-executor-kernel/      Kernel IPC/client、Core 生命周期、源流窗口
   octo-runtime-adapter-sdk/          adapter authoring helpers
   octo-runtime-acp-client/           reusable ACP client
   octo-runtime-adapter-*/            provider adapter definitions
@@ -47,13 +47,13 @@ apps -> packages
 octo-runtime-adapter-* -> octo-runtime-adapter-sdk / provider protocol helpers
 octo-runtime-host-sdk -> Kernel / Protocol / Adapter SDK（原生服务对象，不代启服务进程）
 optional extras -> Host SDK 的插件类型与 Protocol
-HostApp composition -> 原生导入所选 Adapter/Extra，显式选择 Kernel worker 入口
+HostApp composition -> 原生导入所选 Adapter/Extra，将 Adapter 对象传入 Kernel 服务工厂
 octo-runtime-executor-kernel -> Core / Protocol / Adapter SDK
 ```
 
 Kernel 和 Host SDK 的生产依赖不引入业务 Channel；HostApp 携带并显式启用所需 Extra。标准根发行物携带内置模块，不代表源码 SDK 宿主必须部署全部模块。旧 daemon、adapter-host、worker-access 和 Context Builder 包已移除。
 
-SDK 不提供 owned Kernel/Extra launcher、外部原生组件启动器或依赖代理。执行隔离来自 Kernel 内部 worker；宿主注入的函数在服务所在进程直接调用，应用数据库由宿主创建和关闭。CLI 的 Unix socket / Windows Named Pipe、manifest 和系统服务管理不成为其他 SDK 宿主的部署要求。
+SDK 不提供 owned Kernel/Extra launcher、外部原生组件启动器或依赖代理。Kernel/Core 共享宿主故障域；宿主注入的函数在服务所在进程直接调用，应用数据库由宿主创建和关闭。CLI 的 Unix socket / Windows Named Pipe、manifest 和系统服务管理不成为其他 SDK 宿主的部署要求。
 
 `packages/*` 不应 import `apps/*`。provider 命令构造、native event parser、session codec 和权限适配必须留在 `packages/octo-runtime-adapter-*`；apps 只做配置、进程启动和 I/O 装配。
 
@@ -100,7 +100,7 @@ pnpm cli status
 pnpm --recursive list --depth -1
 ```
 
-单独运行 worker runner 的 stdio 诊断入口（通常由 Kernel 监督启动）：
+通过 CLI 宿主运行 Kernel：
 
 ```bash
 pnpm host
@@ -130,7 +130,7 @@ pnpm --filter @mininglamp-oss/octo-runtime-adapter-codex list
 
 宿主保留预编译方案，将上述过滤构建及独立 Host 入口编译前置到原有 `dev` / `build` 命令，保留原有开发、检查与打包步骤；不要求安装时的 `prepare` 或额外脚本文件。开发启动后仅 App 源码由原服务监听，修改 Runtime 源码需重新编译。普通安装覆盖所有 workspace 项目，构建过滤本身不限制安装范围。
 
-源码 SDK 宿主按实际依赖闭包裁剪模块，不能仅按是否启用判断可否排除。Core、Kernel、Host SDK 不持有具体 Provider/Extra 依赖；具体模块及其共享依赖由选择它们的宿主声明，自定义 worker 原生 import 并注册所选 Adapter。已发布单包仍保留完整默认目录，通过 /host、/executor-kernel、/executor-core、/extra、/protocol 子路径消费，完整示例见两篇 SDK 指南。
+源码 SDK 宿主按实际依赖闭包裁剪模块，不能仅按是否启用判断可否排除。Core、Kernel、Host SDK 不持有具体 Provider/Extra 依赖；具体模块及其共享依赖由选择它们的宿主声明，宿主原生 import 并注入所选 Adapter。已发布单包仍保留完整默认目录，通过 /host、/executor-kernel、/executor-core、/extra、/protocol 子路径消费，完整示例见两篇 SDK 指南。
 
 ## 新增 Adapter Package
 
@@ -142,7 +142,7 @@ pnpm --filter @mininglamp-oss/octo-runtime-adapter-codex list
 2. 包名使用 `@mininglamp-oss/octo-runtime-adapter-foo`，依赖 `@mininglamp-oss/octo-runtime-adapter-sdk: workspace:*`。
 3. 实现 metadata、probe、invoke、session 和 canonical event mapping。
 4. CLI 默认项在 [manifest.json](../../apps/cli/src/manifest.json) 注册 type/module/export；SDK 在各自 Host 入口直接 import 并注册，不复制 CLI 资源。
-5. 新增标准 CLI 默认项时，在 `apps/cli/package.json` 增加所需 workspace dependency，并同步根发行装配的生产依赖；不得把具体 Provider 依赖加回 Core、Kernel 或 Host SDK。自定义 SDK worker 由宿主管理其依赖和 serveWorker 注册集合。
+5. 新增标准 CLI 默认项时，在 `apps/cli/package.json` 增加所需 workspace dependency，并同步根发行装配的生产依赖；不得把具体 Provider 依赖加回 Core、Kernel 或 Host SDK。SDK 由宿主管理依赖和 adapters 对象集合。
 6. 若根测试直接 import 该包，在根 `devDependencies` 增加 workspace dependency。
 7. 在 `test/` 添加 native event、success/error/cancel/session resume 契约测试。
 8. README 至少说明包的作用、设计原则、适用场景、明确边界和最小用法，并在 [Packages And Adapter Guide](../../packages/README.md) 与 provider matrix 中建立入口。

@@ -1,7 +1,7 @@
 // 显式手动运行：pnpm build && node --test test/manual/codex-async-live.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
 import { randomUUID } from "node:crypto";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
@@ -13,14 +13,8 @@ for (const custom of [false, true]) {
     { timeout: 150000 },
     async (t) => {
       const f = await kernelFixture(t, {
-        manifest: undefined,
-        adapterModules: [
-          {
-            type: "codex",
-            module: resolve("packages/octo-runtime-adapter-codex/dist/index.js"),
-            export: "default"
-          }
-        ]
+        // 真实专项由宿主选择 Provider，Kernel 只接收已构造的对象。
+        adapters: [createCodexAdapter()]
       });
       const marker = `ASYNC_${randomUUID().replaceAll("-", "")}`;
       const prompt = `This is a local async-input test. Invoke request_user_input_async with exactly one question, title "Test color?", and options ["${marker}", "Green"]. Then run a shell command sleeping for 8 seconds to keep the turn active. After that, report the exact answer you receive, including its full ASYNC marker. Do not edit files or make network requests. Do not ask a synchronous question. Use Default mode.`;

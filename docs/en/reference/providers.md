@@ -17,7 +17,6 @@ The table describes the checked-in Adapters. Confirm that your actual Provider v
 | `opencode`                                                      | OpenCode CLI       | canonical           | local stdio + remote HTTP                      |
 | `codebuddy`                                                     | Provider CLI       | canonical           | Unsupported                                    |
 | `openclaw`                                                      | Gateway            | canonical           | Unsupported                                    |
-| `zcode-gui`                                                     | GUI runtime client | canonical           | Unsupported                                    |
 | `antigravity`                                                   | Provider CLI       | canonical           | Unsupported                                    |
 | `grok-build` | Grok CLI ACP stdio | canonical | stdio; HTTP when advertised; final `${` literals rejected |
 

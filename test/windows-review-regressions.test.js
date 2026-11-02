@@ -13,7 +13,6 @@ import {
 import { buildClaudeCommand } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { buildCodexCommand } from "../packages/octo-runtime-adapter-codex/dist/index.js";
 import { buildOpenCodeCommand } from "../packages/octo-runtime-adapter-opencode/dist/index.js";
-import { buildZcodeCommand } from "../packages/octo-runtime-adapter-zcode-gui/dist/index.js";
 import { resolveDshLaunch } from "../packages/octo-runtime-adapter-dsh/dist/launch.js";
 import { spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
 import { spawnGrokBuildAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";
@@ -21,8 +20,7 @@ import {
   InvocationManifest,
   acknowledgeOrphanCleanup,
   inspectOrphanCleanup,
-  reapOrphanedInvocationManifest,
-  processStartIdentity
+  reapOrphanedInvocationManifest
 } from "../packages/octo-runtime-executor-kernel/dist/invocation-manifest.js";
 import { WindowsUserTaskBackend } from "../packages/octo-runtime-cross-service/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
@@ -109,42 +107,7 @@ for (const platform of ["win32", "linux"]) {
       await exact.cleanup();
     }
   });
-
-  test(`${platform} ZCode preserves explicit desktop selection across environment aliases`, () => {
-    const original = Object.getOwnPropertyDescriptor(process, "platform");
-    Object.defineProperty(process, "platform", { ...original, value: platform });
-    try {
-      const context = join(tmpdir(), "context desktop", "zcode.cjs");
-      const override = join(tmpdir(), "override desktop", "zcode.cjs");
-      const req = request({ ZCODE_BIN: context });
-      req.executionEnvOverrides = payload({ zcode_bin: override });
-      const before = structuredClone(req);
-      const command = buildZcodeCommand(req);
-      assert.equal(command.command, process.execPath);
-      assert.equal(command.args[0], platform === "win32" ? override : context);
-      assert.deepEqual(req, before);
-    } finally {
-      Object.defineProperty(process, "platform", original);
-    }
-  });
 }
-
-test(
-  "native Windows ZCode discovers Desktop through a mixed-case LOCALAPPDATA override",
-  { skip: process.platform !== "win32" },
-  async (t) => {
-    const directory = await mkdtemp(join(tmpdir(), "octo-zcode-review-"));
-    t.after(() => rm(directory, { recursive: true, force: true }));
-    const entry = join(directory, "Programs", "ZCode", "resources", "glm", "zcode.cjs");
-    await mkdir(dirname(entry), { recursive: true });
-    await writeFile(entry, "// fixture\n");
-    const req = request({ ZCODE_BIN: "", PATH: "", LOCALAPPDATA: join(directory, "missing") });
-    req.executionEnvOverrides = payload({ localappdata: directory });
-    const command = buildZcodeCommand(req);
-    assert.equal(command.command, process.execPath);
-    assert.equal(command.args[0], entry);
-  }
-);
 
 test(
   "native Windows MCP, Claude, shared probe and DSH consume mixed-case overrides",
@@ -217,7 +180,8 @@ async function incompleteFixture(t) {
   const manifest = {
     schemaVersion: 1,
     kernelPid: 2147483646,
-    worker: { pid: 2147483645, started: "windows:100", entrypoint: "fixture" },
+    nativeOwner: true,
+    updatedAt: new Date().toISOString(),
     invocations: [],
     cleanupIncomplete: true
   };
@@ -231,21 +195,12 @@ test("explicit orphan recovery keeps evidence, rejects a live owner and permits 
   await writeFile(path, JSON.stringify(manifest));
   await assert.rejects(acknowledgeOrphanCleanup(path), /ORPHAN_CLEANUP_OWNER_ALIVE/);
   manifest.kernelPid = 2147483646;
-  manifest.worker.pid = process.pid;
-  manifest.worker.started = await processStartIdentity(process.pid);
-  await writeFile(path, JSON.stringify(manifest));
-  await assert.rejects(acknowledgeOrphanCleanup(path), /ORPHAN_CLEANUP_OWNER_ALIVE/);
-  manifest.worker.pid = 2147483645;
-  manifest.worker.started = "windows:100";
   await writeFile(path, JSON.stringify(manifest));
   const source = await readFile(path, "utf8");
   const recovery = await acknowledgeOrphanCleanup(path);
   assert.equal(await readFile(recovery.archivePath, "utf8"), source);
   assert.equal(await readFile(path, "utf8"), source);
   assert.equal((await inspectOrphanCleanup(path)).state, "acknowledged");
-  const platform = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { ...platform, value: "win32" });
-  t.after(() => Object.defineProperty(process, "platform", platform));
   const { manifest: opened, reap } = await InvocationManifest.open(path);
   assert.equal(reap.reason, "cleanup_acknowledged");
   assert.equal(reap.reaped, false, "operator acknowledgement is not verified tree cleanup");
@@ -256,13 +211,12 @@ test("explicit orphan recovery keeps evidence, rejects a live owner and permits 
   assert.equal(await readFile(recovery.archivePath, "utf8"), source);
 });
 
-test("reaping removes stale confirmation but preserves its original evidence archive", async (t) => {
+test("missing ownership record removes stale confirmation but preserves its evidence archive", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   const source = await readFile(path, "utf8");
   const { archivePath } = await acknowledgeOrphanCleanup(path);
-  delete manifest.cleanupIncomplete;
-  await writeFile(path, JSON.stringify(manifest));
-  assert.equal((await reapOrphanedInvocationManifest(path)).reason, "host_missing");
+  await rm(path);
+  assert.deepEqual(await reapOrphanedInvocationManifest(path), { found: false, reaped: false });
   await assert.rejects(readFile(path), { code: "ENOENT" });
   await assert.rejects(readFile(`${path}.acknowledgement`), { code: "ENOENT" });
   assert.equal(await readFile(archivePath, "utf8"), source);
@@ -270,8 +224,7 @@ test("reaping removes stale confirmation but preserves its original evidence arc
 
 test("unremovable stale confirmation does not block a new manifest or clean close", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
-  delete manifest.cleanupIncomplete;
-  await writeFile(path, JSON.stringify(manifest));
+  await rm(path);
   await mkdir(`${path}.acknowledgement`);
   const { manifest: opened } = await InvocationManifest.open(path);
   assert.equal((await inspectOrphanCleanup(path)).state, "available");
@@ -282,22 +235,26 @@ test("unremovable stale confirmation does not block a new manifest or clean clos
 test("acknowledgement requires the same manifest and an intact evidence archive", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   const { archivePath } = await acknowledgeOrphanCleanup(path);
-  const platform = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { ...platform, value: "win32" });
-  t.after(() => Object.defineProperty(process, "platform", platform));
   await writeFile(archivePath, "changed");
   await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
   await writeFile(archivePath, JSON.stringify(manifest));
-  await writeFile(path, JSON.stringify({ ...manifest, updatedAt: new Date().toISOString() }));
+  await writeFile(
+    path,
+    JSON.stringify({
+      ...manifest,
+      updatedAt: new Date(Date.parse(manifest.updatedAt) + 1000).toISOString()
+    })
+  );
   await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
 });
 
-test("Windows incomplete evidence does not introduce a POSIX startup latch", async (t) => {
+test("native incomplete evidence blocks replacement on POSIX as well as Windows", async (t) => {
   const { path } = await incompleteFixture(t);
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   Object.defineProperty(process, "platform", { ...platform, value: "linux" });
   t.after(() => Object.defineProperty(process, "platform", platform));
-  assert.equal((await reapOrphanedInvocationManifest(path)).reason, "host_missing");
+  assert.equal((await reapOrphanedInvocationManifest(path)).reason, "cleanup_incomplete");
+  await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
 });
 
 test("CLI recover requires acknowledgement and doctor exposes the manifest path", async (t) => {

@@ -1,3 +1,5 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
+import { adapters } from "./fixtures/drain-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -16,7 +18,7 @@ for (const finishFails of [false, true])
     { timeout: 10000 },
     async (t) => {
       const fixture = await kernelFixture(t, {
-        manifest: resolve("test/fixtures/invoke-adapters.json")
+        adapters: [invokeAdapter]
       });
       let completedBeforeSubscribe = false;
       const relay = await kernelRelay(t, fixture, {
@@ -111,8 +113,7 @@ test(
   { timeout: 10000 },
   async (t) => {
     const { client, endpoint, directory } = await kernelFixture(t, {
-      workerEntrypoint: resolve("test/fixtures/drain-worker.mjs"),
-      manifest: undefined
+      adapters: adapters
     });
     const sibling = await client.submit(kernelInput("sibling"));
     const trace = join(directory, "drain.ndjson");

@@ -327,7 +327,7 @@ test(
 );
 
 test(
-  "A9: bad OpenClaw input leaves sibling and later invocations on the same real worker",
+  "A9: bad OpenClaw input leaves sibling and later invocations on the same native Kernel",
   { timeout: 15000 },
   async (t) => {
     const held = new Map();
@@ -338,8 +338,14 @@ test(
       } else sessionReply(frame, reply);
     });
     const kernel = await kernelFixture(t, {
-      workerEntrypoint: resolve("test/manual/openclaw-invalid-frames-worker.mjs"),
-      adapterConfigurations: { openclaw: { providerOptions: f.providerOptions } }
+      adapterConfigurations: { openclaw: { providerOptions: f.providerOptions } },
+      adapters: (
+        await import(
+          (await import("node:url")).pathToFileURL(
+            resolve("test/manual/openclaw-invalid-frames-worker.mjs")
+          ).href
+        )
+      ).adapters
     });
     const before = await kernel.client.status();
     const run = (text) =>
@@ -367,8 +373,8 @@ test(
     assert.ok((await c).some((event) => event.type === "run.completed"));
     const after = await kernel.client.status();
     assert.equal(after.kernel_instance_id, before.kernel_instance_id);
-    assert.equal(after.worker.pid, before.worker.pid);
-    assert.equal(after.worker.generation, before.worker.generation);
+    assert.equal(after.pid, before.pid);
+    assert.equal(after.kernel_instance_id, before.kernel_instance_id);
     assert.equal(after.execution_ready, true);
   }
 );

@@ -1,10 +1,10 @@
+import { loadCliAdapters } from "./adapters.js";
 import { runExtraCommand, commandError } from "./extra-commands.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { lstat, mkdir } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import {
   attachKernel,
   acknowledgeOrphanCleanup,
@@ -45,6 +45,8 @@ import {
 } from "./output.js";
 
 export interface CliDependencies extends ServiceControlOptions {
+  /** 参数确认后通知可执行入口接管 Playboard 信号；可导入调用方默认保留协作取消。 */
+  onPlayboardRun?: () => void;
   env?: NodeJS.ProcessEnv;
   input?: NodeJS.ReadableStream;
   output?: (line: string) => void;
@@ -247,6 +249,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     if (positional[0] === "playboard" && positional.length === 1) {
+      dependencies.onPlayboardRun?.();
       const { runPlayboard } = await import("./playboard.js");
       return runPlayboard({
         home,
@@ -254,7 +257,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         manifest: flags.manifest,
         input,
         output: dependencies.output,
-        env: dependencies.env
+        env: dependencies.env,
+        handleSignals: !dependencies.onPlayboardRun
       });
     }
     if (positional[0] === "adapter" && positional[1] === "list" && positional.length === 2) {
@@ -330,23 +334,19 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           logging: { directory: join(home, "logs") },
           endpoint,
           stateDirectory: kernelStateDirectory,
-          workerEntrypoint: fileURLToPath(new URL("./worker.js", import.meta.url)),
-          adapterModules: resolveAdapterModules(manifest),
+          adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
+            profileRoot: paths.profileRoot,
+            syncOpenClawTools: true
+          }),
           adapterConfigurations: await readCliAdapterConfigurations(
             paths.profileRoot,
             config?.adapters,
             manifest,
             dependencies.env ?? process.env
-          ),
-          env: {
-            ...(dependencies.env ?? process.env),
-            OCTO_RUNTIME_HOME: home,
-            OCTO_RUNTIME_CLI_PROFILE_ROOT: paths.profileRoot,
-            OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "1",
-            OCTO_RUNTIME_LOGS_DIRECTORY: join(home, "logs")
-          }
+          )
         });
       } else {
+        // CLI 的 Gateway 等 Extra 独立托管；ExtraService 内部 attach 已有 Kernel，不创建执行内核。
         const registration = await readExtra(paths, component, manifest);
         const module =
           registration.enabled === false

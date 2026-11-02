@@ -38,7 +38,7 @@ SDK 同类事故尚未独立复现，但 Issue 明确将原生 SDK 列为强制�
 
 F03 为当前实现；用户已要求目标改成 **5/10/15/15…秒**，不沿用 30 秒封顶。新的状态日志是独立明确范围，不等于读取聊天或执行逐帧日志。
 
-源码入口：[Gateway 状态机](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[WS](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[错误分类](../../../packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts)、[KernelClient](../../../packages/octo-runtime-executor-kernel/src/client.ts)、[Supervisor](../../../packages/octo-runtime-executor-kernel/src/supervisor.ts)、[Extra 服务](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)。
+源码入口：[Gateway 状态机](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[WS](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[错误分类](../../../packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts)、[KernelClient](../../../packages/octo-runtime-executor-kernel/src/client.ts)、[Supervisor](https://github.com/Mininglamp-OSS/octo-runtime/blob/58332b3bcf5651f58e674fa236184dc6a0d927ca/packages/octo-runtime-executor-kernel/src/supervisor.ts)、[Extra 服务](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)。
 
 # reason 12 的补充证据
 

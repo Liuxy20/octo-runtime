@@ -16,4 +16,4 @@ main@85411725 的现有实现已能把 Gateway Bot 的 `octo.execution/envs` 传
 
 新增全部 14 个内置 Harness 的双语安装/认证、Gateway 配置和代理专题，以及完整 Gateway 声明、导入重载和非 TUN 排查指南。保留 OpenClaw 独立进程例外；只为 Antigravity 声明本轮真实模型验收。修正旧总览对 OpenCode ask 支持的过时描述。
 
-检查与审查见[验证记录](../../tasks/252-antigravity-proxy/validation.md)和[交付审查](../../tasks/252-antigravity-proxy/review.md)；后续入口见[中文 Harness 目录](../../../docs/zh-CN/guides/harnesses.md)。用户随后授权本地 CI、审查、更新、提交、推送和 PR，按该授权交付文档；运行行为和 GitHub CI 范围均不变，ZCode V4 增强单独由 Issue #286 跟踪。
+检查与审查见[验证记录](../../tasks/252-antigravity-proxy/validation.md)和[交付审查](../../tasks/252-antigravity-proxy/review.md)；后续入口见[中文 Harness 目录](../../../docs/zh-CN/guides/harnesses.md)。用户随后授权本地 CI、审查、更新、提交、推送和 PR，按该授权交付文档；运行行为和 GitHub CI 范围均不变。

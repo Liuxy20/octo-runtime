@@ -1,13 +1,6 @@
-import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-
-interface WorkerIdentity {
-  pid: number;
-  started: string;
-  entrypoint: string;
-}
 
 export interface InvocationManifestEntry {
   invocationId: string;
@@ -16,37 +9,34 @@ export interface InvocationManifestEntry {
   startedAt: string;
 }
 
-/** Kernel 内部恢复记录；可选字段兼容扩展，读取时容忍未知字段，不是公共业务协议。 */
+/** 原生 Kernel 资源所有权记录；严格校验，不接受旧 worker 格式或模块 manifest。 */
 interface ManifestFile {
   schemaVersion: 1;
   kernelPid: number;
   updatedAt: string;
-  worker?: WorkerIdentity;
-  cleanupIncomplete?: true;
+  cleanupIncomplete: true;
+  nativeOwner: true;
+  /** 实际关闭已报告失败/超时；区别于原生运行期间预先登记的保守标记。 */
+  cleanupFailed?: true;
   invocations: InvocationManifestEntry[];
 }
 
 export interface OrphanReapResult {
   found: boolean;
-  reaped: boolean;
-  pid?: number;
-  reason?:
-    | "kernel_alive"
-    | "host_missing"
-    | "identity_mismatch"
-    | "unsupported_identity"
-    | "cleanup_incomplete"
-    | "cleanup_acknowledged";
+  /** 原生恢复不终止任何进程；人工确认也不表示自动回收。 */
+  reaped: false;
+  reason?: "kernel_alive" | "cleanup_incomplete" | "cleanup_acknowledged";
 }
 
 /**
- * 持久化 Kernel/worker 身份与在途执行事实，用于下次启动时识别遗留资源，不保存业务历史。
- * 写入串行化并通过 rename 替换；只有 owner 确认 worker 回收后才能 close 删除清单。
+ * 持久化原生 Kernel 所有权与在途执行事实，不保存业务历史，不迁移旧执行架构。
+ * 这是资源恢复记录，不是模块 manifest。写入串行化并通过 rename 替换；
+ * 只有 owner 确认 Core/Adapter 资源回收后才能 close 删除记录。
  */
 export class InvocationManifest {
   readonly #path: string;
   readonly #invocations = new Map<string, InvocationManifestEntry>();
-  #worker?: WorkerIdentity;
+  #cleanupFailed = false;
   #writes = Promise.resolve();
 
   private constructor(path: string) {
@@ -65,8 +55,8 @@ export class InvocationManifest {
         { code: "ORPHAN_CLEANUP_INCOMPLETE" }
       );
     }
-    if (reap.reason === "kernel_alive" || reap.reason === "unsupported_identity") {
-      throw new Error(`cannot replace live or unverifiable invocation manifest (${reap.reason})`);
+    if (reap.reason === "kernel_alive") {
+      throw new Error(`cannot replace live invocation manifest (${reap.reason})`);
     }
     const manifest = new InvocationManifest(path);
     await manifest.#persist();
@@ -74,18 +64,14 @@ export class InvocationManifest {
     return { manifest, reap };
   }
 
-  async setWorker(pid: number | undefined, entrypoint: string): Promise<void> {
-    if (pid === undefined) {
-      this.#worker = undefined;
-    } else {
-      try {
-        const started = await queryProcessStartIdentity(pid);
-        if (!started) throw new Error("system process start identity unavailable");
-        this.#worker = { pid, started, entrypoint };
-      } catch (cause) {
-        throw new Error(`cannot identify worker process ${pid}`, { cause });
-      }
-    }
+  /** 原生服务异常退出无法证明 Adapter 资源已清空；正常 close 才删除所有权证据。 */
+  async markNativeOwner(): Promise<void> {
+    await this.#persist();
+  }
+
+  /** owner 关闭未完成时登记实际失败；宿主继续存活也不能将诊断恢复为 available。 */
+  async markCleanupIncomplete(): Promise<void> {
+    this.#cleanupFailed = true;
     await this.#persist();
   }
 
@@ -110,7 +96,9 @@ export class InvocationManifest {
       schemaVersion: 1,
       kernelPid: process.pid,
       updatedAt: new Date().toISOString(),
-      ...(this.#worker ? { worker: { ...this.#worker } } : {}),
+      nativeOwner: true,
+      cleanupIncomplete: true,
+      ...(this.#cleanupFailed ? { cleanupFailed: true as const } : {}),
       invocations: [...this.#invocations.values()].map((entry) => ({ ...entry }))
     };
     // 当前调用仍收到自己的 IO 失败；后续完整快照可重试，不能让一次失败毒化整个串行队列。
@@ -124,75 +112,27 @@ export class InvocationManifest {
 }
 
 /**
- * 仅在原 Kernel 已退出且 worker 的 PID/启动身份仍匹配时尝试回收，防止 PID 复用误杀。
- * 无法验证身份时保留清单并报告 unsupported_identity；worker 已消失不证明 Windows 后代已清空。
+ * 检查原生 owner 的遗留记录，不终止宿主或 Provider 进程。
+ * 仅文件不存在或该原文已获人工确认才允许 open；损坏及旧 worker 记录保留并明确拒绝。
  */
 export async function reapOrphanedInvocationManifest(path: string): Promise<OrphanReapResult> {
-  let parsed: ManifestFile;
   let source: string;
   try {
     source = await readFile(path, "utf8");
-    parsed = JSON.parse(source) as ManifestFile;
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      await removeAcknowledgement(path);
-      return { found: false, reaped: false };
-    }
-    await rm(path, { force: true });
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     await removeAcknowledgement(path);
-    return { found: true, reaped: false, reason: "host_missing" };
+    return { found: false, reaped: false };
   }
-  if (
-    Number.isSafeInteger(parsed.kernelPid) &&
-    parsed.kernelPid > 0 &&
-    processAlive(parsed.kernelPid)
-  ) {
-    return { found: true, reaped: false, reason: "kernel_alive" };
-  }
-  const host = parsed.worker;
-  if (!host || !Number.isSafeInteger(host.pid) || host.pid < 1 || !processAlive(host.pid)) {
-    if (parsed.cleanupIncomplete && process.platform === "win32") {
-      return {
-        found: true,
-        reaped: false,
-        pid: host?.pid,
-        reason: (await cleanupWasAcknowledged(path, source))
-          ? "cleanup_acknowledged"
-          : "cleanup_incomplete"
-      };
-    }
-    await rm(path, { force: true });
-    await removeAcknowledgement(path);
-    return { found: true, reaped: false, reason: "host_missing" };
-  }
-  const currentIdentity = await processStartIdentity(host.pid);
-  if (!currentIdentity) {
-    return { found: true, reaped: false, pid: host.pid, reason: "unsupported_identity" };
-  }
-  if (currentIdentity !== host.started) {
-    if (parsed.cleanupIncomplete && process.platform === "win32") {
-      return {
-        found: true,
-        reaped: false,
-        pid: host.pid,
-        reason: (await cleanupWasAcknowledged(path, source))
-          ? "cleanup_acknowledged"
-          : "cleanup_incomplete"
-      };
-    }
-    await rm(path, { force: true });
-    await removeAcknowledgement(path);
-    return { found: true, reaped: false, pid: host.pid, reason: "identity_mismatch" };
-  }
-  // 必须在 leader 仍可识别时回收 Windows 树；失败保留证据，禁止覆盖清单并启动替代 worker。
-  if (!(await terminateProcessGroup(host.pid)) && process.platform === "win32") {
-    // 失败事实必须跨重启保留；leader 后来消失或 PID 复用不能抹去未确认的后代归属。
-    await writeManifest(path, { ...parsed, cleanupIncomplete: true });
-    return { found: true, reaped: false, pid: host.pid, reason: "cleanup_incomplete" };
-  }
-  await rm(path, { force: true });
-  await removeAcknowledgement(path);
-  return { found: true, reaped: true, pid: host.pid };
+  const parsed = parseManifest(source);
+  if (processAlive(parsed.kernelPid)) return { found: true, reaped: false, reason: "kernel_alive" };
+  return {
+    found: true,
+    reaped: false,
+    reason: (await cleanupWasAcknowledged(path, source))
+      ? "cleanup_acknowledged"
+      : "cleanup_incomplete"
+  };
 }
 
 async function removeAcknowledgement(path: string): Promise<void> {
@@ -206,56 +146,46 @@ async function removeAcknowledgement(path: string): Promise<void> {
 /** 只读恢复诊断，不回收进程、不改写清单；用于 doctor 及 SDK 运维界面。 */
 export async function inspectOrphanCleanup(path: string): Promise<{
   manifestPath: string;
-  state: "missing" | "available" | "cleanup_incomplete" | "acknowledged" | "unreadable";
-  workerPid?: number;
+  state:
+    "missing" | "available" | "cleanup_incomplete" | "acknowledged" | "unsupported" | "unreadable";
 }> {
   try {
     const source = await readFile(path, "utf8");
-    const parsed = JSON.parse(source) as ManifestFile;
+    const parsed = parseManifest(source);
     return {
       manifestPath: path,
-      state: parsed.cleanupIncomplete
-        ? (await cleanupWasAcknowledged(path, source))
-          ? "acknowledged"
-          : "cleanup_incomplete"
-        : "available",
-      workerPid: parsed.worker?.pid
+      // 运行中的保守标记不表示实际失败；关闭已失败时，宿主继续存活也不能隐藏 incomplete。
+      state:
+        parsed.cleanupFailed || !processAlive(parsed.kernelPid)
+          ? (await cleanupWasAcknowledged(path, source))
+            ? "acknowledged"
+            : "cleanup_incomplete"
+          : "available"
     };
   } catch (error) {
     return {
       manifestPath: path,
-      state: (error as NodeJS.ErrnoException).code === "ENOENT" ? "missing" : "unreadable"
+      state:
+        (error as NodeJS.ErrnoException).code === "ENOENT"
+          ? "missing"
+          : (error as NodeJS.ErrnoException).code === "ORPHAN_RECORD_UNSUPPORTED"
+            ? "unsupported"
+            : "unreadable"
     };
   }
 }
 
 /**
  * 操作者已停止未知后代后显式确认当前失败记录；不终止进程、不声称整树回收已验证。
- * 仍存活的原 Kernel/worker 或无法核验的 PID 不能放行。备份保留，确认仅匹配原文摘要，
+ * 仅接受有效原生记录，仍存活的原 Kernel 不能放行。备份保留，确认仅匹配原文摘要，
  * 所以并发启动、后续调用或另一份清单不会复用旧确认；下一次 open 才替换失败记录。
  */
 export async function acknowledgeOrphanCleanup(
   path: string
 ): Promise<{ manifestPath: string; archivePath: string }> {
   const source = await readFile(path, "utf8");
-  const parsed = JSON.parse(source) as ManifestFile;
-  if (
-    parsed.schemaVersion !== 1 ||
-    !Number.isSafeInteger(parsed.kernelPid) ||
-    parsed.kernelPid < 1 ||
-    parsed.cleanupIncomplete !== true ||
-    !parsed.worker ||
-    !Number.isSafeInteger(parsed.worker.pid) ||
-    parsed.worker.pid < 1
-  ) {
-    throw new Error("ORPHAN_CLEANUP_NOT_PENDING");
-  }
+  const parsed = parseManifest(source);
   if (processAlive(parsed.kernelPid)) throw new Error("ORPHAN_CLEANUP_OWNER_ALIVE");
-  if (processAlive(parsed.worker.pid)) {
-    const identity = await processStartIdentity(parsed.worker.pid);
-    if (!identity || identity === parsed.worker.started)
-      throw new Error("ORPHAN_CLEANUP_OWNER_ALIVE");
-  }
   const archivePath = `${path}.acknowledged.${randomUUID()}.json`;
   await writeFile(archivePath, source, { encoding: "utf8", flag: "wx", mode: 0o600 });
   const temporary = `${path}.${randomUUID()}.ack.tmp`;
@@ -305,110 +235,56 @@ async function writeManifest(path: string, snapshot: ManifestFile): Promise<void
   }
 }
 
-/** 查询系统启动时间以区分 PID 复用；失败时不返回可用于回收的身份，绝不以 PID 本身兜底。 */
-export async function processStartIdentity(pid: number): Promise<string | undefined> {
+/** 旧格式、未知字段及损坏内容均不能当作空记录覆盖；读取与人工确认共用同一校验。 */
+function parseManifest(source: string): ManifestFile {
   try {
-    return await queryProcessStartIdentity(pid);
-  } catch {
-    return undefined;
-  }
-}
-
-// 登记失败保留系统查询原因；公开探测与孤儿回收仍以 undefined 表示身份未知。
-async function queryProcessStartIdentity(pid: number): Promise<string | undefined> {
-  if (!Number.isSafeInteger(pid) || pid < 1) return undefined;
-  if (process.platform === "linux") {
-    try {
-      const stat = await readFile(`/proc/${pid}/stat`, "utf8");
-      const fields = stat
-        .slice(stat.lastIndexOf(")") + 2)
-        .trim()
-        .split(/\s+/);
-      return fields[19] ? `linux:${fields[19]}` : undefined;
-    } catch {
-      return undefined;
-    }
-  }
-  if (process.platform === "darwin" || process.platform === "freebsd") {
-    return new Promise((resolve) => {
-      execFile(
-        "/bin/ps",
-        ["-o", "lstart=", "-p", String(pid)],
-        { timeout: 2_000 },
-        (error, stdout) => {
-          const value = stdout.trim();
-          resolve(error || !value ? undefined : `ps:${value}`);
-        }
-      );
+    const value: unknown = JSON.parse(source);
+    const fields = new Set([
+      "schemaVersion",
+      "kernelPid",
+      "updatedAt",
+      "nativeOwner",
+      "cleanupIncomplete",
+      "cleanupFailed",
+      "invocations"
+    ]);
+    if (
+      !record(value) ||
+      Object.keys(value).some((key) => !fields.has(key)) ||
+      value.schemaVersion !== 1 ||
+      value.nativeOwner !== true ||
+      value.cleanupIncomplete !== true ||
+      !Number.isSafeInteger(value.kernelPid) ||
+      Number(value.kernelPid) < 1 ||
+      Number(value.kernelPid) > 2147483647 ||
+      !timestamp(value.updatedAt) ||
+      (value.cleanupFailed !== undefined && value.cleanupFailed !== true) ||
+      !Array.isArray(value.invocations) ||
+      !value.invocations.every(
+        (entry: unknown) =>
+          record(entry) &&
+          Object.keys(entry).length === 4 &&
+          ["invocationId", "runId", "adapterType"].every(
+            (key) => typeof entry[key] === "string" && entry[key] !== ""
+          ) &&
+          timestamp(entry.startedAt)
+      )
+    )
+      throw new Error("Invalid native ownership record");
+    return value as unknown as ManifestFile;
+  } catch (cause) {
+    throw Object.assign(new Error("ORPHAN_RECORD_UNSUPPORTED", { cause }), {
+      code: "ORPHAN_RECORD_UNSUPPORTED"
     });
   }
-  if (process.platform === "win32") {
-    return new Promise((resolve, reject) => {
-      execFile(
-        "powershell.exe",
-        [
-          "-NoLogo",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          // 直接调用系统进程对象，避免 Get-Process 的命令发现/模块自动加载占用身份查询预算。
-          // 保持 UTC ticks 身份格式，不缓存可能已经复用的 PID。
-          `$PSModuleAutoLoadingPreference='None'; $target=[System.Diagnostics.Process]::GetProcessById(${pid}); try { [Console]::Out.Write($target.StartTime.ToUniversalTime().Ticks.ToString([Globalization.CultureInfo]::InvariantCulture)) } finally { $target.Dispose() }`
-        ],
-        // PowerShell 冷启动与查询共用 40 秒；Windows CI 曾在 30 秒期限被系统命令超时终止。
-        // 身份登记独立于后续 RPC 就绪与关闭预算，失败仍禁止使用未知 PID。
-        { encoding: "utf8", timeout: 40_000, windowsHide: true },
-        (error, stdout) => {
-          if (error) {
-            reject(
-              error instanceof Error
-                ? error
-                : new Error("Windows process identity query failed", { cause: error })
-            );
-            return;
-          }
-          const value = stdout.trim();
-          resolve(!/^\d+$/.test(value) ? undefined : `windows:${value}`);
-        }
-      );
-    });
-  }
-  return undefined;
 }
 
-async function terminateProcessGroup(pid: number): Promise<boolean> {
-  if (process.platform === "win32") {
-    const terminated = await new Promise<boolean>((resolve) => {
-      execFile(
-        "taskkill.exe",
-        ["/PID", String(pid), "/T", "/F"],
-        { windowsHide: true, timeout: 5_000 },
-        (error) => resolve(!error)
-      );
-    });
-    // taskkill 失败即使 leader 随后消失，也不能证明后代已回收。
-    return terminated && (await waitForExit(pid, 1_000));
-  }
-  signalProcessGroup(pid, "SIGTERM");
-  if (await waitForExit(pid, 1_000)) return true;
-  signalProcessGroup(pid, "SIGKILL");
-  return waitForExit(pid, 1_000);
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
-  try {
-    process.kill(-pid, signal);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-  }
-}
-
-async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (processAlive(pid) && Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, 25));
-  }
-  return !processAlive(pid);
+function timestamp(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && Number.isFinite(Date.parse(value));
 }
 
 function processAlive(pid: number): boolean {
@@ -416,6 +292,9 @@ function processAlive(pid: number): boolean {
     process.kill(pid, 0);
     return true;
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "EPERM";
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ESRCH") return false;
+    if (code === "EPERM") return true;
+    throw error;
   }
 }

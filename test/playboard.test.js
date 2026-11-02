@@ -78,9 +78,17 @@ async function fixture(t, { legacyOpenClaw = false } = {}) {
 async function execute(
   { directory, manifest },
   value,
-  { args = [], signalOnFrame = false, env = {}, cleanupFailure } = {}
+  {
+    args = [],
+    signalOnFrame = false,
+    signalOnImport = false,
+    signalOnFailure = false,
+    env = {},
+    cleanupFailure
+  } = {}
 ) {
-  const consoleControl = signalOnFrame ? await createWindowsConsole() : undefined;
+  const consoleControl =
+    signalOnFrame || signalOnImport || signalOnFailure ? await createWindowsConsole() : undefined;
   return new Promise((resolve, reject) => {
     const childArgs = [
       ...(cleanupFailure
@@ -134,7 +142,13 @@ async function execute(
     }, 15_000);
     child.on("error", reject);
     const interruptWhenReady = () => {
-      if (signalOnFrame && !signalled && targetPid && stdout.includes('"type":"message.delta"')) {
+      if (
+        !signalled &&
+        targetPid &&
+        ((signalOnFrame && stdout.includes('"type":"message.delta"')) ||
+          (signalOnImport && /PLAYBOARD_IMPORT_READY=\{[^\n]+\}\n/.test(stderr)) ||
+          (signalOnFailure && stderr.includes("COMPONENT_CLEANUP_INCOMPLETE")))
+      ) {
         signalled = true;
         shutdownStarted = Date.now();
         if (consoleControl) {
@@ -306,10 +320,10 @@ test("temporary daemon renders ordered context and leaves no identity or process
   assert.equal(wire.controlInstructions, "control-only");
   assert.ok(wire.modelInput.indexOf("business-b") < wire.modelInput.indexOf("business-a"));
   assert.doesNotMatch(wire.modelInput, /control-only|test-model/);
-  assert.doesNotMatch(result.stderr, /playboard fixture diagnostic/);
+  assert.match(result.stderr, /playboard fixture diagnostic/);
   assert.doesNotMatch(result.stdout, /playboard fixture diagnostic/);
   assert.throws(() => process.kill(wire.hostPid, 0), { code: "ESRCH" });
-  assert.throws(() => process.kill(wire.daemonPid, 0), { code: "ESRCH" });
+  assert.equal(wire.daemonPid, wire.hostPid);
   assert.equal(wire.runMetadata.profile, "default");
   const repeated = await execute(settings, request);
   assert.equal(observed(repeated).modelInput, wire.modelInput);
@@ -425,19 +439,20 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
     });
     assert.notEqual(cancelled.code, 0, cancelled.stderr);
     assert.equal(cancelled.signal, null);
-    terminal(cancelled, "cancelled");
-    assert.match(cancelled.stderr, /Playboard exited with code 130/);
-    assert.match(cancelled.stderr, new RegExp(cleanupCode));
+    assert.match(cancelled.stderr, /PLAYBOARD_FORCE_STOP/);
+    assert.doesNotMatch(cancelled.stderr, new RegExp(cleanupCode));
+    assert.equal(cancelled.frames.some(isTerminal), false);
   });
 }
 
-test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (t) => {
+test("Ctrl+C force-stops Playboard without waiting for a terminal or Kernel close", async (t) => {
   const settings = await fixture(t);
   const temporary = join(settings.directory, "cancellation-".repeat(5));
   await mkdir(temporary);
   const env = { TEMP: temporary, TMP: temporary, TMPDIR: temporary };
   const result = await execute(settings, echoInput("hang"), { signalOnFrame: true, env });
-  assert.equal(result.code, 130, result.stderr);
+  if (process.platform === "win32") assert.notEqual(result.code, 0, result.stderr);
+  else assert.equal(result.code, 130, result.stderr);
   assert.equal(result.signal, null);
   assert.ok(result.shutdownMs < 7_000, `close took ${result.shutdownMs}ms`);
   const frame = result.frames.find((frame) => frame.type === "message.delta");
@@ -445,19 +460,90 @@ test("Ctrl+C cancels execution and reaps the temporary daemon and Host", async (
   assert.throws(() => process.kill(JSON.parse(frame.payload.text).hostPid, 0), {
     code: "ESRCH"
   });
-  assert.throws(() => process.kill(JSON.parse(frame.payload.text).daemonPid, 0), {
-    code: "ESRCH"
-  });
+  assert.equal(JSON.parse(frame.payload.text).daemonPid, JSON.parse(frame.payload.text).hostPid);
   assert.throws(() => process.kill(result.pid, 0), { code: "ESRCH" });
-  assert.deepEqual(await readdir(temporary), []);
+  assert.match(result.stderr, /PLAYBOARD_FORCE_STOP/);
   const next = await execute(settings, echoInput("after cancellation"), { env });
   assert.equal(next.code, 0, next.stderr);
   terminal(next, "completed");
   t.diagnostic(
     `${process.platform === "win32" ? "CTRL_C_EVENT" : "SIGINT"}: code=${result.code}, signal=${result.signal}, close=${result.shutdownMs}ms; owned PIDs gone; next invocation completed`
   );
-  // 在资源与后续调用断言之后检查源终态，区分控制台处理成功与执行结果可见性。
-  terminal(result, "cancelled");
+  assert.equal(result.frames.some(isTerminal), false);
+});
+
+test(
+  "Ctrl+C during pending Adapter import kills only the Playboard descendant tree",
+  { timeout: 15000 },
+  async (t) => {
+    const settings = await fixture(t);
+    await writeFile(
+      settings.manifest,
+      JSON.stringify({
+        version: 1,
+        adapters: [
+          {
+            module: join(root, "test/fixtures/playboard-pending-adapter.mjs"),
+            export: "pendingAdapter"
+          }
+        ]
+      })
+    );
+    const sibling = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      stdio: "ignore"
+    });
+    const siblingExited = once(sibling, "exit");
+    t.after(async () => {
+      sibling.kill("SIGKILL");
+      await siblingExited;
+    });
+    const result = await execute(settings, echoInput(), { signalOnImport: true });
+    assert.notEqual(result.code, 0);
+    assert.ok(result.shutdownMs < 7000, result.stderr);
+    assert.match(result.stderr, /PLAYBOARD_FORCE_STOP/);
+    assert.doesNotMatch(result.stderr, /PLAYBOARD_TREE_STOP_UNCONFIRMED/);
+    assert.equal(result.stdout, "");
+    const ids = JSON.parse(/PLAYBOARD_IMPORT_READY=(\{[^\n]+\})/.exec(result.stderr)[1]);
+    for (const pid of [ids.grandchild, ids.child, result.pid]) {
+      const deadline = Date.now() + 3000;
+      while (true) {
+        try {
+          process.kill(pid, 0);
+        } catch (error) {
+          assert.equal(error.code, "ESRCH");
+          break;
+        }
+        assert.ok(Date.now() < deadline, `owned process ${pid} still alive`);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+    assert.equal(sibling.exitCode, null);
+    assert.equal(process.kill(sibling.pid, 0), true);
+  }
+);
+
+test("Ctrl+C still force-stops owned children after the command reports incomplete cleanup", async (t) => {
+  const settings = await fixture(t);
+  const result = await execute(settings, echoInput(), {
+    cleanupFailure: "pending",
+    signalOnFailure: true
+  });
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /COMPONENT_CLEANUP_INCOMPLETE/);
+  assert.match(result.stderr, /PLAYBOARD_FORCE_STOP/);
+  assert.ok(result.shutdownMs < 7000);
+  const pid = Number(/PLAYBOARD_CLEANUP_PENDING_PID=(\d+)/.exec(result.stderr)[1]);
+  const deadline = Date.now() + 3000;
+  while (true) {
+    try {
+      process.kill(pid, 0);
+    } catch (error) {
+      assert.equal(error.code, "ESRCH");
+      break;
+    }
+    assert.ok(Date.now() < deadline, `owned child ${pid} still alive`);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
 });
 
 test("malformed stdin, unknown arguments and unsupported native mode fail clearly", async (t) => {

@@ -20,7 +20,6 @@ CLI 默认加载集合以 [manifest.json](../../apps/cli/src/manifest.json) 为�
 | [CodeBuddy](../../packages/octo-runtime-adapter-codebuddy/README.md) | ACP stdio | canonical |
 | [OpenCode](../../packages/octo-runtime-adapter-opencode/README.md) | full_access 使用 JSON CLI，ask 使用 ACP | canonical |
 | [OpenClaw](../../packages/octo-runtime-adapter-openclaw/README.md) | Gateway WebSocket RPC 与事件 | canonical |
-| [ZCode](../../packages/octo-runtime-adapter-zcode-gui/README.md) | 私有 NDJSON RPC stdio | canonical |
 | [Antigravity](../../packages/octo-runtime-adapter-antigravity/README.md) | agy stream-json stdio | canonical |
 | Hermes、Kimi Code、MCode、Qoder CLI、Qoder CN | ACP stdio | canonical |
 | [Grok Build](../../packages/octo-runtime-adapter-grok-build/README.md) | Grok CLI ACP stdio，共享通用 client | canonical |

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Developer documentation](../docs/en/README.md)
 
-Octo Runtime is one Provider-neutral execution implementation shared by SDK applications, the bundled CLI, and optional business integrations. The host picks Adapters, configuration, and Extras. `AgentExecutor` in Executor Core performs the work; Executor Kernel adds local IPC and supervision of an isolated worker; Host SDK composes optional Extras around it.
+Octo Runtime is one Provider-neutral execution implementation shared by SDK applications, the bundled CLI, and optional business integrations. The host picks Adapters, configuration, and Extras. `AgentExecutor` in Executor Core performs the work; Executor Kernel owns local RPC, Run admission, observation, control, and bounded replay in the same host process; Host SDK composes optional Extras around it.
 
 This directory holds the private workspace packages. Each README explains its purpose, integration entry, and boundaries; execution examples live with Core and Kernel, while Adapter pages show registration and input preparation.
 
@@ -10,8 +10,8 @@ This directory holds the private workspace packages. Each README explains its pu
 
 | You want to…                                 | Start with                                                                                                           |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Run an agent inside your own process         | [Executor Core](octo-runtime-executor-core/README.md)                                                                |
-| Run it isolated, with supervision and replay | [Executor Kernel](octo-runtime-executor-kernel/README.md)                                                            |
+| Embed Runtime in an Electron or Node application | [Executor Kernel](octo-runtime-executor-kernel/README.md)                                                                |
+| Use explicit low-level execution primitives | [Executor Core](octo-runtime-executor-core/README.md)                                                            |
 | Talk to a Provider CLI                       | the Provider table below                                                                                             |
 | Write a new Adapter                          | [Adapter SDK](octo-runtime-adapter-sdk/README.md), then [ACP Adapter](octo-runtime-adapter-acp/README.md)            |
 | Connect Octo IM or WeCom                     | [Channel Gateway](octo-runtime-extra-channel-gateway/README.md), [WeCom](octo-runtime-extra-channel-wecom/README.md) |
@@ -23,10 +23,11 @@ The typical path:
 ```text
 Application or Extra
   -> KernelClient -> local IPC
-  -> isolated worker -> AgentExecutor -> selected Adapter -> Provider
+  -> ExecutorKernel / HostRunService
+  -> AgentExecutor in the Kernel host -> injected Adapter -> Provider
 ```
 
-Kernel and Extra service objects are built in their calling process. An Electron host can build both in its main process; the CLI deploys Kernel and Extras as separate services through the same factories. Core can also be embedded directly, at the cost of sharing the host's failure domain. Extras are optional.
+For native SDK integration, the host imports and constructs Adapters, passes them to `createKernelService({ endpoint, adapters })`, initializes the service, and uses `kernel.client`. Even in the same process, business calls use real local RPC. An Electron host can construct Kernel and optional Extras in its main process; the CLI deploys separate service hosts through the same factories. Bare Core is an explicit low-level API, not the ordinary in-process SDK entry point.
 
 ## Protocol
 
@@ -54,23 +55,22 @@ Kernel and Extra service objects are built in their calling process. An Electron
 | OpenClaw         | [octo-runtime-adapter-openclaw](octo-runtime-adapter-openclaw/README.md)       | Gateway WebSocket RPC                     | canonical; calls an existing remote Agent                              |
 | Grok Build       | [octo-runtime-adapter-grok-build](octo-runtime-adapter-grok-build/README.md)   | ACP stdio with native auth negotiation    | canonical; `>=1.0.67 <2`                                               |
 | Antigravity      | [octo-runtime-adapter-antigravity](octo-runtime-adapter-antigravity/README.md) | `agy` stream-json stdio                   | canonical; `full_access` only                                          |
-| ZCode            | [octo-runtime-adapter-zcode-gui](octo-runtime-adapter-zcode-gui/README.md)     | bundled app-server NDJSON stdio           | canonical; no per-invocation model                                     |
 | Hermes           | [octo-runtime-adapter-hermes](octo-runtime-adapter-hermes/README.md)           | `hermes acp`                              | canonical; empty load result means missing session                     |
 | Kimi Code        | [octo-runtime-adapter-kimi-code](octo-runtime-adapter-kimi-code/README.md)     | `kimi acp`                                | canonical; model from advertised `configOptions`                       |
 | MCode            | [octo-runtime-adapter-mcode](octo-runtime-adapter-mcode/README.md)             | `mcode acp`                               | canonical; MiniMax owns model selection                                |
 | Qoder CLI        | [octo-runtime-adapter-qodercli](octo-runtime-adapter-qodercli/README.md)       | `qodercli --acp`                          | canonical; `--yolo` only for `full_access`                             |
 | Qoder CLI CN     | [octo-runtime-adapter-qoderclicn](octo-runtime-adapter-qoderclicn/README.md)   | `qoderclicn --acp`                        | canonical; separate binary and adapter type                            |
 
-The host selects and supplies Adapter implementations. In the Kernel path, its worker imports and registers them. Each Adapter README lists its own Provider prerequisites and verification limits; being in this table is not evidence that a feature or platform passed real integration.
+The host imports and constructs Adapter instances; Kernel registers those objects in its own process without serializing their methods or dependencies. CLI hosts own manifest resolution, dynamic imports, factories, and configuration loading. Kernel does not accept module manifests or start execution workers. Adapters may start Provider subprocesses and remain responsible for their cleanup. Each Adapter README lists its own Provider prerequisites and verification limits; being in this table is not evidence that a feature or platform passed real integration.
 
 ## Executor
 
 | Package                                                                | What it does                                                                                       | Watch out for                                            |
 | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | [octo-runtime-executor-core](octo-runtime-executor-core/README.md)     | The single `AgentExecutor`: input preparation, rendering, output validation, cancellation, cleanup | Shares the host's event loop and failure domain          |
-| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.md) | `createKernelService`, `KernelClient`, local JSON-RPC, worker supervision, bounded replay          | Does not replay interrupted runs or own business history |
+| [octo-runtime-executor-kernel](octo-runtime-executor-kernel/README.md) | `createKernelService`, `KernelClient`, local JSON-RPC, Run admission/control, bounded replay          | Does not replay interrupted runs or own business history |
 
-Kernel workers and direct embedding run the same Core. Replacing a worker restores capacity for new runs, not the interrupted one. A bounded source replay window is not durable history.
+Kernel uses the single Core implementation in the host process. Kernel, Core, and injected Adapters share the host event loop, memory, and failure domain: RPC does not isolate synchronous blocking, `process.exit()`, OOM, or host crashes. Host restart belongs to the application or CLI; reconstruction creates a new Kernel instance and never re-executes previously accepted Runs. Reconnecting can only replay retained events from the original live instance; the bounded replay window is not durable history.
 
 ## Extras
 
@@ -99,7 +99,7 @@ Everything in this directory is a private `@mininglamp-oss/octo-runtime-*` works
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `octo-runtime-protocol`              | `/protocol`, plus `/protocol/schema.json`                                                                    |
 | `octo-runtime-executor-core`         | `/executor-core`: `AgentExecutor`                                                                            |
-| `octo-runtime-executor-kernel`       | `/executor-kernel`: `attachKernel`, `createKernelService`, `serveWorker`, `/executor-kernel/ipc-schema.json` |
+| `octo-runtime-executor-kernel`       | `/executor-kernel`: `attachKernel`, `createKernelService`, `/executor-kernel/ipc-schema.json` |
 | `octo-runtime-host-sdk`              | `/host`: `createExtraService`, `componentEndpoint`; `/extra`: plugin types                                   |
 | `octo-runtime-adapter-dsh`           | `/adapters/dsh`: `dshAdapter`, `createDshAdapter`                                                            |
 | `octo-runtime-extra-channel-gateway` | `/extras/channel-gateway`                                                                                    |

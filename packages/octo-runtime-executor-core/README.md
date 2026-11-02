@@ -2,13 +2,13 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-`AgentExecutor` is the one place Octo Runtime actually runs an agent. Register the Adapters you ship, hand it an `InvokeInput`, and it prepares the turn, calls the selected Provider, and streams the result back. Kernel runs this same class inside its isolated worker, so in-process embedding and the Kernel path cannot drift into two different execution behaviours.
+`AgentExecutor` is the one place Octo Runtime actually runs an agent. Register the Adapters you ship, hand it an `InvokeInput`, and it prepares the turn, calls the selected Provider, and streams the result back. Kernel uses this class in its host process. Standard Electron/CLI integration uses KernelClient/RPC; the examples below explain the low-level execution API.
 
 ## When to use it
 
 - You run execution inside your own process and accept sharing its event loop, memory, and failure domain.
-- You are writing a Kernel worker entrypoint — `serveWorker` builds an `AgentExecutor` for you.
-- You need process isolation, supervision, or stream replay: use [Kernel](../octo-runtime-executor-kernel/README.md) instead.
+- Standard host integration uses [Kernel](../octo-runtime-executor-kernel/README.md) for RPC, Run admission, and observation management.
+- Kernel provides bounded replay and control; it does not isolate the host failure domain.
 
 ## Make one call
 
@@ -89,18 +89,20 @@ Provider terminal draining and iterator closure share one monotonic `cancelGrace
 
 Core keeps at most 1,024 invocation identity records and evicts inactive ones after 120 seconds. Active, paused, and uncleaned invocations are never evicted, so leaked ownership eventually exhausts capacity. These records are correlation state, not history and not an output replay buffer.
 
+`shutdown()` also waits for actual Adapter probes it has started. A `describe()` display timeout does not end a probe. Pending probes produce `cleanup: "incomplete"`, potentially with empty invocation identity lists. Closing prevents new probes; settlement releases their tracking records.
+
 ## Direct Core or Kernel
 
 | Concern                    | Direct `AgentExecutor`                                                                     | `KernelClient`                                      |
 | -------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Execution location         | Your process                                                                               | Kernel's isolated worker                            |
-| Failure domain             | Shares your event loop; `process.exit`, OOM, or a synchronous block takes the host with it | Worker failures are contained; the service stays up |
+| Execution location         | Your process                                                                               | Kernel host process                            |
+| Failure domain             | Shares your event loop; `process.exit`, OOM, or a synchronous block takes the host with it | Shares the Kernel host failure domain |
 | Ending the iterator early  | Requests cancellation                                                                      | Stops observation only                              |
 | Replay                     | None                                                                                       | Bounded, by original identity and sequence          |
 | `environment.streamLimits` | Supported                                                                                  | Rejected                                            |
 | Shutdown                   | `shutdown()`, then check `cleanup`                                                         | `close()`, then check `complete`                    |
 
-Kernel is the recommended path for long-lived desktop hosts. Choose direct Core deliberately, when you accept the shared failure domain and own the executor's lifetime yourself. Neither path needs an Extra.
+Electron, Node SDK hosts, and CLI hosts use KernelClient over local RPC. Direct Core is the lower-level execution implementation for internal integration and tests; it does not provide Kernel admission, observation, or replay. Neither path needs an Extra.
 
 ## Import and distribution
 

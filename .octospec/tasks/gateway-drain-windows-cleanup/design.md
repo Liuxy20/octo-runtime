@@ -113,7 +113,7 @@ broker 自身被强杀时 OS 关闭其唯一 Job handle，触发后代回收；�
 
 ## D6 覆盖范围与发行
 
-接线必须覆盖 Host launchNode/native、Kernel spawnWorker、Adapter SDK NDJSON、ACP spawn、Codex app-server、ZCode。
+接线必须覆盖 Host launchNode/native、Kernel spawnWorker、Adapter SDK NDJSON、ACP spawn、Codex app-server。
 不能只给 Host/worker 设置 processTree=true。外部传入且非本 SDK 创建的共享连接保持 borrowed，不取得杀进程权。
 POSIX 继续使用原进程组实现，保留 TERM/KILL 有界确认与故障隔离。
 

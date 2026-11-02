@@ -17,7 +17,7 @@ Call `initialize()` to start, `status()` to inspect, and `close()` on exit. Buil
 
 ## Connect Channel Gateway
 
-Use an existing Kernel with an installed, authenticated Codex Provider. In the separate npm directory from [SDK setup](../getting-started/sdk.md), download [gateway.mts](../../examples/gateway.mts). It imports the public `/host` and `/extras/channel-gateway` entries and uses `createExtraService` to construct the complete Bot declaration.
+Create Kernel natively as shown in [SDK integration](../getting-started/sdk.md) and prepare Codex Provider. That page's ChannelGateway chapter shows composition in the main process. [gateway.mts](../../examples/gateway.mts) is also a complete runnable host example using the public `/host` and `/extras/channel-gateway` entries; run it in your own consumer project.
 
 Prepare these variables in the example host's environment; they are not new Runtime configuration fields:
 
@@ -129,7 +129,7 @@ Querying a model catalog or passing business data to an external service is unre
 
 Extra is optional. Users can implement their own lambda or reuse a Provider integration function; the Provider does not need a new extension mechanism. Neither path goes through Kernel.
 
-For example, a model selection Extra can call an injected catalog function to obtain options for the selected official service, proxy, or custom endpoint. To publish that catalog or other business results to an external service, it calls a corresponding publication function. These queries and publications belong to that Extra's business dependencies, not a unified Kernel model catalog API. A Provider can supply an integration implementation without exposing the Adapter instance inside the worker to Extra.
+For example, a model selection Extra can call an injected catalog function to obtain options for the selected official service, proxy, or custom endpoint. To publish that catalog or other business results to an external service, it calls a corresponding publication function. These queries and publications belong to that Extra's business dependencies, not a unified Kernel model catalog API. A Provider can supply an integration implementation without exposing the Adapter instance used by Kernel to Extra.
 
 The specific Extra must define and consume the dependency. Once that entry point exists, users only need to supply an implementation. The host selects the implementation and encapsulates configuration, credentials, and authorization; Extra calls it under the business contract and handles results, errors, and cancellation. Functions run in Extra's process and may access external services over the network. They do not belong in JSON or travel through Kernel IPC. The framework does not discover Provider functions or decide sending, retry, and confirmation semantics. Existing dependency shutdown and actual in-flight tracking still apply; callers must pass `signal` explicitly.
 

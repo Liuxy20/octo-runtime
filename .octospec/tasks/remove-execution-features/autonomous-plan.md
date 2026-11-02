@@ -6,6 +6,8 @@ tags: [architecture, adapter, testing, delivery]
 timestamp: 2026-10-16T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 目标与实施门槛
 
 用户要求全自动完成剩余清理，新发现的问题也评估修复；每个 Feature 验证后独立 commit、push。实施前先提交本计划给未参与设计的独立智能体，按下述标准评分。整体及每个待实施 Feature 均须达到 95/100；任一低于门槛，先修订计划并复评，不启动产品代码修改。
@@ -90,7 +92,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 ApprovalCards 的五个翻译键实际误放在 `chat.activity.question`，将已有中英文对象移至 `chat.question`，保持文案和问答交互。全量测试另发现四个用例指定未声明的 jsdom；将 `local-context-attachment`、`object-source-button`、`object-context-transfer`、`run-context-receipt` 的环境注释与仓库已声明的 happy-dom 对齐，运行这些实际测试确认兼容，不新增依赖。Electron 在 ignore-scripts 安装后的初始化属于验收准备，显式运行已声明依赖的安装脚本后重测，不作为源码缺陷。运行隔离 typecheck、相关选区/问答/翻译测试、全量测试和 build:test；若再发现基线缺口，先记录实际错误并复评，不恢复 Runtime 已退役的协议来绕过检查。
 
-保留现有 `adapterQualification` 作为 Work App 私有产品入口，参数只接收 type，不接收 Runtime 标签。以本产品已交付的执行实现确定选项：Codex、Claude、CodeBuddy 三种审批；ACP 系列、OpenCode、OpenClaw、ZCode 为 ask/full_access；Antigravity 为 full_access。模型入口沿用当前产品的类型选择，不扩大支持。
+保留现有 `adapterQualification` 作为 Work App 私有产品入口，参数只接收 type，不接收 Runtime 标签。以本产品已交付的执行实现确定选项：Codex、Claude、CodeBuddy 三种审批；ACP 系列、OpenCode、OpenClaw 为 ask/full_access；Antigravity 为 full_access。模型入口沿用当前产品的类型选择，不扩大支持。
 
 未知/第三方类型：仍可出现在设备发现中，但不自动选为聊天引擎、不默认开放审批，在本产品现有 unsupported 状态显示；只有宿主明确集成该类型后才开放。本规则只在 Work App 生效，不写入 Runtime，不变成通用能力表。远端同名类型以既有执行合同调用；具体版本不支持输入时必须由 Adapter 返回真实错误，不能以 providerVersion 字符串猜支持范围。
 
@@ -104,10 +106,10 @@ ApprovalCards 的五个翻译键实际误放在 `chat.activity.question`，将�
 | Claude / CodeBuddy | default/auto/bypass 原生映射 | 当前只传文本，执行前明确拒绝图片 |
 | Hermes / Kimi / MCode / Qoder / QoderCN | ask 等待、assisted 拒绝、full_access 按当前请求自动应答 | 原生 ACP 握手确认 image 后映射，否则在创建 session/发送输入前拒绝 |
 | OpenCode | ask ACP，assisted 拒绝，full_access CLI | 本次统一明确拒绝，保持此前 Host 不接受图片的实际范围 |
-| OpenClaw / ZCode | ask/full_access 原生处理，assisted 拒绝 | 解析连接/创建客户端前明确拒绝图片 |
+| OpenClaw | ask/full_access 原生处理，assisted 拒绝 | 解析连接/创建客户端前明确拒绝图片 |
 | Antigravity | 仅 full_access，其他模式明确拒绝 | 保留现有执行前拒绝 |
 
-使用既有 `hasImageInput`，同时覆盖 recovery-only 图片。Claude command builder、CodeBuddy invoke、OpenCode builder/invoke、OpenClaw invoke、ZCode builder/公开 Driver 保护直接调用路径；不新增通用能力校验框架。
+使用既有 `hasImageInput`，同时覆盖 recovery-only 图片。Claude command builder、CodeBuddy invoke、OpenCode builder/invoke、OpenClaw invoke 保护直接调用路径；不新增通用能力校验框架。
 
 Host 只删除 `executionFeatures` 驱动的审批/图片/回答准入；继续校验输出模式、来源、冻结身份和非 full_access 的实际 responder 方法。回答继续核对活动 invocation、pending ID、期限、模式、重复/在途和授权范围，不复制新 pending 注册中心。行为测试替换标签快照，断言不支持时无 Provider/连接/输入副作用；运行 native-host、ACP/OpenClaw 审批和多模态回归。
 

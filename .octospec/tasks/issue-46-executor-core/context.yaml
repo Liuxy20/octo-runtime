@@ -105,7 +105,6 @@ decisions:
   - 取消清理成功和最终Host/canonical终态交付均释放模式占额；旧stream不得修改复用ID的新调用。
   - 保留当前中央 StreamLimitPolicy、受信覆盖、每轮冻结、容量错误、安全 failure 信封及 Windows 路径与端点修复。
   - 用户授权修复yujiawei评审的真实问题及同类缺陷，并英文评论回复；P1 race输入迟到拒绝意见不成立，用回归与代码证据说明。
-  - Core统一单调时钟清理截止，Native缓存并观察关闭失败且独立清理均启动，ZCode关闭失败仍执行caller cleanup。
   - 原强制独立 Host 的规则与显式 direct 目标冲突时按当前用户决定设计，实施时同步规则和路径触发器。
 validation:
   performed:
@@ -125,8 +124,6 @@ validation:
     - 实施后全仓知识校验仍为原 14 处跨仓库失效链接，迁移产生的新源码链接失效已修复。
     - cb2e2dc的GitHub CI运行39365453742：Windows、Linux、macOS和CI Gate均通过；不作为后续整改提交的CI证据。
     - PR52评审整改新增21项回归，14项先在旧实现复现失败；含真实TCP资源、finally故障、容量回收和旧ID复用。
-    - ae0186f的CI运行39368585082三平台及Gate通过；macOS首次既有ZCode回收超时，同提交重跑通过，原因未复现。
-    - 后续评审整改针对性新增22项回归通过，涵盖共享预算、迟到拒绝、Native后台失败/真实资源以及ZCode清理故障。
     - 后续评审整改最终Node1307通过10跳过0失败、UI35通过，typecheck/build、lint、命名、格式及diff检查通过；重新pack与仓库外verify通过，来源ae0186f且dirty=true。
   pending:
     - PR52评审整改提交的最新三平台CI结果。

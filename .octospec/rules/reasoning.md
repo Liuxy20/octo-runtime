@@ -31,7 +31,7 @@ supersedes: []
 | Antigravity | low | medium | high | xhigh |
 | OpenClaw Gateway | low | medium | high | high |
 | OpenCode V2 CLI（full_access，显式 model） | low | medium | high | high |
-| ACP（含 OpenCode ask）、CodeBuddy、ZCode | 原生默认 | 原生默认 | 原生默认 | 原生默认 |
+| ACP（含 OpenCode ask）、CodeBuddy | 原生默认 | 原生默认 | 原生默认 | 原生默认 |
 
 OpenClaw、OpenCode 使用保守的三挡默认基线；这不声明所有底层模型只有三挡。其高级档位依赖底层模型，当前不动态发现、探测或重试切换档位。本机 Claude Code 帮助已列出 `xhigh`，因此保留四挡映射。
 

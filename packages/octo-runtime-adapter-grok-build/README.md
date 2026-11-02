@@ -63,5 +63,5 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 ## Further reading
 
-- [Implementation](src/index.ts), [worker example](examples/worker.mts), [fixtures](../../test/grok-build-adapter.test.js).
+- [Implementation](src/index.ts), [native Kernel example](examples/worker.mts), [fixtures](../../test/grok-build-adapter.test.js).
 - [Recorded verification](../../.octospec/tasks/95-grok-build-acp/reference.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).

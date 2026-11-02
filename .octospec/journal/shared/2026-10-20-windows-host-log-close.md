@@ -11,7 +11,7 @@ source: self
 
 ## 当前 rebase 范围
 
-当前基线为 main d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e（已含 #76）。#61 已把 launcher 迁入 Executor Kernel，并删除 daemon；#73 提供 KernelClient.invoke；#72 明确公共层的 Node-only 约束；#74/#71 把 Kernel 服务改为调用进程直接构造。产品修改限于 [process.ts](../../../packages/octo-runtime-executor-kernel/src/process.ts) 与 [serve.ts](../../../packages/octo-runtime-executor-kernel/src/serve.ts)：保留 EOF、4 秒宽限、整段关闭 Promise 和 finally 管道释放，并在排空后保留 worker leader，由 launcher 继续执行现有树清理。保留当前 onSpawn、IPC、进程树 cleanup 和启动失败回滚。旧 supervisor 的 7 秒补丁及 daemon 日志 fixture 已随上游架构删除，不向新 Host SDK 迁移旧预算。
+当前基线为 main d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e（已含 #76）。#61 已把 launcher 迁入 Executor Kernel，并删除 daemon；#73 提供 KernelClient.invoke；#72 明确公共层的 Node-only 约束；#74/#71 把 Kernel 服务改为调用进程直接构造。产品修改限于 [process.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/58332b3bcf5651f58e674fa236184dc6a0d927ca/packages/octo-runtime-executor-kernel/src/process.ts) 与 [serve.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/58332b3bcf5651f58e674fa236184dc6a0d927ca/packages/octo-runtime-executor-kernel/src/serve.ts)：保留 EOF、4 秒宽限、整段关闭 Promise 和 finally 管道释放，并在排空后保留 worker leader，由 launcher 继续执行现有树清理。保留当前 onSpawn、IPC、进程树 cleanup 和启动失败回滚。旧 supervisor 的 7 秒补丁及 daemon 日志 fixture 已随上游架构删除，不向新 Host SDK 迁移旧预算。
 
 对应回归改走当前 createKernelService→Kernel→worker，检查健康日志、ServiceCleanupResult.complete、phase/closed、worker 退出和再次构造。Kernel PID 等于调用进程，SDK 不退出宿主。cleanup 错误回归只拒绝本次 PID 的 taskkill；断言当前 PROCESS_TREE_CLEANUP_INCOMPLETE 原样传播，管道释放不等于 worker 已退出。本次新架构的检查结果在文末单列，以下旧架构证据不代表当前版本已验证。
 
@@ -19,7 +19,7 @@ source: self
 
 [Issue #38](https://github.com/Mininglamp-OSS/octo-runtime/issues/38) 的正常关闭日志缺陷已完成本地修复，原 F31 的失败用例修复后通过。Windows Host launcher 在原 close 内部先结束 stdin，让 serve.ts 执行已有 shutdown/logging.close，最多等待 4 秒再进入既有 cleanup；整个关闭过程共用同一个 Promise。公开调用方无需改动，POSIX 组清理、启动失败回滚和日志的有界可丢弃语义保持原样。范围见[brief](../../tasks/windows-host-log-close/brief.md)。
 
-当时产品修改在 [process.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/3c46dea3bbe8b8ceca927145e6056734c7811a0f/packages/octo-runtime-adapter-host/src/process.ts) 和 [supervisor.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/3c46dea3bbe8b8ceca927145e6056734c7811a0f/packages/octo-runtime-daemon/src/runtime/supervisor.ts)：Windows supervisor 首次等待 daemon 退出从 5 秒调整为 7 秒，给本次新增 Host 宽限之后的 daemon 日志留出收尾机会。新增 [关闭回归](../../../test/host-process-close.test.js)和 [fixture](../../../test-support/fake-host-close.mjs)。没有修改共享 process-cleanup、日志 Worker、协议、Provider 实现或 CI 配置。
+当时产品修改在 [process.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/3c46dea3bbe8b8ceca927145e6056734c7811a0f/packages/octo-runtime-adapter-host/src/process.ts) 和 [supervisor.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/3c46dea3bbe8b8ceca927145e6056734c7811a0f/packages/octo-runtime-daemon/src/runtime/supervisor.ts)：Windows supervisor 首次等待 daemon 退出从 5 秒调整为 7 秒，给本次新增 Host 宽限之后的 daemon 日志留出收尾机会。新增 [关闭回归](../../../test/host-process-close.test.js)和 [fixture](https://github.com/Mininglamp-OSS/octo-runtime/blob/58332b3bcf5651f58e674fa236184dc6a0d927ca/test-support/fake-host-close.mjs)。没有修改共享 process-cleanup、日志 Worker、协议、Provider 实现或 CI 配置。
 
 ## 环境与隔离
 

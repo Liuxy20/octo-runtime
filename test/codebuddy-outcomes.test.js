@@ -1,3 +1,4 @@
+import { adapters } from "./fixtures/codebuddy-worker.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -340,7 +341,7 @@ test("CodeBuddy failure closes running tool and model step without a success ter
 
 test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and failed outcomes", async (t) => {
   const { client } = await kernelFixture(t, {
-    workerEntrypoint: resolve("test/fixtures/codebuddy-worker.mjs")
+    adapters: adapters
   });
   for (const [scenario, expected] of [
     ["success", "completed"],

@@ -50,7 +50,7 @@ export const lifecycleCommands = new Map([
 export const rootCommands = new Map([
   ["adapter", "List and probe execution adapters"],
   ["doctor", "Diagnose the local runtime"],
-  ["executor-kernel", "Manage local Agent execution and worker supervision"],
+  ["executor-kernel", "Manage native Agent execution and local RPC"],
   ["extraget", "Read a complete service configuration (advanced)"],
   ["extraset", "Replace a complete service configuration from JSON (advanced)"],
   ["help", "Help about any command"],

@@ -35,4 +35,3 @@ decisions:
   - Non-TUN; do not change system proxy settings or running user services.
   - User subsequently authorized local CI, review, update, commit, push, and PR creation.
   - No merge or CI expansion authorization.
-  - ZCode V4 model and effort integration is tracked separately in GitHub issue 286.

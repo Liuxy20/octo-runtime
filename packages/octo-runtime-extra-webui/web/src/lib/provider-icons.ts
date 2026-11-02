@@ -24,7 +24,6 @@ export interface ProviderIcon {
 const PROVIDER_ALIAS: Record<string, string> = {
   claude_code: 'claude-code',
   kimi_code: 'kimi-code',
-  zcode: 'zcode-gui',
 }
 
 /** 包里没有官方图标的 provider 仍要有名字（回落图标由调用方给）。 */

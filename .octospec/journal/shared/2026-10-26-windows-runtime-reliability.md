@@ -5,6 +5,8 @@ description: 四项问题的修复、真实 Windows 回归及同基线全量对�
 tags: [runtime, lifecycle, adapter, envs, installation, testing]
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 实施与证据
 
 从最新 `origin/main@8af8360` 建立独立 worktree 和 `fix/windows-runtime-reliability` 分支，按 [OctoSpec 简报](../../tasks/windows-runtime-reliability/brief.md)处理 #131、#135、#134、#146；[可执行性评估](../../tasks/windows-runtime-reliability/assessment.md)为 97/100，仅表示准备度。
@@ -29,7 +31,7 @@ rebase 后 29 项定向回归、5 项原生任务测试及工程/文档检查通
 
 # 持续复审与消费者补齐
 
-`5049add` 六组托管 CI 及 CI Gate 全通过，已在 PR 逐项回复三位 reviewer。新 review 又确认 OpenCode 内联配置与 ZCode 桌面路径的直接大写读取遗漏；同类排查补齐 Codex Home，并使其固定环境合并保持唯一键。确认文件在成功恢复/回收/close 后尽力清理，归档保留；模块清单参数只选择模块，帮助与指南明确状态仍在 Home/run，三条路径共用派生值。源头超时扫描无实际 diff，不修改既有 40 秒预算。
+`5049add` 六组托管 CI 及 CI Gate 全通过，已在 PR 逐项回复三位 reviewer。新 review 又确认 OpenCode 内联配置的直接大写读取遗漏；同类排查补齐 Codex Home，并使其固定环境合并保持唯一键。确认文件在成功恢复/回收/close 后尽力清理，归档保留；模块清单参数只选择模块，帮助与指南明确状态仍在 Home/run，三条路径共用派生值。源头超时扫描无实际 diff，不修改既有 40 秒预算。
 
 新增 9 项全部通过，定向 38 项通过；完整 Node 1682 通过、94 失败、70 跳过，UI 35 通过，失败集合与上一轮一致。四组原生任务矩阵和编码迁移、类型、lint、命名、格式、docs 通过；OctoSpec 无新增错误。用户授权每 15 分钟跟进并统一 commit/push、英文回复，直到 review 通过；新 head 必须独立验证 CI，合并仍按保护规则。
 

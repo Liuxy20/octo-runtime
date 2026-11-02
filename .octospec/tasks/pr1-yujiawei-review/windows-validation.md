@@ -19,7 +19,7 @@ process-cleanup 已有 Windows child.kill、退出检查、有界等待及幂等
 ## 验收与修复
 
 1. 记录 Windows / Node 24 版本、Runtime commit、Provider、步骤与脱敏日志。
-2. 验证正常执行、连续调用、取消、重复和并发关闭；覆盖 ACP、NDJSON、Host launcher、ZCode。
+2. 验证正常执行、连续调用、取消、重复和并发关闭；覆盖 ACP、NDJSON、Host launcher。
 3. 专门验证父先退、工具后代持续工作的情况，检查后代 PID 及文件写入停止；兄弟任务与用户其他进程不得受影响。
 4. 验证 spawn/管道错误隔离、清理超时及真实失败原因。
 5. 发现故障后登记和修复；确认持续执行或共享 Host 退出时按 P1 处理，不以 Windows 平台差异豁免。

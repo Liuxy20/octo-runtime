@@ -161,7 +161,10 @@ test("POSIX keeps the selected executable and argument arrays", { skip: windows 
 
 test("missing installation preserves ENOENT; business failure preserves numeric exit and stderr", async (t) => {
   const { root, options } = await fixture(t);
-  await assert.rejects(execute("octo-cli", ["version"], options), { code: "ENOENT" });
+  await assert.rejects(
+    execute("octo-cli", ["version"], { ...options, env: { ...options.env, PATH: root } }),
+    { code: "ENOENT" }
+  );
   const program = join(root, "exit.cjs");
   await writeFile(program, entrySource);
   await assert.rejects(execute(process.execPath, [program, "--fail"], options), (error) => {

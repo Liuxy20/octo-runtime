@@ -1,4 +1,3 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { createExecutorFixture } from "../../test-support/executor-adapter.mjs";
 
 const adapter = createExecutorFixture();
@@ -21,4 +20,4 @@ adapter.invoke = () => {
     }
   };
 };
-serveWorker([adapter]);
+export const adapters = [adapter];

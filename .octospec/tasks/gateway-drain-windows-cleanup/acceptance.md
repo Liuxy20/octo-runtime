@@ -44,7 +44,7 @@ G02/G03 必须有真实独立 runner+Kernel 版本，不能只测同进程 Extra
 | W05 | Node parent/child 的 fd3：ready、status、依赖 call/result/cancel、stop ACK、disconnect | 与既有 Node IPC 完整往返，数据通道无 broker 帧；owner 死确实触发 disconnect；无复制句柄导致 EOF 挂起 |
 | W06 | 原生 exe、Node、现有 cmd shim、空格/中文/引号/元字符 argv、env、cwd | 目标观察值逐项一致，无新增 shell 拼接；已有不支持形式保持原拒绝；status.pid 指向目标 |
 | W07 | 宿主/CI 外层 Job、拒绝嵌套、句柄查询失败、broker资源缺失/错架构 | 普通用户无需提权；不能归属即启动失败；无 taskkill/普通 spawn 成功回退；有界 incomplete 阻止替换 |
-| W08 | ACP、NDJSON、Codex、ZCode、Host Node/native、Kernel worker 分别运行 W02/W03 | 所有本仓 owned launch 路径完成接线；共享 Provider 不因单 Run 取消而被错误终止 |
+| W08 | ACP、NDJSON、Codex、Host Node/native、Kernel worker 分别运行 W02/W03 | 所有本仓 owned launch 路径完成接线；共享 Provider 不因单 Run 取消而被错误终止 |
 | W09 | 并行创建/取消 100 次，外加一个不相关哨兵进程 | 清理后进程/句柄回到预热范围；哨兵持续可用；没有历史 PID/Job 泄漏或持续增长 |
 | W10 | 最终 tgz 在干净 Windows 离线安装、运行和卸载 | 两架构资源及摘要可验证；实际架构 executable 可运行；无 Go/编译器/网络要求；卸载保留 Home |
 

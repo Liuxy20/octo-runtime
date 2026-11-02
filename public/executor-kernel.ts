@@ -6,7 +6,6 @@ export {
   createKernelService,
   ServiceInitializationError
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
-export { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 export type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
 export type {
   KernelClient,

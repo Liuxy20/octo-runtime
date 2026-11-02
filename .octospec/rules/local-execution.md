@@ -18,14 +18,15 @@ supersedes: []
 
 # 本地执行与传输
 
-服务构造强制遵循[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)：CLI 服务进程与 Electron 主进程直接构造服务、持有 socket，不得由外部 Node 代启。下述 worker/IPC 是现有执行隔离合同，不授权 SDK 再启动顶层 Kernel。公共 API 见[服务设计](../tasks/unified-native-sdk-services/design.md)。直接 /executor-core AgentExecutor 仍是显式可选模式，实例所有者管理 shutdown，共享宿主故障域，不具备进程隔离或源重放。
+服务构造遵循 [#294 原生装配与统一 RPC](architecture.md#sdk-原生装配与统一-rpc)：CLI 服务进程与 Electron 主进程原生构造服务并持有 endpoint，注入实际 Adapter；同进程业务也必须通过 KernelClient/RPC。Kernel 不读模块 manifest、不启动执行 worker。本任务工作树已切换为原生对象装配。RPC、接纳、观察和清理合同继续有效，目标签名见[架构声明](architecture.md#createkernelservice-目标签名)。直接 Core 是显式低层能力，不替代标准宿主的 Kernel 路径。
 
 ```mermaid
 flowchart LR
-  App[HostApp] -->|原生构造服务 / attach 客户端| K[Executor Kernel]
-  Extra[原生 Extra 服务] -->|共同 KernelClient / IPC| K
-  K -->|stdio NDJSON| W[worker / 唯一 AgentExecutor]
-  W --> A[Provider Adapter]
+  Host[宿主装配入口] -.->|原生构造并注入 Adapter| K[Executor Kernel]
+  App[应用业务] -->|KernelClient / 本地 RPC| K
+  Extra[原生 Extra 服务] -->|KernelClient / 本地 RPC| K
+  K -->|Kernel 所在进程| Core[唯一 AgentExecutor]
+  Core --> A[宿主注入的 Adapter]
 ```
 
 业务输入为 InvokeInput，环境 signal 不序列化，executionEnvOverrides 独立传递。唯一 Core 负责执行配置解析和输入准备；Extra 不提前解析内部计划，不补模型历史。
@@ -38,7 +39,7 @@ invocations 只登记本 client 的高层 invoke 元数据，最多 128（包括
 
 environment.streamLimits 在现有 Kernel wire 不支持，显式传入拒绝 KERNEL_STREAM_LIMITS_UNSUPPORTED；直接 Core 仍支持。执行终态与 delivery/业务写入完成分别验证，SDK 继续等待 onDispose 的剩余期限。当前实现和证据见 [#69 实施](../tasks/69-kernel-client-invoke/implementation.md)。
 
-Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本轮 runtimeId 和 Adapter 选择配置；Provider 选项与流限制使用同一份经校验的自有快照。宿主选项仍覆盖输入同名项，合并后检查整请求预算，再传给 worker 和重放窗口。更新原配置不影响在途 AgentRun，后续 AgentRun 独立读取；list/probe 独立取值，订阅、重放、取消和交互不重新读取本轮配置。框架不冻结宿主原对象，不持久化或按会话复用配置快照。实现与显式本地专项见 [Issue 136 验证](../tasks/136-configuration-snapshot/validation.md)。
+Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本轮 runtimeId 和 Adapter 选择配置；Provider 选项与流限制使用同一份经校验的自有快照。宿主选项仍覆盖输入同名项，合并后检查整请求预算，再传给执行源和重放窗口。更新原配置不影响在途 AgentRun，后续 AgentRun 独立读取；list/probe 独立取值，订阅、重放、取消和交互不重新读取本轮配置。框架不冻结宿主原对象，不持久化或按会话复用配置快照。实现与显式本地专项见 [Issue 136 验证](../tasks/136-configuration-snapshot/validation.md)。
 
 ## IPC v1
 
@@ -62,19 +63,19 @@ Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本
 
 Playboard 直接构造临时 Kernel，只有真实 close 完成才删除所属目录；incomplete 时保留资源事实，不删除其他实例或用户 Home。创建临时目录失败时尚未注册进程级监听，不能留下 signal/stdout handler。此修复不迁移常驻端点、不改变公共 SDK、不新增 Home 限制。验证与范围见 [Issue 184](../tasks/184-ci-ipc-reliability/brief.md)。
 
-## worker 监督
+## 原生执行与故障边界
 
-worker 加载 Adapter，并使用同一 AgentExecutor。独立 Node IPC 心跳由主循环响应，1 秒检查，单个带序号 probe 5 秒未响应判失联；不能用执行输出静默程度判断存活。检测到 wall/monotonic 长间隔或回拨时废弃旧 probe，发新 probe 并给予完整 5 秒，不因休眠直接丢失 Run；旧 pong 不能刷新新期限。就绪预算 15 秒。失败先回收本次进程，再按 250/1000/4000 ms 退避，60 秒活跃观测时间最多三次快速替换；快速额度耗尽后保持 recovering，每次等待 15 秒再单次尝试，普通启动失败回收完成后继续冷却，不永久停止。启动成功不立即退出低频模式；连续健康观测 60 秒才重置策略，休眠时间不洗掉预算。仅清理或所有权确认失败进入 exhausted，阻止冲突替换并保留 close 失败。冷却/启动串行，close 取消等待，status/invoke 不触发额外重试。整个恢复保留 Kernel instance、进程和监听端点；本地监听不依赖网络或 Provider 在线。
+Kernel 在宿主进程构造 AgentExecutor，注册传入实例；不启动执行 worker，不提供心跳、退避替换、generation 或 worker.recovery 状态。status 仅报告当前实例、宿主 PID 和 execution_ready；注册就绪不证明 Provider 安装或登录成功。
 
-Issue #210 补充恢复合同：上述 exhausted 表示当前清理或 manifest 写入阻塞，不能因一次失败永久停止监督。两阶段串行按 1/2/5 秒重试、之后间隔上限 5 秒；成功确认后继续原替换策略。失败缓存不得阻止重新观测实际资源，manifest 写队列不得被一次失败永久打断。成功清理后不再向历史 PGID 发信号；leader 已退出且同号 PID 重新出现时保留身份冲突，不回收无关应用。Windows 已观察到后代回收失败时不能由 leader 后续消失推定成功；首次清理前已经退出且没有既有失败的 worker 则沿用 skipped 基线，不能因无条件 immediate 清理人为制造永久阻塞。这不增加异常退出后完整后代回收的保证。
+RPC 保留接纳、观察分离、ACK 查回、原游标恢复和取消/交互。宿主退出后不能把结果未知改成成功，也不自动重新 invoke；宿主重建服务产生新的 instance。Kernel 不改变进程信号处理、不调用 process.exit、不改全局环境。Adapter 内部按 Provider 原生协议拥有子进程。
 
-worker.recovery 可选诊断区分 cleanup/manifest/starting/backoff，保留触发、稳定错误码、发生时间、下次重试和可用的 exit code/signal。Kernel 父进程沿独立状态日志记录丢失、阻塞、退避、启动失败和 ready；执行日志或 Gateway 在线状态不能代替这些事实。日志与本地模拟验收见 [Issue 210 方案](../tasks/210-kernel-recovery/design.md)。
+关闭停止接纳、取消 Core，并在共享 5 秒绝对期限内等待 Adapter 清理、Run 消费和日志。未完成/失败的 finally 返回 incomplete，保留所有权证据；同进程同步阻塞、OOM 或进程退出无法靠 RPC 隔离，截止时间要求事件循环仍可调度。宿主依赖仍由宿主关闭。
 
-worker 丢失令活动源产生一次 lost；已保留终态不改写。重启不恢复旧 Run、不重新 invoke。进程身份清单只用于孤儿清理，不是业务持久化。清理失败禁止替代实例，但监督器继续重新确认和重试。
+已发起的实际 Adapter probe 同属 Core 生命周期；describe 的展示超时不结束底层 Promise。关闭后拒绝新 probe，未完成探测使 cleanup incomplete，即使没有遗留 invocation 身份。原生服务实际关闭失败写入 cleanupFailed，诊断不能因 Electron 宿主仍活着而显示 available；活 owner 的人工确认继续拒绝。
 
-Kernel 在真实 runs.submit 之前明确拒绝 worker 不可用时，invoke RPC 可以附带匹配 instance 的未提交证据；公共客户端仅标记实际匹配的响应对象。同名错误或重建对象不构成证明，ACK 丢失和已接纳后失联仍是未知。此合同不授权重放旧请求。
+Kernel 在 runs.submit 前明确拒绝接纳时可以附带匹配 instance 的未提交证据；ACK 丢失或接纳后失联仍是未知。状态码名称、重建错误对象均不能代替该证据。
 
-Windows 进程身份登记调用系统 PowerShell 查询真实启动 UTC ticks，冷启动与查询共用 40 秒期限；该期限独立于后续 RPC 就绪和关闭预算，不缓存 PID 身份。登记失败保留系统错误 cause，不能退回 PID 或猜测启动时间；公开探测仍以未知身份返回，孤儿回收遇到未知身份时不终止目标。
+旧 worker 监督与恢复的历史实现见 [Issue 210](../tasks/210-kernel-recovery/design.md)，不得重新用作当前服务部署要求。
 
 ## 有界资源
 
@@ -84,20 +85,22 @@ POSIX 只回收自己创建的独立进程组，leader 退出不表示后代消�
 
 Windows 使用 Node.js 创建进程，并通过系统已有的 `taskkill /PID … /T /F` 处理仍可识别的进程树。ChildProcess、status 和 manifest 保留真实目标身份。父进程先退出后可能失去后代归属；Runtime 被强杀或事件循环无法运行时，退出回调也可能不执行。这些场景不具备 Job Object 级回收保证。现有清理在 leader 已退出时仍可能返回成功，因此 cleanup.complete 不是异常退出后整棵树已清空的证明；对应缺口保留，不以文档修改宣称已经修复。
 
-Windows 崩溃后的 invocation manifest 回收在原 Kernel 已退出、worker 启动身份仍匹配时，先用 taskkill /T /F 回收整棵可识别树，再确认 leader 消失。命令失败或退出未确认返回 cleanup_incomplete，原子保存 cleanupIncomplete 事实并拒绝替代 open；后续 leader 消失或 PID 复用不能自动丢弃记录。同身份仍存活时继续重试。操作者已停止遗留工具后，可以显式 acknowledgeOrphanCleanup / CLI recover 确认：原清单归档、确认绑定原文摘要，仍存活或无法验证的原 owner 拒绝放行，旧确认不能放行新记录。下一次启动消费确认，reaped 仍为 false；doctor 显示路径与状态。持久阻塞仅作用于 Windows，POSIX 维持既有 best-effort orphan 回收合同。不扫描无关应用，也不为原本已经消失且从未登记清理失败的 leader 新增后代归属保证。
+Kernel 资源记录仅接受原生 owner 格式。旧 worker 格式或损坏记录返回 ORPHAN_RECORD_UNSUPPORTED 并保留原文件；不做身份探测、进程树终止、转换或自动删除。inspect 显示 unsupported，人工确认也不接受未知格式。旧 worker 监督、心跳及恢复实现全部删除，不提供兼容或升级支持。Provider 进程清理仍由 Adapter 负责。
 
 JSON-lines Provider 的 stdout、stderr 及 readline 错误归属单次调用，走相同有界清理路径；迟到的管道 error 仍有监听。进程清理后释放所属 stdin/stdout/stderr，失败继续传播；释放句柄不是进程已退出的证明。Windows 原生启动失败保留 ENOENT 等原始 errno，不用全局异常抑制或重启共享 worker 消化本次管道错误。
 
-确认被消费并创建新清单、成功回收删除旧清单或正常 close 后，尽力删除已经失效的 acknowledgement 辅助文件，原始 acknowledged 归档继续保留。辅助文件清理失败不得将已恢复的启动重新阻塞；它已不能匹配新清单。CLI 的 --manifest 选择 Provider/Extra 模块清单，不改变 Home 下的 Kernel 状态位置，doctor、recover 与前台 Kernel 共用该位置。
+确认被消费并创建新清单或正常 close 后，尽力删除已经失效的 acknowledgement 辅助文件，原始 acknowledged 归档继续保留。辅助文件清理失败不得将已恢复的启动重新阻塞；它已不能匹配新清单。CLI 的 --manifest 选择 Provider/Extra 模块清单，不改变 Home 下的 Kernel 状态位置，doctor、recover 与前台 Kernel 共用该位置。
 
 公共 Runtime 不引入 Go broker、原生扩展或随包辅助二进制，遵守[实现语言与原生依赖边界](architecture.md#实现语言与原生依赖边界)。已观察到的清理失败及协议未确认仍按既有合同报告 incomplete。各 Windows 平台及真实 Provider 的验证证据分别记录，历史原生方案的测试结果不能作为当前 Node.js 方案的回收保证，见[专项实施记录](../tasks/gateway-drain-windows-cleanup/implementation.md)。
 
 ## 临时执行与证据
 
-Windows worker 正常 close 在 launcher 内部先结束 stdin，复用既有 shutdown/logging.close；监听先于 EOF，等待期间继续消费输出，整个关闭过程共用一个 Promise。排空与树回收必须共用调用方剩余预算，为回收预留时间；未响应 EOF 时提前进入回收，已确认开始关闭的 worker 可使用较长的有界排空机会。故障恢复不等待正常排空宽限。worker 通过现有私有 IPC 通知排空结果并保留 leader，随后 launcher 使用 taskkill 清理仍可识别的进程树。本次 EOF 关闭开始后、树回收确认前发生的提前退出、taskkill 失败或已报告的排空 incomplete 不能报成功；cleanup 后仍释放本层管道并保留错误。关闭开始前已经退出的 worker 沿用前述基线限制。启动失败直接回滚；宿主不传平台选项或调用新 flush API。Host SDK→Kernel→worker 慢关闭和延迟回收的组合须实际验证，不能仅比较超时常量。证据见 [#38 验证记录](../journal/shared/2026-10-20-windows-host-log-close.md)。
+CLI playboard 通过同一原生工厂在本进程创建临时 Kernel 服务，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。正常结束只回收本次资源，保留 Home/profile，不复用常驻服务。只有确认 close 完整，才删除本次临时目录。
 
-CLI playboard 通过同一原生工厂在本进程创建临时 Kernel 服务，读取选定 profile 的 Provider 配置，跳过 Extra 和渠道工具环境同步。退出只回收本次资源，保留 Home/profile，不复用常驻服务。#71 已删除旧 owned launcher 路径。
+2026-11-02 用户明确 Playboard 仅为一次性本地测试 CLI：可执行入口确认命令后、加载 Adapter 前接管 SIGINT/SIGTERM，直接定向强退，不等待 import、Run 终态或 Kernel.close。POSIX 查询当前父子关系并按后代优先发送 SIGKILL，再退出本进程；Windows 在 owner 仍存活时调用 taskkill /PID /T /F。不得按 node/应用名匹配、杀父 shell、兄弟服务或其他 Runtime，不引入 worker。已重新归属的孤儿进程及查询之后新增的后代不具备完整归属保证；诊断明确执行/清理未确认，允许尾流、日志和临时状态未收尾。可导入 runCli/runPlayboard 默认仍协作取消，不执行强退；此策略不进入 Kernel/SDK。
 
-Windows 共享控制台事件可同时到达 Kernel 与 worker。父 IPC 仍连接时，worker 不因 SIGINT/SIGTERM 抢先关闭，由 Kernel 经 RPC 取消并消费源终态，再以 EOF 进入既有排空与树回收；独立运行或父 IPC 断开时仍自行 shutdown。测试必须使用所属独立控制台验证真实 Ctrl+C，child.kill 的强制终止另行记录，不能作为优雅关闭成功。见 [#58 最新基线任务](../tasks/58-windows-cli-signals/brief.md)。
+信号处理和最终退出归 CLI/Electron 宿主。SDK 不安装进程退出处理器；宿主须等待 Extra 和 Kernel 的关闭结果。真实 Windows Ctrl+C 需独立控制台验证，child.kill 的强制终止不能作为优雅关闭证据。旧 worker EOF/IPC 信号协作保留在 [#38 记录](../journal/shared/2026-10-20-windows-host-log-close.md)和 [#58 记录](../tasks/58-windows-cli-signals/brief.md)，不再是当前服务要求。
 
-实现：[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Core](../../packages/octo-runtime-executor-core/README.md)。测试：[clients](../../test/kernel-clients.test.js)、[worker](../../test/kernel-worker-supervision.test.js)、[所有权](../../test/host-sdk-lifecycle.test.js)。实际平台与线上证据见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
+原生服务在有状态文件时登记 nativeOwner/cleanupIncomplete 标记；正常关闭且 Core、Run、日志清理完整后删除记录。宿主异常退出无法证明 Adapter 后代已清空，各平台均保留未确认事实、阻止覆盖启动。操作者确认遗留资源已停止后，使用同一个 acknowledgeOrphanCleanup / CLI recover 流程恢复；活着的原 owner 不允许确认，确认只匹配原文摘要，不把宿主 PID 当作可杀的 worker。此记录是 Kernel 资源所有权，不是模块 manifest。
+
+实现：[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[Core](../../packages/octo-runtime-executor-core/README.md)。测试：[clients](../../test/kernel-clients.test.js)、[原生装配](../../test/adapter-composition.test.js)、[所有权](../../test/host-sdk-lifecycle.test.js)。实际平台与线上证据见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。

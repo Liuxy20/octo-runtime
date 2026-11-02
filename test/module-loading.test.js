@@ -1,3 +1,5 @@
+import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
+import { nativeHost } from "./native-host-fixture.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -11,7 +13,7 @@ import {
   resolveAdapterModules,
   resolveModuleSpecifier
 } from "../packages/octo-runtime-adapter-sdk/dist/module-manifest.js";
-import { createKernelService, spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { runtimePaths } from "../apps/cli/dist/state.js";
 import { readExtra, getExtra, setExtra } from "../apps/cli/dist/extras.js";
 import { loadCliManifest } from "../apps/cli/dist/module-manifest.js";
@@ -27,40 +29,6 @@ const declaration = (module, type = "test") => ({ type, module, export: "testAda
 const manifest = (adapters = [], extras = []) => ({ version: 1, adapters, extras });
 
 for (const mode of ["timeout", "abort"]) {
-  test(`blocked Adapter snapshot send respects ${mode} and reclaims the owned worker`, async (t) => {
-    const controller = new AbortController();
-    let child;
-    let timer;
-    t.after(() => {
-      clearTimeout(timer);
-      if (child?.exitCode === null && child?.signalCode === null) child.kill("SIGKILL");
-    });
-    const started = Date.now();
-    await assert.rejects(
-      spawnWorker({
-        entrypoint: resolve("test/fixtures/ipc-stalled-worker.mjs"),
-        adapterModules: [
-          {
-            ...declaration(adapterFixture),
-            factory: false,
-            options: { payload: "x".repeat(8 * 1024 * 1024) },
-            sourceManifest: resolve("unused-manifest.json")
-          }
-        ],
-        readyTimeoutMs: mode === "timeout" ? 100 : 5000,
-        signal: controller.signal,
-        onSpawn: async (value) => {
-          child = value;
-          if (mode === "abort") timer = setTimeout(() => controller.abort(), 100);
-        }
-      }),
-      mode === "timeout" ? /readiness timed out/ : /spawn cancelled/
-    );
-    assert.ok(child?.pid, "worker ownership must be registered before sending the snapshot");
-    assert.ok(Date.now() - started < 3000, "startup must not wait for the stalled worker");
-    assert.ok(child.exitCode !== null || child.signalCode !== null);
-    assert.throws(() => process.kill(child.pid, 0), { code: "ESRCH" });
-  });
 }
 
 async function fixture(t) {
@@ -169,13 +137,13 @@ test("merge ignores collisions before resolution and keeps Adapter/Extra keys se
 test("Home extension is optional, strict, follows selected Home and override fully replaces defaults", async (t) => {
   const home = await fixture(t);
   const builtin = await loadCliManifest(home);
-  assert.equal(builtin.adapters.length, 14);
+  assert.equal(builtin.adapters.length, 13);
   assert.deepEqual(
     builtin.extras.map((x) => x.name),
     ["channel-gateway", "channel-wecom", "webui"]
   );
   await json(join(home, "manifest.json"), manifest([declaration("./user.mjs", "user")]));
-  assert.equal((await loadCliManifest(home)).adapters.length, 15);
+  assert.equal((await loadCliManifest(home)).adapters.length, builtin.adapters.length + 1);
   const override = join(home, "explicit.json");
   await json(override, { version: 1, adapters: [] });
   assert.deepEqual(await loadCliManifest(home, override), manifest());
@@ -231,7 +199,7 @@ test("Extra modules resolve lazily from manifest; new and legacy configurations 
 
 test("empty Adapter snapshot starts without resolving Extras; selected type mismatch fails", async (t) => {
   const home = await fixture(t);
-  const empty = await spawnWorker({ entrypoint: runner, adapterModules: [] });
+  const empty = await nativeHost(await loadCliAdapters([]));
   t.after(() => empty.close());
   assert.deepEqual(empty.adapters, []);
   const file = join(home, "adapter.mjs");
@@ -239,14 +207,11 @@ test("empty Adapter snapshot starts without resolving Extras; selected type mism
   const selected = resolveAdapterModules(
     parseModuleManifest(manifest([declaration(file, "wrong")]), join(home, "manifest.json"))
   );
-  await assert.rejects(
-    spawnWorker({ entrypoint: runner, adapterModules: selected }),
-    /does not match adapter test/
-  );
+  await assert.rejects(loadCliAdapters(selected), /does not match adapter test/);
 });
 
 test(
-  "Kernel worker recovery reuses resolved startup snapshot and keeps service in caller PID",
+  "Kernel uses host-resolved startup instances and keeps service in caller PID",
   { timeout: 15000 },
   async (t) => {
     const home = await fixture(t),
@@ -257,17 +222,15 @@ test(
       process.platform === "win32"
         ? `\\\\.\\pipe\\octo-snapshot-${Date.now()}`
         : join(home, "k.sock");
-    const kernel = createKernelService({ endpoint, workerEntrypoint: runner, manifest: file });
+    const kernel = createKernelService({
+      endpoint,
+      adapters: await loadCliAdapters(resolveAdapterModules(await readModuleManifest(file)))
+    });
     t.after(() => kernel.close());
     await kernel.initialize();
     assert.equal((await kernel.status()).pid, process.pid);
     const first = await kernel.client.status();
     await json(file, manifest([declaration("must-not-resolve-after-recovery")]));
-    process.kill(first.worker.pid, "SIGKILL");
-    await waitFor(async () => {
-      const current = await kernel.client.status();
-      return current.worker.generation > first.worker.generation && current.execution_ready;
-    });
     assert.deepEqual(
       (await kernel.client.list()).map((x) => x.type),
       ["test"]
@@ -296,9 +259,9 @@ test("Core/Kernel/Host SDK production closures contain no concrete Adapter or Ex
 test("CLI untyped selection loads its factory once without importing an unselected Provider helper", async (t) => {
   const directory = await mkdtemp(join(resolve("apps/cli/dist"), "selected-worker-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
-  // 此目录只有 worker，没有 openclaw.js；误判 untyped 项为 OpenClaw 会因导入缺失而失败。
-  const entrypoint = join(directory, "worker.mjs");
-  await copyFile(resolve("apps/cli/dist/worker.js"), entrypoint);
+  // 此目录只有装配器，没有 openclaw.js；未选择的 Provider 不应加载。
+  const entrypoint = join(directory, "adapters.mjs");
+  await copyFile(resolve("apps/cli/dist/adapters.js"), entrypoint);
   const module = join(directory, "selected.mjs");
   const calls = join(directory, "calls");
   await writeFile(
@@ -310,19 +273,21 @@ export function selected() {
   return testAdapter;
 }`
   );
-  const worker = await spawnWorker({
-    entrypoint,
-    adapterModules: [
-      {
-        module,
-        export: "selected",
-        factory: true,
-        options: {},
-        sourceManifest: join(directory, "unused.json")
-      }
-    ],
-    env: { ...process.env, OCTO_RUNTIME_CLI_PROFILE_ROOT: directory }
-  });
+  const { loadCliAdapters: loadSelected } = await import(pathToFileURL(entrypoint).href);
+  const worker = await nativeHost(
+    await loadSelected(
+      [
+        {
+          module,
+          export: "selected",
+          factory: true,
+          options: {},
+          sourceManifest: join(directory, "unused.json")
+        }
+      ],
+      { profileRoot: directory, syncOpenClawTools: false }
+    )
+  );
   t.after(() => worker.close());
   assert.deepEqual(
     worker.adapters.map((adapter) => adapter.type),

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { readAdapterConfigurations } from "../apps/cli/dist/adapter-configuration.js";
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
   MAX_STREAM_LIMIT_POLICY,

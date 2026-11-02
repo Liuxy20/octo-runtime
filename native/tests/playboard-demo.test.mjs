@@ -1,3 +1,5 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
+import { adapter } from "./fixture-adapter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -75,7 +77,7 @@ function run(args, input, onEvent) {
 }
 test(`${language} playboard demo uses native SDK against a real Kernel with an empty client PATH`, async (t) => {
   build();
-  const f = await kernelFixture(t, { manifest: resolve("native/tests/adapters.json") });
+  const f = await kernelFixture(t, { adapters: [testAdapter, adapter] });
   const relay = await kernelRelay(t, f);
   for (const mode of ["native", "canonical"])
     await t.test(`${mode} can wait for an answer from a second CLI`, async () => {

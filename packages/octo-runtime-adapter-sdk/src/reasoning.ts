@@ -33,8 +33,7 @@ export const DEFAULT_REASONING_LEVEL_MAPS: Readonly<Record<string, ReasoningLeve
     "kimi-code": null,
     mcode: null,
     qodercli: null,
-    qoderclicn: null,
-    "zcode-gui": null
+    qoderclicn: null
   });
 
 export function reasoningLevelMap(adapterType: string): ReasoningLevelMap | null {

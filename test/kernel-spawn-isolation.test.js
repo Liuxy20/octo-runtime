@@ -1,3 +1,4 @@
+import { testAdapter as faultAdapter } from "./fixtures/pipe-fault-adapter.mjs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -6,15 +7,15 @@ import { fileURLToPath } from "node:url";
 import { kernelFixture, kernelInput, frames } from "./kernel-fixture.js";
 
 test(
-  "real worker survives Provider spawn/output faults with an active sibling and later invocations",
+  "native Kernel survives Provider spawn/output faults with an active sibling and later invocations",
   {
     timeout: 90_000
   },
   async (t) => {
     const f = await kernelFixture(t, {
-      manifest: fileURLToPath(new URL("./fixtures/pipe-fault-adapters.json", import.meta.url))
+      adapters: [faultAdapter]
     });
-    const before = (await f.client.status()).worker;
+    const before = await f.client.status();
     const gate = join(f.directory, "release-sibling");
     const sibling = await f.client.submit(kernelInput("sibling", { runMetadata: { gate } }));
     const observer = f.client.subscribe(sibling.ref);
@@ -27,9 +28,9 @@ test(
       const failed = await f.client.submit(kernelInput(fault));
       const events = await frames(f.client, failed.ref);
       assert.equal(events.at(-1).control.state, "failed", JSON.stringify(events));
-      const current = (await f.client.status()).worker;
-      assert.equal(current.state, "ready");
-      assert.equal(current.generation, before.generation);
+      const current = await f.client.status();
+      assert.equal(current.execution_ready, true);
+      assert.equal(current.kernel_instance_id, before.kernel_instance_id);
       assert.equal(current.pid, before.pid);
     }
     if (process.platform === "win32") {
@@ -53,8 +54,8 @@ test(
         );
       }
       t.diagnostic(`native Windows cwd length=${longCwd.length}, outcome=${state}`);
-      assert.equal((await f.client.status()).worker.generation, before.generation);
-      assert.equal((await f.client.status()).worker.pid, before.pid);
+      assert.equal((await f.client.status()).kernel_instance_id, before.kernel_instance_id);
+      assert.equal((await f.client.status()).pid, before.pid);
     }
     await writeFile(gate, "release");
     const tail = await Array.fromAsync(observer);

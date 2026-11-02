@@ -9,10 +9,10 @@ This page describes the loading mechanism implemented for [issue #85](https://gi
 | Integration | Adapter selection | Extra selection |
 | --- | --- | --- |
 | CLI | Built-in manifest plus a user-extension manifest | Built-in, Home and same-environment global packages; explicit component startup and business configuration control activation |
-| SDK, including Electron | Host code imports selected Adapters and registers them in its worker entry | Host code imports selected Extra modules and passes them to `createExtraService` |
+| SDK, including Electron | Host code imports selected Adapters and injects their objects into createKernelService | Host code imports selected Extra modules and passes them to `createExtraService` |
 | FDE delivery | The business team copies the code it needs and handles dependencies | The business team chooses its own dependencies and deployment |
 
-The SDK must not require, read, copy, or generate a permanent or temporary manifest. Electron's main process constructs Kernel and Extra services directly. Adapter instances belong to the host-provided execution worker; module objects and business functions are not serialized across processes. See [Architecture](architecture.md) and [SDK Integration](../getting-started/sdk.md).
+The SDK must not require, read, copy, or generate a permanent or temporary manifest. Electron's main process constructs Kernel and Extra services directly. Adapter instances remain in the Kernel host process; module objects and business functions are not serialized across processes. See [Architecture](architecture.md) and [SDK Integration](../getting-started/sdk.md).
 
 Kernel, Core, and Host SDK must not depend on concrete Provider Adapters or business Extras. Shared framework and transport helpers remain valid dependencies. The standard App/CLI distribution continues to include its full default catalog. An SDK integration loads only its explicit selection; adding a module to the repository does not add it to every product.
 
@@ -58,13 +58,11 @@ An Adapter entry uses `type`, `module`, `export`, and the existing optional `fac
 5. Do not retry resolution from the process working directory, Kernel package, another manifest, or a global package location.
 6. Empty arrays contribute no entries. A CLI `--manifest` override remains a complete replacement, without automatically merging built-in, Home or global sources; a legacy Adapter-only override is normalized to an empty Extra array.
 
-Legacy explicit manifests also allow an Adapter to omit `type`. The CLI-owned execution worker instantiates each selected module once and uses its actual `metadata.type` to perform OpenClaw connection discovery and credential refresh before the existing readiness handshake. CLI Kernel and Playboard share this order. It does not infer types from package names or import unselected Providers to identify the selection.
-
 For example, a user-relative `./plugins/example-extra.mjs` points inside the selected Home. An internal package name in the built-in manifest resolves from the CLI installation. Merging the two files must not change either anchor.
 
 ## Loading Is Separate from Activation
 
-Kernel's worker loads the selected Adapters. It never imports or manages Extras. CLI merges and resolves the selected Adapters once and passes a JSON snapshot over the existing internal Node IPC channel. Worker recovery reuses that snapshot, without rereading the manifest or replaying Runs. This is internal worker initialization, not an SDK service launcher.
+CLI owns manifest resolution, selected module imports, factories, and product preparation. It passes Adapter objects to Kernel; Kernel does not load manifests or spawn execution workers. No runtime hot reload or automatic replacement is performed.
 
 An Extra is imported and initialized only when its own service is explicitly started and enabled. Listing all default Extras does not automatically start them; an unused Extra package must not prevent Kernel startup.
 
@@ -85,7 +83,7 @@ Unselected modules are never imported or probed. Existing probes for selected Ad
 
 There is no automatic module installation or live module reloading. Preserve the existing invocation, cancellation, resource ownership, and cleanup contracts. A failed Extra must not stop unrelated services.
 
-SDK code must not use an external Node process to load modules or start a top-level Kernel/Extra service. There is no `startOwnedKernel` integration. The host imports Extra modules in its own process, and its own worker entry imports selected Adapters before calling `serveWorker`. See the [isolated native SDK fixture](../../../test/fixtures/native-loading-host.mts) for invocation, cancellation, caller PID and cleanup checks without CLI or unselected packages.
+SDK hosts import Adapters and Extras in the service process and inject the actual objects into their respective factories. No worker entry or manifest is required.
 
 Implementation and verification are tracked in [OctoSpec](../../../.octospec/tasks/85-provider-decoupling/brief.md). The normative ownership constraints live in the [architecture rules](../../../.octospec/rules/architecture.md).
 

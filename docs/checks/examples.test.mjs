@@ -1,3 +1,4 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -25,7 +26,7 @@ async function options(t) {
   t.after(() => rm(directory, { recursive: true, force: true }));
   return {
     endpoint: componentEndpoint(directory),
-    workerEntrypoint: join(root, "test/fixtures/direct-invoke-worker.mjs")
+    adapters: [testAdapter]
   };
 }
 

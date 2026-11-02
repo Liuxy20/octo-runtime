@@ -7,21 +7,22 @@ timestamp: 2026-10-27T00:00:00Z
 source: self
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # Issue 60：Windows fixture 路径修复与复测
 
 关联 [任务](../../tasks/60-windows-fixture-paths/brief.md) 和 [Issue #60](https://github.com/Mininglamp-OSS/octo-runtime/issues/60)。基线 main@f0bacb01590084523c21dc9996d05738c9a06a44，分支 fix/60-windows-fixture-paths。Windows 11 Enterprise build 22621、x64、普通用户、PowerShell 5.1、Node 24.18.0、pnpm 11.19.0。
 
 ## Change
 
-ACP、ZCode、Grok 三个测试文件以 node:url 的 fileURLToPath 转换自己生成的 fixture URL。保留全部原有 argv、cwd、断言、容量和超时。产品源码、SDK、导出、配置和协议无变化；不增加依赖。
+ACP、Grok 等原测试文件以 node:url 的 fileURLToPath 转换自己生成的 fixture URL。保留全部原有 argv、cwd、断言、容量和超时。产品源码、SDK、导出、配置和协议无变化；不增加依赖。
 
 ## Verification
 
-- 修复前：正文 ACP 单项 1 失败、ZCode 四项全部失败；Grok 完整文件 3 通过/25 失败。三个完整文件合计 14 通过/30 失败，均发生在路径启动边界或其衍生断言。
-- 初始相关构建：`pnpm --recursive --filter '@mininglamp-oss/octo-runtime-executor-kernel...' --filter '@mininglamp-oss/octo-runtime-adapter-grok-build...' --filter '@mininglamp-oss/octo-runtime-adapter-zcode-gui...' run build`，8 个包通过。
+- 修复前：正文 ACP 单项 1 失败；Grok 完整文件 3 通过/25 失败。三个完整文件合计 14 通过/30 失败，均发生在路径启动边界或其衍生断言。
 - 修复后直接运行源码：`node --test --test-reporter=tap --test-timeout=30000 test/acp-transport-failure.test.js test/provider-buffer-limits.test.js test/grok-build-adapter.test.js`，41 通过、1 失败、2 因原有 5000 ms 测试超时取消、0 跳过。
-- 用户要求再次确认全部修复后，重新执行相同三个完整文件：仍为 41 通过、1 失败、2 超时取消、0 跳过，ZCode 四项明确通过，未再出现 MODULE_NOT_FOUND；ACP 关闭失败和 Grok 两项断流超时仍存在，不能宣称全部验收通过。本轮再次按所属父子 PID 清理两个已超时的 Grok fixture，未继续修改测试或生产代码。
-- 特殊字符路径：将相同三个测试、runtime-fixture 和实际 fixture 放入包含中文、空格、#、% 的仓外测试目录，按原相对布局启动。三个测试的 SHA256 与工作树逐一相同；直接使用修改后的测试，不加载诊断转换 hook。复测同样 41 通过/1 失败/2 超时取消/0 跳过。ACP/Grok fixture 和 ZCode Provider 均已从实际特殊字符路径启动。
+- 复测仍为 41 通过、1 失败、2 超时取消；ACP 关闭失败和 Grok 两项断流超时仍存在，不能宣称全部验收通过。再次按所属父子 PID 清理两个已超时的 Grok fixture，未继续修改测试或生产代码。
+- 特殊字符路径：将相同三个测试、runtime-fixture 和实际 fixture 放入包含中文、空格、#、% 的仓外测试目录，按原相对布局启动。三个测试的 SHA256 与工作树逐一相同；直接使用修改后的测试，不加载诊断转换 hook。复测同样 41 通过/1 失败/2 超时取消/0 跳过。
 - 两次完整文件运行均需在 Grok 原有超时已经记录后，按父子 PID 和 fixture 路径确认所有权，回收本次两个存活的 Grok fixture，使测试 runner 退出；不能将人工清理记作测试自行完成或清理成功。
 - `pnpm exec prettier --check test/acp-transport-failure.test.js test/provider-buffer-limits.test.js test/grok-build-adapter.test.js`：通过。
 - `pnpm lint:names`：通过；`git diff --check`：通过。
@@ -54,10 +55,10 @@ ACP、ZCode、Grok 三个测试文件以 node:url 的 fileURLToPath 转换自己
 
 ## PR 交付范围
 
-用户后续明确授权提交、通过已有 SSH 身份普通 push，并创建关联 #60 的 PR。目标 Mininglamp-OSS/octo-runtime，base=main，head=fix/60-windows-fixture-paths；不合并或发布安装包。交付前 origin/main=596e28c39219064040200ab0d30ce15e28ff4e8b，相比验证基线仅新增无关 Gateway 重连提交，未修改本次三个测试或其 ACP/ZCode/Grok/Core/Kernel 依赖。PR 使用共同祖先的三点差异核对，避免将目标分支新增内容误当成本分支删除。
+用户后续明确授权提交、通过已有 SSH 身份普通 push，并创建关联 #60 的 PR。目标 Mininglamp-OSS/octo-runtime，base=main，head=fix/60-windows-fixture-paths；不合并或发布安装包。交付前 origin/main=596e28c39219064040200ab0d30ce15e28ff4e8b，相比验证基线仅新增无关 Gateway 重连提交，未修改本次三个测试或其 ACP/Grok/Core/Kernel 依赖。PR 使用共同祖先的三点差异核对，避免将目标分支新增内容误当成本分支删除。
 
 本地最后一次三个完整文件复测仍为 41 通过、1 失败、2 超时取消。重复验证和独立范围核验没有修改生产代码，已确认三处路径缺陷消失。所有未通过项和完整构建限制均须保留在 PR Validation，不宣称全仓或跨平台通过。远端分支 SHA 和 CI/冲突状态以提交后实际查询为准。
 
 修复提交 1d4468b955e305bd5f84ab1e68e5260bd82d9084 已通过 SSH 普通 push 到 Liuxy20/octo-runtime 的同名分支，git ls-remote 与 GitHub 分支 ref 两次核对均与本地完全一致。[PR #200](https://github.com/Mininglamp-OSS/octo-runtime/pull/200) 已创建，Fixes #60、Refs #14，正文与 body-file 核对一致。上游仅有读取权限，沿用现有 fork 的管理权限和已登录身份，不要求新增 workflow scope。
 
-GitHub 核对发现任务目录索引与 main@596e28c 同位置插入导致文档冲突。通过普通 merge 保留 Issue 60 与 Issue 198 两条记录，不 rebase 或改写已推送提交；主线合入的 Gateway 变化不属于 PR 相对 main 的差异，最终仍只交付三处测试路径与本任务记录。相关测试和 ACP/ZCode/Grok/Core/Kernel 依赖均未被此次主线更新修改，保留既有验证结果；CI 状态单独查询，不冒称合并后的全仓检查已通过。
+GitHub 核对发现任务目录索引与 main@596e28c 同位置插入导致文档冲突。通过普通 merge 保留 Issue 60 与 Issue 198 两条记录，不 rebase 或改写已推送提交；主线合入的 Gateway 变化不属于 PR 相对 main 的差异，最终仍只交付三处测试路径与本任务记录。相关测试和 ACP/Grok/Core/Kernel 依赖均未被此次主线更新修改，保留既有验证结果；CI 状态单独查询，不冒称合并后的全仓检查已通过。

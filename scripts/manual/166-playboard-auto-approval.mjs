@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, writeFile, rm, realpath } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
+import { performance } from "node:perf_hooks";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv from "ajv";
@@ -32,7 +33,7 @@ const request = (mode, scenario = "approval", overrides = {}) => ({
   ...overrides
 });
 
-async function fixture(t) {
+async function fixture(t, { nativeHost = false } = {}) {
   const directory = await realpath(await mkdtemp("/tmp/ort166-"));
   const trace = join(directory, "trace.jsonl");
   const adapter = {
@@ -70,7 +71,13 @@ async function fixture(t) {
     // 先确认本专项 Provider 已退出，再删除其目录；不把 kill 请求当回收证据。
     for (const row of await readTrace({ trace })) {
       if (row.pid) assert.throws(() => process.kill(row.pid, 0), { code: "ESRCH" });
-      if (row.workerPid) assert.throws(() => process.kill(row.workerPid, 0), { code: "ESRCH" });
+      if (row.hostPid) {
+        // 原生 SDK 只关闭服务资源；测试宿主必须继续存活，CLI 子宿主则须已经退出。
+        if (nativeHost) {
+          assert.equal(row.hostPid, process.pid);
+          assert.doesNotThrow(() => process.kill(row.hostPid, 0));
+        } else assert.throws(() => process.kill(row.hostPid, 0), { code: "ESRCH" });
+      }
       if (row.temporary) await rm(row.temporary, { recursive: true, force: true });
     }
     await rm(directory, { recursive: true, force: true });
@@ -132,8 +139,8 @@ async function cli(settings, value, { signal, cleanup } = {}) {
       timedOut = true;
       cleanupTask = (async () => {
         const rows = await readTrace(settings);
-        const pids = new Set(rows.flatMap((row) => [row.pid, row.workerPid]).filter(Boolean));
-        // 所属 Provider/worker 先退，CLI 最后；每个 PID 的退出确认独立有界。
+        const pids = new Set(rows.flatMap((row) => [row.pid, row.hostPid]).filter(Boolean));
+        // 所属 Provider 先退，CLI 最后；每个 PID 的退出确认独立有界。
         for (const pid of pids) await terminateFixtureProcess(pid);
         await terminateFixtureProcess(child.pid);
       })();
@@ -221,12 +228,11 @@ for (const mode of ["canonical", "native"]) {
     assert.equal((await readTrace(settings)).filter((r) => r.externalReply).length, 0);
   });
   test(`${mode}: SDK default ask remains answerable, full_access resolves`, async (t) => {
-    const settings = await fixture(t);
+    const settings = await fixture(t, { nativeHost: true });
+    // 原生装配保留 Provider 工厂参数；每轮环境通过 RPC 传递，不修改宿主 process.env。
     const kernel = createKernelService({
       endpoint: join(settings.directory, "k.sock"),
-      workerEntrypoint: join(root, "apps/cli/dist/worker.js"),
-      adapterModules: [settings.adapter],
-      env: settings.env
+      adapters: [createCodexAdapter(settings.adapter.options)]
     });
     try {
       await kernel.initialize();
@@ -234,7 +240,11 @@ for (const mode of ["canonical", "native"]) {
         const input = request(mode, "approval", policy ? { approvalMode: policy } : {});
         const snapshot = structuredClone(input);
         const frames = [];
-        for await (const frame of kernel.client.invoke(input)) {
+        for await (const frame of kernel.client.invoke(input, {
+          executionEnvOverrides: {
+            env_variables: [{ key: "ORT166_TRACE", value: settings.trace }]
+          }
+        })) {
           frames.push(frame);
           if (
             (frame.type === "interaction.requested" || frame.control?.status === "pending") &&
@@ -357,10 +367,14 @@ test("shared approval bridge marks automatic ownership before write confirmation
 });
 
 for (const mode of ["canonical", "native"]) {
-  for (const fault of ["write-failure", "expired", "cancelled"]) {
+  for (const fault of ["write-failure", "write-stalled", "cancelled"]) {
     test(`${mode}: ${fault} while automatic response write is held`, async (t) => {
-      if (fault === "expired")
+      let monotonic = performance.now();
+      if (fault === "write-stalled") {
+        // 回复已入队后由共享发送器的单调时钟约束；5 秒无进展先于审批过期。
+        t.mock.method(performance, "now", () => monotonic);
         t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+      }
       const server = codexAppServerFixture({ holdResponseWrites: true });
       const child = server.spawnFn();
       const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
@@ -388,17 +402,18 @@ for (const mode of ["canonical", "native"]) {
         if (fault === "write-failure") child.stdin.emit("error", new Error("ORT166_WRITE_FAILED"));
         else if (fault === "cancelled") controller.abort(new Error("ORT166_CANCELLED"));
         else {
-          t.mock.timers.tick(600000);
+          monotonic += 5000;
+          t.mock.timers.tick(5000);
           server.close(1);
         }
         if (fault === "cancelled") server.close(null, "SIGTERM");
         try {
           for await (const frame of iterator) frames.push(frame);
         } catch (error) {
-          // native Driver 把传输/过期错误交给 Host 包装；直接 Adapter 专项观察原始错误。
+          // native Driver 把传输错误交给 Host 包装；直接 Adapter 专项观察原始错误。
           assert.equal(mode, "native");
           assert.notEqual(fault, "cancelled");
-          assert.match(error.message, /ORT166_WRITE_FAILED|INTERACTION_EXPIRED/);
+          assert.match(error.message, /ORT166_WRITE_FAILED|CODEX_STDIN_STALLED/);
         }
         server.flushResponseWrites();
         assert.equal(completed(frames), false);
@@ -409,16 +424,18 @@ for (const mode of ["canonical", "native"]) {
               ["invalidated", "expired"].includes(f.control?.status)
           )
         );
-        if (fault === "expired")
+        if (fault === "write-stalled")
           assert.ok(
-            frames.some((f) => f.payload?.status === "expired" || f.control?.status === "expired")
+            frames.some(
+              (f) => f.payload?.status === "invalidated" || f.control?.status === "invalidated"
+            )
           );
         assert.equal(child.exitCode === null && child.signalCode === null, false);
       } finally {
         controller.abort();
         server.close(1);
         server.flushResponseWrites();
-        if (fault === "expired") t.mock.timers.reset();
+        if (fault === "write-stalled") t.mock.timers.reset();
         await iterator.return();
       }
     });

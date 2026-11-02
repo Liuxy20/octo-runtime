@@ -1,3 +1,5 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
+import { adapter } from "./fixture-adapter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -109,7 +111,7 @@ test(`${language} archive consumer runs outside the repository without Node on P
     ]).trim();
     assert.ok(location.startsWith(venv), location);
   } else throw Error("Unknown language");
-  const fixture = await kernelFixture(t, { manifest: join(root, "native/tests/adapters.json") });
+  const fixture = await kernelFixture(t, { adapters: [testAdapter, adapter] });
   const env = { ...process.env, PATH: "", PYTHONPATH: "" };
   const listing = JSON.parse(
     await consume(binary, [...prefix, "list", "--endpoint", fixture.endpoint], {

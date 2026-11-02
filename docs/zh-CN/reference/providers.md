@@ -17,7 +17,6 @@ Provider 是实际执行 Agent 任务的程序，例如 Codex 或 Claude Code。
 | `opencode`                                                      | OpenCode CLI       | canonical          | local stdio + remote HTTP       |
 | `codebuddy`                                                     | Provider CLI       | canonical          | 不支持                          |
 | `openclaw`                                                      | Gateway            | canonical          | 不支持                          |
-| `zcode-gui`                                                     | GUI runtime client | canonical          | 不支持                          |
 | `antigravity`                                                   | Provider CLI       | canonical          | 不支持                          |
 | `grok-build` | Grok CLI ACP stdio | canonical | stdio；广告支持时使用 HTTP；最终 `${` 字面量拒绝 |
 

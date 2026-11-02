@@ -20,11 +20,6 @@ import {
   createOpenClawAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
 import {
-  buildZcodeCommand,
-  createZcodeGuiAdapter,
-  runZcodeAppServerTurn
-} from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
-import {
   buildAntigravityCommand,
   createAntigravityAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
@@ -318,7 +313,6 @@ for (const recoveryOnly of [false, true]) {
     ["Claude", buildClaudeCommand],
     ["OpenCode", buildOpenCodeCommand],
     ["OpenClaw", buildOpenClawGatewayInvocation],
-    ["ZCode", buildZcodeCommand],
     ["Antigravity", buildAntigravityCommand]
   ]) {
     test(`${name} direct command construction rejects ${variant} images`, async () => {
@@ -340,11 +334,6 @@ for (const recoveryOnly of [false, true]) {
     ["CodeBuddy", (mustNotStart) => createCodeBuddyAdapter({ acpClientFactory: mustNotStart })],
     ["OpenCode", () => createOpenCodeAdapter({ command: "/provider-must-not-start" })],
     ["OpenClaw", (mustNotStart) => createOpenClawAdapter({ clientFactory: mustNotStart })],
-    [
-      "ZCode",
-      (mustNotStart) =>
-        createZcodeGuiAdapter({ command: "/provider-must-not-start", spawnFn: mustNotStart })
-    ],
     ["Antigravity", () => createAntigravityAdapter({ command: "/provider-must-not-start" })]
   ]) {
     test(`${name} invocation rejects ${variant} images before Provider work`, async () => {
@@ -373,29 +362,6 @@ for (const recoveryOnly of [false, true]) {
       collect(adapter.invoke({ ...imageRequest(), approvalMode: "ask" })),
       /UNSUPPORTED_INPUT_MODALITY/
     );
-  });
-
-  test(`ZCode direct Driver rejects ${variant} images before client creation`, async () => {
-    let starts = 0;
-    await assert.rejects(
-      collect(
-        runZcodeAppServerTurn({
-          request: imageRequest(),
-          spec: {
-            command: "/provider-must-not-start",
-            args: [],
-            cwd: process.cwd(),
-            env: process.env
-          },
-          spawnFn: () => {
-            starts += 1;
-            assert.fail("Provider must not start");
-          }
-        })
-      ),
-      /UNSUPPORTED_INPUT_MODALITY/
-    );
-    assert.equal(starts, 0);
   });
 }
 

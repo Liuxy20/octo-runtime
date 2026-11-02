@@ -76,7 +76,7 @@ Runtime 入口为 `packages/octo-runtime-adapter-{sdk,host,acp,codex}/src` 和 `
 
 - 对 12 个默认 Adapter 列出审批三种模式、图片及 canonical/native 回答的当前原生参数或明确错误，用固定行为测试验收；测试案例不成为生产能力目录。
 - 删除 Host 的标签判断，保留模式、调用身份和实际 responder 路由。限制放到 Adapter 现有命令构造、Driver 或共享 ACP 执行边界，不增加通用能力校验框架。
-- 复用 ACP 的 assisted 拒绝及原生 image/MCP 检查，Codex/Claude/CodeBuddy 审批映射，OpenClaw/Antigravity/ZCode 现有拒绝；补齐此前仅靠 Host 图片标签保护的路径。在相关 Provider 操作前校验；握手才能确认的限制在握手后、发送输入前校验。
+- 复用 ACP 的 assisted 拒绝及原生 image/MCP 检查，Codex/Claude/CodeBuddy 审批映射，OpenClaw/Antigravity 现有拒绝；补齐此前仅靠 Host 图片标签保护的路径。在相关 Provider 操作前校验；握手才能确认的限制在握手后、发送输入前校验。
 - 验收：合法输入到达 Provider，不支持图片不能静默变纯文本，不支持审批不能提升 full_access；回答仍核对活动 invocation、pending ID、期限、模式和授权，取消不变。
 - 扣分及补齐：尚缺逐 Adapter 的图片拒绝位置和错误时机对照表；补齐该表及对应 fake Provider 用例后重新评分。
 

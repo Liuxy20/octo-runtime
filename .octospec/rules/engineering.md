@@ -34,7 +34,7 @@ supersedes: []
 - `pnpm build` 将源码 Git commit 与 dirty 状态写入 CLI 的 `dist/build-info.json`；根帮助和版本命令（version/--version）展示版本及构建时的 `commit:<12 位短 SHA>`，未提交修改标记 `(dirty)`。发行物保留此元数据，运行时不查询用户当前目录的 Git；缺少 Git 来源时显示 `commit:unknown`，不得伪造为干净提交。
 - 同一文件的 `buildTime` 为构建流程捕获的 UTC ISO 8601 时间，根帮助和版本命令显示 `build:`；旧或无效元数据显示 `build:unknown`，不得用运行、安装或 commit 时间代替。发行矩阵共用一次构建会话时间；同版本恢复必须校验并复用原发行物时间，仍以完整 archive integrity 阻止不可变版本内容漂移。
 - 协议 wire types 从 JSON Schema 生成。修改协议时同步 schema、生成类型、样例、调用端及测试，不手工只改生成文件。
-- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0；Kernel 到 worker 使用 stdio NDJSON JSON-RPC 2.0，独立 Node IPC 承载主循环心跳。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
+- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0，Electron 同进程业务也使用此路径。按 [#294 合同](architecture.md#sdk-原生装配与统一-rpc)，宿主注入实际 Adapter，Kernel 不启动执行 worker；旧 stdio worker RPC/Node IPC 心跳实现已删除，不提供兼容入口；公共 RPC 保留。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
 - 默认自动化测试使用 fake Provider，不调用真实模型。所有 adapter 的真实验收独立运行，见下文；IM 接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录离线回归与实际联调结果，不把 mock 结果当作线上证据。
 - 验证脚本消费 Runtime CLI 状态时显式传 `--json`；输出回调先收集完整 stdout/stderr，检查非零返回码并保留原始诊断后，再解析和校验状态结构。不能让 JSON 解析错误覆盖 CLI 失败，也不能把错误对象或缺失状态当作可继续验证的成功结果。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。

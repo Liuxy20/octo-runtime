@@ -2,7 +2,7 @@
 
 本项目是内部 TypeScript monorepo。沟通和文档直接使用中文。
 
-先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是唯一执行实现；Executor Kernel 监督独立 worker，宿主独立管理 Extra。本地存在和执行不以登录、云端登记或 IM 建联为前提。
+先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是唯一执行实现；服务装配与调用遵守 [SDK 原生装配与统一 RPC](.octospec/rules/architecture.md#sdk-原生装配与统一-rpc)，宿主独立管理 Extra。#294 原生对象装配已在工作树实现，验证状态见对应任务。本地存在和执行不以登录、云端登记或 IM 建联为前提。
 
 ## 目录与命令
 

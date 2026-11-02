@@ -20,7 +20,6 @@ Each bundled Harness has a topic covering installation, authentication, a Channe
 - [Qoder CN CLI](harnesses/qoderclicn.md)
 - [OpenCode](harnesses/opencode.md)
 - [OpenClaw](harnesses/openclaw.md)
-- [ZCode](harnesses/zcode-gui.md)
 - [Antigravity](harnesses/antigravity.md)
 - [DeepSeek Harness](harnesses/dsh.md)
 - [Grok Build](harnesses/grok-build.md)
@@ -43,14 +42,13 @@ Each row gives a short setup summary and the official documentation. The launch 
 | `qoderclicn`  | `qoderclicn --acp`                                                        | Install and sign in to the China distribution using the [Qoder CN guide](https://docs.qoder.cn/cli/installation). Ensure Runtime can execute `qoderclicn` with ACP support; verify the installed command name because upstream distributions can change.                                                       |
 | `opencode` | full_access uses `opencode run …`; ask uses `opencode acp` | Install OpenCode `>=2.1.3 <3` using the [official guide](https://dev.opencode.ai/docs/) and configure a model account with `/connect`. assisted is unsupported; see the [OpenCode topic](harnesses/opencode.md) for launch details. |
 | `openclaw`    | Connects to an existing Gateway                                           | Install OpenClaw, complete onboarding, and start its Gateway using the [official getting-started guide](https://docs.openclaw.ai/start/getting-started). Configure the Runtime connection and specify `provider_agent_id`, such as `main`; starting Executor Kernel does not start that Gateway.               |
-| `zcode-gui`   | ZCode Desktop's embedded client                                           | Install [ZCode Desktop](https://zcode.z.ai/cn/docs/install) and configure the model account in the application. The Adapter checks `ZCODE_BIN`, then `PATH`, then desktop installation locations; use `ZCODE_BIN` if the client is not detected.                                                               |
 | `antigravity` | `agy` in stream-json headless mode                                        | Install Antigravity CLI using the [official setup guide](https://antigravity.google/docs/getting-started?tab=cli), then run interactive `agy` once to authenticate. Keep the executable on Runtime's `PATH`; see the [headless guide](https://antigravity.google/docs/cli/headless/) for required CLI support. |
 
 `dsh` requires an npm-installed `@deepseek-ai/dsh` Provider at **`0.2.1-rc.4` or later**. This differs from the unmodified official Client SDK pinned to `0.2.1-rc.3` inside the Adapter. The Provider runs with profile `sdk`. The Runtime CLI host automatically resolves the first `dsh` on its PATH to the npm package's JavaScript entry and passes `providerOptions.dshBin` to both Kernel discovery and invocation, including `playboard`. An explicit `adapters.dsh.execution.provider_options.dshBin` in `<home>/<profile>/config.json` takes precedence and never falls back to another installation. SDK hosts supply their own selected entry; the Adapter does not discover installations or use Desktop/ASAR. It defaults to deepseek-account and requires explicit full_access. See the [DSH Adapter](../../../packages/octo-runtime-adapter-dsh/README.md) for SDK registration and configuration boundaries.
 
-Generic `acp` is a reusable Adapter factory for another ACP-compatible Harness, not a separate Harness to install. Configure its command and arguments through `createAcpAdapter` and register the resulting Adapter in your worker or manifest; it is not an entry in the default CLI manifest. See the [factory implementation](../../../packages/octo-runtime-adapter-acp/src/index.ts) and [ACP documentation](https://agentclientprotocol.com/get-started/introduction).
+Generic `acp` is a reusable Adapter factory for another ACP-compatible Harness, not a separate Harness to install. Configure its command and arguments through `createAcpAdapter` and inject the resulting Adapter into createKernelService; CLI hosts can select the factory through their manifest; it is not an entry in the default CLI manifest. See the [factory implementation](../../../packages/octo-runtime-adapter-acp/src/index.ts) and [ACP documentation](https://agentclientprotocol.com/get-started/introduction).
 
-After installation, follow [CLI Installation and Invocation](../getting-started/cli.md) to probe the selected Adapter and send a small request. Shell aliases are not executable programs for the worker; background services also need the correct `PATH`, home directory, and account configuration. Restart the service after changing its environment.
+After installation, follow [CLI Installation and Invocation](../getting-started/cli.md) to probe the selected Adapter and send a small request. Shell aliases are not executable programs for an Adapter; background services also need the correct `PATH`, home directory, and account configuration. Restart the service after changing its environment.
 
 ## Enable Codex Computer Use
 
@@ -59,7 +57,7 @@ After installation, follow [CLI Installation and Invocation](../getting-started/
 
 Availability and platform setup follow [OpenAI's Computer Use documentation](https://learn.chatgpt.com/docs/computer-use).
 
-For Runtime, run the worker as the same operating-system user with the same `CODEX_HOME`. The [Codex Adapter](../../../packages/octo-runtime-adapter-codex/src/index.ts) starts `codex app-server` with that real home, so existing Codex configuration and plugin state remain available. There is no Runtime `computer_use: true` setting, and `full_access` does not install the plugin or grant operating-system permissions.
+For Runtime, run the host process as the same operating-system user with the same `CODEX_HOME`. The [Codex Adapter](../../../packages/octo-runtime-adapter-codex/src/index.ts) starts `codex app-server` with that real home, so existing Codex configuration and plugin state remain available. There is no Runtime `computer_use: true` setting, and `full_access` does not install the plugin or grant operating-system permissions.
 
 The official setup above enables the desktop feature. Whether that installation exposes the required tools to the installed CLI/app-server must also be verified with a Runtime invocation; this documentation's automated tests do not establish Computer Use compatibility. If the tools are missing, check the Codex version, `CODEX_HOME`, plugin setup, and app-server tool availability before changing Runtime MCP settings. Applications must also handle any supported approval requests; see [Output and Control](../reference/output-and-control.md).
 

@@ -93,7 +93,7 @@ NDJSON 还在 generator finally 中清掉 escalation timer；ACP close 在父进
 
 边界是本次受管进程组，不等于对任意进程树提供操作系统沙箱。主动 setsid 脱离进程组的工具、其他用户进程和远端服务不由这一补丁保证。Windows 未运行该探针，需按现有平台终止方式单独评估，不能将 POSIX 负 PGID 直接搬过去。
 
-邻近的 [spawnAdapterHost 清理](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts)也按 leader 退出判断是否继续升级。后续定向检查已通过 public launcher 独立复现同组工具残留，记为[同类项 S02](assessment.md)；该补充同时记录 Codex stdin 断管导致进程退出的 S01。ZCode 同类清理条件仍仅有源码证据，不能混写为已复现。均不扩张为全局进程管理重构。
+邻近的 [spawnAdapterHost 清理](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/process.ts)也按 leader 退出判断是否继续升级。后续定向检查已通过 public launcher 独立复现同组工具残留，记为[同类项 S02](assessment.md)；该补充同时记录 Codex stdin 断管导致进程退出的 S01。均不扩张为全局进程管理重构。
 
 ## 实施顺序与决策
 

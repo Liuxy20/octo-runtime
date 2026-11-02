@@ -8,7 +8,6 @@ import { join } from "node:path";
 import { WebSocketServer } from "ws";
 import { createJsonCliAdapter } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
-import { createZcodeGuiAdapter } from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
 import { createAntigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 import {
   acpModelSelectionRequest,
@@ -1891,7 +1890,6 @@ test("built-in Adapters expose execution metadata without feature catalogues", (
     createCodeBuddyAdapter(),
     createOpenCodeAdapter(),
     createOpenClawAdapter(),
-    createZcodeGuiAdapter(),
     createAntigravityAdapter(),
     hermesAdapter,
     kimiCodeAdapter,

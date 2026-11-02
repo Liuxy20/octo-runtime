@@ -6,6 +6,8 @@ tags: [p0, adapter, stream, capacity, protocol, channel, testing]
 timestamp: 2026-10-18T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # Provider 输出流容量与错误分类专项规划
 
 ## 1. 状态、基线与结论
@@ -107,7 +109,6 @@ Provider stdout / callback
 | Codex 原始 JSON 行                     |  256 KiB；图片回显有 32 MiB 特例 | `adapter-codex/src/app-server.ts`         | 是；改为已冻结的 Adapter 原始消息上限，保留精确图片回显规则 |
 | Claude Code / 通用 JSON CLI 原始行     |                          256 KiB | `adapter-sdk/src/index.ts#spawnJsonLines` | 是；接收公共策略参数                                        |
 | ACP 原始 JSON 行                       | 256 KiB；图片 prompt 临时 32 MiB | `acp-client/src/index.ts`                 | 是；实例级策略隔离，prompt 特例不得污染后续调用             |
-| ZCode GUI 原始 JSON 行                 |                          256 KiB | `adapter-zcode-gui/src/app-server.ts`     | 是；使用同一策略类型                                        |
 | Antigravity / 其他 JSON CLI            |        通过共享 SDK 继承 256 KiB | `adapter-antigravity`、`adapter-sdk`      | 是；逐个登记实际路径，不按包名猜测覆盖                      |
 | Adapter `DriverQueue` 单项             |                          256 KiB | `adapter-sdk/src/native.ts`               | 是；与原始消息、HostFrame 分开配置                          |
 | Adapter `DriverQueue` 累计             |                  4096 项 / 4 MiB | 同上                                      | 是；保持条数和字节双重上限                                  |
@@ -195,7 +196,7 @@ Provider stdout / callback
 | M0 完整容量清单与样本基线          | 所有 Adapter/Host/daemon/Channel 边界、单位、所有者和现有测试映射 |         20 |       20 |         19 |         20 |         19 | **98** |
 | M1 冻结合同与用户决策              | 默认值、硬最大值、配置归属、错误码、Channel 交付策略              |         20 |       16 |         14 |         18 |         14 | **82** |
 | M2 共享策略类型与配置校验          | 单一类型、默认值、关系校验、Adapter 隔离、启动失败语义            |         20 |       18 |         17 |         19 |         18 | **92** |
-| M3 Adapter 原始读取与队列接线      | Codex、Claude、ACP、ZCode、Antigravity 及全部注册 Adapter         |         20 |       18 |         17 |         18 |         17 | **90** |
+| M3 Adapter 原始读取与队列接线      | Codex、Claude、ACP、Antigravity 及全部注册 Adapter         |         20 |       18 |         17 |         18 |         17 | **90** |
 | M4 HostFrame、RPC 与重放窗口接线   | 完整 envelope 计量、队列细分错误、窗口关系和淘汰                  |         20 |       17 |         16 |         18 |         17 | **88** |
 | M5 错误目录与 Channel 展示         | 稳定公开码、诊断编号、主卡片和最终文本可见                        |         20 |       19 |         18 |         19 |         18 | **94** |
 | M6 自动化容量、并发和内存验收      | 精确边界、UTF-8、慢消费、取消、兄弟隔离、GC 趋势                  |         20 |       18 |         17 |         19 |         17 | **91** |
@@ -206,7 +207,7 @@ Provider stdout / callback
 ### M0：清单和样本基线
 
 1. 搜索所有固定字节/条数限制和所有 `STREAM_*` / `IM_RESULT_TOO_LARGE` 路径。
-2. 为 12 个默认 Adapter 登记真实传输：Codex、Claude Code、CodeBuddy、Hermes、Kimi Code、MCode、OpenCode、OpenClaw、Qoder CLI、Qoder CN CLI、ZCode GUI、Antigravity。
+2. 为所列默认 Adapter 登记真实传输：Codex、Claude Code、CodeBuddy、Hermes、Kimi Code、MCode、OpenCode、OpenClaw、Qoder CLI、Qoder CN CLI、Antigravity。
 3. 保存脱敏结构样本，只记录事件类型、字段长度和序列化字节，不保存业务正文。
 4. 重放 603,523 bytes 与 1,430,765 bytes 规模的结构化 fixture，并生成 16 MiB 前后边界 fixture。
 

@@ -11,7 +11,7 @@ Start with the [SDK quickstart](../getting-started/sdk.md) for a first integrati
 | Import subpath                                                                | Purpose                                                                                        |
 | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | `/host`                                                                       | Create Kernel/Extra services, manage initialization and shutdown, generate component endpoints |
-| `/executor-kernel`                                                            | `attachKernel`, KernelClient types, KernelError, `serveWorker`, Kernel service factory         |
+| `/executor-kernel`                                                            | `attachKernel`, KernelClient types, KernelError, Kernel service factory         |
 | `/executor-core`                                                              | Use AgentExecutor directly in the calling process                                              |
 | `/protocol`                                                                   | InvokeInput, output/context types and public validators                                        |
 | `/protocol/schema.json`                                                       | Shared protocol schema                                                                         |
@@ -23,7 +23,7 @@ All paths are under `@mininglamp-oss/octo-runtime`. For example, import the clie
 
 ## Create a Service
 
-`createKernelService(options)` requires the listening address `endpoint` and absolute worker entry path `workerEntrypoint`. Optional SDK settings are `adapterConfigurations`, `configurations(runtimeId?)`, `env`, and `stateDirectory`. SDK hosts import and register selected Adapters in their own worker code; they do not use a manifest or launch a separate top-level service. The CLI's internal runner accepts a `manifest` file or resolved `adapterModules` snapshot, mutually exclusively; these are CLI composition mechanisms, not SDK integration requirements. See [Module Loading](../concepts/module-loading.md).
+`createKernelService(options)` requires a local `endpoint` and host-constructed `adapters`. Optional settings include `adapterConfigurations`, `configurations(runtimeId?)`, `logging`, and `stateDirectory`. Kernel registers objects in its process and exposes business calls through RPC. It accepts no module manifests, paths, worker entries, or subprocess env. CLI imports modules before passing objects. See [Module Loading](../concepts/module-loading.md).
 
 1. Create the service and await `initialize({signal?})`.
 2. After initialization, invoke through `kernel.client` or inspect the service with `status()`.
@@ -39,7 +39,7 @@ Initialization failure throws `ServiceInitializationError` with the original `ca
 | `cancelInvocation(invocationId, reason?)`          | Cancel an invocation started through invoke on this client; returns `{accepted}`.                                              |
 | `respondInteraction(invocationId, response)`       | Reply to that invocation's canonical interaction.                                                                              |
 | `respondNativeInteraction(invocationId, response)` | Reply to that invocation's Provider-native interaction.                                                                        |
-| `status()` / `list()`                              | Query Kernel/worker state or registered Adapter metadata with Provider probe results, respectively. Probing does not establish login or model access. |
+| `status()` / `list()`                              | Query Kernel state or registered Adapter metadata with Provider probe results, respectively. Probing does not establish login or model access. |
 | `close()`                                          | Close client connections without cancelling submitted executions or closing the Kernel service.                                |
 
 Use these lower-level methods only when managing submission and subscription yourself:
@@ -84,7 +84,7 @@ Ordinary requests end the connection after their response. A subscription receiv
 
 | Wire method                | Params                                                 | Successful result                                                            |
 | -------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `status`                   | `{}`                                                   | KernelStatus including `kernel_instance_id`, `execution_ready`, worker state |
+| `status`                   | `{}`                                                   | KernelStatus including `kernel_instance_id`, `execution_ready`, host `pid` |
 | `adapter.list`             | `{}`                                                   | Registered Adapter metadata array including `available`, `unavailableReason`, `providerPath`, and `providerVersion` |
 | `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`; receipt is the accepted execution identity  |
 | `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                                   |
@@ -175,6 +175,6 @@ The subscription budget is separate from the Kernel and per-client connection li
 
 Byte limits count serialized data, rather than total process memory. Trusted Adapter execution settings can adjust output-cache policy within allowed bounds. Ordinary Context cannot change it.
 
-Kernel or worker restart does not restore old output or rerun old executions. Applications decide how to proceed when a result is `lost` or unknown. See [Output and Control](output-and-control.md).
+Kernel host restart does not restore old output or rerun old executions. Applications decide how to proceed when a result is `lost` or unknown. See [Output and Control](output-and-control.md).
 
 Sources: [IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json), [fixtures](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json), [client types](../../../packages/octo-runtime-executor-kernel/src/types.ts), [client](../../../packages/octo-runtime-executor-kernel/src/client.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts).

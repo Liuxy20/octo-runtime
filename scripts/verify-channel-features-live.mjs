@@ -178,14 +178,19 @@ try {
   );
   kernel = createKernelService({
     endpoint: socket,
-    manifest,
-    workerEntrypoint: fileURLToPath(
-      new URL("../packages/octo-runtime-executor-kernel/dist/runner.js", import.meta.url)
+    adapters: await (
+      await import("../apps/cli/dist/adapters.js")
+    ).loadCliAdapters(
+      (
+        await (
+          await import("../packages/octo-runtime-adapter-sdk/dist/module-manifest.js")
+        ).readModuleManifest(manifest, { legacy: true })
+      ).adapters
     )
   });
   await kernel.initialize();
-  assert.notEqual((await kernel.client.status()).worker.pid, process.pid);
-  report.independentHost = true;
+  assert.equal((await kernel.client.status()).pid, process.pid);
+  report.nativeKernelHost = true;
   group = await createTestGroup();
   assert.ok(group.group_no);
   report.groupId = group.group_no;

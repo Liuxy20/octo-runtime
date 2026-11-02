@@ -15,6 +15,7 @@ interface AdapterCredentialManifest {
   schema_version?: unknown;
   provider_options?: unknown;
 }
+/** CLI 读取 profile 配置和凭据引用，返回配置值；Kernel 不读取这些文件或路径。 */
 export function readAdapterConfigurations(
   profileRoot: string,
   adaptersValue: unknown

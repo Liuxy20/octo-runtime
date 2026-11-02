@@ -1,3 +1,4 @@
+import { testAdapter } from "./fixtures/test-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
@@ -107,7 +108,7 @@ test("native Kernel belongs to this process; replacement is explicit constructio
   t.after(() => rm(home, { recursive: true, force: true }));
   const options = {
     endpoint: componentEndpoint(home),
-    workerEntrypoint: resolve("test/fixtures/direct-adapter-host.js")
+    adapters: [testAdapter]
   };
   const kernel = createKernelService(options);
   t.after(() => kernel.close());

@@ -5,13 +5,15 @@ description: 按三份评审的代码与原生复现证据处理环境消费者�
 tags: [runtime, lifecycle, adapter, envs, installation, testing]
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 依据与方案
 
 用户已授权修复并继续原 PR 交付。评审基线为 `6e2f54bc4b13ea56d6225d210baa6fd6c5c6de66`，原 main 为 `8af836068780ebb76581225254ad7bef18cc8170`。本轮已 rebase 至最新 `main@78bb88a`，仅知识目录有冲突，保留上游 DSH 任务与本任务条目；上游依赖改动通过 frozen install 重新安装。
 
 | 评审意见 | 核验及处置 |
 | --- | --- |
-| Jerry-Xin：合并后消费者仍大小写敏感 | 原生 Windows 对比复现：旧 main 成功，PR 的 MCP/Claude 报 MCP_ENV_MISSING、probe 报 command_not_found、DSH 报 DSH_EXECUTABLE_NOT_FOUND。新增共享只读查询，覆盖 MCP、probe、DSH 和相同模式的 ZCode executable 查找。 |
+| Jerry-Xin：合并后消费者仍大小写敏感 | 原生 Windows 对比复现：旧 main 成功，PR 的 MCP/Claude 报 MCP_ENV_MISSING、probe 报 command_not_found、DSH 报 DSH_EXECUTABLE_NOT_FOUND。新增共享只读查询，覆盖 MCP、probe、DSH。 |
 | mochashanyao：ACP/Grok 最终 spawn 再次引入别名 | 共用逐层环境合并；原生子进程集成回归验证真实接收到高优先级值。 |
 | mochashanyao：清理失败永久阻塞 | 同身份存活 worker 原本已重试；保留该行为。leader 消失后增加显式运维确认，备份原记录并以原文 SHA-256 绑定确认；旧确认不能放行新记录，不声称已经验证清空后代。doctor 展示路径，CLI/SDK 提供同一恢复能力。 |
 | mochashanyao：POSIX 扩大阻塞 | 持久 cleanupIncomplete 阻塞仅作用于 Windows，POSIX 保持原先 best-effort 回收行为，不在此专项重写 POSIX 僵尸进程管理。 |
@@ -42,7 +44,6 @@ rebase 至 `main@78bb88a` 并重新安装构建后，29 项定向回归再次全
 | 意见或同类检查 | 最终处置 |
 | --- | --- |
 | OpenCode 仍直接读 OPENCODE_CONFIG_CONTENT | 改用共享查询；覆盖配置保留 instructions/provider/MCP、独立覆盖优先级及非法 JSON 拒绝，POSIX 不混同变量名。 |
-| ZCode 仍直接读 ZCODE_BIN/LOCALAPPDATA | 两处改用共享查询；覆盖显式桌面脚本选择及 Windows 临时目录中的自动发现。这里只验证配置构建和文件发现，不声称执行真实 Provider。 |
 | 同类排查：Codex CODEX_HOME | 补齐同类读取；Adapter 固定 Home 环境合并使用共享 helper，不生成大小写别名。覆盖 Windows 最终值与唯一键、POSIX 两个独立名字。 |
 | --manifest 是否覆盖恢复清单 | 现有参数选择模块清单，既有 Kernel stateDirectory 固定为 Home/run。保留此合同，在全局及组件帮助、CLI 指南明确说明；前台 Kernel、doctor、recover 共享路径派生，增加同时携带 --home/--manifest 的回归，模块清单保持不变。 |
 | 确认 sidecar 遗留 | 消费确认创建新清单、成功回收或正常 close 后清理失效 sidecar，保留归档；清理失败不阻塞新实例。验证失效清理、归档保留与不可删除辅助路径的失败边界。 |

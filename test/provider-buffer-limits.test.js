@@ -2,13 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { fileURLToPath } from "node:url";
 import { AcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
-import { createZcodeGuiAdapter } from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
 import { resolveStreamLimitPolicy } from "@mininglamp-oss/octo-runtime-protocol";
-import { invokeRequest } from "./runtime-fixture.js";
 
 function fixture(overrides) {
   const child = Object.assign(new EventEmitter(), {
@@ -96,68 +91,6 @@ test("ACP image prompt permits bounded large RPC echo while retaining event queu
   assert.equal((await stream.next()).done, true);
   await client.close();
 });
-
-for (const mode of ["count", "bytes", "line", "complete"]) {
-  test(
-    `ZCode slow consumer: ${mode} retains the true terminal outcome`,
-    { timeout: 4000 },
-    async () => {
-      let child, exited;
-      const adapter = createZcodeGuiAdapter({
-        spawnFn: (command, args, options) => {
-          child = spawn(command, args, { ...options, stdio: ["pipe", "pipe", "pipe"] });
-          exited = once(child, "exit");
-          return child;
-        },
-        command: process.execPath,
-        appServerArgs: [
-          fileURLToPath(
-            new URL("../test-support/zcode/fake-zcode-buffer-flood.mjs", import.meta.url)
-          ),
-          mode
-        ]
-      });
-      const stream = adapter.invoke(
-        invokeRequest({ approvalMode: "full_access", signal: AbortSignal.timeout(3000) }),
-        {
-          streamLimits: resolveStreamLimitPolicy({
-            rawMessageMaxBytes: 256 * 1024,
-            adapterQueueItemMaxBytes: 256 * 1024,
-            adapterQueueMaxBytes: 512 * 1024,
-            adapterQueueMaxItems: 16
-          })
-        }
-      );
-      assert.equal((await stream.next()).value.type, "session.update");
-      // 消费者停读，直到容量保护主动关闭 Provider；不靠固定 sleep 制造时序。
-      await exited;
-      const events = [];
-      for await (const event of stream) events.push(event);
-      if (mode === "complete") {
-        assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
-        assert.equal(
-          events.some((event) => event.type === "run.failed"),
-          false
-        );
-        return;
-      }
-      const failures = events.filter((event) => event.type === "run.failed");
-      assert.equal(failures.length, 1);
-      assert.equal(
-        failures[0].payload.code,
-        mode === "line"
-          ? "PROVIDER_MESSAGE_TOO_LARGE"
-          : mode === "count"
-            ? "STREAM_QUEUE_ITEMS_EXCEEDED"
-            : "STREAM_QUEUE_BYTES_EXCEEDED"
-      );
-      assert.equal(
-        events.some((event) => event.type === "run.completed"),
-        false
-      );
-    }
-  );
-}
 
 test("ACP preserves accepted prompt completion when the process exits before the consumer resumes", async () => {
   const { client, send, child } = fixture();

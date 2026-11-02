@@ -1,3 +1,4 @@
+import { adapters } from "./fixtures/dsh-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -24,9 +25,10 @@ test(
       await realpath(process.env.OCTO_DSH_NATIVE_BIN)
     );
     const { client } = await kernelFixture(t, {
-      workerEntrypoint: fileURLToPath(new URL("../apps/cli/dist/worker.js", import.meta.url)),
-      manifest: undefined,
-      adapterModules: [
+      adapterConfigurations,
+      adapters: await (
+        await import("../apps/cli/dist/adapters.js")
+      ).loadCliAdapters([
         {
           type: "dsh",
           module: new URL("../packages/octo-runtime-adapter-dsh/dist/index.js", import.meta.url)
@@ -36,8 +38,7 @@ test(
           options: {},
           sourceManifest: fileURLToPath(new URL("../apps/cli/dist/manifest.json", import.meta.url))
         }
-      ],
-      adapterConfigurations
+      ])
     });
     const discovered = (await client.list()).find((entry) => entry.type === "dsh");
     assert.equal(discovered.available, true, JSON.stringify(discovered));
@@ -53,8 +54,7 @@ test(
   async (t) => {
     const providerOptions = { dshBin: process.env.OCTO_DSH_NATIVE_BIN };
     const { client: kernelClient, directory } = await kernelFixture(t, {
-      workerEntrypoint: fileURLToPath(new URL("./fixtures/dsh-worker.mjs", import.meta.url)),
-      manifest: undefined,
+      adapters: adapters,
       adapterConfigurations: { dsh: { providerOptions } }
     });
     const discovered = (await kernelClient.list()).find((entry) => entry.type === "dsh");

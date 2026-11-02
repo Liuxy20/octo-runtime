@@ -20,16 +20,11 @@ import {
   type InvokeEnvironment
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { HostRunService } from "./host-run-service.js";
-import { WorkerSupervisor } from "./supervisor.js";
-import type { WorkerRpc } from "./rpc.js";
-import { probeOptions } from "./rpc.js";
+import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
+import { beforeDeadline } from "./lifecycle.js";
+import { probeOptions, type ExecutionSource } from "./execution-source.js";
 import { acquireEndpoint } from "./endpoint.js";
 import { InvocationManifest } from "./invocation-manifest.js";
-import {
-  readModuleManifest,
-  resolveAdapterModules,
-  type AdapterModuleEntry
-} from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import {
   KernelError,
   type LookupKey,
@@ -40,14 +35,11 @@ import {
 
 export interface KernelServerOptions {
   endpoint: string;
-  workerEntrypoint: string;
-  manifest?: string;
-  /** CLI 装配快照；SDK 原生 worker 无需清单或此字段。 */
-  adapterModules?: AdapterModuleEntry[];
-  env?: NodeJS.ProcessEnv;
+  /** 宿主已 import/构造的实例；保留对象身份，不跨进程序列化。 */
+  adapters: readonly HostedAdapter[];
   adapterConfigurations?: Record<string, AdapterProbeOptions>;
   stateDirectory?: string;
-  /** 父进程独立记录 worker 监督状态；不依赖 worker 的执行日志，调用方选择日志目录。 */
+  /** 记录 Kernel/Core 的生命周期；调用方选择日志目录。 */
   logging?: RuntimeLoggingOptions;
   configurations?: (runtimeId?: string) => Record<string, AdapterProbeOptions>;
 }
@@ -120,25 +112,16 @@ function validateParams(method: string, params: Record<string, unknown>): void {
 }
 
 /**
- * 创建独立 Kernel 的本地 RPC 端点，独占端点租约、Run 事件源与 worker 监督器。
+ * 在宿主进程创建本地 RPC 端点，独占端点租约、Run 事件源和 AgentExecutor。
  * 启动失败也执行回收；close 失败会保留所有权证据，客户端断开不等同于 owner 关闭。
  */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
   assertRuntimeLogging(options.logging);
-  if (options.manifest && options.adapterModules !== undefined)
-    throw new TypeError("manifest and adapterModules are mutually exclusive");
-  // 文件仅在服务启动时读取一次；worker 自动恢复沿用快照，不因磁盘改动改变加载集合。
-  const adapterModules = options.manifest
-    ? resolveAdapterModules(await readModuleManifest(options.manifest, { legacy: true }))
-    : options.adapterModules;
   const instance = randomUUID();
   const logging = new RuntimeLogging(options.logging);
   let manifest: InvocationManifest | undefined;
-  const worker = new WorkerSupervisor(
-    { entrypoint: options.workerEntrypoint, adapterModules, env: options.env },
-    (pid) => manifest?.setWorker(pid, options.workerEntrypoint) ?? Promise.resolve(),
-    logging.kernel
-  );
+  const executor = new AgentExecutor({ log: logging.kernel });
+  let ready = false;
   // 每轮只读取一次宿主配置；复制后冻结自有快照，不冻结宿主持有的原对象。
   const configure = (input: InvokeInput) => {
     const type = contextItem(input.contexts, "octo.execution", "adapter")?.payload.type;
@@ -155,15 +138,16 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       })
     );
   };
-  const transport: WorkerRpc = {
+  const transport: ExecutionSource = {
     list: (configs) =>
-      worker.client.list(configs ?? options.configurations?.() ?? options.adapterConfigurations),
-    probe: (type, config) => worker.client.probe(type, config),
-    cancel: (id, reason) => worker.client.cancel(id, reason),
-    respondInteraction: (id, response) => worker.client.respondInteraction(id, response),
-    respondNative: (id, response) => worker.client.respondNative(id, response),
+      executor.describe(configs ?? options.configurations?.() ?? options.adapterConfigurations),
+    probe: (type, config) => Promise.resolve().then(() => executor.probe(type, config)),
+    cancel: (id, reason) =>
+      Promise.resolve().then(() => ({ cancelled: executor.cancel(id, reason) })),
+    respondInteraction: (id, response) => executor.respondInteraction(id, response),
+    respondNative: (id, response) => executor.respondNative(id, response),
     invoke: createInputInvoke((input, environment) => transport.invokeFrames(input, environment)),
-    invokeFrames: (input, environment) => worker.client.invokeFrames(input, environment)
+    invokeFrames: (input, environment) => executor.invokeFrames(input, environment)
   };
   const runs = new HostRunService(transport);
   const sockets = new Set<net.Socket>();
@@ -174,8 +158,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     ipc_version: 1,
     kernel_instance_id: instance,
     pid: process.pid,
-    worker: worker.status,
-    execution_ready: !closing && worker.status.state === "ready"
+    execution_ready: !closing && ready
   });
   const snapshot = (key: LookupKey, expected?: string): RunSnapshot => {
     if (expected !== undefined && expected !== instance)
@@ -247,15 +230,10 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
             throw new KernelError("KERNEL_INSTANCE_CHANGED");
           // 此处尚未调用执行源；专用证据只标记本次拒绝，不能推广到已接纳或 ACK 未知的请求。
           if (!status().execution_ready)
-            throw new KernelError(
-              worker.status.state === "exhausted"
-                ? "WORKER_RESTART_EXHAUSTED"
-                : "KERNEL_UNAVAILABLE",
-              { invocation_not_submitted: true }
-            );
+            throw new KernelError("KERNEL_UNAVAILABLE", { invocation_not_submitted: true });
           const input = params.input as InvokeInput;
           const config = configure(input);
-          // 选项先合并再进入 HostRunService 的整请求预算检查；策略沿同一调用传给 worker 和重放窗口。
+          // 选项先合并再进入 HostRunService 的整请求预算检查；策略沿同一调用传给 Core 和重放窗口。
           const configuredInput = config
             ? {
                 ...input,
@@ -390,7 +368,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
                   message: "Kernel request failed",
                   data: {
                     code,
-                    // worker RPC 已还原 camelCase 属性；此处转换为公开 socket 协议字段，client 保留整个 data。
+                    // Core 错误使用 camelCase 属性；此处转换为公开 socket 协议字段，client 保留整个 data。
                     ...(code === "ASYNC_ANSWER_REJECTED" &&
                     record(error) &&
                     Number.isSafeInteger(error.providerRpcCode)
@@ -430,12 +408,14 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     });
   });
   const teardown = async (until = Date.now() + 5000): Promise<void> => {
+    ready = false;
+    logging.kernel("info", "kernel.closing", { pid: process.pid });
     runs.beginDrain();
     for (const socket of sockets) socket.destroy();
     const errors: unknown[] = [];
     const attempt = async (operation: () => Promise<unknown>) => {
       try {
-        await operation();
+        await beforeDeadline(operation(), until);
         return true;
       } catch (error) {
         errors.push(error);
@@ -444,24 +424,41 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     };
     if (listening)
       await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())));
-    // 先终止 worker 才能让失联的源流结束，再清空 Run 缓存；每个资源仍独立尝试回收并汇总失败。
-    // 内部沿用服务截止时间，为清单和端点收尾预留时间；不重启一份独立关闭预算。
-    // 父日志与 worker 独立关闭，重叠使用剩余期限；不能在 worker 排空后再加一秒日志预算。
-    const loggingClosed = attempt(() => logging.close());
-    const workerStopped = await attempt(() => worker.close(until - 200));
-    await attempt(() => runs.close());
-    await loggingClosed;
-    // An incomplete worker close retains ownership, including an observed executor cleanup failure.
-    if (workerStopped) {
+    // 先停接纳，再取消 Core 并等待 Adapter finally；终态不代替资源释放确认。
+    // 同进程不能强杀阻塞的 JS。所有等待共享绝对期限，超时保留所有权证据。
+    const executorStopped = await attempt(async () => {
+      const result = await executor.shutdown(
+        "Kernel shutdown",
+        Math.max(1, until - Date.now() - 1200)
+      );
+      if (result.cleanup !== "complete") throw new Error("EXECUTOR_CLEANUP_INCOMPLETE");
+    });
+    await attempt(() => beforeDeadline(runs.close(), until - 1000));
+    // 原生日志由同一 owner 持有：Core/finally 排空后才关闭，且仍只用原截止时间。
+    logging.kernel(
+      errors.length ? "error" : "info",
+      errors.length ? "kernel.cleanup_incomplete" : "kernel.execution_drained",
+      errors.length ? { code: "KERNEL_CLEANUP_INCOMPLETE" } : { pid: process.pid }
+    );
+    await attempt(() => logging.close());
+    if (executorStopped && !errors.length) {
       await attempt(() => manifest?.close() ?? Promise.resolve());
       if (listening && process.platform !== "win32")
         await attempt(() => rm(options.endpoint, { force: true }));
       if (!errors.length) await attempt(() => releaseEndpoint?.() ?? Promise.resolve());
     }
-    if (errors.length) throw new AggregateError(errors, "KERNEL_CLEANUP_INCOMPLETE");
+    if (errors.length) {
+      // 原生宿主仍存活时也必须暴露真实关闭失败；持久化失败不能覆盖原清理原因。
+      await attempt(() => manifest?.markCleanupIncomplete() ?? Promise.resolve());
+      throw new AggregateError(errors, "KERNEL_CLEANUP_INCOMPLETE");
+    }
   };
   try {
     signal?.throwIfAborted();
+    for (const adapter of options.adapters) {
+      executor.register(adapter);
+      logging.kernel("info", "adapter.registered", { adapter_type: adapter.metadata.type });
+    }
     if (process.platform !== "win32")
       await mkdir(dirname(options.endpoint), { recursive: true, mode: 0o700 });
     signal?.throwIfAborted();
@@ -472,7 +469,10 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       : process.platform !== "win32"
         ? `${options.endpoint}.runs`
         : undefined;
-    if (statePath) manifest = (await InvocationManifest.open(statePath)).manifest;
+    if (statePath) {
+      manifest = (await InvocationManifest.open(statePath)).manifest;
+      await manifest.markNativeOwner();
+    }
     signal?.throwIfAborted();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
@@ -484,9 +484,10 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     signal?.throwIfAborted();
     if (process.platform !== "win32") await chmod(options.endpoint, 0o600);
     signal?.throwIfAborted();
-    await worker.start(signal);
-    signal?.throwIfAborted();
+    ready = true;
+    logging.kernel("info", "kernel.ready", { pid: process.pid });
   } catch (error) {
+    logging.kernel("error", "kernel.start_failed", { code: safeCode(error) });
     try {
       await teardown();
     } catch (cleanupError) {

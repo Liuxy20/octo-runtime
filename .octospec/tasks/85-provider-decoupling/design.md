@@ -20,7 +20,7 @@ timestamp: 2026-10-21T00:00:00Z
 - SDK 不读 CLI 或 Home manifest，不生成临时 JSON。Adapter 原生 import 和注册发生在宿主维护的 worker 入口；Extra 原生 import 后在宿主调用进程传入 createExtraService。
 - SDK 继续使用已有公共工厂和生命周期；Extra 函数依赖直接注入，不能写入 manifest 或序列化给 worker。
 
-现有依据：[Kernel dependencies](../../../packages/octo-runtime-executor-kernel/package.json)、[Core](../../../packages/octo-runtime-executor-core/package.json)、[Host SDK](../../../packages/octo-runtime-host-sdk/package.json)、[serveWorker](../../../packages/octo-runtime-executor-kernel/src/serve.ts)、[Extra service](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)。
+现有依据：[Kernel dependencies](../../../packages/octo-runtime-executor-kernel/package.json)、[Core](../../../packages/octo-runtime-executor-core/package.json)、[Host SDK](../../../packages/octo-runtime-host-sdk/package.json)、[serveWorker](https://github.com/Mininglamp-OSS/octo-runtime/blob/58332b3bcf5651f58e674fa236184dc6a0d927ca/packages/octo-runtime-executor-kernel/src/serve.ts)、[Extra service](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)。
 
 ## CLI 的两份 manifest
 

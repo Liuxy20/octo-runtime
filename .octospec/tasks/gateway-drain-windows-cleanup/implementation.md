@@ -7,6 +7,8 @@ timestamp: 2026-10-20T00:00:00Z
 status: in_progress
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 当前进度
 
 ## 终态登记与业务尾流的后续 P2
@@ -53,13 +55,13 @@ M0原生机制通过，M1/M2产品实现与本地回归通过，M3接线已完�
 
 - Gateway资源signal不再随owner停止立即撤销；同步停准入/准备/重试，取消已接纳调用并等待原订阅、绑定及final，最后释放连接。drain最多3秒，资源最多4秒，共用Host传下来的单调截止。
 - Extra runner并发取消所属Run和dispose，二者完成后才断开执行连接；失败ref不再无条件清空。
-- 本地Node24/macOS：build、lint、命名通过。57项focused回归通过，涵盖Gateway/WeCom/启动回滚/ACP/NDJSON/Kernel/Codex/ZCode。
+- 本地Node24/macOS：build、lint、命名通过。57项focused回归通过，涵盖Gateway/WeCom/启动回滚/ACP/NDJSON/Kernel/Codex。
 - 独立Extra+真实Kernel/worker受控回归通过：Gateway消费cancel ACK后释放的已接纳session.update、唯一final、再关闭connector；兄弟Run与Kernel存活。fixture保留Core既有取消合同，不声称Provider在取消之后新生成的帧必然被Core转发。
 - Gateway未知结果、投递失败和超时均拒绝close并禁止迟到保存/回复；排队消息没有新invoke。
 
 ## M3/M4当前实现
 
-- Host Node/native、Kernel worker、ACP、NDJSON、Codex与ZCode已接入私有spawnManaged；ChildProcess仍代表broker，status/manifest使用真实目标PID和GetProcessTimes身份。
+- Host Node/native、Kernel worker、ACP、NDJSON、Codex已接入私有spawnManaged；ChildProcess仍代表broker，status/manifest使用真实目标PID和GetProcessTimes身份。
 - 固定Go1.25.14交叉编译amd64/arm64；打包前及包外检查资源摘要和PE架构；Windows包外执行helper。
 - Windows新增同步阻塞owner、挂起窗口拒绝resume、100次并发创建/清理、句柄数与哨兵；扩大Provider回收测试。
 - `3cd3fde`的Windows Job/Provider步骤通过。后续原生组件测试暴露Job清空先于broker退出的竞态，不能把cleared当成processExited；`6b79493`已等待broker与stdio关闭，该SHA原生组件3项及Windows job通过。旧run超时及失败保留在记录中。

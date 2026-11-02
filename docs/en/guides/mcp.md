@@ -131,7 +131,7 @@ Set environment variables before invoking. Running `export` in another terminal 
 | Claude Code                                            | stdio, Streamable HTTP                                         | Does not support those four optional fields. Substituted values cannot contain literal `${`. |
 | ACP, Hermes, Kimi Code, MCode, Qoder CLI, Qoder CLI CN | stdio; Streamable HTTP when the Provider declares HTTP support | Does not support those four optional fields.                                                 |
 | OpenCode                                               | stdio, Streamable HTTP                                         | Supports `toolTimeoutMs`; does not support `cwd`, `required`, or `startupTimeoutMs`.         |
-| CodeBuddy, OpenClaw, ZCode GUI, Antigravity            | No per-invocation MCP configuration                            | Nonempty MCP configuration fails with `MCP_UNSUPPORTED`.                                     |
+| CodeBuddy, OpenClaw, Antigravity            | No per-invocation MCP configuration                            | Nonempty MCP configuration fails with `MCP_UNSUPPORTED`.                                     |
 
 Choose service names distinct from the Provider's existing MCP configuration. Codex rejects duplicates with `MCP_SERVER_NAME_CONFLICT`, even if the existing service is disabled or uses a different transport. It does not overwrite that service. Claude Code and OpenCode handle duplicate names according to their own configuration loading rules.
 

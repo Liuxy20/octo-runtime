@@ -63,5 +63,5 @@ private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，�
 
 ## 延伸阅读
 
-- [实现](src/index.ts)、[worker 示例](examples/worker.mts)、[测试夹具](../../test/grok-build-adapter.test.js)。
+- [实现](src/index.ts)、[原生 Kernel 示例](examples/worker.mts)、[测试夹具](../../test/grok-build-adapter.test.js)。
 - [真实验证记录](../../.octospec/tasks/95-grok-build-acp/reference.md)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)。

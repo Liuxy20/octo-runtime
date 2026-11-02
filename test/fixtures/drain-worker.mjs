@@ -1,7 +1,6 @@
-import { serveWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { setTimeout as delay } from "node:timers/promises";
 
-serveWorker([
+export const adapters = [
   {
     metadata: {
       type: "test",
@@ -22,4 +21,4 @@ serveWorker([
       yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
     }
   }
-]);
+];

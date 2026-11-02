@@ -1,3 +1,4 @@
+import { testAdapter } from "./test-adapter.js";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,13 +8,15 @@ import { createExtraService } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import * as selectedExtra from "./native-loading-extra.mjs";
 
-// SDK 宿主直接构造服务；只有执行 worker 使用内部子进程，Extra 与宿主函数在本进程。
+// SDK 宿主直接构造服务；Adapter、Core、Kernel 和 Extra 均在本进程，调用仍走 RPC。
 const home = process.cwd();
 const endpoint =
   process.platform === "win32" ? `\\\\.\\pipe\\octo-native-${process.pid}` : join(home, "k.sock");
 const kernel = createKernelService({
   endpoint,
-  workerEntrypoint: fileURLToPath(new URL("./native-worker.mjs", import.meta.url))
+  adapters: [
+    testAdapter as unknown as import("@mininglamp-oss/octo-runtime-executor-kernel").HostedAdapter
+  ]
 });
 let released = false;
 const extra = createExtraService({

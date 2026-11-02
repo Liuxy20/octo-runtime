@@ -2,15 +2,9 @@ import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fileURLToPath } from "node:url";
-import { PassThrough, Writable } from "node:stream";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import {
-  WorkerRpcClient,
-  WorkerRpcServer,
-  spawnWorker
-} from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { contextHash, invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { nativeHost } from "./native-host-fixture.js";
+import { contextHash } from "@mininglamp-oss/octo-runtime-protocol";
 
 const request = {
   protocolVersion: 2,
@@ -26,35 +20,6 @@ const request = {
   agentSource: "provisioned",
   agentConfig: {}
 };
-
-async function assertClosedRpcCalls(client, failure) {
-  for (const call of [
-    () => client.request("list"),
-    () => client.list(),
-    () => client.probe("fixture"),
-    () => client.cancel("closed-invocation"),
-    () =>
-      client.respondInteraction("closed-invocation", {
-        interactionId: "closed-interaction",
-        outcome: "accepted"
-      }),
-    () =>
-      preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-        "fixture",
-        { ...request, invocationId: "closed-invocation" },
-        { protocolMode: "canonical" }
-      ).next()
-  ]) {
-    const result = await Promise.race([
-      call().then(
-        () => assert.fail("closed RPC call unexpectedly succeeded"),
-        (error) => error
-      ),
-      new Promise((resolve) => setImmediate(() => resolve("RPC call remained pending after close")))
-    ]);
-    assert.equal(result, failure);
-  }
-}
 
 test("host rejects missing mandatory invocation inputs and untyped context before dispatch", async () => {
   let invoked = false;
@@ -583,316 +548,15 @@ test("host shutdown aborts every active provider invocation before returning", a
   );
 });
 
-test("RPC trace observes frame metadata without retaining payloads or changing the wire", async () => {
-  const clientToServer = new PassThrough();
-  const serverToClient = new PassThrough();
-  const host = new AgentExecutor();
-  const traced = [];
-  new WorkerRpcServer({ host, output: serverToClient }).listen(clientToServer);
-  const client = new WorkerRpcClient({
-    input: serverToClient,
-    output: clientToServer,
-    trace: (direction, frame) => traced.push({ direction, frame })
-  });
-
-  assert.deepEqual(await client.list(), []);
-  assert.deepEqual(
-    traced.map((item) => item.direction),
-    ["send", "receive"]
-  );
-  const id = JSON.parse(traced[0].frame).id;
-  assert.deepEqual(
-    traced.map((item) => JSON.parse(item.frame)),
-    [
-      {
-        jsonrpc: "2.0",
-        id,
-        method: "list",
-        bytes: Buffer.byteLength(JSON.stringify({ jsonrpc: "2.0", id, method: "list", params: {} }))
-      },
-      {
-        jsonrpc: "2.0",
-        id,
-        bytes: Buffer.byteLength(JSON.stringify({ jsonrpc: "2.0", id, result: [] }))
-      }
-    ]
-  );
-  client.close();
-  clientToServer.end();
-  serverToClient.end();
-});
-
-test(
-  "RPC failed Writable callback rejects pending calls and invoke ACK without an unhandled error",
-  { timeout: 5_000 },
-  async (testContext) => {
-    const input = new PassThrough();
-    let failWrite;
-    const output = new Writable({
-      write(_chunk, _encoding, callback) {
-        failWrite = callback;
-      }
-    });
-    const frames = [];
-    const client = new WorkerRpcClient({
-      input,
-      output,
-      trace: (_direction, frame) => frames.push(JSON.parse(frame))
-    });
-    testContext.after(() => {
-      client.close();
-      input.destroy();
-      output.destroy();
-    });
-    assert.equal(output.listenerCount("error"), 1);
-    const failure = Object.assign(new Error("write EPIPE"), { code: "EPIPE" });
-    const rejectedCall = assert.rejects(client.list(), (error) => error === failure);
-    const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, invocationId: "pending-ack" },
-      { protocolMode: "canonical" }
-    );
-    const rejectedInvoke = assert.rejects(iterator.next(), (error) => error === failure);
-    assert.deepEqual(
-      frames.map((frame) => frame.method),
-      ["list", "invoke"]
-    );
-    failWrite(failure);
-    await Promise.all([rejectedCall, rejectedInvoke]);
-    await new Promise((resolve) => setImmediate(resolve));
-    client.close(new Error("later close must not replace the write failure"));
-    await assertClosedRpcCalls(client, failure);
-    assert.deepEqual(await iterator.next(), { value: undefined, done: true });
-    assert.deepEqual(
-      frames.map((frame) => frame.method),
-      ["list", "invoke"]
-    );
-  }
-);
-
-test(
-  "RPC failed Writable callback rejects an acknowledged invocation waiting for its next event",
-  { timeout: 5_000 },
-  async (testContext) => {
-    const input = new PassThrough();
-    let failWrite;
-    const output = new Writable({
-      write(chunk, _encoding, callback) {
-        if (JSON.parse(chunk.toString()).method === "invoke") callback();
-        else failWrite = callback;
-      }
-    });
-    const frames = [];
-    const client = new WorkerRpcClient({
-      input,
-      output,
-      trace: (_direction, frame) => frames.push(JSON.parse(frame))
-    });
-    testContext.after(() => {
-      client.close();
-      input.destroy();
-      output.destroy();
-    });
-    const failure = Object.assign(new Error("write EPIPE after invoke ACK"), { code: "EPIPE" });
-    const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, invocationId: "acknowledged-invoke" },
-      { protocolMode: "canonical" }
-    );
-    const rejectedInvoke = assert.rejects(iterator.next(), (error) => error === failure);
-    const acknowledgement = {
-      jsonrpc: "2.0",
-      id: frames[0].id,
-      result: {
-        run_id: request.runId,
-        invocation_id: "acknowledged-invoke",
-        stream_id: "host:fixture",
-        agent_session_id: request.agentSessionId,
-        session_generation: 0,
-        protocol_mode: "canonical",
-        protocol: "fixture.canonical"
-      }
-    };
-    input.write(`${JSON.stringify(acknowledgement)}\n`);
-    await new Promise((resolve) => setImmediate(resolve));
-    const rejectedCall = assert.rejects(client.list(), (error) => error === failure);
-    assert.equal(typeof failWrite, "function");
-    failWrite(failure);
-    await Promise.all([rejectedCall, rejectedInvoke]);
-    await new Promise((resolve) => setImmediate(resolve));
-    const sentFrames = frames.filter((frame) => frame.method);
-    assert.deepEqual(
-      sentFrames.map((frame) => frame.method),
-      ["invoke", "list"]
-    );
-    await assertClosedRpcCalls(client, failure);
-    assert.deepEqual(await iterator.next(), { value: undefined, done: true });
-    assert.equal(frames.filter((frame) => frame.method).length, sentFrames.length);
-  }
-);
-
-test(
-  "RPC output error closes pending calls and invocations even when write callbacks succeeded",
-  { timeout: 5_000 },
-  async (testContext) => {
-    const input = new PassThrough();
-    const output = new Writable({
-      write(_chunk, _encoding, callback) {
-        callback();
-      }
-    });
-    const frames = [];
-    const client = new WorkerRpcClient({
-      input,
-      output,
-      trace: (_direction, frame) => frames.push(JSON.parse(frame))
-    });
-    testContext.after(() => {
-      client.close();
-      input.destroy();
-      output.destroy();
-    });
-    assert.equal(output.listenerCount("error"), 1);
-    const failure = Object.assign(new Error("output EPIPE"), { code: "EPIPE" });
-    const rejectedCall = assert.rejects(client.list(), (error) => error === failure);
-    const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, invocationId: "output-error-invoke" },
-      { protocolMode: "canonical" }
-    );
-    const rejectedInvoke = assert.rejects(iterator.next(), (error) => error === failure);
-    output.emit("error", failure);
-    await Promise.all([rejectedCall, rejectedInvoke]);
-    await assertClosedRpcCalls(client, failure);
-    assert.deepEqual(
-      frames.map((frame) => frame.method),
-      ["list", "invoke"]
-    );
-  }
-);
-
-test(
-  "RPC synchronous Writable throw rejects all pending work and later calls without another write",
-  { timeout: 5_000 },
-  async (testContext) => {
-    const input = new PassThrough();
-    const failure = Object.assign(new Error("synchronous write EPIPE"), { code: "EPIPE" });
-    const output = new Writable({
-      write(chunk, _encoding, callback) {
-        if (JSON.parse(chunk.toString()).method === "invoke") throw failure;
-        callback();
-      }
-    });
-    const frames = [];
-    const client = new WorkerRpcClient({
-      input,
-      output,
-      trace: (_direction, frame) => frames.push(JSON.parse(frame))
-    });
-    testContext.after(() => {
-      client.close();
-      input.destroy();
-      output.destroy();
-    });
-    const rejectedCall = assert.rejects(client.list(), (error) => error === failure);
-    const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, invocationId: "synchronous-error-invoke" },
-      { protocolMode: "canonical" }
-    );
-    const rejectedInvoke = assert.rejects(iterator.next(), (error) => error === failure);
-    await Promise.all([rejectedCall, rejectedInvoke]);
-    await new Promise((resolve) => setImmediate(resolve));
-    await assertClosedRpcCalls(client, failure);
-    assert.deepEqual(
-      frames.map((frame) => frame.method),
-      ["list", "invoke"]
-    );
-  }
-);
-
-test(
-  "RPC server closes active providers when its output fails",
-  { timeout: 5_000 },
-  async (testContext) => {
-    const input = new PassThrough();
-    const output = new Writable({
-      write(_chunk, _encoding, callback) {
-        callback();
-      }
-    });
-    const host = new AgentExecutor();
-    let started;
-    const providerStarted = new Promise((resolve) => {
-      started = resolve;
-    });
-    let aborted;
-    const providerAborted = new Promise((resolve) => {
-      aborted = resolve;
-    });
-    host.register({
-      metadata: {
-        protocolSupport: {
-          protocol: "broken-output" + ".canonical",
-          modes: ["canonical"],
-          nativeMethods: []
-        },
-        type: "broken-output",
-        agentSources: ["provisioned"]
-      },
-      async *invoke(invoke) {
-        started();
-        await new Promise((resolve) =>
-          invoke.signal.addEventListener(
-            "abort",
-            () => {
-              aborted();
-              resolve();
-            },
-            { once: true }
-          )
-        );
-        yield { protocolVersion: 2, type: "run.cancelled", payload: {} };
-      }
-    });
-    const frames = [];
-    new WorkerRpcServer({
-      host,
-      output,
-      trace: (_direction, frame) => frames.push(JSON.parse(frame))
-    }).listen(input);
-    testContext.after(async () => {
-      input.destroy();
-      output.destroy();
-      await host.shutdown();
-    });
-    input.write(
-      `${JSON.stringify({ jsonrpc: "2.0", id: "invoke-1", method: "invoke", params: { input: invocationInput(request, "canonical", "broken-output") } })}\n`
-    );
-    await providerStarted;
-    output.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
-    await providerAborted;
-    await host.shutdown();
-    input.write(`${JSON.stringify({ jsonrpc: "2.0", id: "list-1", method: "list" })}\n`);
-    assert.equal(
-      frames.filter((frame) => frame.jsonrpc === "2.0" && frame.id === "list-1").length,
-      0
-    );
-  }
-);
-
 test(
   "RPC interaction responses resume the same active ask invocation",
   { timeout: 5_000 },
   async (testContext) => {
-    const clientToServer = new PassThrough();
-    const serverToClient = new PassThrough();
-    const host = new AgentExecutor();
     let resume;
     const response = new Promise((resolve) => {
       resume = resolve;
     });
-    host.register({
+    const adapter = {
       metadata: {
         protocolSupport: {
           protocol: "interactive" + ".canonical",
@@ -943,14 +607,10 @@ test(
         assert.equal(invocationId, "rpc-interactive");
         resume(answer);
       }
-    });
-    new WorkerRpcServer({ host, output: serverToClient }).listen(clientToServer);
-    const client = new WorkerRpcClient({ input: serverToClient, output: clientToServer });
-    testContext.after(() => {
-      client.close();
-      clientToServer.end();
-      serverToClient.end();
-    });
+    };
+    const host = await nativeHost([adapter]);
+    const client = host.client;
+    testContext.after(() => host.close());
 
     const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
       "interactive",
@@ -970,7 +630,7 @@ test(
         interactionId: "approval-1",
         outcome: "accepted"
       }),
-      /invocation is not active/
+      /INVALID_PARAMS|RUN_IDENTITY_MISMATCH|INVOCATION_NOT_TRACKED/
     );
     await client.respondInteraction("rpc-interactive", {
       interactionId: "approval-1",
@@ -993,85 +653,3 @@ test(
     assert.equal(remaining[1].payload.text, "accepted");
   }
 );
-
-test("RPC keeps AbortSignal local and cancels both pending ACK and active streams", async (t) => {
-  for (const acknowledged of [false, true]) {
-    const input = new PassThrough();
-    const frames = [];
-    const output = new Writable({
-      write(chunk, _encoding, callback) {
-        frames.push(JSON.parse(chunk.toString()));
-        callback();
-      }
-    });
-    const client = new WorkerRpcClient({ input, output });
-    t.after(() => {
-      client.close();
-      input.destroy();
-      output.destroy();
-    });
-    const controller = new AbortController();
-    const reason = new Error("shared run deadline");
-    const iterator = preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, invocationId: "abort-" + acknowledged, signal: controller.signal },
-      { protocolMode: "canonical" }
-    );
-    const pending = iterator.next();
-    assert.equal(Object.hasOwn(frames[0].params.input, "signal"), false);
-    if (acknowledged) {
-      input.write(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: frames[0].id,
-          result: {
-            run_id: request.runId,
-            invocation_id: "abort-" + acknowledged,
-            stream_id: "host:fixture",
-            agent_session_id: request.agentSessionId,
-            session_generation: 0,
-            protocol_mode: "canonical",
-            protocol: "fixture.canonical"
-          }
-        }) + "\n"
-      );
-      await new Promise((resolve) => setImmediate(resolve));
-    }
-    controller.abort(reason);
-    await assert.rejects(pending, (error) => error === reason);
-    const cancellation = frames.find((frame) => frame.method === "cancel");
-    assert.equal(cancellation.params.invocationId, "abort-" + acknowledged);
-    input.write(
-      JSON.stringify({ jsonrpc: "2.0", id: cancellation.id, result: { cancelled: true } }) + "\n"
-    );
-    assert.deepEqual(await iterator.next(), { value: undefined, done: true });
-  }
-});
-
-test("pre-aborted RPC invocation sends no Provider command", async (t) => {
-  const input = new PassThrough();
-  const frames = [];
-  const output = new Writable({
-    write(chunk, _encoding, callback) {
-      frames.push(JSON.parse(chunk.toString()));
-      callback();
-    }
-  });
-  const client = new WorkerRpcClient({ input, output });
-  t.after(() => {
-    client.close();
-    input.destroy();
-    output.destroy();
-  });
-  const controller = new AbortController();
-  controller.abort(new Error("cancelled before dispatch"));
-  await assert.rejects(
-    preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-      "fixture",
-      { ...request, signal: controller.signal },
-      { protocolMode: "canonical" }
-    ).next(),
-    /cancelled before dispatch/
-  );
-  assert.deepEqual(frames, []);
-});

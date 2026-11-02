@@ -15,8 +15,14 @@ assert.ok(dshBin, "Host must supply OCTO_DSH_NATIVE_BIN: the npm-installed JavaS
 const directory = await mkdtemp(join(tmpdir(), "od-dsh-"));
 const kernel = createKernelService({
   endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
-  workerEntrypoint: fileURLToPath(new URL("../test/fixtures/dsh-worker.mjs", import.meta.url)),
-  adapterConfigurations: { dsh: { providerOptions: { dshBin } } }
+  adapterConfigurations: { dsh: { providerOptions: { dshBin } } },
+  adapters: (
+    await import(
+      (await import("node:url")).pathToFileURL(
+        fileURLToPath(new URL("../test/fixtures/dsh-worker.mjs", import.meta.url))
+      ).href
+    )
+  ).adapters
 });
 const report = { platform: process.platform };
 const final = (events) =>

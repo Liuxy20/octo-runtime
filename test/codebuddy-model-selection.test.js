@@ -1,3 +1,4 @@
+import { adapters } from "./fixtures/codebuddy-model-worker.mjs";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
@@ -173,11 +174,12 @@ test("CodeBuddy cancellation while selecting a model closes transport without pr
 });
 
 test(
-  "Gateway -> real Kernel worker -> CodeBuddy model selection -> delivered result",
+  "Gateway -> native Kernel RPC -> CodeBuddy model selection -> delivered result",
   { timeout: 30000 },
   async (t) => {
     const fixture = await kernelFixture(t, {
-      workerEntrypoint: resolve("test/fixtures/codebuddy-model-worker.mjs")
+      adapters: adapters,
+      expectedCleanupComplete: false
     });
     let onMessage;
     t.mock.method(GatewayTransport.prototype, "start", async function () {

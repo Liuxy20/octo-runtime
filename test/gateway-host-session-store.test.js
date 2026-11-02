@@ -1,3 +1,4 @@
+import { adapters } from "./fixtures/drain-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -685,8 +686,7 @@ for (const name of ["save", "remember", "close"]) {
     { timeout: 10000 },
     async (t) => {
       const fixture = await kernelFixture(t, {
-        workerEntrypoint: resolve("test/fixtures/drain-worker.mjs"),
-        manifest: undefined
+        adapters: adapters
       });
       const tail = await holdSessionUpdate(t, fixture);
       const endpoint = tail.endpoint;
@@ -752,8 +752,7 @@ test(
   { timeout: 10000 },
   async (t) => {
     const fixture = await kernelFixture(t, {
-      workerEntrypoint: resolve("test/fixtures/drain-worker.mjs"),
-      manifest: undefined
+      adapters: adapters
     });
     const { client } = fixture;
     const tail = await holdSessionUpdate(t, fixture);

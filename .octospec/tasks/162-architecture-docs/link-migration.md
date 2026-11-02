@@ -6,6 +6,8 @@ tags: [documentation, architecture]
 timestamp: 2026-11-01T00:00:00+08:00
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 核对依据
 
 原提交：`8214292132d260c04cf72218580bef741788dd4a`。当前基线：`0bcd89c528018ffd508ca8099c8ac9c6b88de35d` 加本任务未提交改动。
@@ -32,7 +34,6 @@ timestamp: 2026-11-01T00:00:00+08:00
 | 10 | `packages/octo-runtime-adapter-qodercli/README.md:33` | 旧段删除；Packages 指向 `packages/README.md`，补充独立 CN Adapter 与 Core README |
 | 11 | `packages/octo-runtime-adapter-qoderclicn/README.md:35` | 旧段删除；Packages 指向 `packages/README.md`，补充独立国际版 Adapter 与 Core README |
 | 12 | `packages/octo-runtime-adapter-sdk/README.md:91` | 旧段删除；Packages 指向 `packages/README.md`，补充 authoring guide 与 metadata rule |
-| 13 | `packages/octo-runtime-adapter-zcode-gui/README.md:84` | 旧段删除；Packages 指向 `packages/README.md`，执行生命周期指向 Core README |
 | 14 | `packages/octo-runtime-cross-service/README.md:128` | 旧段删除；Packages 指向 `packages/README.md`，部署说明指向 CLI Operations |
 | 15 | `packages/octo-runtime-protocol/README.md:135` | 旧段删除；Packages 指向 `packages/README.md`，补充 InvokeInput/output/Kernel IPC |
 

@@ -6,6 +6,8 @@ tags: [review, testing, lifecycle]
 timestamp: 2026-10-17T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 实施记录
 
 用户已授权按问题修复并单独 commit。此前 brief、assessment 和消费者审查是实施前评估；执行状态以本文件为准。不推送、不发送 GitHub 评审回复、不合并 PR。
@@ -48,19 +50,15 @@ timestamp: 2026-10-17T00:00:00Z
 
 来自 Jerry-Xin R06 的同类检查。Host launcher 复用本次受管组回收函数，close 先关闭 RPC 再返回同一清理 Promise，readiness 失败也等待同一清理；删除按 leader exit 提前返回与遗留 exit/timer 竞速。真实 Host fixture 的后代忽略 TERM 仍被回收，相关组回收和 Host 共 30 项测试通过。
 
-## S03：ZCode 进程组回收
+## S04：ACP 接收缓冲
 
-来自 Jerry-Xin R06 的同类检查，现已通过真实 ZCode 协议 fixture 复现并验证：Provider 返回终态后先退出，其忽略 TERM 的后代仍须被回收。close 复用同一清理 Promise，关闭 reader，取消定时器在 finally 释放；协议停止宽限 250 ms 加受管回收 600 ms，不超过 Host 默认 1 秒预算。进程组与 ZCode 共 17 项测试通过。
+来自 Jerry-Xin 生命周期意见的同类审查。ACP 传输复用已有 DriverQueue：单事件 256 KiB、单队列 4096 条、单队列序列化总量 4 MiB，任一超过即失败。ACP 按 session 的更新队列隔离。数值是序列化字节预算，不是进程 RSS 上限。
 
-## S04：ACP / ZCode 接收缓冲
+普通协议行（包含尚未换行的数据）在 readline / JSON.parse 前限制为 256 KiB。ACP 当前 prompt 明确带原生图片时，原生行允许到既有 INVOKE_REQUEST_MAX_BYTES=32 MiB，容纳输入回显；结束后恢复普通行上限，事件队列始终使用 256 KiB / 4096 / 4 MiB。不增加可配置参数或动态猜测消息类别。
 
-来自 Jerry-Xin 生命周期意见的同类审查。两种传输复用已有 DriverQueue：单事件 256 KiB、单队列 4096 条、单队列序列化总量 4 MiB，任一超过即失败。ACP 按 session 的更新队列隔离；ZCode 按单次客户端事件队列隔离。数值是序列化字节预算，不是进程 RSS 上限。
+超限返回 STREAM_EVENT_TOO_LARGE 或 STREAM_BUFFER_OVERFLOW，释放积压、拒绝新输入、关闭 reader 并启动受管组回收；仅当前调用失败，不静默丢事件后报告成功。稳定错误码随错误对象返回。共 7 项新增容量回归覆盖条数、字节、无换行、图片原生 RPC 回显。相关 ACP 与回收共 34 项通过；后续稳定错误码/确定性时序检查另与 native 回归一起验证。
 
-普通协议行（包含尚未换行的数据）在 readline / JSON.parse 前限制为 256 KiB。ACP 当前 prompt 明确带原生图片时，原生行允许到既有 INVOKE_REQUEST_MAX_BYTES=32 MiB，容纳输入回显；结束后恢复普通行上限，事件队列始终使用 256 KiB / 4096 / 4 MiB。ZCode 当前不支持图片输入，始终使用普通行上限。不增加可配置参数或动态猜测消息类别。
-
-超限返回 STREAM_EVENT_TOO_LARGE 或 STREAM_BUFFER_OVERFLOW，释放积压、拒绝新输入、关闭 reader 并启动受管组回收；仅当前调用失败，不静默丢事件后报告成功。稳定错误码随错误对象返回。共 7 项新增容量回归覆盖条数、字节、无换行、图片原生 RPC 回显，以及真实 ZCode Provider 管道在消费者停读时主动关闭。相关 ACP、ZCode 与回收共 34 项通过；后续稳定错误码/确定性时序检查另与 native 回归一起验证。
-
-S04 补充：新增 ACP 与 ZCode 正常完成后消费者停读的时序回归，正常退出保留已接纳终态，超限才清空积压；ZCode 在 leader exit 启动清理、stdio close 后判断接收结束。9 项容量/终态专项与进程组回归通过。
+S04 补充：新增 ACP 正常完成后消费者停读的时序回归，正常退出保留已接纳终态，超限才清空积压。9 项容量/终态专项与进程组回归通过。
 
 R06/S02 完整回归补充：macOS 在进程退出窗口可能短暂拒绝组信号。记录 EPERM 后继续在原期限内确认消失，只有确认 ESRCH 才成功；持续拒绝保留为超时 cause。Host 启动错误与清理错误同时发生时使用 AggregateError 保留两者，避免丢失 ENOENT 等真实原因。增加短暂/持续 EPERM 故障注入，与受影响的 Host 装配、Antigravity、playboard 和进程组共 49 项通过。
 
@@ -89,7 +87,6 @@ R06/S02 完整回归补充：macOS 在进程退出窗口可能短暂拒绝组信
 | S05 / R05 同类检查 | 91a3847 | 收敛 Host 启动错误 |
 | R06 / Jerry-Xin | 43059b8、6075f48、d687916 | 有界回收受管组，保留退出竞态及原始失败原因 |
 | S02 / R06 同类检查 | df7eb23 | 回收 Host 后代 |
-| S03 / R06 同类检查 | f24a4bf | 回收 ZCode 后代 |
 | S04 / 生命周期同类检查 | cf6b35d、cc8fc9d | 限制接收积压，保留正常终态 |
 
 R04 的 Node 24 证据随本次验收文档记录；不需要产品代码变更。3cdeea6 保存实施前决策基线。

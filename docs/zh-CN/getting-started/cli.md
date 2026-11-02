@@ -58,6 +58,8 @@ octo-runtime playboard < request.json
 
 `playboard` 为这次请求启动临时 Kernel，不要求 Kernel 服务已运行，不会将请求提交给常驻服务，也不加载 Extra。stdout 输出 NDJSON 事件，stderr 输出诊断信息。成功时可看到 `message.delta` 中的最终回复文本及 `run.completed` 终态，具体措辞由模型决定；`run.failed`、`run.cancelled` 不表示执行成功。调用结束后，命令关闭自己创建的临时服务，清理不完整时报错。
 
+Playboard 是一次性本地测试工具。按 Ctrl+C 会直接强制结束本次 CLI 及其可识别的子进程，不等待模块加载或执行收尾；可能没有终态事件，日志和临时文件也可能保留。正常完成仍执行服务关闭。
+
 遇到需要回复的交互时，会以 `PLAYBOARD_INTERACTION_REQUIRED` 结束；应用需要回答审批或追问时，应使用 SDK。Provider 无法启动或认证被拒绝时，先检查同一操作系统账号下的安装和登录状态；错误码见[故障排查](../guides/troubleshooting.md)。这个本地请求不需要 `octo-cli` 或 IM Bot。
 
 顶层 `approvalMode` 和 Context `octo.security/approval_policy` 均省略时，Playboard 默认 `full_access`；SDK 仍默认 `ask`。显式策略保留原有校验。Adapter 自动处理的审批继续到真实终态，通知不证明执行完成；即使在 `full_access` 下，问题与 elicitation 仍需外部回答。普通 provisioned 执行缺省工作目录为 CLI 进程的 `process.cwd()`；显式工作区及 preset Provider 自有目录保持原语义。
@@ -276,24 +278,17 @@ octo-runtime executor-kernel logs --lines 200
 octo-runtime executor-kernel logs --follow --json
 ```
 
-Kernel 父进程独立记录 worker 的退出信号/退出码、恢复阶段、错误码、代次和下次重试，
-位于 `<Home>/logs/kernel-status-<UTC小时>.log`，沿用上述保留和读取限制，不含执行正文。
-SDK 宿主通过 `createKernelService({ logging: { directory } })` 显式选择日志目录。
+CLI 在宿主进程读取所选 manifest、import 并构造 Adapter，然后调用 `createKernelService({ endpoint, adapters })`。Kernel 在该进程执行，业务调用统一经过 RPC，不启动内部执行 worker。
 
-`service.state=running` 只表示服务进程存在，执行能力以 `runtime.execution_ready` 为准。
-worker 退出后开始为新请求恢复。清理或 manifest 写入失败的重试等待依次为 1、2、5 秒，
-后续保持 5 秒。worker 启动使用独立的快速重试预算，等待依次为 250ms、1 秒、4 秒，
-之后进入 15 秒慢重试。`worker.state=exhausted` 表示当前恢复被阻塞；服务未关闭时，
-清理/manifest 的重试继续进行。查看 `worker.recovery` 中的阶段、原因和 `retry_at`；
-非预期恢复错误仍可能需要人工处理。间隔不包含清理、启动和握手耗时。
-恢复不重新执行旧请求；确定尚未执行的拒绝与在途执行
-失联后的未知结果分别反馈，不要求重启 Channel Gateway。
+Kernel 的初始化、就绪、关闭和清理失败记录于 `<Home>/logs/kernel-status-<UTC小时>.log`，沿用上述保留和读取限制，不含执行正文。SDK 宿主通过 `createKernelService({ endpoint, adapters, logging: { directory } })` 显式选择日志目录。
+
+`service.state=running` 只表示服务进程存在，执行能力以 `runtime.execution_ready` 为准。Kernel 不再提供 worker 心跳或自动替换；宿主进程重启归原生服务管理器负责。RPC 重连只查回原身份和续读事件，不重新执行旧请求；宿主重建导致 instance 改变时，旧调用结果不能假定成功。
 
 `status` 分别返回原生 `service` 状态和 IPC `runtime` 状态，退出码 0 不代表业务可用。`doctor` 报告服务管理器探测和服务定义；`adapter list`、`adapter probe` 查询已运行的 Kernel，不会启动它。
 
 返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。文本错误写 stderr，JSON 错误写 stdout。
 
-Windows 崩溃后工具树状态未知时，启动会以 `ORPHAN_CLEANUP_INCOMPLETE` 失败。确认遗留进程已停止后再执行：
+宿主异常退出后遗留资源状态未确认时，启动会以 `ORPHAN_CLEANUP_INCOMPLETE` 失败。确认遗留进程已停止后再执行：
 
 ```bash
 octo-runtime doctor --home <home>
@@ -305,7 +300,28 @@ octo-runtime executor-kernel start --home <home>
 
 ## 调用常驻 Kernel
 
-按 [SDK 入门](sdk.md)取得实际 endpoint，再运行共享的 attach 示例调用常驻 Kernel。注册 Kernel 后还需单独配置、启动 `channel-gateway`，才能接入 Octo IM；接入方式见 [Extra 指南](../guides/extras.md)。
+| CLI 入口 | 服务装配与连接 |
+| --- | --- |
+| `executor-kernel run` | CLI 读取 manifest、import Adapter，再调用 `createKernelService({ endpoint, adapters })` |
+| `channel-gateway run` | CLI 创建 ExtraService；其内部通过 `attachKernel({ endpoint })` 跨进程连接已有 Kernel，不创建或关闭 Kernel |
+| `playboard` | CLI 用同一 createKernelService 创建临时 Kernel，经 kernel.client 执行并回收本次服务 |
+
+`attachKernel` 用于另一个进程中的独立应用连接已经运行的 Kernel，CLI 客户端是其中一种；它不会启动服务。原生 SDK 宿主使用自己创建的 `kernel.client`，不执行这一步。
+
+```ts
+import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+
+const client = attachKernel({ endpoint: componentEndpoint("/absolute/cli-home") });
+try {
+  console.log(await client.status());
+} finally {
+  client.close(); // 仅关闭本进程连接，不停止 CLI 托管的 Kernel。
+}
+```
+
+
+使用与 CLI 服务相同的 Home 派生 endpoint。注册 Kernel 后还需单独配置、启动 `channel-gateway`，才能接入 Octo IM；接入方式见 [Extra 指南](../guides/extras.md)。
 
 ## 让 Agent 使用 octo-cli
 

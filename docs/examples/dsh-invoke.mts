@@ -10,14 +10,13 @@ import { invokeOnce } from "./invoke.mts";
 
 /** 宿主创建本次服务和临时目录；消费真实终态并检查清理，不接管已有 Home。 */
 export async function runDshExample(
-  workerEntrypoint: string,
   dshBin: string,
   consume: (event: CanonicalEvent) => void | Promise<void>,
   signal?: AbortSignal
 ): Promise<void> {
   if (!isAbsolute(dshBin)) throw new Error("DSH_BIN must be an absolute JavaScript entry path");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ord-"));
-  const kernel = createDshKernel(componentEndpoint(directory), resolve(workerEntrypoint), dshBin);
+  const kernel = createDshKernel(componentEndpoint(directory), dshBin);
   const errors: unknown[] = [];
   try {
     await kernel.initialize({ signal });
@@ -62,16 +61,14 @@ export async function runDshExample(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const [workerEntrypoint] = process.argv.slice(2);
   const dshBin = process.env.DSH_BIN;
-  if (!workerEntrypoint || !dshBin)
-    throw new Error("Usage: DSH_BIN=<absolute JS entry> node dsh-invoke.mts <worker.mjs>");
+  if (!dshBin)
+    throw new Error("Usage: DSH_BIN=<absolute JS entry> node dsh-invoke.mts");
   const controller = new AbortController();
   const cancel = () => controller.abort(new Error("Interrupted"));
   process.once("SIGINT", cancel);
   try {
     await runDshExample(
-      workerEntrypoint,
       dshBin,
       (event) => {
         console.log(JSON.stringify(event));

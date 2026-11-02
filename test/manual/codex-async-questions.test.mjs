@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as tick } from "node:timers/promises";
-import { PassThrough } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { CodexAsyncQuestions } from "../../packages/octo-runtime-adapter-codex/dist/async-questions.js";
 import {
@@ -16,12 +15,7 @@ import {
 } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { InvocationWatchdog } from "../../packages/octo-runtime-executor-core/dist/watchdog.js";
 import { InvocationExperience } from "../../packages/octo-runtime-executor-core/dist/experience.js";
-import { AgentExecutor } from "../../packages/octo-runtime-executor-core/dist/index.js";
-import {
-  WorkerRpcServer,
-  WorkerRpcClient,
-  HostRunService
-} from "../../packages/octo-runtime-executor-kernel/dist/index.js";
+import { nativeHost } from "../native-host-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
 
 const item = (
@@ -290,62 +284,47 @@ test("async questions leave experience and watchdog non-blocking", () => {
 
 const fake = fileURLToPath(new URL("./fixtures/codex-async-server.mjs", import.meta.url));
 for (const scenario of ["normal", "wrong", "reject", "lost", "stale"])
-  test(
-    `public Core / worker / HostRunService round trip: ${scenario}`,
-    { timeout: 10000 },
-    async () => {
-      const executor = new AgentExecutor();
-      executor.register(createCodexAdapter({ command: process.execPath, appServerArgs: [fake] }));
-      const upstream = new PassThrough(),
-        downstream = new PassThrough();
-      new WorkerRpcServer({ host: executor, output: downstream }).listen(upstream);
-      const rpc = new WorkerRpcClient({ input: downstream, output: upstream });
-      const host = new HostRunService(rpc),
-        events = [];
-      const req = invokeRequest({
-        modelInput: scenario,
-        prompt: scenario,
-        signal: AbortSignal.timeout(8000)
-      });
-      let original;
-      try {
-        for await (const event of canonicalEvents(
-          host.invokeFrames(invocationInput(req, "canonical", "codex"))
-        )) {
-          events.push(event);
-          if (event.type !== "interaction.requested") continue;
-          original = response(event.payload.interactionId);
-          if (scenario === "stale") continue;
-          if (scenario === "normal") await host.respond(req.runId, original);
-          else
-            await assert.rejects(
-              host.respond(req.runId, original),
-              (e) =>
-                e.code ===
-                (scenario === "reject" ? "ASYNC_ANSWER_REJECTED" : "OPERATION_OUTCOME_UNKNOWN")
-            );
-        }
-        assert.equal(events.filter((e) => e.type === "interaction.requested").length, 1);
-        assert.equal(
-          events.filter((e) => e.type === "interaction.resolved").length,
-          scenario === "stale" ? 0 : 1
-        );
-        const resolved = events.find((e) => e.type === "interaction.resolved")?.payload;
-        if (scenario !== "stale")
-          assert.equal(resolved.status, scenario === "normal" ? "resolved" : "invalidated");
-        if (scenario === "normal")
-          assert.ok(events.some((e) => e.payload.text?.includes("steers=1")));
-        await assert.rejects(async () => host.respond(req.runId, original));
-        await assert.rejects(
-          executor.respondInteraction(req.invocationId, original),
-          (error) => error.code === "INTERACTION_NOT_ACTIVE"
-        );
-      } finally {
-        await host.close();
-        rpc.close();
-        await executor.shutdown();
-        upstream.destroy();
-        downstream.destroy();
+  test(`native Kernel / Core RPC round trip: ${scenario}`, { timeout: 10000 }, async () => {
+    const native = await nativeHost([
+      createCodexAdapter({ command: process.execPath, appServerArgs: [fake] })
+    ]);
+    const host = native.client,
+      events = [];
+    const req = invokeRequest({
+      modelInput: scenario,
+      prompt: scenario,
+      signal: AbortSignal.timeout(8000)
+    });
+    let original;
+    try {
+      for await (const event of canonicalEvents(
+        host.invokeFrames(invocationInput(req, "canonical", "codex"))
+      )) {
+        events.push(event);
+        if (event.type !== "interaction.requested") continue;
+        original = response(event.payload.interactionId);
+        if (scenario === "stale") continue;
+        if (scenario === "normal") await host.respondInteraction(req.invocationId, original);
+        else
+          await assert.rejects(
+            host.respondInteraction(req.invocationId, original),
+            (e) =>
+              e.code ===
+              (scenario === "reject" ? "ASYNC_ANSWER_REJECTED" : "OPERATION_OUTCOME_UNKNOWN")
+          );
       }
+      assert.equal(events.filter((e) => e.type === "interaction.requested").length, 1);
+      assert.equal(
+        events.filter((e) => e.type === "interaction.resolved").length,
+        scenario === "stale" ? 0 : 1
+      );
+      const resolved = events.find((e) => e.type === "interaction.resolved")?.payload;
+      if (scenario !== "stale")
+        assert.equal(resolved.status, scenario === "normal" ? "resolved" : "invalidated");
+      if (scenario === "normal")
+        assert.ok(events.some((e) => e.payload.text?.includes("steers=1")));
+      await assert.rejects(async () => host.respondInteraction(req.invocationId, original));
+    } finally {
+      await native.close();
     }
-  );
+  });

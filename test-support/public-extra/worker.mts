@@ -1,4 +1,4 @@
-import { serveWorker, type HostedAdapter } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import type { HostedAdapter } from "@mininglamp-oss/octo-runtime/executor-kernel";
 
 const adapter: HostedAdapter = {
   metadata: {
@@ -20,4 +20,4 @@ const adapter: HostedAdapter = {
     }
   }
 };
-serveWorker([adapter]);
+export const adapters = [adapter];

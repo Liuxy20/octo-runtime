@@ -19,7 +19,6 @@ import {
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { buildCodexCommand } from "../packages/octo-runtime-adapter-codex/dist/index.js";
 import { codexEnvironmentConfig } from "../packages/octo-runtime-adapter-codex/dist/environment.js";
-import { buildZcodeCommand } from "../packages/octo-runtime-adapter-zcode-gui/dist/index.js";
 import { buildOpenClawGatewayInvocation } from "../packages/octo-runtime-adapter-openclaw/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
 
@@ -170,10 +169,6 @@ test("per-run environment preserves empty/literal values and adapter-owned overr
     buildCodexCommand(request({ OCTO_ENVS_TEST: "codex" }), process.execPath, [], {}).env
       .OCTO_ENVS_TEST,
     "codex"
-  );
-  assert.equal(
-    buildZcodeCommand(request({ OCTO_ENVS_TEST: "zcode" }), process.execPath).env.OCTO_ENVS_TEST,
-    "zcode"
   );
 });
 

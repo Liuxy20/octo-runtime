@@ -30,7 +30,7 @@ Schema 定义 ProviderSession、AgentConfig、Context、执行计划、Host 帧�
 
 运行时常量、泛型 CanonicalEvent 以及带 `AbortSignal` 的 InvokeRequest 组合留在 [src/index.ts](../../packages/octo-runtime-protocol/src/index.ts)。函数、活对象及 AbortSignal 不通过 JSON wire 传输。
 
-当前 Kernel、worker 入口及 Host SDK 是 TypeScript 实现。`native/` 提供 Go、Python 附着客户端及各自的 playboard demo；模型、校验规则、行为常量和 RPC 方法从 Schema 及 `kernel-client.behavior.json` 生成，客户端/生命周期在各语言包内单份维护。原生客户端只连接已有服务，不代启 Node/CLI，不拥有 Kernel。
+当前 Kernel、Core 及 Host SDK 是 TypeScript 实现。`native/` 提供 Go、Python 附着客户端及各自的 playboard demo；模型、校验规则、行为常量和 RPC 方法从 Schema 及 `kernel-client.behavior.json` 生成，客户端/生命周期在各语言包内单份维护。原生客户端只连接已有服务，不代启 Node/CLI，不拥有 Kernel。
 
 Native SDK 按一份生成源码和一份手写源码组织：Python 为 `octo_runtime_generated.py` / `client.py`，`__init__.py` 仅作公开 API 导出；Go 为 `octo_runtime_generated.go` / `client.go`，Go 另有极薄的 `pipe_windows.go` 绑定 Windows 专用 API。Transport 和 codec 属于手写实现内部，不再单独拆文件；平台选择由 SDK 完成。按用户最新要求，native SDK、demo 及相关代码注释使用英文；核心入口仍须解释所有权、取消和失败边界。
 

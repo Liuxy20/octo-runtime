@@ -4,7 +4,7 @@
 
 Octo Runtime 让应用通过统一接口调用 Codex、Claude Code 等 Agent 执行程序。本文将这些程序称为 **Provider**，将接入 Runtime 的应用称为**宿主应用**。每个 Provider 对应一个 **Adapter**，负责转换输入、输出和控制消息。
 
-应用通常通过 `KernelClient.invoke` 发起调用。Kernel 接收请求，在独立的 worker 进程中执行，并把输出返回给客户端。本文将一次执行称为 Run。应用处理输出和交互请求，Kernel 管理 worker 的启动与监督，KernelClient 处理输出订阅和断线重连。
+标准业务调用统一使用 KernelClient.invoke，经本地 RPC 进入 Kernel；Kernel 在宿主进程持有 AgentExecutor 和宿主注入的 Adapter。
 
 根目录[架构文档](../../../ARCHITECTURE.md)介绍了这一设计的背景：IM、桌面应用和任务系统共用一套执行能力，无需各自实现 Provider 接入。
 
@@ -18,12 +18,12 @@ flowchart TB
   Business[业务代码] --> Client[KernelClient.invoke]
   Extra --> Client
   Client -->|本地 IPC| Kernel
-  Kernel -->|stdio NDJSON| Worker[独立 worker: AgentExecutor]
-  Worker --> Adapter[Provider Adapter]
+  Kernel --> Core[AgentExecutor in host process]
+  Core --> Adapter[Provider Adapter]
   Adapter --> Provider[Provider CLI / server]
 ```
 
-`createKernelService` 在调用它的进程中创建 Kernel 服务和 IPC endpoint；AgentExecutor 在 Kernel 启动的 worker 进程中运行。原生应用可以直接在主进程中创建 Kernel，无需另外运行 Runtime CLI。也可以通过 `attachKernel({ endpoint })` 连接已经存在的服务。
+createKernelService 在调用进程创建 Kernel、AgentExecutor 与 RPC 端点；原生宿主无需运行 Runtime CLI，使用 kernel.client 调用服务。另一个进程中的独立应用通过 attachKernel 连接已有 Kernel。
 
 CLI 用 Home 目录保存设备实例的身份和配置，用 workdir 指定 Agent 工作目录，两者用途不同。使用 SDK 的应用自行决定配置和状态存放位置。
 
@@ -35,7 +35,7 @@ Adapter 与 Extra 由接入入口选择。SDK 宿主原生 import 和组装，�
 | ---------------- | --------------------------------------------------------------------- | -------------------------------- |
 | 宿主应用         | 安装和认证 Provider，提供配置、业务历史和数据库，管理服务的启动与关闭 | 转换 Provider 协议               |
 | Host SDK         | 创建 Kernel 和 Extra 服务，传入依赖，报告初始化和清理结果             | 管理应用数据库的表结构和迁移     |
-| Executor Kernel  | 提供 IPC 接口，监督 worker，暂存输出以支持断线后补读                  | 保存业务历史或自动重跑请求       |
+| Executor Kernel  | 提供 IPC 接口，管理 Core 与 Run 生命周期，暂存输出以支持断线后补读                  | 保存业务历史或自动重跑请求       |
 | AgentExecutor    | 准备输入，驱动一次执行，处理交互、取消和最终状态                      | 查询业务背景或安装 Provider      |
 | Provider Adapter | 将 Runtime 参数转换为 Provider 配置，处理原生输出并清理执行资源       | 决定业务权限或补齐聊天历史       |
 | Extra            | 接收业务请求，加载 Context，调用 Kernel，向业务系统投递结果           | 关闭共享 Kernel 或其他模块的调用 |
@@ -83,7 +83,7 @@ sequenceDiagram
   participant App as 业务代码
   participant Client as KernelClient
   participant Kernel
-  participant Core as worker / AgentExecutor
+  participant Core as AgentExecutor
   participant Provider
   App->>Client: 消费 invoke(input)
   Client->>Kernel: 仅提交一次
@@ -99,45 +99,21 @@ sequenceDiagram
   Client-->>App: 返回所选格式的事件
 ```
 
-提交回执表示请求已经被接收，执行结果还要从输出流中读取。客户端断线后，已提交的执行仍会继续。重连时客户端查询原执行，并补读 Kernel 尚未清除的输出，不会重新发起调用。若 worker 失联，未完成的执行会标记为 `lost`；替代 worker 只处理新请求。
+提交回执表示请求已经被接收，执行结果还要从输出流中读取。客户端断线后，已提交的执行仍会继续。重连时客户端查询原执行，并补读 Kernel 尚未清除的输出，不会重新发起调用。若宿主退出，客户端按失联合同报告未知结果；重建服务不重跑原请求。
 
-## KernelClient 与直接 Core
+## 原生装配与统一 RPC
 
-| 属性                         | KernelClient                          | AgentExecutor                     |
-| ---------------------------- | ------------------------------------- | --------------------------------- |
-| 执行位置                     | Kernel 监督的独立 worker              | 调用进程                          |
-| 故障隔离                     | worker 隔离；宿主管理 Kernel 服务     | 共享宿主故障、阻塞和 OOM 影响     |
-| 提前关闭迭代器               | 停止接收输出，执行继续                | 请求取消执行                      |
-| 断线后补读                   | 可读取保留期内的原执行输出            | 不提供 Kernel 输出缓存            |
-| 本地环境 `streamLimits` 选项 | 拒绝                                  | 支持                              |
-| 关闭                         | 调用服务的 `close()`，检查 `complete` | 调用 `shutdown()`，检查 `cleanup` |
+Electron 主进程原生 import 并构造 Adapter，CLI 则由自己的装配层读取 manifest、动态 import 并调用工厂。两者都将实际对象传入 `createKernelService({ endpoint, adapters })`，等待 `initialize()`，再通过 `kernel.client` 执行业务。Kernel 不接受清单、模块路径或执行 worker 入口，不加载产品模块。
 
-通常选择 KernelClient。只有应用需要进程内执行，并能接受执行阻塞或崩溃影响应用进程时，才直接使用 AgentExecutor。两者都提供 `invoke(input, environment?)`，但关闭迭代器、恢复输出和清理资源的行为不同。详见 [Kernel IPC](../reference/kernel-ipc.md) 和 [Core 包](../../../packages/octo-runtime-executor-core/README.md)。
+`endpoint` 是本地通信地址；Home 是宿主配置目录，`componentEndpoint(home)` 只是地址派生函数。同进程不省略 RPC：业务和 Extra 统一走 `KernelClient -> RPC -> Kernel -> AgentExecutor -> Adapter`。对象注入属于装配，RPC 传递调用数据；方法和闭包无需经过 RPC。
 
-## Worker 故障与服务关闭
+Kernel 保留接纳、身份检查、有界源窗口、交互、取消与关闭管理。客户端停止观察不取消执行；丢失 ACK 后查询原身份，不能重跑请求。直接 Core 仅供底层实现和专项测试，不是 Electron/CLI 的另一种标准入口。
 
-```mermaid
-flowchart TB
-  Ready[Worker 就绪] --> Failure[心跳或执行进程失败]
-  Failure --> Lost[未完成执行标为 lost]
-  Lost --> Cleanup{执行资源已回收?}
-  Cleanup -->|否| Block[不创建冲突的替代 worker]
-  Cleanup -->|是| Budget{还有快速额度?}
-  Budget -->|是| Backoff[等待后启动新 worker]
-  Backoff --> Attempt
-  Budget -->|否| Cooldown[等待15秒再单次尝试启动]
-  Cooldown --> Attempt[启动一个worker]
-  Attempt -->|就绪| Ready
-  Attempt -->|失败| Rollback{启动资源已回收?}
-  Rollback -->|是| Budget
-  Rollback -->|否| Block
-```
+## 故障边界与关闭
 
-Kernel 每秒检查一次 worker 主循环心跳，连续 5 秒未响应时判定失联。worker 启动后最多等待 15 秒就绪。启动替代 worker 前先清理旧 worker 的执行资源；清理未完成时，不创建可能与旧资源冲突的 worker。
+Kernel、Core 和 Adapter 共享宿主事件循环；RPC 不提供进程崩溃隔离。已删除 worker 心跳、自动重启和 worker generation 状态。Adapter 内部仍可按 Provider 协议启动和回收子进程。宿主崩溃或 OOM 后不能承诺本进程继续服务；宿主重建服务产生新的 `kernel_instance_id`，旧 Run 不自动重放。
 
-快速替换按 250、1000、4000 毫秒间隔退避，60 秒活跃观测时间最多快速尝试三次。额度耗尽后保持 `recovering`，每次等待 15 秒再单次尝试启动；启动和清理完成后才开始下一次等待。短暂就绪不会退出低频策略，连续健康观测 60 秒才恢复快速额度。清理或所有权未确认时保持 `exhausted`，阻止替换并保留关闭失败。关闭服务会取消等待。恢复期间 Kernel 进程、实例和本地监听保持不变，不依赖网络连通性；新 worker 不会重跑旧请求。
-
-创建 Kernel 后，先等待 `initialize()` 完成，再使用 `kernel.client`。应用退出时，先关闭由应用创建的 Extra，等待结果消费和投递结束，再关闭自己创建的 Kernel。通过 `attachKernel` 获得的客户端只需关闭连接，不会关闭服务。清理结果中 `complete=false` 表示还有资源未确认释放，应检查返回的错误和待清理资源。
+初始化成功后才开放业务入口。退出先停接纳、关闭自己拥有的 Extra、排空业务尾流，再关闭 Kernel。Kernel 在共用 5 秒截止时间内取消 Core、等待 Adapter 清理并回收端点。`complete=false` 保留未确认清理事实；终态、取消 ACK 和资源回收是三个独立事实。无法强杀同进程阻塞代码，绝对期限只对仍可调度的事件循环有效。
 
 ## 访问权限
 

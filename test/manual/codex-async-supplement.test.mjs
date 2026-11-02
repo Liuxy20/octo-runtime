@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import adapter from "./fixtures/codex-async-adapter.mjs";
 import {
   AsyncQuestionReply,
   KernelError,
@@ -14,16 +14,8 @@ import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index
 import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
 
-const options = {
-  manifest: undefined,
-  adapterModules: [
-    {
-      type: "codex",
-      module: resolve("test/manual/fixtures/codex-async-adapter.mjs"),
-      export: "default"
-    }
-  ]
-};
+// 测试宿主直接注入原生 Adapter；重建 Kernel 时仍使用同一 fake Provider。
+const options = { adapters: [adapter] };
 const value = {
   schema: "octo.question-response/v1",
   answers: [
@@ -167,7 +159,6 @@ test(
     assert.equal((await f.server.close()).complete, true);
     const server = createKernelService({
       endpoint: f.endpoint,
-      workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
       ...options
     });
     t.after(() => server.close());

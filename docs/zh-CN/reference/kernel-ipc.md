@@ -11,7 +11,7 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 | 导入子路径                                                                    | 用途                                                                           |
 | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `/host`                                                                       | 创建 Kernel 和 Extra 服务，管理初始化和关闭，生成组件 endpoint                 |
-| `/executor-kernel`                                                            | `attachKernel`、KernelClient 类型、KernelError、`serveWorker`、Kernel 服务工厂 |
+| `/executor-kernel`                                                            | `attachKernel`、KernelClient 类型、KernelError、Kernel 服务工厂 |
 | `/executor-core`                                                              | 在调用进程中直接使用 AgentExecutor                                             |
 | `/protocol`                                                                   | InvokeInput、输出/Context 类型与公开校验器                                     |
 | `/protocol/schema.json`                                                       | 共享协议 Schema                                                                |
@@ -23,7 +23,7 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## 创建服务
 
-`createKernelService(options)` 必须提供监听地址 `endpoint` 和 worker 入口文件绝对路径 `workerEntrypoint`。SDK 可选参数包括 `adapterConfigurations`、`configurations(runtimeId?)`、`env` 和 `stateDirectory`。SDK 宿主在自己的 worker 代码中 import 并注册所选 Adapter，不使用 manifest，也不代启另一个顶层服务。CLI 内部 runner 接受互斥的 `manifest` 文件或已解析 `adapterModules` 快照；这是 CLI 的装配机制，不是 SDK 的接入条件。见[模块载入](../concepts/module-loading.md)。
+`createKernelService(options)` 必须提供本地通信地址 `endpoint` 和宿主已构造的 `adapters`。可选配置包括 `adapterConfigurations`、`configurations(runtimeId?)`、`logging` 和 `stateDirectory`。Kernel 本进程注册对象并通过 RPC 服务业务调用，不接受模块清单、路径、worker 入口或子进程 env；CLI 自行 import 后传对象。见[模块载入](../concepts/module-loading.md)。
 
 1. 创建服务对象后，等待 `initialize({signal?})` 完成。
 2. 初始化成功后，使用 `kernel.client` 发起调用，或通过 `status()` 查看服务状态。
@@ -39,7 +39,7 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 | `cancelInvocation(invocationId, reason?)`          | 取消同一客户端通过 invoke 发起的调用，返回 `{accepted}`。                                    |
 | `respondInteraction(invocationId, response)`       | 回复该调用的 canonical 交互请求。                                                            |
 | `respondNativeInteraction(invocationId, response)` | 回复该调用的 Provider 原生交互请求。                                                         |
-| `status()` / `list()`                              | 分别查询 Kernel/worker 状态，或已注册 Adapter 元数据及 Provider 探测结果。探测不证明已登录或具有模型访问权限。 |
+| `status()` / `list()`                              | 分别查询 Kernel 状态，或已注册 Adapter 元数据及 Provider 探测结果。探测不证明已登录或具有模型访问权限。 |
 | `close()`                                          | 关闭客户端连接，不取消已提交的执行，也不关闭 Kernel 服务。                                   |
 
 只有需要自行管理提交和订阅时，才使用下面的底层方法：
@@ -84,7 +84,7 @@ macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接
 
 | Wire 方法                  | Params                                                 | 成功结果                                                                |
 | -------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `status`                   | `{}`                                                   | KernelStatus，包含 `kernel_instance_id`、`execution_ready`、worker 状态 |
+| `status`                   | `{}`                                                   | KernelStatus，包含 `kernel_instance_id`、`execution_ready`、宿主 `pid` |
 | `adapter.list`             | `{}`                                                   | 已注册 Adapter 元数据数组，包含 `available`、`unavailableReason`、`providerPath` 和 `providerVersion` |
 | `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`，receipt 包含执行标识                   |
 | `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                              |
@@ -175,6 +175,6 @@ Kernel 实例变化、执行标识不匹配、序号非法、输出缺失或过�
 
 字节限制按序列化数据计算，不代表进程实际内存占用上限。可信的 Adapter 执行设置可以在允许范围内调整输出缓存策略，普通 Context 不能修改它。
 
-Kernel 或 worker 重启后，不会恢复旧输出或重跑旧执行。结果为 `lost` 或未知时，应由应用决定后续处理。详见[输出与控制](output-and-control.md)。
+Kernel 宿主重启后，不会恢复旧输出或重跑旧执行。结果为 `lost` 或未知时，应由应用决定后续处理。详见[输出与控制](output-and-control.md)。
 
 来源：[IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json)、[fixture](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json)、[client 类型](../../../packages/octo-runtime-executor-kernel/src/types.ts)、[client](../../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../../packages/octo-runtime-executor-kernel/src/server.ts)。

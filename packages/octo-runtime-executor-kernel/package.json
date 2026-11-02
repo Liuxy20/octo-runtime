@@ -7,14 +7,6 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./manifest-adapters": {
-      "types": "./dist/manifest-adapters.d.ts",
-      "import": "./dist/manifest-adapters.js"
-    },
-    "./runner": {
-      "types": "./dist/runner.d.ts",
-      "import": "./dist/runner.js"
     }
   },
   "dependencies": {

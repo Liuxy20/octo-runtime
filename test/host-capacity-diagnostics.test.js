@@ -1,8 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { PassThrough } from "node:stream";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
 import {
   assertHostControl,
   assertHostFrame,
@@ -25,7 +24,7 @@ const limits = resolveStreamLimitPolicy({
 
 function fixture(mode = "canonical", invoke) {
   const host = new AgentExecutor();
-  host.register({
+  const adapter = {
     metadata: {
       type: "capacity-fixture",
       agentSources: ["provisioned"],
@@ -56,13 +55,14 @@ function fixture(mode = "canonical", invoke) {
           };
         }
       }
-  });
+  };
+  host.register(adapter);
   const input = invocationInput(
     invokeRequest({ runId, approvalMode: "full_access" }),
     mode,
     "capacity-fixture"
   );
-  return { host, input };
+  return { host, input, adapter };
 }
 
 async function collect(source) {
@@ -99,19 +99,13 @@ for (const mode of ["canonical", "native"]) {
 }
 
 test("HostFrame diagnostics survive RPC and canonical errors without inventing a Provider result", async (context) => {
-  const { host, input } = fixture();
-  const upstream = new PassThrough();
-  const downstream = new PassThrough();
-  const server = new WorkerRpcServer({ host, output: downstream });
-  server.listen(upstream);
-  const client = new WorkerRpcClient({ input: downstream, output: upstream });
-  context.after(async () => {
-    client.close();
-    upstream.destroy();
-    downstream.destroy();
-    await host.shutdown();
+  const { host: unusedCore, input, adapter } = fixture();
+  await unusedCore.shutdown();
+  const host = await nativeHost([adapter], {
+    adapterConfigurations: { "capacity-fixture": { streamLimits: limits } }
   });
-  const frames = await collect(client.invokeFrames(input, { streamLimits: limits }));
+  context.after(() => host.close());
+  const frames = await collect(host.client.invokeFrames(input));
   const failure = frames.find((frame) => frame.kind === "control" && frame.control.type === "error")
     .control.failure;
   const events = [];

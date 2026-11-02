@@ -3,7 +3,7 @@ type: Rule
 title: Octo Runtime 基础架构
 description: 运行时设备、统一执行内核与 Extra 的责任边界及执行约束。
 tags: [architecture, runtime, adapter, extra, context, installation]
-timestamp: 2026-10-20T00:00:00Z
+timestamp: 2026-11-02T00:00:00+08:00
 id: runtime-architecture
 tier: repo
 priority: 100
@@ -17,6 +17,75 @@ supersedes: []
 
 # Octo Runtime 基础架构
 
+## SDK 原生装配与统一 RPC
+
+2026-11-02 用户确认 [Issue 294](https://github.com/Mininglamp-OSS/octo-runtime/issues/294)：**Electron 原生 SDK 接入是核心模式，Runtime CLI 是使用同一 SDK 的特殊宿主。宿主 import 并注入 Adapter 对象，普通执行统一经过 KernelClient / RPC / ExecutorKernel；即使调用方与 Kernel 同进程，也不得绕过 RPC。Kernel 不再启动执行 worker。** 本节取代 #71、#85 等旧合同中“SDK 提供 worker 入口、Kernel 监督独立 worker、worker 装配 Adapter”的要求；服务所有权、统一调用和稳定性责任继续有效。
+
+**状态：#294 原生装配合同已实现；npm 可用版本以发行记录为准。** Kernel 接收实际 Adapter，在本进程使用 Core；CLI 持有模块装配。实现及验证见 [任务](../tasks/294-native-kernel-sdk/brief.md)。历史 worker 记录只证明原基线行为。
+
+### 装配和调用的边界
+
+- **宿主装配。** Electron 在主进程 import、选择并构造 Adapter；CLI 在自己的服务 run 入口读取模块 manifest、解析来源、动态 import 并构造 Adapter。两者将实际对象传给同一个服务工厂。对象的方法、闭包、原型、`this` 和宿主依赖保留在 Kernel 所在进程，不序列化或在另一进程重建。
+- **模块 manifest 完全归宿主。** `executor-kernel` 不接受 manifest 文件、`AdapterModuleEntry`、模块 URL、导出名或工厂描述，不读取、解析、合并、扫描或动态 import 所选 Provider 模块。CLI 即使提前解析成绝对模块路径，也不能将该快照交给 Kernel。原 Kernel 包中的模块 loader、runner、launcher 和相应导出已删除，不能换名恢复。
+- **统一 RPC。** 应用与 Extra 通过实际 `KernelClient` 发起执行、订阅、查询、取消和交互；服务自身的 `kernel.client` 也连接该服务 endpoint。同进程原生构造不产生直接执行的快捷分支，不把业务方转接到裸 `AgentExecutor`，不建立 Extra 专用执行层。
+- **接入入口分章说明。** 原生 SDK 宿主创建并初始化 KernelService 后使用 `kernel.client`，不显式调用 `attachKernel`。显式 attach 用于另一个进程中的独立应用连接已有 Kernel，CLI 客户端是其中一种；不得把它写成原生服务装配步骤或 CLI 专属能力。Kernel/Extra 内部管理 RPC client 不属于宿主额外接入步骤。SDK 文档分别说明 KernelService、ChannelGateway ExtraService 和高级依赖；AgentRun invoke、事件消费与控制另列可选使用章节，不作为接入条件。
+- **统一执行。** Kernel 在自己的进程内使用唯一 `AgentExecutor` 执行实现，注册宿主传入的 Adapter。Kernel 保留接纳、Run 所有权、事件源和有界恢复等责任。原生的 `initialize/status/close` 是宿主管理服务对象的生命周期入口，不是绕过 RPC 发起业务执行的接口。
+- **不启动执行替身。** Kernel 不通过 `spawn`、`fork`、外部 Node、Runtime CLI 或其他等价 launcher 启动另一份执行 worker；也不能将所注入的 Adapter 移到线程/进程重新装配。Adapter 内部按 Provider 协议启动程序仍然允许，其取消与清理由对应执行合同负责。CLI 的系统服务部署属于宿主，不能下沉到 Kernel 工厂。此条针对执行装配，不把既有日志线程等其他资源误当成执行 worker。
+- **Extra 独立。** 宿主另行 import 并创建 Extra 服务，函数依赖留在对应 Extra 服务进程；其执行仍经 `ctx.kernel` 的 RPC。Kernel 不读取 Extra 目录、不持有插件、不接管宿主数据库。
+
+```text
+装配：Electron 原生 import / CLI 自己读取 manifest 后动态 import
+      → Adapter 对象 → createKernelService({ endpoint, adapters, ... })
+
+执行：业务 / Extra / CLI client → KernelClient → 本地 RPC → ExecutorKernel
+      → 本进程 AgentExecutor → 已注入的 Adapter → Provider
+```
+
+### createKernelService 目标签名
+
+以下只声明 #294 已确认的装配参数与返回类型，**不是完整选项清单；对应本任务工作树实现，不代表 npm 已发布版本**。其他与本次装配边界无关的现有可选项本轮不规定增删。复用现有 `HostedAdapter` 和服务生命周期类型，不重新定义 Adapter、业务输入或另一份调用协议。
+
+```ts
+export interface KernelServiceOptions {
+  endpoint: string;
+  adapters: readonly HostedAdapter[];
+  // 仅列本轮确定的装配字段；其他现有选项不在此展开。
+}
+
+export function createKernelService(options: KernelServiceOptions): KernelService;
+
+export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
+  readonly client: KernelClient;
+}
+```
+
+其中 `endpoint` 必填，继续承载本地 RPC；`adapters` 必填且为宿主已构造的对象，不接受模块文件路径或 manifest 描述。服务不得因缺少 Adapter 自动加载 CLI 默认集合。注册沿现有协议声明及重复类型校验执行。
+
+构造仍同步返回服务对象；`initialize()` 成功后才可取得 `kernel.client`。初始化在对外报告 ready 前完成 Adapter 注册、端点建立与调用可用性检查；失败沿既有回滚与 `ServiceInitializationError` 合同报告。注册不表示 Provider 已安装、已认证或本次执行必然成功。
+
+数组集合在构造时固定，宿主不得在服务存续期修改已注册 Adapter 的类型与协议声明；需要更换集合或实现时，关闭并确认旧服务清理完成，再构造新服务。宿主通过方法读取的业务依赖仍可变化，本要求不冻结宿主对象、不增加热加载。服务拥有自己的 Core、Run、连接与日志；调用结束时执行 Adapter 的既有清理，不能自动关闭 Adapter 引用的宿主数据库或推定任意资源归 Kernel 所有。
+
+`endpoint` 与 Home 分别定义：Home 是数据/身份目录，`componentEndpoint(home)` 只派生本地地址。例如 POSIX 的 `<home>/sockets/octo-runtime-executor-kernel.sock`；Windows 使用命名管道，不把 `~/.octo-runtime` 目录直接作为 RPC 地址。Electron 自选 Home/endpoint，CLI 从自己的配置派生；不新增隐式 Home 扫描或省略 endpoint 的直调模式。
+
+### 装配职责与典型案例
+
+| 场景 | 宿主负责 | Kernel/Adapter 负责 | 不符合本合同的实现 |
+| --- | --- | --- | --- |
+| Electron 主进程托管 | 原生 import Adapter，准备对象和配置，创建并初始化 Kernel；业务取 `kernel.client` | Kernel 监听 endpoint，业务经 RPC 进入接纳、执行和控制 | Electron 传 `octo-runtime.js`/worker 文件；或因同进程改为业务直调 Core |
+| CLI 常驻 Kernel | CLI 自己读取/合并 manifest、解析来源、动态 import 并调用选中工厂，然后把对象交给服务 | 同一 Kernel 工厂使用对象，不知道它们来自静态 import 还是 manifest | Kernel 读取 manifest；CLI 仅解析绝对路径，再让 Kernel import 或 spawn 加载 |
+| 跨进程独立应用（包括 CLI 客户端） | `attachKernel({ endpoint })`，通过 RPC 调用已有 Kernel，结束时关闭自己的 client | 已接纳 Run 由服务持有，观察断开不等于取消 | 把 attach 列为原生 SDK 接入步骤或 CLI 专属能力；attached client 自动拉起服务，或 client.close 关闭共享 Kernel |
+| Electron 或 CLI 加载 Extra | 宿主原生创建 Extra，注入业务函数，为其选择 Kernel endpoint | Extra 通过自己的 `ctx.kernel` RPC 调用；服务只排空所属调用 | Extra 直接使用注入的 Adapter 执行；Kernel 读取 Extra manifest 或接管其数据库 |
+| Adapter 调用 Provider CLI | 宿主选择安装、版本和配置 | Adapter 可按原生协议启动 Provider，并处理本轮交互、取消及资源清理 | 将 Kernel 执行 worker 包装成“Adapter 内部逻辑”来规避原生对象装配 |
+| CLI Playboard | CLI 装配所选 Adapter，创建本次临时 endpoint 与同一 Kernel 服务，关闭后核对清理 | 执行仍经 `kernel.client` RPC，保留既有单次资源所有权 | 为临时执行绕过 Kernel，或恢复独立执行 runner |
+
+这些案例约束运行机制，不要求所有 CLI 服务部署在一个进程，也不把 Electron renderer 与 main 的桥接定义成新的 Kernel 协议。宿主已选定本地 Kernel 后，执行统一走 Unix socket / Named Pipe 的现有 RPC，不用 localhost HTTP 或对象调用代替。
+
+### 稳定性与故障边界
+
+RPC、内核稳定性逻辑和独立进程隔离是不同能力。移除执行 worker 必须保留执行接纳、身份关联、取消/交互、观察与执行分离、ACK 丢失查回、原游标有界续流、容量/背压、截止、终态和清理不完整的事实。不得以“同进程”删除 `HostRunService` 的责任或改成由请求 socket 持有执行 iterator。
+
+worker 心跳、替换和崩溃隔离随旧进程边界删除；status 不再包含 worker，不能声称本地 RPC 可以隔离同进程 OOM、`process.exit` 或同步阻塞，也不能为保留旧字段伪造 worker PID/ready/recovery。宿主进程退出及恢复归 Electron/CLI 宿主，SDK 不退出或重启宿主，不自动重跑已接纳 Run。已有身份、状态文件和未确认清理记录不得因移除 worker 而被清空或忽略。具体迁移项见[#294 稳定性矩阵](../tasks/294-native-kernel-sdk/plan.md#稳定性迁移矩阵)。
+
 ## GitHub CI 范围约束
 
 2026-10-28 用户明确：严禁擅自扩大 GitHub CI 范围。功能开发、修复、验证、review、解决冲突及交付 PR 不包含新增 CI 的授权。不得新增 workflow、job、矩阵维度、自动触发条件、必需状态或 CI Gate 依赖，也不得通过既有 job 的步骤、脚本和默认测试开关变相加入专项 CI。专项验证在本地或显式手动执行并记录；维护既有 CI 时保留原有范围，提交前核对相对目标分支的 workflow diff 与实际检查列表。
@@ -29,12 +98,12 @@ OpenClaw 远端产物转换为 Gateway 可读取 HTTPS 资源的方案已接受�
 
 ## 统一原生服务构造与部署边界
 
-2026-10-20，Issue #71 及用户补充明确以下强制架构原则。统一服务 API 在本 worktree 落实，见[实施记录](../tasks/unified-native-sdk-services/implementation.md)。`main@fae6333` 的 `startOwnedKernel`、`startExtra` 及 runner 绑定装配已移除，不能以历史验收为由恢复。
+2026-10-20，Issue #71 确立原生服务构造；2026-11-02，#294 将 Adapter 装配和执行位置收敛到同一宿主进程，执行仍统一经 RPC。以下规则按最新决定更新；#71 的历史实现证据见[实施记录](../tasks/unified-native-sdk-services/implementation.md)。`main@fae6333` 的 `startOwnedKernel`、`startExtra` 及 runner 绑定装配已移除，不能以历史验收为由恢复。
 
 1. **CLI 服务进程与 Electron 主进程必须严格原生、直接构造对应服务。** 两者导入相同公共服务工厂，使用相同配置/依赖形状和 initialize、status、执行/控制、close 签名，调用同一真实实现。Kernel socket 必须由调用进程监听；Gateway 控制 socket 如启用也必须属于该调用进程。不得通过外部 Node、Runtime CLI 或其他进程代替服务启动。
 2. **服务对象所有权不等于另一个 OS 进程所有权。** SDK 管理自己构造的服务对象及其资源；CLI/App 管理宿主进程和部署。严禁 `startOwnedKernel`、`OwnedKernel` 及同等语义的专门 launch/restart 合同；不得换名、加兼容 alias、包装成可选便利函数或移到宿主 supervisor 后保留相同路径。`startExtra`/`OwnedExtra` 的必经进程启动合同同样删除，抽为普通可导入服务。
 3. **部署拓扑由宿主决定，构造实现不得分叉。** CLI 的 `executor-kernel start` 与 `channel-gateway start` 分别管理独立服务进程，各自 run 入口直接调用 SDK。Gateway 仅连接指定 Kernel，不能创建、启动或关闭 Kernel。Electron 主进程通过相同 API 原生构造所需服务。不得将该要求误解为所有 CLI 服务合进一个常驻进程。
-4. **内部执行隔离与服务部署分别设计。** worker 可以基于明确隔离需求执行唯一 AgentExecutor，Adapter 可以启动合法 Provider CLI；二者都不能成为另一个顶层 Kernel/Gateway。计划必须列出执行位置、服务拥有的资源和进程、Electron 实际运行机制。不得向原生宿主增加外部 Node 安装、版本或 executable 选择要求；不能用修改宿主 fuse 策略或 source patch 掩盖 Runtime 缺陷。
+4. **原生装配与 RPC 分别定义。** 宿主注入 Adapter 对象，Kernel 在本进程调用唯一 AgentExecutor；业务调用必须经过 KernelClient/RPC，不因同进程而直调执行器。Kernel 不启动执行 worker，Adapter 可以按合同启动 Provider CLI。计划须列出执行位置、资源所有权、实际 RPC 路径与稳定性影响；不得向宿主增加外部 Node、worker 文件或修改 fuse 策略的接入要求。
 5. **一份调用合同、一份生命周期实现。** 普通业务执行统一使用 KernelClient.invoke，低层 primitives 保留给明确需要的调用方；不得建立 Extra 专用执行层或让业务方复制 submit/subscribe 组合。invoke 自动登记，服务 close 自动完成所属调用的停止接纳、取消和排空，不得要求普通业务调用方额外手动触发 client.invocations。所属 Run 登记/取消/排空是服务内部资源管理，不是第二个 invoke。停止 Gateway 只影响自己的 Run 和资源，不能关闭 Kernel、其他 Extra、无关 Run 或宿主数据库。
 6. **功能测试通过不能豁免架构。** 每个涉及装配/生命周期/进程的 brief 必须声明服务与进程拓扑、composition root、资源所有权、公共接口和删除映射。库内评审以 CLI 直接加载共同公共 SDK 为主要验证路径，核对真实调用链、包外普通 SDK 严格类型 fixture 和实际 PID/socket 所有权；名称扫描不足以证明不存在换名替身。其他原生宿主遵循相同接口与实现，不为其另建装配路径。外部 Electron 的打包/版本/真机集成不作为库内改造前置条件，也不因 CLI 通过而宣称已实测。
 7. **失败事实与既有数据必须保留。** 分开定义服务、客户端连接与已接纳 Run 的生命周期。初始化回滚、重复 close、尾流排空、未结束依赖和 incomplete 需共同覆盖，不能用进程退出假报完整清理。接入改造不授权重置 Home、machine/profile/runtime identity、凭据、配置或应用 SQLite，也不授权消费方依赖未合并的私有 Runtime 补丁。
@@ -44,18 +113,17 @@ OpenClaw 远端产物转换为 Gateway 可读取 HTTPS 资源的方案已接受�
 11. **异步创建中的资源也属于生命周期。** socket/pipe 尚未完成 bind 不代表不存在所有权。取消时须等待绑定后关闭，或安排迟到回收；截止到期只结束等待，仍报告 incomplete 并保留冲突所有权，后续实际回收不得把已返回结果改成成功。回归必须覆盖 bind 中取消、到期后成功与失败；SDK 不得用退出宿主进程代替回收，CLI 可执行入口负责前台组件的有界最终退出。服务进程兜底不能推广到普通数据命令：慢管道下完整输出是成功返回的合同，固定退出 timer 不能代替输出刷新。
 12. **同进程依赖装配必须保留调用语义。** 依赖容器可为类实例，不能用仅复制可枚举自有属性的展开操作丢失方法。只读快照须保留原型成员并绑定函数到宿主原对象，支持其私有状态；服务权限和实际在途包装不能被类实例绕过。宿主实例不被 SDK 冻结或接管，嵌套资源仍由宿主维护；具体浅快照合同见 [Extra 规则](extras.md#动态函数与实际在途)。
 
-本节约束优先于旧任务和实现说明中的 launcher 设计。具体接口合同、迁移与验收见[设计](../tasks/unified-native-sdk-services/design.md)、[迁移](../tasks/unified-native-sdk-services/migration.md)和[验收矩阵](../tasks/unified-native-sdk-services/acceptance.md)。需要变更服务构造或新增进程时，必须先按本节检查；不得以“能启动/能调用”为唯一完成标准。
+本节与上文 [#294 合同](#sdk-原生装配与统一-rpc)优先于旧任务中的 launcher/worker 设计。#71 的历史接口、迁移与验收见[设计](../tasks/unified-native-sdk-services/design.md)、[迁移](../tasks/unified-native-sdk-services/migration.md)和[验收矩阵](../tasks/unified-native-sdk-services/acceptance.md)。需要变更服务构造或新增进程时，必须先按本节检查；不得以“能启动/能调用”为唯一完成标准。
 
-2026-10-26 用户明确删除外部组件启动器 `startNativeComponent`，包括其选项、部署清理类型、实现、公开导出和专属测试；不保留兼容入口或替代 launcher。Runtime 接入采用 CLI 宿主或原生 SDK 服务工厂。此决定覆盖历史任务中保留该外部组件 API 的约定，不改变 Kernel 内部 worker 和 Adapter 调用 Provider CLI 的执行隔离合同。
+2026-10-26 用户明确删除外部组件启动器 `startNativeComponent`，包括其选项、部署清理类型、实现、公开导出和专属测试；不保留兼容入口或替代 launcher。Runtime 接入采用 CLI 宿主或原生 SDK 服务工厂。此决定覆盖历史任务中保留该外部组件 API 的约定；当时仍保留 Kernel worker，#294 已进一步取消其作为原生接入前提。Adapter 调用 Provider CLI 的合同继续有效。
 
 ## ExecutorCore 抽取后的执行边界
 
-接入通过原生 SDK 服务及 Kernel IPC，服务直接构造在宿主选择的服务进程中；尤其是 Electron，Kernel 服务在主进程构造，不能由外部 Node 代启。执行隔离由 Kernel 内部 worker 承担。允许宿主显式选择直接嵌入 Core，但它不是 CLI/Electron 服务合同的替代分支。历史实现证据见 [Kernel/Host 实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)，其中 owned launcher 已由上节否决。
+接入通过原生 SDK 服务及 Kernel IPC，服务直接构造在宿主选择的服务进程中；尤其是 Electron，Kernel 服务在主进程构造，不能由外部 Node 代启。按 #294 合同，Kernel 和 AgentExecutor 在同一宿主进程，业务统一经 RPC 调用，Kernel 不启动执行 worker。直接嵌入 Core 仍是已有的显式低层能力，但不能作为 CLI/Electron 服务合同的替代分支。历史实现证据见 [Kernel/Host 实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)，其中 owned launcher 已由上节否决。
 
 #46 将唯一执行实现收敛到 `octo-runtime-executor-core` 的 `AgentExecutor`。主发行物公开
 `@mininglamp-oss/octo-runtime/executor-core`，宿主可显式注册 Adapter 并直接执行，不需要
-Kernel、IPC、Extra、云端账号或进程信号接线。默认链路由 executor-kernel 监督独立
-worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 AgentExecutor 类别名已删除。
+Kernel、IPC、Extra、云端账号或进程信号接线。Kernel 在宿主进程使用同一实现，保留外部 RPC 和内核稳定性处理。旧 adapter-host 包和 AgentExecutor 类别名已删除。
 
 直接执行与宿主共享进程故障域，不能隔离 process.exit、OOM 或同步阻塞。Core 负责输入准备、
 本轮固定渲染、接纳身份、执行、交互路由、取消和正常终态；不加载业务、安装 Provider 或保存
@@ -67,15 +135,15 @@ worker，通过 stdio NDJSON 调用同一实现；旧 adapter-host 包和 AgentE
 
 两种入口共用 InputInvoke 类型和 invoke(input, environment?) 签名：相同的 InvokeInput 业务结构、独立的本地环境，以及 native/default 的 HostFrame 或 canonical 的 CanonicalEvent 异步输出。相同输入契约不表示相同的执行拓扑、故障影响、环境选项或控制 API；Adapter、配置和运行环境仍须由相应宿主装配。
 
-产品默认推荐 KernelClient，依据是执行与宿主的进程隔离、worker 监督和原身份/原游标的有界恢复。原生服务的 client、attached client 及 Extra 的 ctx.kernel 使用此路径；Kernel 服务本身在调用进程，执行隔离来自内部 worker。本地 IPC 在 macOS/Linux 使用 Unix socket，在 Windows 使用 Named Pipe。直接 AgentExecutor 无需 IPC，适用于宿主明确接受同进程故障影响并自行管理 Adapter 与实例清理的接入。
+产品接入统一使用 KernelClient，依据是共同 RPC、内核接纳与控制、执行和观察分离及原身份/原游标的有界恢复。原生服务的 client、attached client 及 Extra 的 ctx.kernel 均使用此路径；Electron 同进程业务也不例外。本地 IPC 在 macOS/Linux 使用 Unix socket，在 Windows 使用 Named Pipe。#294 不再提供独立执行 worker 的进程隔离；不能以 RPC 代替该保证。直接 AgentExecutor 无需 IPC，也不具备 Kernel 的 Run 事件源和恢复管理；其低层能力不替代标准宿主接入。
 
 提前关闭 Core 执行 iterator 会请求取消；关闭 Kernel 观察 iterator 或 client 仅停止观察，不隐式取消已接纳 Run。Core 所有者调用 shutdown 并检查 cleanup；原生服务所有者调用 close 并检查 complete，Extra 服务内部自动排空所属 invoke。仅高级 attached 调用方自定调用所有权策略时才直接使用 invocations.stopAdmission/drain。两条路径的 signal 都请求取消，不能把取消接纳当作执行终态。直接 Core 支持 environment.streamLimits，当前 Kernel wire 对该本地选项明确拒绝。
 
-不得把产品推荐解释为每次执行必定成功：worker 重启不重跑旧 Run，恢复预算或源窗口不足明确失败，lost/结果未知仍不得报告完成。选型对照和适用场景见[架构讲解](../../ARCHITECTURE.md#接入选型产品默认推荐-kernelclient)，精确恢复合同见[本地执行](local-execution.md)。
+不得把统一调用解释为每次执行必定成功：服务恢复不重跑旧 Run，恢复预算或源窗口不足明确失败，lost/结果未知仍不得报告完成。选型对照和适用场景见[架构讲解](../../ARCHITECTURE.md#接入选型产品默认推荐-kernelclient)，精确恢复合同见[本地执行](local-execution.md)。
 
 App 和 Extra 直接使用同一个 KernelClient.invoke，Extra 通过 ctx.kernel 获得实际 client。提交、身份关联、订阅与有界恢复由 Kernel 包统一维护，Gateway 消费调用结果做 delivery；不建立第二个 Extra 执行 API。服务 close 内部复用 invocations.stopAdmission/drain，未知或 lost 不得视为清理完成。
 
-Executor Kernel 提供本地 IPC、源窗口和 worker 监督；Host SDK 独立管理 Kernel 与各 Extra。
+Executor Kernel 提供本地 RPC、Run 接纳、源窗口与执行生命周期；#294 取消内部执行 worker。宿主独立管理 Kernel 与各 Extra。
 旧 daemon app、包、bin、CLI 命令和 API 已删除，不保留兼容包装。LoopDaemon 是另一项目的
 Go 二进制，不在本仓实现；平台和真实业务验收按各自实际证据报告。
 
@@ -100,7 +168,7 @@ Runtime CLI（octo-runtime）是 Runtime 团队基于 SDK 维护、提供开箱�
 
 CLI 面向需要直接使用 Runtime 的普通用户，也支持云端设备的定制接入、部署和运维。默认包含全部 Adapter、Extra，以及系统管理、自启等服务能力。npm 发行物包含组件不表示所有 Extra 已配置或系统自启已注册；组件 install 按下面的产品默认值执行。
 
-Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。宿主通过 SDK 管理装配、配置、执行及生命周期，不把 CLI 可执行程序、终端输出解析或 CLI 系统服务作为业务接入层。SDK 在调用进程原生构造服务，管理内部执行 worker 和合法 Provider 子进程不构成外部服务代启；SDK 不管理另一个顶层 Kernel/Gateway 启动器。SDK 宿主自行选择依赖和配置来源，不继承 CLI 的全量集合或文件约定。
+Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。宿主通过 SDK 管理装配、配置、执行及生命周期，不把 CLI 可执行程序、终端输出解析或 CLI 系统服务作为业务接入层。SDK 在调用进程原生构造服务并接收宿主注入的 Adapter；同进程业务也走 Kernel RPC。Kernel 不再启动执行 worker 或顶层服务替身，Adapter 按协议管理合法 Provider 子进程。SDK 宿主自行选择依赖和配置来源，不继承 CLI 的全量集合或文件约定。
 
 ### CLI 面向普通用户的产品默认值
 
@@ -111,7 +179,7 @@ Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。宿�
 - **组件各自自启，不要求用户安排先后顺序。** Kernel 与每个 Extra 有独立服务；Extra 先启动时等待 Kernel 后续可用，不要求用户通过重装或重启 Extra 修复顺序。
 - **默认给人看。** 状态和操作结果使用易读文本，明确当前状态、成功或失败及必要的下一步；--json 才提供格式化机器数据。状态保留各 Extra 自身的业务健康和任务计数，裸组件命令显示包含用途、配置/启动入口的帮助。
 - **高级控制显式提供。** 普通安装启动流程不以理解原生管理器、enabled 字段或高级开关为前提。平台差异由宿主和既有 cross-service 处理，错误保留可诊断原因并给出可执行恢复命令。
-- **启动结果包含运行状态。** start/restart 成功后复用本组件 status 查询与展示，包含服务、自启、IPC、Manager、PID、Worker/Extra 业务状态及服务定义路径；--json 保留 component/action 和相同的 service/runtime 数据，用户无需追加 status 才能核实结果。
+- **启动结果包含运行状态。** start/restart 成功后复用本组件 status 查询与展示，包含服务、自启、IPC、Manager、PID、Kernel/Extra 业务状态及服务定义路径；--json 保留 component/action 和相同的 service/runtime 数据，用户无需追加 status 才能核实结果。
 
 精确的组件安装、显式禁用、启动、状态及平台激活合同见[本地生命周期](runtime-lifecycle.md#cli)。本策略不授权 npm 下载包时自动配置全部 Extra，也不替 SDK 宿主决定自启。
 
@@ -158,7 +226,7 @@ octo-cli 是 Octo 场景的重要产品能力。用户明确：对使用 Octo Ru
 
 [Issue 193](https://github.com/Mininglamp-OSS/octo-runtime/issues/193) 希望通过 Kernel IPC 返回模型及 effort 目录，其客户端展示诉求有价值，但“消费者需要列表”不能推出“Runtime 必须生产或发现列表”。`adapter.list` 描述宿主已装配的执行实现及实际探测状态，不是后端模型目录。某个 Provider 的执行响应含有模型选项，也不能推出其他 Provider 或后端具备相同的独立只读查询能力。
 
-公共 Kernel `adapter.list` / `KernelClient.list()` 经 worker RPC 调用 Core 的 `AgentExecutor.describe()`，因此包含 Provider 探测结果；进程内 `AgentExecutor.list()` 仅返回注册元数据与协议支持。不能因方法同名而混淆这两个入口，也不能将 Provider 安装可用性解释为模型目录或账号权限。
+公共 Kernel `adapter.list` / `KernelClient.list()` 通过 Kernel RPC 取得 Core 的 `AgentExecutor.describe()` 结果，因此包含 Provider 探测结果；内部在 Kernel 进程使用 Core；进程内 `AgentExecutor.list()` 仅返回注册元数据与协议支持。不能因方法同名而混淆这两个入口，也不能将 Provider 安装可用性解释为模型目录或账号权限。
 
 | 责任方 | 模型目录相关责任 |
 | --- | --- |
@@ -185,7 +253,7 @@ octo-cli 是 Octo 场景的重要产品能力。用户明确：对使用 Octo Ru
 
 Extra 是可选的业务组织方式，不是访问外部服务的必经入口。函数可以由宿主自行实现，也可复用 Provider 集成模块；不要求 Provider 新增 dependency 机制。结果和错误按对应业务合同处理。
 
-以模型目录为例，宿主可注入 Provider 集成模块提供的查询函数，Extra 在需要选项时调用；如需将目录或其他业务结果交给外部服务，则注入相应的发布函数，由其实现具体传输。具体 Extra 必须先定义并消费该依赖；已有依赖入口时，用户只需提供实现，框架不自动发现函数，也不自动调用任意 Provider 方法。这里的 Provider 实现可以是宿主进程中的集成对象，不要求暴露 worker 内的 Adapter 实例。
+以模型目录为例，宿主可注入 Provider 集成模块提供的查询函数，Extra 在需要选项时调用；如需将目录或其他业务结果交给外部服务，则注入相应的发布函数，由其实现具体传输。具体 Extra 必须先定义并消费该依赖；已有依赖入口时，用户只需提供实现，框架不自动发现函数，也不自动调用任意 Provider 方法。这里的 Provider 实现可以是宿主进程中的集成对象，不要求通过 Kernel 暴露 Adapter 实例。
 
 依赖接口和数据语义归具体 Extra 的业务合同，Provider 集成实现负责实际协议，宿主负责装配和授权；通用 Extra 框架只负责注入及既有生命周期管理。不把函数放入 JSON、不通过 Kernel 传输函数，不为这一场景新增通用 Provider dependency 注册中心或 Kernel 业务 RPC。函数在 Extra 所在进程调用，具体实现可以自行访问外部服务；有副作用的发送、重试和确认语义必须由该业务合同明确，框架不据此自动重试。取消、超时和实际在途遵守[Extra 依赖规则](extras.md#动态函数与实际在途)。
 
@@ -319,7 +387,7 @@ Kernel、AgentExecutor 和 Adapter 不管理文档/网盘业务，不按资源�
 
 ## 设备定义与寻址目标
 
-2026-10-16 用户明确：本架构中的**设备是某台机器上，由特定 Runtime Home 承载的本地执行实例**，不是整台电脑或手机。普通目录或单个 Provider 工作目录不构成设备；HostApp 初始化的 Home 承载设备身份、配置与本地状态，ExecutorKernel 管理 IPC 与共享 worker。不同 Home 不因位于同一台机器而自动合并。
+2026-10-16 用户明确：本架构中的**设备是某台机器上，由特定 Runtime Home 承载的本地执行实例**，不是整台电脑或手机。普通目录或单个 Provider 工作目录不构成设备；HostApp 初始化的 Home 承载设备身份、配置与本地状态，ExecutorKernel 管理本地 RPC 与共享执行；#294 目标由本进程 AgentExecutor 使用宿主注入的 Adapter。不同 Home 不因位于同一台机器而自动合并。
 
 统一设备的目标是先确定执行位置，再选择传输：
 
@@ -385,11 +453,11 @@ flowchart TB
     style Extras fill:#f5f5f5,stroke:#333
 ```
 
-宿主 App / CLI 装配设备实例；该实例内包含上方的 Extra 层与下方的 ExecutorKernel 与 worker 内的 AgentExecutor。IM-Server 位于宿主外，通过 ChannelGateway 接入；Extra 与本地模块复用同一内核，本地模块经 Kernel IPC 调用。图中箭头表示请求进入方向，交互事件与结果沿对应调用链返回。
+宿主 App / CLI 装配设备实例；按 #294 合同，该实例内包含上方的 Extra 层与下方的 ExecutorKernel；AgentExecutor 和注入的 Adapter 位于 Kernel 进程内。IM-Server 位于宿主外，通过 ChannelGateway 接入；Extra 与本地模块复用同一内核，本地模块经 Kernel IPC 调用。图中箭头表示请求进入方向，交互事件与结果沿对应调用链返回。
 
 图中进入 Kernel 的调用统一标为 `ipc_invoke`，用于架构讲解；图示不代替实际 SDK / RPC 方法，实际接口见[协议与调用设计](protocol-design.md)。
 
-图表示责任边界，不表示所有组件必须是独立进程。CLI 部署分别运行 Kernel/Gateway 服务；Electron 在主进程原生构造同一服务。内部 worker 仅隔离执行，SDK 不另起顶层服务。Extra 不挂靠单个 Runtime/profile；插件内部的账号、连接数量与路由由插件管理。“其他 Extra”是扩展占位，不表示已有实现。
+图表示责任边界，不表示所有组件必须是独立进程。CLI 部署分别运行 Kernel/Gateway 服务；Electron 在主进程原生构造同一服务。#294 已取消内部执行 worker，SDK 不另起顶层服务；同进程业务也通过本地 RPC 进入 Kernel。Extra 不挂靠单个 Runtime/profile；插件内部的账号、连接数量与路由由插件管理。“其他 Extra”是扩展占位，不表示已有实现。
 
 ## 按责任归属修复问题
 
@@ -412,7 +480,7 @@ HostApp 安装并初始化 Runtime 后，本地执行对象及其身份即存在
 
 与外部 IM 交互、设备登记及在线状态保持等接入需求，可以在设备本体之上按需扩展。设备接入当前考虑 Extra 层的独立模块与独立设备 Token，具体方案待架构确认；远程服务只通过设备侧接入层进入，不直接连接执行内核。停用相关接入或撤销线上登记只改变对应的对外可访问性，不销毁本地设备，也不阻止宿主通过内部 IPC 使用执行内核。
 
-SDK 管理原生服务对象，Kernel 提供 IPC 并监督执行 worker；#71 已删除旧 owned 进程合同。Home、配置与身份辅助函数继续保留既有格式。一个 Home 可承载多个 Runtime/profile，Extra 属于设备宿主。Home 级 `machine_id` 是安装分组标识，不是硬件指纹、认证凭据或跨产品全局设备身份。详见 [本地存在与接入边界](runtime-lifecycle.md)。
+SDK 管理原生服务对象，Kernel 提供 RPC 并管理执行与观察；#71 已删除旧 owned 进程合同，#294 进一步要求宿主注入 Adapter 并取消内部执行 worker。Home、配置与身份辅助函数继续保留既有格式。一个 Home 可承载多个 Runtime/profile，Extra 属于设备宿主。Home 级 `machine_id` 是安装分组标识，不是硬件指纹、认证凭据或跨产品全局设备身份。详见 [本地存在与接入边界](runtime-lifecycle.md)。
 
 ### 统一执行内核 AgentExecutor
 
@@ -442,18 +510,18 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 2026-10-16 进一步明确：CLI、desktop 和其他 SDK 宿主管理所选 Adapter 及版本的功能支持范围；Adapter 负责显式输入的原生适配、转发和真实结果返回。Runtime 不再额外建立功能发现、标签匹配或能力准入体系；`executionFeatures` 自建声明的字段、常量、发现投影和消费者已删除，不得恢复标签或换成能力字段表。必要的参数、权限、身份和原生协议校验仍在各自边界执行，实际安装/认证/连接状态与功能目录分别处理。具体边界见 [Adapter 规则](adapter-metadata.md#宿主掌握支持范围adapter-适配转发)及[决策记录](../journal/shared/2026-10-16-adapter-forwarding-ownership.md)。
 
-当前 ExecutorKernel 监督独立 worker，worker 内的 AgentExecutor 是唯一执行实现。SDK 与 Extra 使用 Kernel IPC，不为每种外部系统另建执行实现。
+ExecutorKernel 在本进程使用唯一 AgentExecutor 和宿主注入的 Adapter。SDK 与 Extra 始终使用 Kernel RPC，不为同进程调用或某种外部系统另建执行路径。
 
-可执行 app 只保留 `apps/cli`。CLI 直接构造服务并使用自己的 Adapter JSON；SDK 显式提供内部执行 worker 入口，以 `serveWorker` 注册 Adapter、提供 RPC 和退出清理。基线 Kernel 通过 stdio RPC 调用 worker，本次复用既有执行隔离，不以外部宿主假设新增运行机制，也不以外部 Node 代替原生服务。HostApp 独立管理 Kernel 和各 Extra。
+可执行 app 只保留 `apps/cli`。按 #294，CLI 自己读取 Adapter manifest、解析模块并动态 import，取得对象后调用 `createKernelService`；Electron 原生 import 后调用同一工厂。两者均不提供执行 worker 入口，Kernel 不加载模块清单。HostApp 独立管理 Kernel 和各 Extra。
 
-保留原 Home、身份、profile、配置和执行语义，不为入口迁移重新初始化 Runtime。旧 remove-adapter-host-app 任务保留命令的约定已被本轮明确删除 daemon 的决定替代；当前 CLI 是 executor-kernel/channel-gateway 两组六动作。单一 npm 发行物必须携带实际 runner 与生产依赖。当前验收范围见 [独立组件任务](../tasks/executor-kernel-host-lifecycle/acceptance.md)。
+保留原 Home、身份、profile、配置和执行语义，不为入口迁移重新初始化 Runtime。旧 remove-adapter-host-app 任务保留命令的约定已被本轮明确删除 daemon 的决定替代；当前 CLI 是 executor-kernel/channel-gateway 两组六动作。单一 npm 发行物必须携带实际公共入口与生产依赖；迁移期间旧 runner 的存在不构成目标架构要求。当前验收范围见 [独立组件任务](../tasks/executor-kernel-host-lifecycle/acceptance.md)。
 
 #### CLI 与 SDK 的 Adapter/Extra 装配约束
 
-2026-10-21 用户明确：本节同时约束 Adapter 和 Extra，取代此前“仅 Adapter 默认清单”和 SDK 可继承 CLI 文件的解释。Issue #192 增加 CLI 独占的同环境全局 Extra 发现，详见本节补充。以下要求已在本工作树实现；具体实现与验证范围见 [Issue 85](../tasks/85-provider-decoupling/brief.md)。SDK 原生 import 与 CLI 内部 runner 必须保持两种独立装配路径，禁止恢复 startOwnedKernel 或外部 Node 顶层服务加载器。
+2026-10-21 用户明确：本节同时约束 Adapter 和 Extra，取代此前“仅 Adapter 默认清单”和 SDK 可继承 CLI 文件的解释。Issue #192 增加 CLI 独占的同环境全局 Extra 发现，详见本节补充。#85 的既有实现与验证见 [Issue 85](../tasks/85-provider-decoupling/brief.md)。2026-11-02 的 #294 要求将两类宿主的模块选择收敛为同一工厂的对象输入，下面的执行位置和装配边界已在本任务工作树实施；不再要求 CLI 内部 runner，禁止恢复 startOwnedKernel 或外部 Node 服务加载器。
 
 1. **SDK 原生装配。** Electron 及其他 SDK 宿主在接入代码中直接 import 所需 Adapter 和 Extra。SDK 不要求、读取、复制或生成永久或临时 manifest，不扫描 CLI Home 或默认集合。宿主 App 选择模块、配置、函数依赖和部署；FDE 如何复制代码与处理依赖由业务方负责。
-2. **保持执行位置。** Kernel 服务在宿主调用进程原生构造；Adapter 在宿主选择的内部 worker 入口 import 并注册到唯一 AgentExecutor。Extra 在宿主服务进程 import 后传给 createExtraService，函数依赖直接注入。跨进程只传 worker 入口和必要可序列化启动信息，不传实例或函数，不以外部 Node 或 CLI 代启顶层服务。
+2. **对象留在服务进程，调用统一经 RPC。** 宿主 import 并构造 Adapter，Kernel 接收对象并在本进程注册到唯一 AgentExecutor；Kernel 不接收模块 manifest、模块路径或 worker 入口。Extra 在宿主服务进程 import 后传给 createExtraService，函数依赖直接注入。执行和控制经 KernelClient/RPC；Adapter 对象和函数不进入 RPC。
 3. **CLI 一份统一内置目录。** `apps/cli/src/manifest.json` 使用 `adapters`、`extras` 两个数组，随自身 dist 交付；将现有 `default_adapters.json` 的内容并入，不继续维护第二份默认目录。默认发布 App 仍携带完整默认 Adapter/Extra 集合，目录全量不等于全部 Extra 已配置、启用或自启。
 4. **CLI 用户扩展。** 在 `<Runtime Home>/manifest.json` 读取同样具有 `adapters`、`extras` 的扩展清单；默认 `~/.octo-runtime/manifest.json`，`--home` 指定时跟随该 Home。缺失表示无扩展，损坏或无法读取明确失败；不能把该文件推广成 SDK 宿主接入条件。
 5. **合并先于加载。** Adapter 按 type、Extra 按 name，各自内置优先、用户追加；报告忽略的同名扩展且不解析、不导入、不调用其工厂。同一文件的重复键报错，空数组不触发全量回退。显式 --manifest 继续是完整替换，不隐式叠加默认与 Home 来源。
@@ -469,7 +537,7 @@ IM Agent 固定 workdir、reset 只切会话是架构决策，不是待开发功
 
 全局环境必须由当前 CLI 安装入口与包/启动器/活动安装组证据确定，不按 PATH 选择包管理器，不合并多个环境。npm 对应 prefix 的 node_modules；pnpm 支持全局版本 5 和版本 11 活动独立安装组，只发现直接包，不扫描共享 store、陈旧 target 或传递依赖。源码或无法确认来源时诊断并保留 manifest 路径。CLI 服务定义保留经 realpath 验证的安装入口，使 pnpm 安装组来源跨启动保持。发现只读元数据且不导入；异常候选诊断跳过，已选模块加载时须核对原安装与导出 name。发现不启用、不自启、不安装；每次目录读取更新候选，运行实例不热更。SDK、Adapter 和业务配置合同不变。操作及支持限制见[模块载入](../../docs/zh-CN/concepts/module-loading.md#全局安装的-extra)。
 
-旧式显式 --manifest 允许省略 Adapter type。CLI 自有执行 worker 先仅装配所选实例，再根据其真实 metadata.type 完成 OpenClaw 连接准备，之后进入既有 serveWorker/list 就绪链；不得按包名猜测、省略初始化或在父进程重复实例化工厂。CLI Kernel 与 Playboard 共享此顺序；通用清单 runner 不包含产品准备逻辑，SDK 保持宿主自有 worker 的原生 import。
+旧式显式 --manifest 允许省略 Adapter type。#294 要求 CLI 宿主先装配所选实例，再根据其真实 metadata.type 完成宿主拥有的 OpenClaw 连接准备，随后将同一组对象交给 createKernelService；不得按包名猜测、省略初始化或重复调用工厂。CLI 常驻 Kernel 与 Playboard 共享此装配顺序，产品准备不下沉到通用 Kernel；Electron 自行准备并原生 import 所需对象。
 
 ### ChannelGateway 任务接收与投递边界
 
@@ -516,6 +584,10 @@ Extra 的函数式入口负责封装内部流程：宿主传入完整配置和�
 | 其他 Extra | 待确定 | 按具体外部系统或业务接入需求扩展 |
 
 图中的插件仅作架构示例。当前还有独立的 `extra-channel-wecom` 和 `octo-runtime-extra-webui` 包，以各包实际合同为准。`webui-extra` 提供类似 OpenClaw 的 WebUI 能力，仅用于本地服务调试，不用于实际生产环境。旧 `worker-access` 已退出当前 workspace，不作为已完成的设备 Agent 访问方案。
+
+## 旧装配方式的处理
+
+#294 明确删除旧 worker 启动、stdio WorkerRpc、心跳与恢复实现。旧 workerEntrypoint、manifest 和模块路径选项直接拒绝，不保留兼容入口或升级路径。旧格式资源记录不能证明当前资源归属，因此明确拒绝并保留原文件，不自动转换、清理或终止进程。此决定只替换错误装配架构，不授权重置用户 Home、身份或 Provider 数据。
 
 ## 保持的执行约束
 

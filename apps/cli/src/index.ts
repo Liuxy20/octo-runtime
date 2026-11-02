@@ -1,9 +1,13 @@
 #!/usr/bin/env node
 import { runCli } from "./main.js";
+import { installPlayboardInterrupt } from "./playboard-interrupt.js";
 
 let componentRun = false;
 try {
   process.exitCode = await runCli(process.argv.slice(2), {
+    onPlayboardRun: () => {
+      installPlayboardInterrupt();
+    },
     onComponentRun: () => {
       componentRun = true;
     }

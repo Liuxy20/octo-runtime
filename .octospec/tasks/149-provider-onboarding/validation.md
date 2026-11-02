@@ -6,6 +6,8 @@ tags: [documentation, adapter, testing]
 timestamp: 2026-11-01T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 当前验证版本
 
 最新合入基线为 `7fd022cd`，本轮工作区继承 PR 提交 `76ac6856` 后合并 main，冲突处保留上游更完整的公共/内部模式说明。下方各次验证只适用于各自标明的版本，不将不同版本的计数视为同一次结果。未重跑的构建和专项仍只引用历史版本。
@@ -69,7 +71,7 @@ PR `76ac6856` 的 GitHub 构建矩阵与 CI Gate 已通过；code-review 状态�
 - `node /tmp/ort50-verify.mjs`：临时本地校验，未加入仓库或默认测试。校验 30 个 README 输入片段、实际 Core 三轮连续性、旧字段拒绝、Context 映射、Markdown 本地链接、去注释转译一致及 workflow 范围。日志 `/tmp/ort50-probe.log`；脚本 SHA-256 `4afcb29cbb2ab52a1377267f6e652de5350c1805753d1382088e526b624e4305`。
 - `git diff --check`：通过；新建文件另用定向检查校验 frontmatter 和尾随空白。
 
-README 片段覆盖 ACP、Antigravity、Claude Code、CodeBuddy、Codex、DSH、Grok Build、Hermes、Kimi Code、MCode、OpenClaw、OpenCode、Qoder CLI、Qoder CN、ZCode 的英文与中文文件各 1 个。DSH 示例的宿主路径变量在临时校验中注入本机绝对路径，仅验证请求准备，不启动 Provider 或验证该安装可用性。Adapter SDK 的 authoring 示例不属于公共 InvokeInput 片段。
+README 片段覆盖 ACP、Antigravity、Claude Code、CodeBuddy、Codex、DSH、Grok Build、Hermes、Kimi Code、MCode、OpenClaw、OpenCode、Qoder CLI、Qoder CN 的英文与中文文件各 1 个。DSH 示例的宿主路径变量在临时校验中注入本机绝对路径，仅验证请求准备，不启动 Provider 或验证该安装可用性。Adapter SDK 的 authoring 示例不属于公共 InvokeInput 片段。
 
 ## 已知基线检查问题
 

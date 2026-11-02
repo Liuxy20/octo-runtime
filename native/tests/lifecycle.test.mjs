@@ -1,3 +1,5 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
+import { adapter } from "./fixture-adapter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve, join } from "node:path";
@@ -13,7 +15,7 @@ test(`${language} observation closure during admission`, async (t) => {
   build(language);
   for (const scenario of ["close", "cancel-same-tick", "cancel-watcher-started"]) {
     await t.test(scenario, async (t) => {
-      const f = await kernelFixture(t, { manifest: resolve("native/tests/adapters.json") });
+      const f = await kernelFixture(t, { adapters: [testAdapter, adapter] });
       const gate = join(f.directory, "admitted");
       let closed = false;
       const relay = await kernelRelay(t, f, {
@@ -69,7 +71,7 @@ test(`${language} observation closure during admission`, async (t) => {
 // Block four cancel ACKs while a fifth control queues; release the ACKs only after drain returns.
 test(`${language} drain bounds previously queued cancellation`, async (t) => {
   build(language);
-  const f = await kernelFixture(t, { manifest: resolve("native/tests/adapters.json") });
+  const f = await kernelFixture(t, { adapters: [testAdapter, adapter] });
   const gate = join(f.directory, "controls");
   let received = 0,
     held = 0,

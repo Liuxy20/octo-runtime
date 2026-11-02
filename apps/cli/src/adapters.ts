@@ -1,24 +1,19 @@
 import {
-  parseModuleManifest,
-  readModuleManifest,
   resolveModuleSpecifier,
   type AdapterModuleEntry
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
-import type { HostedAdapter } from "./index.js";
+import type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { dirname, join } from "node:path";
 
-/**
- * 仅供清单驱动的 worker 在自身进程装配：只实例化所选模块，返回后由入口注册及 serveWorker。
- * CLI 可在注册前用实际 metadata 做产品准备；SDK 原生 import 入口不经过此文件加载边界。
- */
-export async function loadManifestAdapters(): Promise<HostedAdapter[]> {
-  const index = process.argv.indexOf("--manifest");
-  const entries = process.argv.includes("--adapters-from-ipc")
-    ? await receiveAdapters()
-    : index >= 0 && process.argv[index + 1]
-      ? (await readModuleManifest(process.argv[index + 1], { legacy: true })).adapters
-      : (() => {
-          throw new Error("usage: octo-runtime-executor-kernel --manifest <file>");
-        })();
+/** CLI 只加载所选模块并构造实例；Kernel 不接触清单、模块路径或产品准备。 */
+export async function loadCliAdapters(
+  entries: readonly AdapterModuleEntry[],
+  options?: {
+    profileRoot: string;
+    syncOpenClawTools: boolean;
+  }
+): Promise<HostedAdapter[]> {
   const adapters: HostedAdapter[] = [];
 
   for (const entry of entries) {
@@ -39,45 +34,16 @@ export async function loadManifestAdapters(): Promise<HostedAdapter[]> {
       );
     adapters.push(instance);
   }
+  if (options && adapters.some((adapter) => adapter.metadata.type === "openclaw")) {
+    const { initializeCliOpenClaw, syncCliOpenClawToolEnvironment } = await import("./openclaw.js");
+    await initializeCliOpenClaw(options.profileRoot);
+    if (options.syncOpenClawTools)
+      await syncCliOpenClawToolEnvironment(
+        options.profileRoot,
+        await readExtraDirectory(join(dirname(options.profileRoot), "extras"))
+      );
+  }
   return adapters;
-}
-
-/** 内部启动消息只携带 JSON 模块声明，不传函数/实例；就绪仍沿用既有 list/probe 握手。 */
-function receiveAdapters(): Promise<AdapterModuleEntry[]> {
-  return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      clearTimeout(timer);
-      process.off("message", onMessage);
-      process.off("disconnect", onDisconnect);
-    };
-    const onDisconnect = () => {
-      cleanup();
-      reject(new Error("Adapter initialization channel disconnected"));
-    };
-    const onMessage = (message: unknown) => {
-      if (!isRecord(message) || message.type !== "kernel.adapters") return;
-      cleanup();
-      try {
-        // 快照已经解析为绝对位置；这个路径只用于结构校验，不读取或生成任何文件。
-        resolve(
-          parseModuleManifest(
-            { version: 1, adapters: message.adapters, extras: [] },
-            process.cwd(),
-            { legacy: true }
-          ).adapters
-        );
-      } catch (error) {
-        reject(error instanceof Error ? error : new Error("Invalid Adapter initialization"));
-      }
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      reject(new Error("Adapter initialization timed out"));
-    }, 15000);
-    process.on("message", onMessage);
-    process.once("disconnect", onDisconnect);
-    if (!process.connected) onDisconnect();
-  });
 }
 
 function callFactory(value: unknown, entry: AdapterModuleEntry): unknown {

@@ -1,12 +1,11 @@
+import { testAdapter } from "../test/fixtures/recovery-adapter.js";
 import { resolve } from "node:path";
 import { createKernelService } from "@mininglamp-oss/octo-runtime/host";
 
 // 此入口属于外层测试环境；Gateway 不加载它，也不取得服务对象。
 const kernel = createKernelService({
   endpoint: process.argv[2],
-  workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
-  manifest: resolve("test/fixtures/recovery-adapters.json"),
-  env: process.env
+  adapters: [testAdapter]
 });
 let closing;
 const close = () =>

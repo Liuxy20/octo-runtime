@@ -157,7 +157,7 @@ jobs:
       - name: Verify release process ownership and failure diagnostics on Windows
         run: node --unhandled-rejections=strict --test test/release-process.test.js test/windows-release-verifier.test.js
       - name: Verify Core, Kernel and independent Extra lifecycle on Windows
-        run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/zcode-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/kernel-worker-supervision.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/extra-startup.test.js test/service-bind-startup.test.js
+        run: node --unhandled-rejections=strict --test test/executor-core.test.js test/executor-cleanup-budget.test.js test/native-cleanup.test.js test/kernel-clients.test.js test/kernel-invoke.test.js test/kernel-invoke-lifecycle.test.js test/kernel-invoke-consumers.test.js test/host-sdk-lifecycle.test.js test/extra-service-shutdown.test.js test/extra-dependency-container.test.js test/native-service-architecture.test.js test/kernel-ipc-contract.test.js test/cli-components.test.js test/extra-startup.test.js test/service-bind-startup.test.js
       # Native process identity queries have their own deadlines; isolate them from process-heavy suites.
       - name: Verify Windows process identity and startup rollback
         run: |
@@ -171,13 +171,9 @@ jobs:
         run: >-
           node --unhandled-rejections=strict --test
           test/extra-status-logs.test.js
-          test/kernel-heartbeat.test.js
-          test/kernel-worker-recovery.test.js
-          test/kernel-recovery.test.js
-          test/kernel-windows-recovery.test.js
           test/im-connection-state-machine.test.js
           test/recovery-dual-mode.test.js
-      - name: Verify Windows worker log drain and close budget
+      - name: Verify Windows native execution log drain and close budget
         run: node --unhandled-rejections=strict --test test/host-process-close.test.js
       - name: Verify Windows invocation isolation, environment and native task installation
         run: >-

@@ -1,3 +1,4 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -8,7 +9,7 @@ import { kernelRelay } from "./kernel-relay.js";
 
 test("ACK and stream loss preserve one admission; old/new clients and sessions recover without Kernel restart", async (t) => {
   const fixture = await kernelFixture(t, {
-    manifest: resolve("test/fixtures/invoke-adapters.json")
+    adapters: [invokeAdapter]
   });
   const startsFile = join(fixture.directory, "starts");
   let ackLost = false,
@@ -43,5 +44,5 @@ test("ACK and stream loss preserve one admission; old/new clients and sessions r
       assert.equal(next.ref.kernel_instance_id, original.kernel_instance_id);
     }
   }
-  assert.equal((await fixture.client.status()).worker.generation, original.worker.generation);
+  assert.equal((await fixture.client.status()).kernel_instance_id, original.kernel_instance_id);
 });

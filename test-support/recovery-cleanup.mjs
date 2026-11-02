@@ -47,8 +47,8 @@ export async function cleanupRecovery({
       errors.push(new Error("recovery cleanup observer failed", { cause }));
     }
   };
-  const attempt = async (component, stage, operation, pid) => {
-    emit({ component, stage, pid, event: "attempt" });
+  const attempt = async (component, stage, operation, pid, timing = {}) => {
+    emit({ component, stage, pid, event: "attempt", ...timing });
     try {
       const result = await operation();
       if (result?.complete === false) {
@@ -70,7 +70,8 @@ export async function cleanupRecovery({
     const signal = (name) => {
       if (!child.kill(name)) throw new Error(`FIXTURE_SIGNAL_FAILED: ${name}`);
     };
-    const gracefulUntil = performance.now() + gracefulMs;
+    const gracefulStartedAt = performance.now();
+    const gracefulUntil = gracefulStartedAt + gracefulMs;
     if (running())
       await attempt(
         component,
@@ -83,7 +84,8 @@ export async function cleanupRecovery({
                 "FIXTURE_CLOSE_REQUEST_TIMEOUT"
               )
             : signal("SIGTERM"),
-        child.pid
+        child.pid,
+        { gracefulStartedAt, gracefulUntil }
       );
     await attempt(
       component,

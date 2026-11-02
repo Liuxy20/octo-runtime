@@ -4,7 +4,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
+import { testAdapter } from "./fixtures/test-adapter.js";
 
 const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const manifest = resolve("test/fixtures/adapters.json");
@@ -35,23 +36,13 @@ for (const enabled of [false, true]) {
       directory = join(home, "logs");
     let host;
     try {
-      host = await spawnWorker({
-        entrypoint,
-        manifest,
-        env: {
-          ...process.env,
-          OCTO_RUNTIME_HOME: home,
-          OCTO_RUNTIME_DEBUG: "1",
-          OCTO_RUNTIME_LOGS_DIRECTORY: enabled ? directory : ""
-        }
-      });
-      assert.equal(host.child.stdio.length, 4);
+      host = await nativeHost([testAdapter], { logging: enabled ? { directory } : undefined });
       await invoke(host);
       await host.close();
       if (enabled) {
         const path = await logPath(directory);
         const records = (await readFile(path, "utf8")).trim().split("\n").map(JSON.parse);
-        assert.ok(records.some((record) => record.event === "rpc.invoke_received"));
+        assert.ok(records.some((record) => record.event === "kernel.ready"));
         assert.ok(
           records.some(
             (record) => record.event === "invoke.finished" && record.data.status === "completed"
@@ -78,19 +69,10 @@ test("F31 unavailable log directory does not prevent Host readiness or invocatio
   try {
     const directory = join(home, "logs");
     await writeFile(directory, "not a directory");
-    host = await spawnWorker({
-      entrypoint,
-      manifest,
-      env: {
-        ...process.env,
-        OCTO_RUNTIME_HOME: home,
-        OCTO_RUNTIME_LOGS_DIRECTORY: directory
-      }
-    });
+    host = await nativeHost([testAdapter], { logging: { directory } });
     await invoke(host);
     await host.close();
     assert.equal(await readFile(directory, "utf8"), "not a directory");
-    assert.doesNotMatch(host.stderr(), /private-log-fixture/);
   } finally {
     await host?.close();
     await rm(home, { recursive: true, force: true });

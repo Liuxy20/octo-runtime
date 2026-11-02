@@ -1,9 +1,9 @@
+import { readAdapterConfigurations } from "./adapter-configuration.js";
 import { constants } from "node:fs";
 import { access, lstat, readFile, realpath, stat } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { processEnvironmentValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import type { ModuleManifest } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
-import { readAdapterConfigurations } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 /** CLI 宿主在创建 Kernel 前补齐 npm DSH 入口；探测与调用共享快照，显式配置始终优先。 */
 export async function readCliAdapterConfigurations(

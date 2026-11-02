@@ -33,14 +33,7 @@ export function formatStatus(name: string, snapshot: ComponentSnapshot): string 
     `  Manager: ${service.manager}${service.pid ? `  PID: ${service.pid}` : runtime.pid ? `  PID: ${text(runtime.pid)}` : ""}`
   ];
   if (runtime.execution_ready !== undefined)
-    lines.push(`  Worker: ${runtime.execution_ready ? "ready" : "unavailable"}`);
-  const recovery = record(record(runtime.worker).recovery);
-  if (recovery.code) {
-    lines.push(
-      `  Recovery: ${text(recovery.stage)} (${text(recovery.code)})${recovery.retry_at ? `  Next retry: ${text(recovery.retry_at)}` : ""}`
-    );
-    lines.push("  Diagnostics: octo-runtime executor-kernel logs --follow (use the same --home)");
-  }
+    lines.push(`  Execution: ${runtime.execution_ready ? "ready" : "unavailable"}`);
   if (runtime.available === false)
     lines.push(`  Reason: ${text(record(runtime.error).code ?? "COMPONENT_UNAVAILABLE")}`);
   if (service.lastExitCode !== undefined && service.lastExitCode !== 0)
@@ -163,7 +156,7 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
       "Check manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys.",
     MANAGER_UNAVAILABLE: "Run doctor and check the current user's native service manager.",
     COMPONENT_UNAVAILABLE:
-      "Check component status and the service logs; the IPC or worker is not ready.",
+      "Check component status and the service logs; the IPC endpoint or execution service is not ready.",
     SERVICE_PROCESS_EXITED: "The service exited unexpectedly. Check its logs and configuration.",
     SERVICE_INITIALIZATION_FAILED: "Check the component configuration, manifest and service logs.",
     SERVICE_DISABLED: "Enable this component with install --autostart=true, then start it."

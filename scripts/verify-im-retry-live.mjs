@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
-import { WorkerRpcClient } from "../packages/octo-runtime-executor-kernel/dist/rpc.js";
+import { nativeHost } from "../test/native-host-fixture.js";
+import { createRetryAdapters } from "../test-support/im-retry-live-host.mjs";
 import { ImTask } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/task.js";
 import { createImInvocation } from "../packages/octo-runtime-extra-channel-gateway/dist/execution/dispatcher.js";
 import { verifyBotIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/auth.js";
@@ -39,16 +38,7 @@ server.on("upgrade", (_req, socket) => {
 });
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const directory = await mkdtemp(join(tmpdir(), "octo-im-retry-live-"));
-const child = spawn(
-  process.execPath,
-  [new URL("../test-support/im-retry-live-host.mjs", import.meta.url).pathname],
-  {
-    env: { ...process.env, OCTO_RETRY_FAULT_URL: `http://127.0.0.1:${server.address().port}/v1` },
-    stdio: ["pipe", "pipe", "ignore"]
-  }
-);
-const exited = once(child, "exit");
-const rpc = new WorkerRpcClient({ input: child.stdout, output: child.stdin });
+let native;
 const marker = `IM_RETRY_${randomUUID().slice(0, 8)}`;
 const config = {
   bot_id: "live-retry-proof",
@@ -57,7 +47,10 @@ const config = {
   codex_retry: { max_consecutive_retries: 10, recovery_timeout_ms: 120000 }
 };
 let task;
+let failure;
 try {
+  native = await nativeHost(createRetryAdapters(`http://127.0.0.1:${server.address().port}/v1`));
+  const rpc = native.kernel.client;
   await rpc.list();
   const { request } = createImInvocation(
     config,
@@ -81,7 +74,7 @@ try {
         yield event;
       }
     },
-    cancel: (id, reason) => rpc.cancel(id, reason)
+    cancelInvocation: (id, reason) => rpc.cancelInvocation(id, reason)
   };
   task = new ImTask(host, request, "codex", config, {}, () => {});
   let terminal,
@@ -114,15 +107,27 @@ try {
   assert.equal(task.attempts.length, 2);
   assert.equal(terminal?.type, "run.completed");
   assert.equal(answer.trim(), marker);
+} catch (error) {
+  failure = error;
 } finally {
-  await task?.cancel("live verification cleanup").catch(() => {});
-  rpc.close();
-  child.stdin.end();
-  child.kill("SIGTERM");
-  const kill = setTimeout(() => child.kill("SIGKILL"), 5000);
-  await exited;
-  clearTimeout(kill);
+  // 各资源分别收尾；保留原始失败与清理错误，Kernel 未确认回收时保留工作目录。
+  const errors = failure ? [failure] : [];
+  const cleanup = async (operation) => {
+    try {
+      await operation();
+      return true;
+    } catch (error) {
+      errors.push(error);
+      return false;
+    }
+  };
+  await cleanup(() => task?.cancel("live verification cleanup"));
+  const released = await cleanup(() => native?.close());
   server.closeAllConnections();
-  await new Promise((resolve) => server.close(resolve));
-  await rm(directory, { recursive: true, force: true });
+  await cleanup(
+    () =>
+      new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+  );
+  if (released) await cleanup(() => rm(directory, { recursive: true, force: true }));
+  if (errors.length) throw new AggregateError(errors, "IM retry verification or cleanup failed");
 }

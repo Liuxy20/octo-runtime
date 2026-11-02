@@ -5,7 +5,6 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, writeFile, rm, stat, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PassThrough } from "node:stream";
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { once } from "node:events";
@@ -18,8 +17,7 @@ import {
   createOpenClawAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
 import { configureCliOpenClaw } from "../apps/cli/dist/openclaw.js";
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { WorkerRpcClient, WorkerRpcServer } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { nativeHost } from "./native-host-fixture.js";
 import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 
@@ -283,7 +281,7 @@ export function selectedAdapter() {
   });
 }
 
-test("shared Host probes and invokes each Runtime connection and uses only the Context Agent target", async (t) => {
+test("native Kernel hosts probe each Runtime connection and use only the Context Agent target", async (t) => {
   const root = await fixture(t);
   const roots = [join(root, "a"), join(root, "b")];
   await Promise.all(
@@ -329,25 +327,21 @@ test("shared Host probes and invokes each Runtime connection and uses only the C
       };
     }
   });
-  const host = new AgentExecutor();
-  host.register(adapter);
-  const requests = new PassThrough(),
-    responses = new PassThrough();
-  const server = new WorkerRpcServer({ host, input: requests, output: responses });
-  server.listen(requests);
-  const client = new WorkerRpcClient({ input: responses, output: requests });
-  t.after(() => {
-    client.close();
-    requests.destroy();
-    responses.destroy();
-  });
   const configurations = roots.map((dir) => ({ providerOptions: { OPENCLAW_RUNTIME_ROOT: dir } }));
-  const listings = await Promise.all(
-    configurations.map((config) => client.list({ openclaw: config }))
+  const hosts = await Promise.all(
+    configurations.map((config) =>
+      nativeHost([adapter], {
+        adapterConfigurations: { openclaw: config }
+      })
+    )
   );
-  assert.ok(listings.every((list) => list[0].available)); // no main Agent exists
+  t.after(async () => {
+    for (const host of hosts) await host.close();
+  });
+  const client = hosts[1].client;
+  const listings = await Promise.all(hosts.map((host) => host.client.list()));
+  assert.ok(listings.every((list) => list[0].available));
   assert.deepEqual(new Set(observed.map((value) => value.token)), new Set(["token-0", "token-1"]));
-  await Promise.all(configurations.map((config) => client.probe("openclaw", config)));
   // Rotation must be picked up without restarting the shared Host.
   await configureOpenClawConnection(roots[1], { url: "ws://127.0.0.1:19300", token: "rotated" });
   const request = {
@@ -397,16 +391,18 @@ test("shared Host probes and invokes each Runtime connection and uses only the C
     OPENCLAW_GATEWAY_PRIVATE_KEY: snapshot.device.privateKey
   };
   assert.deepEqual(await resolveOpenClawGateway(direct), snapshot);
-  assert.equal((await client.probe("openclaw", { providerOptions: direct })).available, true);
+  const sdkHost = await nativeHost([adapter], {
+    adapterConfigurations: { openclaw: { providerOptions: direct } }
+  });
+  t.after(() => sdkHost.close());
+  assert.equal((await sdkHost.client.list())[0].available, true);
   request.runId = "run-sdk";
   request.invocationId = "invoke-sdk";
   request.agentConfig.providerOptions = direct;
   const sdkEvents = [];
-  for await (const event of preparedTestInvoke((...args) => preparedFrames(client, ...args))(
-    "openclaw",
-    request,
-    { protocolMode: "canonical" }
-  ))
+  for await (const event of preparedTestInvoke((...args) =>
+    preparedFrames(sdkHost.client, ...args)
+  )("openclaw", request, { protocolMode: "canonical" }))
     sdkEvents.push(event);
   assert.equal(sdkEvents.at(-1).type, "run.completed");
   assert.equal(observed.at(-1).token, call.token);

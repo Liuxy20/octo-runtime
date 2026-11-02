@@ -1,0 +1,73 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/294
+related_issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/293
+phase: delivery
+baseline: 58332b3bcf5651f58e674fa236184dc6a0d927ca
+branch: codex/294-native-kernel-sdk-spec
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/stateless-execution.md
+context_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/AGENT-BLOCK.md
+  - .octospec/scripts/lint.py
+  - .octospec/tasks/unified-native-sdk-services/brief.md
+  - .octospec/tasks/205-host-configured-dsh/context.yaml
+  - ARCHITECTURE.md
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/process.ts
+  - packages/octo-runtime-executor-kernel/src/serve.ts
+  - packages/octo-runtime-executor-kernel/src/rpc.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-executor-kernel/src/manifest-adapters.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-host-sdk/src/endpoint.ts
+  - apps/cli/src/worker.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/playboard.ts
+  - docs/zh-CN/getting-started/sdk.md
+global_rules: .octospec/_global/ 不存在，未补建或同步。
+user_decisions:
+  - PR 复审要求同步双语 packages 导航的当前架构，并统一修复原生装配后的验证脚本；完成后新增 PR 评论并重新请求现有 reviewers 审查。
+  - 逆向 GUI Adapter 基于逆向接入，用户明确彻底移除 Adapter、注册、依赖、图标、专属测试和当前使用文档，不做 Electron 兼容修补。
+  - 用户后续明确授权 Playboard CLI 人工停止直接定向强退进程树，不等待 import 或 Kernel；正常结束仍关闭，可导入函数/SDK不强退。将决策与原因英文评论至 Issue294 并提交推送。
+  - 旧架构直接拒绝并删除实现，不提供兼容或升级；未知资源记录保留现场但不解释或转换。
+  - Electron 原生 SDK 是核心模式，CLI 是特殊宿主。
+  - 同进程也必须统一通过 KernelClient/RPC，不能绕过 ExecutorKernel 稳定性逻辑。
+  - Adapter 由宿主 import、构造并原生注入；Kernel 不启动执行 worker。
+  - 模块 manifest 完全归 CLI 等宿主，executor-kernel 不读取、解析、import 或接受模块描述。
+  - Adapter 内部按 Provider 原生协议启动程序仍允许。
+  - 声明原生装配签名并实施，不记录签名迁移表，不改变与装配无关的选项。
+  - 装配规则、职责边界及具体 case 必须清楚，目标和基线实现分别标记。
+authorization:
+  - 新建最新 main 基线的独立 worktree。
+  - 启动 Octospec 并更新架构和任务文档。
+  - 用户后续授权开始实施、修复 CLI 与错误架构文档。
+  - SDK 文档改为用途/签名表与具体例子；源码引入只简述 pnpm workspace + Git submodule。
+  - 本地 code-review；修复已复现的原生生命周期问题。
+  - SDK 文档分 KernelService、ChannelGateway ExtraService、高级 dependencies；AgentRun 使用另页且可选。
+  - 原生接入不显式 attachKernel，使用 kernel.client；attachKernel 用于跨进程独立应用连接已有 Kernel，CLI 客户端是其中一种，不是专属入口。
+  - 用户最新授权通过检查后提交、推送、创建 PR 并合并 main；不扩大 CI。
+overrides:
+  - 用户最新决定覆盖旧规则中必需 worker、SDK workerEntrypoint 和 CLI runner 的要求。
+  - Mininglamp-OSS 的 GitHub issue、PR 和 commit message 使用英文；本地规范保持中文。
+  - 不将历史任务中的提交、推送或合并授权继承到本任务。

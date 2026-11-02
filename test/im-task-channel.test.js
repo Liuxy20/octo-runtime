@@ -1,3 +1,5 @@
+import { nativeHost } from "./native-host-fixture.js";
+import { adapters } from "../test-support/im-diagnostic-host.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as settle } from "node:timers/promises";
@@ -6,7 +8,6 @@ import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway
 import { prepareInvokeInput } from "@mininglamp-oss/octo-runtime-executor-core";
 import { failurePayload } from "@mininglamp-oss/octo-runtime-protocol";
 import { canonicalEvents, invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { spawnWorker } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { fileURLToPath } from "node:url";
 import { buildReasoningFrame } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/reasoning-frame.js";
 const event = (type, payload = {}) => ({ protocolVersion: 2, type, payload });
@@ -200,9 +201,7 @@ test("a successful retry discards partial failed-attempt text", async (t) => {
 
 for (const mode of ["normal", "recovered", "silent", "snapshot", "tool", "failed"]) {
   test(`Codex subprocess → Host/RPC → IM: ${mode}`, { timeout: 10000 }, async (t) => {
-    const hosted = await spawnWorker({
-      entrypoint: fileURLToPath(new URL("../test-support/im-diagnostic-host.mjs", import.meta.url))
-    });
+    const hosted = await nativeHost(adapters);
     t.after(() => hosted.close());
     const f = await fixture(t, async function* (request, environment) {
       yield* canonicalEvents(

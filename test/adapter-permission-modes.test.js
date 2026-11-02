@@ -5,7 +5,6 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
-import { createZcodeGuiAdapter } from "@mininglamp-oss/octo-runtime-adapter-zcode-gui";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 
 const request = {
@@ -27,7 +26,7 @@ test("default adapters reject unsupported approval modes at their execution boun
   const manifest = JSON.parse(
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
-  assert.equal(manifest.adapters.length, 14);
+  assert.equal(manifest.adapters.length, 13);
   for (const entry of manifest.adapters) {
     const adapter = (await import(entry.module))[entry.export];
     if (["antigravity", "dsh"].includes(entry.type)) {
@@ -111,16 +110,6 @@ for (const [provider, factory] of [
         command: process.execPath,
         commandArgsPrefix: [
           fileURLToPath(new URL("../test-support/claude/fake-permission-cli.js", import.meta.url))
-        ]
-      })
-  ],
-  [
-    "ZCode",
-    () =>
-      createZcodeGuiAdapter({
-        command: process.execPath,
-        appServerArgs: [
-          fileURLToPath(new URL("../test-support/zcode/fake-zcode-app-server.js", import.meta.url))
         ]
       })
   ]

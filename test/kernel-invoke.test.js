@@ -1,3 +1,4 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -15,8 +16,70 @@ export const collect = async (source, values = []) => {
   for await (const value of source) values.push(value);
   return values;
 };
-const fixture = (t) =>
-  kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+const fixture = (t) => kernelFixture(t, { adapters: [invokeAdapter] });
+
+test("native Kernel close waits for the Adapter probe's actual completion", async (t) => {
+  let entered = false,
+    finished = false,
+    release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const adapter = {
+    ...invokeAdapter,
+    async probe() {
+      assert.equal(this, adapter);
+      entered = true;
+      await gate;
+      finished = true;
+      return { available: true, command: "fixture" };
+    }
+  };
+  const f = await kernelFixture(t, { adapters: [adapter] });
+  const listing = f.client.list().catch(() => undefined);
+  await waitFor(() => entered);
+  let closed = false;
+  const closing = f.server.close().then((result) => {
+    closed = true;
+    return result;
+  });
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    assert.equal(closed, false, "socket closure must not stand in for probe completion");
+  } finally {
+    release();
+  }
+  assert.equal((await closing).complete, true);
+  assert.equal(finished, true);
+  await listing;
+});
+
+test("native Kernel probe display timeout does not erase unfinished cleanup", async (t) => {
+  let finished = false,
+    release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const adapter = {
+    ...invokeAdapter,
+    async probe() {
+      await gate;
+      finished = true;
+      return { available: true, command: "fixture" };
+    }
+  };
+  const f = await kernelFixture(t, { adapters: [adapter], expectedCleanupComplete: false });
+  try {
+    const listing = await f.client.list();
+    assert.equal(listing[0].unavailableReason, "probe_timeout");
+    assert.equal(finished, false);
+    assert.equal((await f.server.close()).complete, false);
+    assert.equal(finished, false);
+  } finally {
+    release();
+    await gate;
+  }
+});
 
 for (const mode of ["native", "canonical"])
   test(`${mode} interaction controls route by invocation ID and reject other clients`, async (t) => {
@@ -486,33 +549,4 @@ for (const close of ["iterator", "client"])
     assert.equal((await f.client.get(ref)).terminal, undefined);
     await f.client.cancel(ref);
     assert.equal((await frames(f.client, ref)).at(-1).control.state, "cancelled");
-  });
-
-for (const mode of ["native", "canonical"])
-  test(`${mode} worker loss stays unknown and never restarts the invocation`, async (t) => {
-    const f = await fixture(t),
-      relay = await kernelRelay(t, f),
-      values = [];
-    const source = relay.client.invoke({ ...kernelInput("wait-for-cancel"), protocol_mode: mode });
-    const done = collect(source, values);
-    const outcome = assert.rejects(done, /RUN_OUTCOME_UNKNOWN/);
-    // Admission is the deterministic barrier before terminating the actual worker.
-    const { waitFor } = await import("./runtime-fixture.js");
-    await waitFor(() => relay.client.invocations.snapshot()[0]?.ref !== undefined);
-    const previous = await f.client.status();
-    process.kill(previous.worker.pid, "SIGKILL");
-    await outcome;
-    if (mode === "native") assert.equal(values.at(-1).control.state, "lost");
-    else
-      assert.equal(
-        values.some((v) => v.type === "run.completed"),
-        false
-      );
-    assert.equal(relay.count("agent_run.invoke"), 1);
-    assert.equal(relay.client.invocations.snapshot()[0].observationError, "RUN_OUTCOME_UNKNOWN");
-    // 流断开可能先于进程退出通知；等监督器完成恢复后再清理测试资源。
-    await waitFor(async () => {
-      const status = await f.client.status();
-      return status.execution_ready && status.worker.generation > previous.worker.generation;
-    }, 10_000);
   });

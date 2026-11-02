@@ -1,3 +1,5 @@
+import { nativeHost } from "./native-host-fixture.js";
+import { adapters } from "./fixtures/acp-failure-host.js";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
@@ -55,11 +57,8 @@ test(
   "ACP missing executable through Host RPC preserves a concurrent run and later invokes",
   { timeout: 5000 },
   async () => {
-    const { spawnWorker } = await import("@mininglamp-oss/octo-runtime-executor-kernel");
     const { preparedFrames, invokeRequest } = await import("./runtime-fixture.js");
-    const host = await spawnWorker({
-      entrypoint: fileURLToPath(new URL("./fixtures/acp-failure-host.js", import.meta.url))
-    });
+    const host = await nativeHost(adapters);
     const collect = async (type, id, ready = () => {}) => {
       const frames = [];
       for await (const frame of preparedFrames(
@@ -93,9 +92,10 @@ test(
           (frame) => frame.event?.type === "run.completed"
         )
       );
-      assert.equal(host.child.exitCode, null);
+      assert.equal((await host.client.status()).execution_ready, true);
     } finally {
-      await host.close();
+      // next() rejection does not prove Adapter finally completed; native owner reports this fact.
+      await assert.rejects(host.close(), { code: "EXECUTOR_CLEANUP_INCOMPLETE" });
     }
   }
 );

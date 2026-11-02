@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
+import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
 import { AsyncQuestionReply } from "../../dist/public/executor-kernel.js";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
@@ -14,14 +14,8 @@ for (const custom of [false, true])
     { timeout: 180000 },
     async (t) => {
       const f = await kernelFixture(t, {
-        manifest: undefined,
-        adapterModules: [
-          {
-            type: "codex",
-            module: resolve("packages/octo-runtime-adapter-codex/dist/index.js"),
-            export: "default"
-          }
-        ]
+        // 真实专项由宿主选择 Provider，Kernel 只接收已构造的对象。
+        adapters: [createCodexAdapter()]
       });
       const marker = `LATE_${randomUUID().replaceAll("-", "")}`;
       const prompt = `Local async-input test. Invoke request_user_input_async with exactly one question titled "Test color?" and options ["${marker}", "Green"]. After publishing the question, finish this turn immediately with "Original turn complete". Do not wait for an answer. In a later turn, when supplemental answers arrive, repeat the exact supplied answer including the complete LATE marker. No file edits or network requests. Use Default mode, no synchronous question.`;

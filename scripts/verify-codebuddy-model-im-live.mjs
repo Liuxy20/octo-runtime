@@ -124,9 +124,14 @@ try {
   );
   kernel = createKernelService({
     endpoint: join(directory, "k.sock"),
-    manifest,
-    workerEntrypoint: fileURLToPath(
-      new URL("../packages/octo-runtime-executor-kernel/dist/runner.js", import.meta.url)
+    adapters: await (
+      await import("../apps/cli/dist/adapters.js")
+    ).loadCliAdapters(
+      (
+        await (
+          await import("../packages/octo-runtime-adapter-sdk/dist/module-manifest.js")
+        ).readModuleManifest(manifest, { legacy: true })
+      ).adapters
     )
   });
   await kernel.initialize();

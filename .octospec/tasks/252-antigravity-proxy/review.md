@@ -6,13 +6,15 @@ tags: [documentation, review, adapter, channel]
 timestamp: 2026-11-01T00:00:00Z
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # 范围
 
 固定基线 `3f2a810b61fefeafa6ad1571f68362b73494b85a`。审查包含已跟踪 diff 及尚未跟踪的全部双语 Harness 专题和任务记录。采用 code-review 的两个独立只读审查者，分别检查 Standards 与 Spec。
 
 # Standards
 
-发现并修复 3 项：ZCode 能力限制明确归于当前 Runtime Adapter，并链接独立的 V4 增强 Issue #286；恢复 MiniMax Code 中英文安装表格行；公共验证指引不再引用已从 Antigravity 专题删除的原生探针。
+已恢复 MiniMax Code 中英文安装表格行；公共验证指引不再引用已从 Antigravity 专题删除的原生探针。
 
 原审查者复核通过，剩余确定问题 0 项。未发现源码或 GitHub CI 范围变化。
 

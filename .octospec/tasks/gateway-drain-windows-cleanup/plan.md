@@ -37,7 +37,7 @@ status: in_progress
 | C08 | `packages/octo-runtime-adapter-sdk/src/process-cleanup.ts`及私有 managed-launch 模块 | Windows Job owner、树清空确认，POSIX 路径原样回归 | M3 |
 | C09 | `packages/octo-runtime-host-sdk/src/launch.ts`、`native.ts` | component/native 创建与回滚、真实目标 PID、owner死宽限 | M3 |
 | C10 | `packages/octo-runtime-executor-kernel/src/process.ts`、`invocation-manifest.ts` | worker 归属、broker/目标清理事实、先回收再替换 | M3 |
-| C11 | Adapter SDK NDJSON、`octo-runtime-acp-client/src/index.ts`、Codex/ZCode app-server | 接到私有 launcher；共享 Provider 的进程 owner 不变 | M3 |
+| C11 | Adapter SDK NDJSON、`octo-runtime-acp-client/src/index.ts`、Codex app-server | 接到私有 launcher；共享 Provider 的进程 owner 不变 | M3 |
 | C12 | `scripts/pack-release.mjs`、`verify-release.mjs`、`verify-windows-release.mjs`、构建脚本 | Go/架构/摘要门禁；tgz 实测，不向 consumer 暴露新步骤 | M4 |
 | C13 | `.github/workflows/ci.yml`、相关 package scripts | 固定 Go，Windows 必跑 broker/回收/独立 Extra 测试，接入 CI Gate | M4 |
 | C14 | `test/`及`test/fixtures/` | [验收矩阵](acceptance.md)中的故障与资源断言 | M0–M5 |

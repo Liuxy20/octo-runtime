@@ -1,143 +1,64 @@
 # Executor Kernel
 
-`KernelClient.invoke` 经公共 IPC 透传整轮预算：默认 24 小时，最大七天。72 小时调用显式传 `runtimeLimits: { runTimeoutMs: 259200000 }` 或对应 Context 字段；无响应检测和显式取消仍有效，见[输入优先级](../../docs/zh-CN/reference/invoke-input.md)。
-
 [English](README.md) | [包导航](../README.zh.md)
 
-把 [Executor Core](../octo-runtime-executor-core/README.zh.md) 放进独立的 worker 进程，并通过本地 IPC 暴露出来。宿主持有 Kernel 服务，业务代码对着 `KernelClient` 说话，worker 是你自己的一个小文件，里面注册要发布的 Adapter，由 Kernel 拉起。当一个 Provider 崩溃、OOM 或 `process.exit` 不能把外面整个应用带走时，就该用它。
+Kernel 是 Electron SDK 和 CLI 的统一执行入口。在宿主进程持有 AgentExecutor、已注入的 Adapter、RPC 端点和有界 Run 事件源。即使业务与 Kernel 同进程，也通过 KernelClient/RPC 调用。
 
-## 什么时候用它
+## 原生装配
 
-- 长期驻留的桌面或 CLI 宿主：执行被隔离、被监督、可重启。
-- 多个调用方——UI、Extra、自动化——共用一个执行服务。
-- 连接断开后需要有界地续读输出。
+宿主 import 并构造 Adapter，再提供本地 `endpoint` 和 `adapters`。endpoint 是 Unix socket / Named Pipe，Home 是宿主目录；`componentEndpoint(home)` 将两者连接起来。模块 manifest、解析、动态 import 和工厂调用属于 CLI 等宿主，Kernel 不接收或读取它们。
 
-跑一次 prompt 就退出的短脚本，直接用 Core 更省事。
-
-## 要接的三块
-
-| 角色       | 入口                                                  | 职责                               |
-| ---------- | ----------------------------------------------------- | ---------------------------------- |
-| 业务调用方 | `attachKernel({ endpoint })`，或注入的 `KernelClient` | 持有自己的连接与调用策略           |
-| 装配入口   | `createKernelService(options)`，然后 `initialize()`   | 持有服务，退出时关闭并读取清理结果 |
-| Worker     | 自己的入口文件里调 `serveWorker([...adapters])`       | 注册 Adapter，通过 Core 提供执行   |
-
-socket 或管道属于调用进程，隔离来自 worker，不来自服务进程。
-
-## 发起一次调用
-
-`worker.mjs` —— 你自己的文件，Kernel 只负责拉起它：
-
-```js
-import { serveWorker } from "@mininglamp-oss/octo-runtime/executor-kernel";
+```ts
+import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
 import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
 
-serveWorker([dshAdapter]);
-```
-
-在宿主进程里构造服务。这一步不做 I/O，`initialize()` 之前不会监听任何地址：
-
-```ts
-import { join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { componentEndpoint, createKernelService } from "@mininglamp-oss/octo-runtime/host";
-
-const home = process.env.OCTO_HOME ?? process.cwd();
 const kernel = createKernelService({
-  endpoint: componentEndpoint(home), // socket on POSIX, named pipe on Windows
-  workerEntrypoint: fileURLToPath(new URL("./worker.mjs", import.meta.url)),
-  stateDirectory: join(home, "state")
+  endpoint: componentEndpoint("/absolute/app-runtime-home"),
+  adapters: [dshAdapter],
+  adapterConfigurations: { dsh: { providerOptions: { dshBin: "/absolute/dsh/lib/bin.js" } } }
 });
-```
-
-然后调用并关闭：
-
-```ts
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-
 await kernel.initialize();
-try {
-  const input = InvokeInput.check({
-    inputs: [{ type: "text", text: "Summarize the last commit." }],
-    approvalMode: "full_access",
-    contexts: {
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
-    }
-  });
-  let terminal: string | undefined;
-  for await (const event of kernel.client.invoke({ ...input, protocol_mode: "canonical" })) {
-    if (event.type === "message.delta" && event.payload.channel === "final")
-      process.stdout.write(event.payload.text ?? "");
-    if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
-      terminal = event.type;
-  }
-  if (terminal !== "run.completed") throw new Error(terminal ?? "RUN_TERMINAL_MISSING");
-} finally {
-  const cleanup = await kernel.close();
-  if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
-}
+// 使用 kernel.client.invoke，消费到终态；退出先排空 Extra 和业务尾流，再关闭服务。
+const cleanup = await kernel.close();
+if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 ```
 
-`stateDirectory` 可选，但孤儿清理记录要靠它跨重启保留。
+构造不做 I/O；实例数组在构造时复制，Adapter 对象本身保留原型、this、闭包和宿主依赖。初始化校验协议声明及重复类型，不自动补默认 Adapter。注册集合固定；不要修改已注册元数据。Kernel 不冻结或销毁宿主持有的任意依赖。
 
-## 从另一个进程接入
+## 职责与流程
 
-```ts
-import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import type { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+| 场景 | 宿主负责 | Kernel 负责 |
+| --- | --- | --- |
+| Electron | 主进程 import/构造对象、选择 endpoint、创建 Extra、退出协调 | 注册对象、RPC、Run 接纳与执行管理 |
+| CLI | 读取/合并 manifest、解析模块、动态 import/工厂、OpenClaw 产品准备 | 接收实例，与 Electron 使用同一服务工厂 |
+| 跨进程独立应用（包括 CLI 客户端） | attachKernel、发起和取消自己拥有的 Run、关闭 client；原生 SDK 使用 kernel.client | 维持共享服务和原执行 |
+| Provider 子进程 | Adapter 按原生协议创建、控制和确认清理 | 调用 Core 并如实汇总清理事实 |
 
-export async function runAgainstKernel(home: string, input: InvokeInput): Promise<void> {
-  const client = attachKernel({ endpoint: componentEndpoint(home) });
-  try {
-    let terminal: string | undefined;
-    for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) {
-      if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
-        terminal = event.type;
-    }
-    if (terminal !== "run.completed") throw new Error(terminal ?? "RUN_TERMINAL_MISSING");
-  } finally {
-    client.close(); // does not cancel the run and does not stop the service
-  }
-}
-```
+模块路径、workerEntrypoint、adapterModules、manifest、子进程 env 均不属于 Kernel 装配输入。Kernel 不启动执行 worker，不提供 worker 心跳或自动重启；status 返回 ipc_version、kernel_instance_id、宿主 pid 和 execution_ready，没有虚构 worker 状态。日志通过 logging.directory 显式配置，SDK 不读取 CLI 日志环境变量。
 
-消费方必须处理所选 Provider 的交互请求。[attach.mts](../../docs/examples/attach.mts) 演示连接所有权与交互回复，[service.mts](../../docs/examples/service.mts) 演示持有服务和区分执行错误、清理错误。
+## 调用、观察与取消
 
-## 服务生命周期
+`KernelClient -> 本地 RPC -> Kernel/HostRunService -> AgentExecutor -> Adapter` 是标准调用路径。Adapter 对象留在服务进程；RPC 传递调用、控制和事件数据。直接 Core 不替代标准 SDK 接入。
 
-构造不做 I/O。`initialize({ signal? })` 之后 `kernel.client` 可用，`status()` 会报告 phase、endpoint、pid 和 worker 状态。`close()` 停止接纳，并在共用的 5 秒预算内协调关闭，返回 `ServiceCleanupResult`；`closed` Promise 也会以同一个值结束。`initialize()` 失败时抛 `ServiceInitializationError`，里面带着原始 `cause` 和当时能做到的 `cleanup`。
+- invoke 开始消费才提交；提交 ACK 仅表示接纳。
+- signal 在提交前取消则不提交，提交后取消请求仍消费尾流。
+- iterator.return、订阅断开和 client.close 仅停止观察，已接纳 Run 继续执行。
+- get/subscribe 使用原身份和原游标；丢失 ACK 只查询，不重复 invoke。
+- respond/respondNative 只响应原 Run 的有效交互，取消 ACK 不等于终态。
 
-`closed` 或 leader 进程停掉都不代表清理完成——要看 `complete`。先关自己拥有的 Extra，再关自己拥有的 Kernel，Extra 不可以关闭共享 Kernel 或别人的 Run。接入一个 client 不会让你变成服务所有者。
+## 生命周期与故障边界
 
-## 取消与观察
+owner 等待 initialize 后使用 client。close 幂等，closed 返回同一个清理结果。先关自己拥有的 Extra、业务投递与存储，再关 Kernel；attached client 不拥有服务。
 
-| 操作                                          | 含义                                                                         |
-| --------------------------------------------- | ---------------------------------------------------------------------------- |
-| `invoke(input, { signal })`                   | 提交前 abort：不会提交。提交后 abort：请求取消这次调用，并继续观察它的收尾。 |
-| `cancelInvocation(invocationId)`              | 取消本 client 发起的调用。`accepted` 不是终态。                              |
-| 迭代器 `return()`、结束订阅、`client.close()` | 停止观察。已接纳的执行继续跑，服务不受影响。                                 |
-| Extra 或服务 `close()`                        | 按所有者显式的取消与清理策略处理。                                           |
+关闭先停止接纳、关闭连接，再取消 Core、等待 Adapter 清理和回收 Run/日志/端点。共用 5 秒截止时间，不为每步重启预算。Adapter next 异常可能来自 finally，不能据此证明清理完成；complete=false 保留失败事实和端点所有权证据。stateDirectory 可显式指定恢复记录目录；POSIX 缺省使用 endpoint + .runs，Windows 需显式配置才能保留该记录。
 
-一个 client 最多跟踪 128 个进行中或结果未知的调用。普通使用者交给服务关闭来管；高级接入方可以用 `invocations.stopAdmission()` 和 `drain({ deadline, reason })`，后者确认的是执行状态，不是投递或数据库落盘。
+原生 owner 的记录不是模块 manifest。异常退出后不能通过宿主 PID 推断 Provider 子进程已回收；保留 nativeOwner/cleanupIncomplete 证据，操作者确认资源已停止后沿既有 orphan-cleanup 确认流程处理。旧 worker 格式或损坏记录报 ORPHAN_RECORD_UNSUPPORTED 并保留原文件；不提供旧架构兼容、升级或自动清理。
 
-底层 `submit`、`get`、`subscribe`、`cancel`、`respond`、`respondNative` 仍然可用，适合自己管理完整 `RunRef` 所有权的调用方；它们不会自动进入高层登记表。见 [IPC 参考](../../docs/zh-CN/reference/kernel-ipc.md)。
+Kernel 与 Adapter 共享宿主事件循环、内存及故障域。RPC 不隔离同步阻塞、process.exit 或 OOM；关闭期限要求事件循环可调度。服务重建产生新 kernel_instance_id，旧 Run 不重放。Adapter 内部 Provider 进程仍由 Adapter 回收。
 
-## 恢复与限额
+默认 Run 窗口 4096 帧 / 32 MiB，全局 128 MiB / 128 Run，保留 120 秒；最多 64 连接、16 订阅。它们是有界回放记录，不是业务历史或 RSS 上限。整轮期限默认 24 小时，最多七天。
 
-- 传输是每个连接一个 UTF-8、LF 结尾的 JSON-RPC 2.0 请求，走 Unix socket 或 Windows 命名管道。Worker 执行走 stdio NDJSON，另有一条 Node IPC 通道传监督心跳。
-- 提交回执丢失时，按原始身份查询，绝不重新提交。流修复沿用原始身份和最后连续序号；出现空洞、过期或实例变更就显式失败。
-- Worker 故障先做自有进程清理，再做有界快速重试，最后转低频恢复。清理或所有权失败会阻止替换。新 worker 只接新 Run，不回放被打断的；丢了 worker 的活动 Run 报 `lost`，已经保留的终态继续保留。
-- 默认额度：单个 Run 4,096 帧或 32 MiB，全局 128 MiB 或 128 个 Run，终态保留 120 秒。Kernel 最多 64 个连接、16 个订阅；一个 client 最多 32 个在途连接。这些只是有界的传输记录——它们不是持久历史，也不代表进程 RSS。
-- POSIX 端点依赖 socket 权限，Windows 用自己的命名管道机制。进程树清理因平台而异，leader 退出不等于后代进程都已退出。要看清清理证据，不要靠推断。
+## 进一步阅读
 
-## 导入与分发
-
-private workspace 包。应用从 `@mininglamp-oss/octo-runtime/executor-kernel` 拿 `attachKernel`、`KernelClient` 和 `serveWorker`。`@mininglamp-oss/octo-runtime/host` 也再导出 `createKernelService` 与端点工具，但实现留在本包。Kernel 和 Core 都不依赖 Host SDK。
-
-## 延伸阅读
-
-- [导出](src/index.ts)、[服务](src/service.ts)、[客户端](src/client.ts)、[worker 入口](src/serve.ts)、[源窗口](src/host-run-service.ts)、[监督器](src/supervisor.ts)。
-- [Core](../octo-runtime-executor-core/README.zh.md)、[Host SDK](../octo-runtime-host-sdk/README.zh.md)、[SDK 入门](../../docs/zh-CN/getting-started/sdk.md)、[模块加载](../../docs/zh-CN/concepts/module-loading.md)。
-- [客户端测试](../../test/kernel-clients.test.js)、[worker 监督测试](../../test/kernel-worker-supervision.test.js)、[源窗口测试](../../test/host-run-service.test.js)。
+[SDK 示例](../../docs/zh-CN/getting-started/sdk.md)、[IPC](../../docs/zh-CN/reference/kernel-ipc.md)、[服务实现](src/service.ts)、[RPC 服务](src/server.ts)、[源窗口](src/host-run-service.ts)、[原生装配测试](../../test/adapter-composition.test.js)、[关闭测试](../../test/host-process-close.test.js)。

@@ -20,11 +20,13 @@ supersedes: []
 
 ## 当前实施
 
+2026-11-02 的 [#294 原生装配合同](architecture.md#sdk-原生装配与统一-rpc)已在工作树实施：Kernel 在宿主进程使用注入的 Adapter，普通调用统一 RPC，不再持有执行 worker。
+
 #71 落实[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)：调用进程直接构造服务并持有 socket，严禁外部 Node 代启。公开合同为 createKernelService/createExtraService 与 initialize/status/close/closed；实现见[服务设计](../tasks/unified-native-sdk-services/design.md)。
 
 #47/#48 联合实现独立 Executor Kernel、Host SDK、独立 Extra 和 CLI 生命周期。旧 daemon app、包、bin、API、CLI 命令组和 AdapterHost 类别名已删除。当前证据与尚待实机验证项见 [实施记录](../tasks/executor-kernel-host-lifecycle/implementation.md)。
 
-宿主拥有 Kernel 和各 Extra 服务对象的创建/关闭顺序；CLI/App 另外拥有部署和宿主进程生命周期。Kernel 仅监督自己的内部 worker；Extra 不负责拉起 Kernel。附加客户端只拥有连接，关闭客户端、消费者 iterator 或 socket 不取消已接纳 Run，不停止服务。统一服务对象提供 initialize/status/close，不提供另起顶层服务的 owned launch/restart。
+宿主拥有 Kernel 和各 Extra 服务对象的创建/关闭顺序；CLI/App 另外拥有部署和宿主进程生命周期。按 #294 合同，Kernel 管理本进程执行和 RPC 服务，不启动执行 worker；Extra 不负责拉起 Kernel。附加客户端只拥有连接，关闭客户端、消费者 iterator 或 socket 不取消已接纳 Run，不停止服务。统一服务对象提供 initialize/status/close，不提供另起顶层服务的 owned launch/restart。
 
 KernelClient.invoke 在本 client 的 invocations 登记身份；App 与 Extra 使用相同方法。owner shutdown 显式调用 stopAdmission/drain，以绝对共享 deadline 返回 complete/unresolved；SDK 为独立 Extra 各建一个 client，停止 A 只排空 A。低层 submit 的所有权由高级调用方自行管理。执行完成、取消请求 ACK、业务 delivery/dispose 和进程退出分别确认，lost/未知不释放登记。具体语义见[本地执行](local-execution.md)。
 
@@ -40,7 +42,7 @@ Home 表示本地设备实例的状态边界，machine_id 是安装分组，不�
 | --- | --- |
 | 身份已存在 | 保存且通过校验的本地身份 |
 | Kernel IPC 可用 | status 返回当前 kernel_instance_id |
-| 可接纳执行 | execution_ready=true 且 worker ready |
+| 可接纳执行 | execution_ready=true；本进程 Core 已注册且接纳开放，不代表 Provider 探测或认证成功 |
 | Provider 可用 | 实际 probe/list 元数据，不证明已认证或本次成功 |
 | Extra 已初始化 | 调用进程中的 initialize 完成 |
 | 外部业务健康 | Extra 的自定义 JSON 状态 |
@@ -51,7 +53,7 @@ Home 表示本地设备实例的状态边界，machine_id 是安装分组，不�
 
 close 关闭接纳并立即取消所属调用；初始化进入可清理状态后，并发等待源调用排空和插件 dispose。插件 disposer 须先等待自己的消费者、保存与投递任务，再清理自己的资源。取消通知不立即封锁注入依赖；插件清理结束或共享截止到期后撤销调用权限，再等待全部实际依赖。单项失败仍尝试独立资源。重复调用等待同一清理操作。失败记录保留所有权；同 endpoint/name 的 Extra 或同 endpoint 的 Kernel 替换必须确认旧实例完整关闭。不同 Home/endpoint 的同名 Extra 独立。
 
-初始化观察 signal 和 close：先登记取消意图，取消 worker readiness，异步创建后检查停止状态，不得建立迟到端点或报告 ready。ServiceInitializationError 保留 cause 和 cleanup；回滚失败保留资源所有权。close-before-initialize 永久关闭该对象，重复 initialize 复用原 Promise。服务没有 restart，完整关闭后重新构造。服务 status.pid 必须等于调用进程 PID。
+初始化观察 signal 和 close：先登记取消意图，取消初始化等待，异步创建后检查停止状态，不得建立迟到端点或报告 ready。ServiceInitializationError 保留 cause 和 cleanup；回滚失败保留资源所有权。close-before-initialize 永久关闭该对象，重复 initialize 复用原 Promise。服务没有 restart，完整关闭后重新构造。服务 status.pid 必须等于调用进程 PID。
 
 加载器因初始化失败 abort 插件 signal 时，Extra 服务立即停止 invoke 准入并启动缓存的取消/排空操作，不能等加载器完成 disposer 后再开始；此通知不替换原始初始化 cause。bind Promise 也是服务资源：Kernel 串行等绑定完成后检查取消并回滚；Extra 控制 socket 清理显式等待 bind，清理超时后仍继续回收迟到的监听句柄，结果保持 incomplete，端点租约不提前释放。
 
@@ -65,11 +67,11 @@ Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervis
 
 ## CLI
 
-executor-kernel 同样提供 logs 命令，参数、读取预算、轮转跟随和错误语义沿用 Extra。只读取当前 Home/logs/kernel-status-*.log 独立状态系列；父进程记录 worker 丢失、恢复阻塞、退避、启动失败与就绪，不包含 worker stderr 或任意错误正文。CLI 自动启用此日志，SDK 通过 logging.directory 选择目录。status 展示 recovery 阶段、稳定错误码、下次重试和日志命令；running 不等于 execution_ready。详见 [Issue 210 方案](../tasks/210-kernel-recovery/design.md)。
+executor-kernel 的 logs 命令读取 Home/logs/kernel-status-*.log，现行事件为 kernel.ready、kernel.closing、kernel.execution_drained、kernel.start_failed 和 kernel.cleanup_incomplete。旧 worker 日志白名单已删除，不兼容历史 worker 心跳/重启状态。CLI 自动选择 Home/logs，SDK 显式传 logging.directory；Core 排空后关闭共享日志，沿用总关闭截止时间。日志不含执行正文、凭据或原始异常。
 
 Extra新增 `logs [--lines 1..10000] [--follow] [--json]`，默认200条，JSON为NDJSON。只读取当前Home对应Extra的独立状态系列，最近三份最多4MiB，重建白名单记录；不得读普通执行日志或链接到外部文件。日志路由先于配置解析、模块载入及管理器操作。空日志stderr提示并成功；参数/权限错误非零；follow跟随轮转并在Ctrl+C释放监听。CLI前台Extra向stdout写状态，最多128条/1MiB，背压不阻塞服务，恢复后报告丢弃数量。后台镜像不依赖manager的stdoutPath，不引入shell wrapper。
 
-start/restart 成功结果复用本组件 status 的查询与格式化：展示服务、自启、IPC、Manager、PID、Worker/Extra 业务状态和服务定义路径；JSON 保留 component/action 并提供同一 service/runtime 数据。启动成功不等同于 Bot 已连通，业务状态沿 Extra 自身接口反馈。
+start/restart 成功结果复用本组件 status 的查询与格式化：展示服务、自启、IPC、Manager、PID、Kernel/Extra 业务状态和服务定义路径；JSON 保留 component/action 并提供同一 service/runtime 数据。启动成功不等同于 Bot 已连通，业务状态沿 Extra 自身接口反馈。
 
 CLI 遵循[面向普通用户的产品默认值](architecture.md#cli-面向普通用户的产品默认值)，为 executor-kernel 与每个已配置 Extra 提供 uninstall/install/start/restart/stop/status/run；内置 Extra 名为 channel-gateway、channel-wecom、webui。裸组件显示用途、配置/启动入口和命令帮助。install 默认注册并开启本组件自启，首次和重复安装相同；只有显式 --autostart=false 才禁用，再次普通 install 恢复开启。start 在组件锁内检查安装状态，未安装时自动注册本组件并开启自启，向 stderr 打印安装及启动阶段进度，随后启动并等待 IPC 就绪；安装失败不继续启动，--json 的 stdout 只保留最终结果。已安装时保留服务定义及自启设置；restart 未安装返回 3。显式禁用时 start/restart 保留 cross-service 的 SERVICE_DISABLED 并提示 install --autostart=true，不安装或控制另一组件。stop 不修改自启；uninstall 保留 Home 和用户数据。两个自启服务或多个 Extra 不依赖启动顺序；Extra 先启动可报告 Kernel 不可用，Kernel 后续上线时沿现有 client 恢复可用状态，不创建替代 Kernel。
 
@@ -96,6 +98,8 @@ systemd 的 WorkingDirectory 与 StandardOutput/StandardError 的 append 路径�
 status 汇总原生服务状态、Kernel 可用性和每个已配置 Extra 自身 status；单组件 status 只查询该组件。服务状态失败独立呈现，不阻止其他组件查询。默认输出紧凑文本，业务状态、Bot 健康和任务/队列/会话等计数继续展示；--json 使用缩进 JSON 保留完整公开状态，需脚本读取的旧 status 调用显式添加 --json。extraget 保留紧凑完整 JSON，playboard 保留 NDJSON。文本错误写 stderr，JSON 错误写 stdout，并返回非零码；异常正文可能含凭据，只输出稳定错误码、受控 cause_code、原生管理器命令名及退出码、排障提示和日志目录。run 前台组件意外退出时 CLI 返回失败；SIGINT/SIGTERM 时等待清理，未完整清理返回 5。服务 ID 和端点按规范化 Home 与组件派生。
 
 CLI 可执行入口仅为参数解析及校验确认的前台组件 run 选择有界最终退出：命令返回后设置原退出码，250ms 后若仍因残留句柄存活则显式退出。该定时器 unref，正常资源回收后无需额外等待。extraget 等数据命令、帮助、状态和部署命令必须自然等待 stdout/stderr 刷新，不能以固定 timer 截断慢管道并返回成功。命令类型由既有解析结果通知可执行入口，不能重复猜测参数。最终退出不改变 incomplete 事实；进程退出只属于可执行入口，不进入 SDK 或可导入的 runCli，也不作为同进程同步死循环的强停保证。
+
+Playboard 人工停止采用用户明确授权的本地测试例外：入口接管 SIGINT/SIGTERM 后，按本次 PID 树定向强退，不等待动态模块装配或优雅关闭；正常完成仍等待既有关闭和输出。系统进程查询/终止命令最多等待 2 秒，失败仍非零退出并标记树停止未确认；不把 OS 终止等同于 Run cancelled 或 cleanup complete。具体范围见[临时执行](local-execution.md#临时执行与证据)。
 
 旧 daemon 架构的 1.0.1 列为 deprecated；不支持旧版升级或迁移。已有安装须先停止并移除旧服务，执行 npm uninstall -g @mininglamp-oss/octo-runtime 后重新安装新架构版本并重新配置。npm 卸载不会自动移除系统服务或 Home；遗留数据存在不表示支持迁移。发行时须另行完成 npm registry deprecation，记录实际结果，不能用文档声明替代 registry 操作。
 

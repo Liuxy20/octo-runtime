@@ -29,7 +29,6 @@ sources:
   - packages/octo-runtime-adapter-sdk/src/index.ts
   - packages/octo-runtime-acp-client/src/index.ts
   - packages/octo-runtime-adapter-codex/src/app-server.ts
-  - packages/octo-runtime-adapter-zcode-gui/src/app-server.ts
   - packages/octo-runtime-adapter-host/src/index.ts
   - packages/octo-runtime-adapter-host/src/rpc.ts
   - packages/octo-runtime-adapter-host/src/host-run-service.ts

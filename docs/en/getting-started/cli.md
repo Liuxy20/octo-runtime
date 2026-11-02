@@ -58,6 +58,8 @@ octo-runtime playboard < request.json
 
 `playboard` starts a temporary Kernel for this request; it does not require a running Kernel service, submit to a persistent service, or load Extras. It writes events as NDJSON to stdout and diagnostics to stderr. Success includes final reply text in `message.delta` events and a `run.completed` terminal event; the model chooses the actual wording. `run.failed` and `run.cancelled` are not successful execution. The command closes its temporary service when the call ends and reports incomplete cleanup as a failure.
 
+Playboard is a one-shot local testing tool. Ctrl+C force-stops this CLI and its identifiable descendants without waiting for module loading or graceful completion. A terminal event may be absent, and logs or temporary files may remain unfinished. Normal completion still closes the service.
+
 An interaction requiring a reply ends with `PLAYBOARD_INTERACTION_REQUIRED`; use the SDK when your application needs to answer approvals or questions. If the Provider cannot start or rejects authentication, check its installation and sign-in under the same OS account. See [Troubleshooting](../guides/troubleshooting.md) for error codes. This local request does not need `octo-cli` or an IM Bot.
 
 When neither top-level `approvalMode` nor Context `octo.security/approval_policy` is supplied, Playboard defaults to `full_access`; the SDK still defaults to `ask`. Explicit policies retain their existing validation. Adapter-owned automatic approvals continue to the real terminal state; their notifications do not prove completion. Questions and elicitation still require external answers, even under `full_access`. Provisioned execution defaults to the CLI process working directory (`process.cwd()`); explicit workspaces and Provider-managed preset directories keep their existing behavior.
@@ -274,27 +276,17 @@ octo-runtime executor-kernel logs --lines 200
 octo-runtime executor-kernel logs --follow --json
 ```
 
-The Kernel parent records Worker exit signals/codes, recovery stages, error codes, generations,
-and retry schedules in `<Home>/logs/kernel-status-<UTC hour>.log`, with the same retention and
-read limits above and no execution content. SDK hosts opt in using
-`createKernelService({ logging: { directory } })`.
+CLI reads the selected manifest, imports modules, constructs Adapters in its host process, then calls `createKernelService({ endpoint, adapters })`. Kernel executes in that process; business calls use RPC. No internal execution worker is started.
 
-`service.state=running` only describes the service process; use `runtime.execution_ready` for
-execution availability. Worker loss starts recovery for new requests. Cleanup or manifest failures
-wait 1, 2, then 5 seconds between retries, staying at 5 seconds. Worker startup has a separate
-fast retry budget with waits of 250 ms, 1 second and 4 seconds, then 15-second slow retries.
-`worker.state=exhausted` means recovery is currently blocked; cleanup/manifest retries continue
-while the service remains open. Inspect `worker.recovery` for the stage, reason and `retry_at`;
-unexpected recovery errors may still require intervention. These intervals exclude cleanup,
-startup and handshake time.
-Recovery never replays old requests. Confirmed rejections before execution are reported separately
-from unknown outcomes of interrupted executions, and Channel Gateway does not need a restart.
+Kernel initialization, readiness, shutdown, and incomplete cleanup are recorded in `<Home>/logs/kernel-status-<UTC hour>.log`, with the retention and read limits above and no execution content. SDK hosts opt in using `createKernelService({ endpoint, adapters, logging: { directory } })`.
+
+`service.state=running` only describes the service process; use `runtime.execution_ready` for execution availability. Kernel no longer provides worker heartbeat or replacement; the native service manager owns host-process restart. RPC reconnection queries the original identity and resumes observation without replaying requests. A rebuilt host has a new instance; old calls cannot be assumed successful.
 
 `status` reports native `service` state and IPC `runtime` state separately, and exit code 0 does not prove business readiness. `doctor` reports service-manager probing and service definitions; `adapter list` and `adapter probe` query a running Kernel without starting one.
 
 Exit codes: 0 success; 2 invalid arguments or declaration; 3 component not installed; 4 unreachable or not ready; 5 incomplete cleanup; 1 other failure. Text errors go to stderr, JSON errors to stdout.
 
-When a Windows crash leaves the tool tree in an unknown state, startup fails with `ORPHAN_CLEANUP_INCOMPLETE`. After confirming the leftovers stopped:
+When an unexpected host exit leaves resource cleanup unconfirmed, startup fails with `ORPHAN_CLEANUP_INCOMPLETE`. After confirming the leftovers stopped:
 
 ```bash
 octo-runtime doctor --home <home>
@@ -306,9 +298,30 @@ Recovery acknowledges one manifest archive; it never kills unknown processes and
 
 ## Invoke the Persistent Kernel
 
+| CLI entry | Composition and connection |
+| --- | --- |
+| `executor-kernel run` | CLI reads its manifest, imports Adapters, then calls `createKernelService({ endpoint, adapters })` |
+| `channel-gateway run` | CLI creates ExtraService, which internally uses `attachKernel({ endpoint })` across processes; it does not create or close Kernel |
+| `playboard` | CLI creates a temporary Kernel with the same createKernelService, invokes through kernel.client, and closes its service |
+
+`attachKernel` lets an independent application in another process connect to an already running Kernel; CLI clients are one example. It does not start the service. Native SDK hosts use their own `kernel.client` and skip this step.
+
+```ts
+import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+
+const client = attachKernel({ endpoint: componentEndpoint("/absolute/cli-home") });
+try {
+  console.log(await client.status());
+} finally {
+  client.close(); // 仅关闭本进程连接，不停止 CLI 托管的 Kernel。
+}
+```
+
+
 The CLI selects Adapters and Extras from its built-in manifest and `<Home>/manifest.json`, and discovers Extras in the current CLI’s global installation environment. Priority is built-in > Home > global. Declaring or discovering an Extra does not enable or start it. `--manifest` replaces these sources completely. See [Adapter and Extra Loading](../concepts/module-loading.md) for examples, resolution anchors and migration of legacy Extra `module` settings.
 
-Follow [SDK setup](sdk.md) to obtain the actual endpoint and run the shared attach example against the persistent Kernel. Registering Kernel does not start `channel-gateway`; configure and start that Extra separately when integrating Octo IM. See [Extras](../guides/extras.md) for wiring an Extra into your host.
+Derive the endpoint from the same Home used by the CLI service. Registering Kernel does not start `channel-gateway`; configure and start that Extra separately when integrating Octo IM. See [Extras](../guides/extras.md) for wiring an Extra into your host.
 
 ## Let the Agent Use octo-cli
 

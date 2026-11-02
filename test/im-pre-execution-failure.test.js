@@ -1,3 +1,4 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
@@ -308,7 +309,7 @@ for (const suffix of ["gateway", "wecom"]) {
 
 for (const mode of ["control", "completed", "cancelled", "source-error"]) {
   test(`Gateway: real Kernel presentation cancellation preserves observation: ${mode}`, async (t) => {
-    const k = await kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+    const k = await kernelFixture(t, { adapters: [invokeAdapter] });
     const source = [];
     let observedSignal;
     const f = await fixture(t, "gateway", {
@@ -386,48 +387,6 @@ test("Gateway: a later rejected retry retains the earlier execution record", asy
   );
   assert.equal(f.saved.at(-1).notSubmittedFailure, undefined);
 });
-
-test(
-  "Gateway: an unavailable Worker reports confirmed non-submission instead of an unknown result",
-  {
-    timeout: 12_000,
-    skip: process.platform === "win32"
-  },
-  async (t) => {
-    const k = await kernelFixture(t);
-    const pid = (await k.client.status()).worker.pid;
-    const kill = process.kill.bind(process);
-    const probe = t.mock.method(process, "kill", (target, signal) => {
-      if (target === -pid && signal === 0)
-        throw Object.assign(new Error("fixture probe blocked"), { code: "EPERM" });
-      return kill(target, signal);
-    });
-    try {
-      process.kill(pid, "SIGKILL");
-      for (let i = 0; i < 300 && (await k.client.status()).worker.state !== "exhausted"; i++)
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      assert.equal((await k.client.status()).worker.state, "exhausted");
-      const f = await fixture(t, "gateway", {
-        invoke: (input, env) => k.client.invoke(input, env)
-      });
-      f.send();
-      await f.done();
-      assert.match(f.replies[0].text, /OH-RUN-2012/);
-      assert.doesNotMatch(f.replies[0].text, /未知/);
-      assert.equal(f.calls.length, 1);
-      assert.equal(f.cancellations.length, 0);
-      assert.equal(f.saved.at(-1).attempts[0].outcome, "not_submitted");
-      assert.equal(f.saved.at(-1).notSubmittedFailure.reasonCode, "WORKER_RESTART_EXHAUSTED");
-      assert.equal(f.diagnostics.includes("IM_EXECUTION_RESULT_UNKNOWN"), false);
-      assert.deepEqual(k.client.invocations.snapshot(), []);
-    } finally {
-      probe.mock.restore();
-      for (let i = 0; i < 500 && !(await k.client.status()).execution_ready; i++)
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      assert.equal((await k.client.status()).execution_ready, true);
-    }
-  }
-);
 
 test("Gateway: error card failure cannot suppress text; secondary log retains root diagnosis", async (t) => {
   const f = await fixture(t, "gateway");
@@ -548,7 +507,7 @@ test("Gateway: both feedback sends failing neither recurse nor invoke", async (t
 });
 
 test("Kernel: admission proof survives real pre-write race and rejects reconstructed errors", async (t) => {
-  const k = await kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+  const k = await kernelFixture(t, { adapters: [invokeAdapter] });
   const { kernelRelay } = await import("./kernel-relay.js");
   let relay;
   relay = await kernelRelay(t, k, {

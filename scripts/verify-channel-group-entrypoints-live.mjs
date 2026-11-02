@@ -141,7 +141,10 @@ try {
         .map((line) => JSON.parse(line));
     let processHandle, extra;
     const endpoint = componentEndpoint(home);
-    const kernel = createKernelService({ endpoint, workerEntrypoint: entrypoint });
+    const kernel = createKernelService({
+      endpoint,
+      adapters: (await import((await import("node:url")).pathToFileURL(entrypoint).href)).adapters
+    });
     await kernel.initialize();
     const closeExtra = async () => {
       if (extra) {

@@ -23,9 +23,17 @@ process.env.OCTO_RUNTIME_DEBUG = "1";
 const endpoint = componentEndpoint(home);
 const kernel = createKernelService({
   endpoint,
-  workerEntrypoint: resolve("packages/octo-runtime-executor-kernel/dist/runner.js"),
-  manifest: resolve("apps/cli/dist/manifest.json"),
-  env: { ...process.env, OCTO_RUNTIME_HOME: home }
+  // 原生 SDK 显式接收日志目录，不再依赖 worker 环境中的 Home。
+  logging: { directory: join(home, "logs") },
+  adapters: await (
+    await import("../apps/cli/dist/adapters.js")
+  ).loadCliAdapters(
+    (
+      await (
+        await import("../packages/octo-runtime-adapter-sdk/dist/module-manifest.js")
+      ).readModuleManifest(resolve("apps/cli/dist/manifest.json"), { legacy: true })
+    ).adapters
+  )
 });
 await kernel.initialize();
 let extras = [];

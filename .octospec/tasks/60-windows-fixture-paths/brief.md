@@ -9,11 +9,13 @@ source: user
 upstream: "https://github.com/Mininglamp-OSS/octo-runtime/issues/60"
 ---
 
+历史验证数量沿用当时完整范围，不表示当前支持范围。
+
 # Task: Issue 60 测试 fixture 原生路径兼容
 
 ## Goal
 
-修复 ACP、ZCode 和 Issue 评论补充的 Grok 测试将 URL.pathname 作为原生启动路径的问题。
+修复 ACP 和 Issue 评论补充的 Grok 测试将 URL.pathname 作为原生启动路径的问题。
 
 ## Background
 

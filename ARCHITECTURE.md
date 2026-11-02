@@ -1,8 +1,10 @@
 # Octo Runtime：为什么统一「设备」
 
+**2026-11-02 / Issue #294：当前工作树已实现宿主原生注入 Adapter、统一 RPC 与同进程 Core，Kernel 不再启动执行 worker；尚未发布。** 职责约束见 [架构规则](.octospec/rules/architecture.md#sdk-原生装配与统一-rpc)，验证见 [任务](.octospec/tasks/294-native-kernel-sdk/brief.md)。
+
 当前实现的双语模块说明和 Mermaid 图见开发者文档：[English](docs/en/concepts/architecture.md) / [简体中文](docs/zh-CN/concepts/architecture.md)。本文保留设备动机、新旧比较及明确标注的未来目标。文中的 daemon 均指已移除的旧实现，只用于对比，不代表当前存在的组件。
 
-**Adapter 与 Extra 的装配约束：SDK 宿主原生 import 并组装，不要求额外 manifest；CLI 使用一份内置 manifest.json，加上 Runtime Home 下同名扩展清单，两者均有 adapters 和 extras。默认发行继续全量，未选模块不加载，Extra 的目录声明不等于启用。** FDE 的代码复制及依赖由业务方处理。统一清单与依赖解耦已在本工作树实现；完整解析、合并和生命周期要求见[基础架构规则](.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)，双语设计见[English](docs/en/concepts/module-loading.md) / [简体中文](docs/zh-CN/concepts/module-loading.md)。
+**Adapter 与 Extra 的装配约束：SDK 宿主原生 import 并组装，不要求额外 manifest；CLI 使用一份内置 manifest.json，加上 Runtime Home 下同名扩展清单，两者均有 adapters 和 extras。默认发行继续全量，未选模块不加载，Extra 的目录声明不等于启用。** FDE 的代码复制及依赖由业务方处理。既有统一清单与依赖解耦已有实现；#294 进一步要求模块 manifest 的读取、解析和动态 import 全部由宿主完成，Kernel 只接收对象，不能接收已解析的模块路径。完整解析、合并和生命周期要求见[基础架构规则](.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)，双语设计见[English](docs/en/concepts/module-loading.md) / [简体中文](docs/zh-CN/concepts/module-loading.md)。
 
 **Provider harness 的登录、授权及凭据准备归使用者、宿主与 harness。Runtime 只负责调用和必要的协议握手，不检查特定认证环境变量、不读取 harness 凭据文件，也不规定凭据来自环境还是预先登录。** harness 是否可用以其真实响应为准；此边界对所有 Provider 和 ACP 适用，见[认证责任规则](.octospec/rules/architecture.md#provider-harness-认证归宿主与-harness)。
 
@@ -16,7 +18,7 @@
 
 本地设备独立存在。线上注册是可选能力，具体接入方案待架构确认；远程服务不直接连接执行内核。
 
-同一台电脑上的 `/data/octo-a` 和 `/data/octo-b` 可以承载两个设备实例；`/data/project` 这样的普通工作目录本身不构成设备。Home 承载身份和配置；启动后的 ExecutorKernel 提供本地 IPC 并监督 worker，worker 内的 AgentExecutor 执行请求。重启进程不等于换设备。
+同一台电脑上的 `/data/octo-a` 和 `/data/octo-b` 可以承载两个设备实例；`/data/project` 这样的普通工作目录本身不构成设备。Home 承载身份和配置；按 #294 合同，启动后的 ExecutorKernel 提供本地 RPC，在其所在进程通过 AgentExecutor 使用宿主注入的 Adapter 执行请求。重启进程不等于换设备。
 
 本文用于讲解。强制合同维护在[基础架构规则](.octospec/rules/architecture.md)。用户指定的线上对齐来源为[架构文档](https://im.deepminer.com.cn/d/d_e34402004b642927092dd649)，当前 octo-cli 缺少登录身份，尚未读取核对，不能宣称与线上版本一致。图中「目标」不表示代码已全部实现；本地实现和待验项见[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
@@ -99,16 +101,16 @@ flowchart TB
                 Gateway["IM Channel / Channel Gateway<br/>接收消息、触发执行与回复"]
                 Presence["设备接入 Extra（待架构确认）<br/>设备登记、在线状态保持<br/>独立设备 Token"]
             end
-            Host["ExecutorKernel · 本地执行 IPC<br/>只监督 worker，不管理 Extra"]
-            Worker["独立 worker · AgentExecutor<br/>唯一执行实现"]
+            Host["ExecutorKernel · 本地 RPC<br/>接纳、事件源、控制与清理，不管理 Extra"]
+            Core["Kernel 进程内 · AgentExecutor<br/>使用宿主注入的 Adapter"]
             subgraph Execution["Provider 执行层"]
                 Providers["Provider Adapter → Codex / Claude Code / OpenClaw 等"]
             end
             IPC -->|"ipc_invoke"| Host
             Gateway -->|"ipc_invoke"| Host
             Presence -.->|"ipc_invoke"| Host
-            Host -->|"stdio NDJSON"| Worker
-            Worker --> Providers
+            Host -->|"本进程执行"| Core
+            Core --> Providers
         end
         Local ==>|"本地直连 IPC · 不经过网络"| IPC
     end
@@ -121,26 +123,26 @@ flowchart TB
 
 **设备底座负责本地执行，Extra 负责接入业务。** Loop、IM、Buddy 可以使用同一内核，不再各自造一套执行服务。关闭某个业务入口不会因此销毁设备身份；没有云端连接，也可以使用已就绪的本地执行入口。
 
-通过设备执行的 App 内部模块和所有 Extra 都直接调用公开 KernelClient.invoke；Extra 使用 ctx.kernel，没有独立的 Extra 执行 API。Kernel client 统一处理提交、身份、订阅及有界恢复，Gateway 消费结果做 delivery。宿主显式管理各 client 的调用排空，业务存储、展示及投递仍由对应消费者负责。
+通过设备执行的 App 内部模块和所有 Extra 都使用公开 KernelClient.invoke 发起 RPC，即使与 Kernel 位于同一进程也不例外；Extra 使用 ctx.kernel，没有独立的 Extra 执行 API。Kernel client 统一处理提交、身份、订阅及有界恢复，Gateway 消费结果做 delivery。原生服务 close 管理所属 client 的调用排空；高级 attached 所有者按既有合同管理自身调用，业务存储、展示及投递仍由对应消费者负责。
 
 ### 接入选型：产品默认推荐 KernelClient
 
-**业务接入默认使用 KernelClient 提供的 RPC 调用能力，尤其是 Electron 等桌面应用和长期运行的宿主。** 业务像使用普通工具一样调用 invoke、消费结果并按需发送控制，不要求构造服务、手动登记或排空。负责托管服务的 CLI/App 装配入口使用原生 SDK 工厂，或连接已有 endpoint，并将同一个 KernelClient 提供给业务。Kernel 服务在调用进程，执行隔离由内部 worker 承担；worker 监督和有界恢复保持原合同。AgentExecutor 是显式可选的进程内接入，适合宿主能够接受并管理同进程执行风险的场景。
+**标准宿主的业务接入统一使用 KernelClient 提供的 RPC 调用能力，尤其是 Electron 等桌面应用和长期运行的宿主。** 业务像使用普通工具一样调用 invoke、消费结果并按需发送控制，不要求构造服务、手动登记或排空。负责托管服务的 CLI/App 装配入口使用原生 SDK 工厂，或连接已有 endpoint，并将同一个 KernelClient 提供给业务。按 #294 合同，Kernel 与 AgentExecutor 在同一宿主进程，Adapter 由宿主 import 后注入；业务仍经 RPC，保留内核接纳、观察和有界恢复。直接 AgentExecutor 是已有低层能力，不作为 Electron/CLI 标准接入的快捷分支。
 
 **两种方式使用相同的 invoke(input, environment?) 调用契约，但执行和生命周期不同。** 两者共用 InputInvoke 类型：InvokeInput 携带 inputs、contexts 和调用身份；省略 protocol_mode 或指定 native 返回 HostFrame，指定 canonical 返回 CanonicalEvent，均通过异步迭代消费。同一份业务输入可用于两种入口，实际可用能力仍取决于所注册的 Adapter、配置和运行环境。
 
 | 比较项                     | KernelClient：产品默认推荐                                                                                               | AgentExecutor：显式进程内接入                                                           |
 | -------------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
 | 公共导入                   | @mininglamp-oss/octo-runtime/executor-kernel；Host SDK 返回实际 client                                                   | @mininglamp-oss/octo-runtime/executor-core                                              |
-| 调用路径                   | App → 本地 IPC → Kernel → worker 内的同一 AgentExecutor                                                                  | App → 当前进程内的 AgentExecutor；宿主显式注册 Adapter                                  |
-| 传输与故障影响             | macOS/Linux 为 Unix socket，Windows 为 Named Pipe；执行进程故障与宿主分开                                                | 直接函数调用，无 IPC；执行共享宿主进程和事件循环，不能隔离 process.exit、OOM 或同步阻塞 |
-| 观察中断                   | 按原身份查询接纳结果，按原游标有界续流；不重发原执行                                                                     | 无 Kernel 源窗口、断线恢复或 worker 监督                                                |
+| 调用路径                   | App → 本地 RPC → Kernel → Kernel 进程内的同一 AgentExecutor                                                                  | App → 当前进程内的 AgentExecutor；宿主显式注册 Adapter                                  |
+| 传输与故障影响             | macOS/Linux 为 Unix socket，Windows 为 Named Pipe；#294 目标与 Kernel 宿主共享进程故障域                                                | 直接函数调用，无 IPC；执行共享宿主进程和事件循环，不能隔离 process.exit、OOM 或同步阻塞 |
+| 观察中断                   | 按原身份查询接纳结果，按原游标有界续流；不重发原执行                                                                     | 无 Kernel 源窗口、接纳查回或断线恢复                                                |
 | 提前关闭执行/观察 iterator | 只停止观察，已接纳的 Run 继续执行；client.close 也不隐式取消                                                             | 关闭执行 iterator 会请求取消，由 Core 执行有界清理                                      |
 | 显式取消                   | signal 或 cancelInvocation；取消 ACK 不等于执行终态                                                                      | signal 或 cancel；返回 true 不等于 Provider 已退出                                      |
-| 所有者清理                 | 对本 client 的高层调用 stopAdmission/drain，并检查 complete/unresolved；拥有 Kernel 的宿主还须按 SDK 生命周期停止 Kernel | 对实例调用 shutdown，并检查 cleanup/unresolvedInvocationIds                             |
+| 所有者清理                 | 原生服务 close 自动管理所属调用并检查 complete；高级 attached 所有者管理本 client 的 stopAdmission/drain | 对实例调用 shutdown，并检查 cleanup/unresolvedInvocationIds                             |
 | 本地 streamLimits 选项     | 当前 wire 不支持，显式传入报 KERNEL_STREAM_LIMITS_UNSUPPORTED                                                            | 支持 InvokeEnvironment.streamLimits                                                     |
 
-Kernel 的隔离与恢复能力不保证每次执行成功。worker 重启只恢复后续调用的可用性，不恢复或重跑旧 Run；窗口缺失、lost 和结果未知仍需如实返回。直接 Core 也不需要加载 Extra 或连接云端。选型依据是宿主需要的隔离、恢复及生命周期能力，而不是另选一套业务输入协议。
+Kernel 的 RPC 恢复能力不保证每次执行成功，也不提供同进程崩溃隔离。恢复只查询和续读原 Run，不重新执行；窗口缺失、lost 和结果未知仍需如实返回。#294 必须逐项核对原 worker 监督的稳定性影响，不能因为删除子进程而一起删除内核管理逻辑。直接 Core 也不需要 Extra 或云端，但没有 Kernel 的接纳和观察管理。
 
 接入步骤见 [SDK 入门](docs/zh-CN/getting-started/sdk.md)，精确合同见[基础架构规则](.octospec/rules/architecture.md#kernelclient-与-agentexecutor-的选型合同)、[本地执行](.octospec/rules/local-execution.md)和 [Core API](packages/octo-runtime-executor-core/README.md)。
 
@@ -168,7 +170,7 @@ Kernel 的隔离与恢复能力不保证每次执行成功。worker 重启只恢
 
 ## 3. 执行时：先寻址，本地直连，异地转发
 
-下图演示统一寻址的调用关系。设备线上注册及移动端跨端调用 AgentRun 的流程逻辑仅供参考，具体生产级架构方案待确定。寻址由调用方及业务接入完成，Kernel 将请求交给 worker 内的 AgentExecutor 执行。
+下图演示统一寻址的调用关系。设备线上注册及移动端跨端调用 AgentRun 的流程逻辑仅供参考，具体生产级架构方案待确定。寻址由调用方及业务接入完成；按 #294 合同，RPC 请求进入 Kernel 后交给本进程 AgentExecutor 执行。
 
 ```mermaid
 flowchart TB
@@ -189,7 +191,7 @@ flowchart TB
         Cloud --> Remote
     end
     subgraph Kernel["目标设备 · 本地执行底座"]
-        Host["ExecutorKernel IPC → worker / AgentExecutor<br/>执行、交互、取消、返回结果"]
+        Host["ExecutorKernel RPC → 本进程 AgentExecutor<br/>执行、交互、取消、返回结果"]
     end
     Desktop --> Resolve
     Buddy --> Resolve
@@ -220,7 +222,7 @@ flowchart TB
 
 **价值落在两件事上：任务能准确找到执行实例；找到本地实例就直接 IPC。业务入口可以增加，执行底座保持统一。**
 
-当前分支已有 Host SDK、ExecutorKernel IPC、独立 worker/AgentExecutor 和独立 Channel Gateway Extra。HostApp/CLI 分别管理 Kernel 与每个 Extra；组件不得暗中安装或维护另一组件。设备登记、在线状态保持、远程接入和云端寻址仍待架构确认，本地/远端自动选择与移动端定向 AgentRun 未完成验收。见[本地执行现状](.octospec/rules/local-execution.md)和[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
+当前工作树已有 Host SDK、ExecutorKernel IPC、同进程 AgentExecutor/Adapter 装配与独立 Channel Gateway Extra。HostApp/CLI 分别管理 Kernel 与每个 Extra；组件不得暗中安装或维护另一组件。设备登记、在线状态保持、远程接入和云端寻址仍待架构确认，本地/远端自动选择与移动端定向 AgentRun 未完成验收。见[本地执行现状](.octospec/rules/local-execution.md)和[实施记录](.octospec/tasks/executor-kernel-host-lifecycle/implementation.md)。
 
 现有的 `webui-extra` 插件提供类似 OpenClaw 的 WebUI 能力，**仅用于本地服务调试，不用于实际生产环境。**
 

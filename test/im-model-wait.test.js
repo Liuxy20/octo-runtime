@@ -1,3 +1,4 @@
+import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as settle } from "node:timers/promises";
@@ -414,7 +415,7 @@ for (const trigger of ["timeout", "IM user stop", "IM card stop"])
     `real Kernel IPC ${trigger} observes a confirmed terminal through the original stream`,
     { timeout: 10000 },
     async (t) => {
-      const k = await kernelFixture(t, { manifest: resolve("test/fixtures/invoke-adapters.json") });
+      const k = await kernelFixture(t, { adapters: [invokeAdapter] });
       const time = clock();
       const input = kernelInput("wait-for-cancel");
       const task = new ImTask(

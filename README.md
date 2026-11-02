@@ -15,7 +15,7 @@ Octo Runtime runs Agent tasks through Provider adapters, so applications can use
 - **WeCom** connects WeCom Bots to the same execution service.
 - **WebUI** provides a local browser workspace for conversations and projects.
 
-Adapters ship for Codex, Claude Code, CodeBuddy, OpenCode, DeepSeek Harness, OpenClaw, Grok Build, Antigravity, ZCode, Hermes, Kimi Code, MCode, and both Qoder CLIs; see [Packages and layers](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/README.md).
+Adapters ship for Codex, Claude Code, CodeBuddy, OpenCode, DeepSeek Harness, OpenClaw, Grok Build, Antigravity, Hermes, Kimi Code, MCode, and both Qoder CLIs; see [Packages and layers](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/README.md).
 
 The Kernel and each Extra run as independent services. They can start in either order, and stopping one Extra leaves the others running. Your application owns its business data, credentials and conversation history.
 

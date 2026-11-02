@@ -1,3 +1,5 @@
+import { testAdapter } from "../../test/fixtures/invoke-adapter.js";
+import { adapter } from "./fixture-adapter.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, spawn } from "node:child_process";
@@ -27,7 +29,7 @@ function nativeInput(mode = "native", scenario = "normal") {
 
 test(`${language} public API talks to real Kernel + isolated fake Provider`, async (t) => {
   build();
-  const { endpoint } = await kernelFixture(t, { manifest: resolve("native/tests/adapters.json") });
+  const { endpoint } = await kernelFixture(t, { adapters: [testAdapter, adapter] });
   for (const [name, input, op] of [
     ["canonical", kernelInput(), "invoke"],
     ["native", nativeInput(), "invoke"],
