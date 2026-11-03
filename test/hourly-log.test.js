@@ -7,8 +7,7 @@ import {
   rmSync,
   statSync,
   writeFileSync,
-  truncateSync,
-  symlinkSync
+  truncateSync
 } from "node:fs";
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
@@ -19,6 +18,7 @@ import {
   HOURLY_LOG_MAX_BYTES
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { resolveServiceControl } from "../apps/cli/dist/service-control.js";
+import { symlinkFixtureSync } from "../test-support/symlink-fixture.mjs";
 
 const hour = 3600000;
 function directory(t) {
@@ -100,7 +100,7 @@ test("actual 100 MiB boundary is inherited after restart and never creates overf
   assert.equal(files(root).length, 2);
 });
 
-test("cleanup preserves legacy files, other categories, user files and symlink targets", (t) => {
+test("cleanup preserves legacy files, other categories and user files", (t) => {
   const root = directory(t),
     target = join(root, "user.txt");
   for (const name of [
@@ -111,12 +111,22 @@ test("cleanup preserves legacy files, other categories, user files and symlink t
     "user.txt"
   ])
     writeFileSync(join(root, name), "keep");
-  symlinkSync(target, join(root, "test-20260101T00.log"));
   const writer = new HourlyLogWriter(root, "test", { now: () => Date.UTC(2026, 9, 16, 7) });
   t.after(() => writer.close());
   assert.equal(readFileSync(target, "utf8"), "keep");
-  assert.equal(readdirSync(root).length, 6);
-  symlinkSync(target, join(root, "test-20261016T07.log"));
+  assert.equal(readdirSync(root).length, 5);
+});
+
+test("cleanup and writes preserve symlink targets", (t) => {
+  const root = directory(t),
+    target = join(root, "user.txt");
+  writeFileSync(target, "keep");
+  if (!symlinkFixtureSync(t, target, join(root, "test-20260101T00.log"))) return;
+  const writer = new HourlyLogWriter(root, "test", { now: () => Date.UTC(2026, 9, 16, 7) });
+  t.after(() => writer.close());
+  assert.equal(readFileSync(target, "utf8"), "keep");
+  assert.equal(readdirSync(root).length, 2);
+  if (!symlinkFixtureSync(t, target, join(root, "test-20261016T07.log"))) return;
   assert.equal(writer.write("must not reach user file"), false);
   assert.equal(readFileSync(target, "utf8"), "keep");
 });
@@ -158,7 +168,7 @@ test("a symlinked log directory is neither cleaned nor written", (t) => {
     target = directory(t),
     link = join(root, "logs");
   writeFileSync(join(target, "test-20260101T00.log"), "keep");
-  symlinkSync(target, link, "dir");
+  if (!symlinkFixtureSync(t, target, link, "dir")) return;
   const writer = new HourlyLogWriter(link, "test");
   t.after(() => writer.close());
   assert.equal(writer.write("must not append"), false);
