@@ -13,6 +13,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { preparedFrames, invokeRequest } from "./runtime-fixture.js";
+import { observeGrokFixture, withGrokOutputPipe } from "../test-support/grok-build-fixture.mjs";
 
 const fixturePath = fileURLToPath(new URL("./fixtures/grok-build-acp-host.mjs", import.meta.url));
 const base = () =>
@@ -24,22 +25,35 @@ const base = () =>
   });
 async function fixture(t, mode = "success", { cleanupFailure = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "octo-grok-test-"));
-  t.after(() => rm(directory, { recursive: true, force: true }));
   const trace = join(directory, "trace.jsonl");
   const spawns = [];
+  const disconnects = [];
+  const disconnectClients = [];
+  t.after(async () => {
+    for (const client of disconnectClients) await client.close();
+    for (const observation of disconnects) await observation.closed;
+    await rm(directory, { recursive: true, force: true });
+  });
   const adapter = createGrokBuildAdapter({
     acpClientFactory(options) {
       spawns.push(options);
-      const client = spawnAcpClient({
-        ...options,
-        command: process.execPath,
-        args: [fixturePath],
-        env: {
-          ...options.env,
-          OCTO_GROK_FIXTURE: options.env?.OCTO_GROK_FIXTURE ?? mode,
-          OCTO_GROK_TRACE: trace
-        }
-      });
+      const spawnClient = () =>
+        spawnAcpClient({
+          ...options,
+          command: process.execPath,
+          args: [fixturePath],
+          env: {
+            ...options.env,
+            OCTO_GROK_FIXTURE: options.env?.OCTO_GROK_FIXTURE ?? mode,
+            OCTO_GROK_TRACE: trace
+          }
+        });
+      const client = ["disconnect", "disconnect_diagnostic"].includes(mode)
+        ? withGrokOutputPipe(spawnClient, (child) => disconnects.push(observeGrokFixture(child)))
+        : spawnClient();
+      if (disconnects.length) {
+        disconnectClients.push(client);
+      }
       if (cleanupFailure) {
         const close = client.close.bind(client);
         client.close = async () => {
@@ -54,6 +68,7 @@ async function fixture(t, mode = "success", { cleanupFailure = false } = {}) {
     adapter,
     directory,
     spawns,
+    disconnects,
     async trace() {
       return (await readFile(trace, "utf8")).trim().split("\n").map(JSON.parse);
     }
@@ -182,6 +197,30 @@ for (const [mode, expected] of [
       for await (const event of f.adapter.invoke(request)) events.push(event);
     }, expected);
     assert.equal(terminal(events).length, 0);
+    if (mode === "disconnect" || mode === "disconnect_diagnostic") {
+      assert.equal(f.disconnects.length, 1);
+      const observation = f.disconnects[0];
+      observation.record("invocation-rejected");
+      await observation.closed;
+      const eof = observation.events.find((entry) => entry.event === "stdout-eof");
+      assert.equal(eof?.alive, true);
+      assert.equal(eof.exitCode, null);
+      assert.equal(eof.signalCode, null);
+      const order = observation.events.map((entry) => entry.event);
+      assert.ok(order.indexOf("stdout-eof") < order.indexOf("exit"));
+      assert.ok(order.indexOf("stdout-eof") < order.indexOf("invocation-rejected"));
+      assert.ok(order.indexOf("exit") < order.indexOf("close"));
+      for (const stream of [
+        observation.child.stdin,
+        observation.child.stdout,
+        observation.child.stderr
+      ])
+        assert.equal(stream.destroyed, true);
+      assert.throws(() => process.kill(observation.child.pid, 0), /ESRCH/);
+      t.diagnostic(
+        JSON.stringify({ mode, pid: observation.child.pid, events: observation.events })
+      );
+    }
     if (mode === "load_error")
       assert.equal(
         (await f.trace()).some((entry) => entry.method === "session/new"),
