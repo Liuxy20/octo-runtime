@@ -1,8 +1,13 @@
 import { createInterface } from "node:readline";
 import { appendFileSync } from "node:fs";
+import { Socket } from "node:net";
 
 const mode = process.env.OCTO_GROK_FIXTURE ?? "success";
 const trace = process.env.OCTO_GROK_TRACE;
+// 可关闭的 ACP 输出管道由测试启动边界接到 child.stdout；不依赖受保护的 stdio fd1。
+const output = process.env.OCTO_GROK_OUTPUT_FD
+  ? new Socket({ fd: Number(process.env.OCTO_GROK_OUTPUT_FD), readable: false, writable: true })
+  : process.stdout;
 const authMethods = (
   {
     auth_missing: ["grok.com"],
@@ -13,7 +18,7 @@ const authMethods = (
     auth_cached_token: ["cached_token"]
   }[mode] ?? ["cached_token", "xai.api_key"]
 ).map((id) => ({ id }));
-const send = (value) => process.stdout.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\n");
+const send = (value) => output.write(JSON.stringify({ jsonrpc: "2.0", ...value }) + "\n");
 const result = (id, value = {}) => send({ id, result: value });
 const error = (id, message, data) =>
   send({ id, error: { code: -32603, message, ...(data ? { data } : {}) } });
@@ -142,7 +147,8 @@ createInterface({ input: process.stdin }).on("line", (line) => {
   if (mode === "disconnect" || mode === "disconnect_diagnostic") {
     if (mode === "disconnect_diagnostic")
       process.stderr.write("CONFIG_INVALID: missing provider credential\n");
-    process.stdout.end();
+    if (process.env.OCTO_GROK_OUTPUT_FD) output.destroy();
+    else output.end();
     setInterval(() => {}, 1000);
     return;
   }

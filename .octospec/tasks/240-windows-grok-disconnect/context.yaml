@@ -1,0 +1,29 @@
+brief: .octospec/tasks/240-windows-grok-disconnect/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 测试拓扑、产品归属、禁止扩大 CI 与保护既有数据
+  - id: runtime-protocol-design
+    source: repo
+    reason: 断流不得误报完成，保持取消和真实终态
+  - id: runtime-adapter-metadata
+    source: repo
+    reason: Adapter 边界与 fake Provider
+  - id: runtime-local-execution
+    source: repo
+    reason: 所属 Provider 与真实清理、句柄及 Windows 保证
+  - id: runtime-output-protocol
+    source: repo
+    reason: 零成功终态和失败诊断
+  - id: runtime-engineering
+    source: repo
+    reason: 测试证据与工程门禁
+  - id: commit
+    source: repo
+    reason: 中文内部记录与交付边界；公开英文约定以 CONTRIBUTING 为准
+files_expected:
+  - test/fixtures/grok-build-acp-host.mjs
+  - test/grok-build-adapter.test.js
+  - test-support/grok-build-fixture.mjs
+  - test/manual/grok-disconnect-240.test.mjs
+updated_at: 2026-11-03T02:00:00Z
