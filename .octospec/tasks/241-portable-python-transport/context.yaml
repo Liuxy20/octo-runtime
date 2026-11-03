@@ -1,0 +1,25 @@
+brief: .octospec/tasks/241-portable-python-transport/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    path: .octospec/rules/architecture.md
+    reason: 工程记录匹配 .octospec 路径；产品意图、原生装配和 CI 范围约束
+  - id: runtime-local-execution
+    source: repo
+    path: .octospec/rules/local-execution.md
+    reason: IPC 背压、错误、连接关闭和所有权断言
+  - id: runtime-engineering
+    source: repo
+    path: .octospec/rules/engineering.md
+    reason: testing 标签；按合同事件计时、保留失败事实和检查
+  - id: commit
+    source: repo
+    path: .octospec/rules/collaboration.md
+    reason: 中文工程记录和授权边界；公开交付语言以 CONTRIBUTING 为准
+files_expected:
+  - native/python/tests/test_transport.py
+  - .octospec/tasks/241-portable-python-transport/brief.md
+  - .octospec/tasks/241-portable-python-transport/context.yaml
+  - .octospec/tasks/241-portable-python-transport/validation.md
+  - .octospec/journal/shared/2026-11-03-241-portable-python-transport.md
+updated_at: 2026-11-03T09:54:06Z

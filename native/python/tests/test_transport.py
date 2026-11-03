@@ -5,7 +5,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from octo_runtime import Client, KernelError
 from octo_runtime.client import _Channel as Channel, BEHAVIOR
 
@@ -52,19 +52,43 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         import octo_runtime.client as transport_module
 
         peers = []
-        server = await asyncio.start_server(
-            lambda r, w: peers.append((r, w)), "127.0.0.1", 0
-        )
+        accepted = asyncio.Event()
+
+        def accept(reader, writer):
+            writer.transport.pause_reading()
+            peers.append((reader, writer))
+            accepted.set()
+
+        server = await asyncio.start_server(accept, "127.0.0.1", 0)
         try:
+            # 限制接收窗口，使非读取对端的背压不依赖操作系统默认缓冲大小。
+            server.sockets[0].setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
             for explicit_close in (False, True):
                 with self.subTest(explicit_close=explicit_close):
+                    accepted.clear()
                     reader, writer = await asyncio.open_connection(
                         "127.0.0.1", server.sockets[0].getsockname()[1]
                     )
+                    await asyncio.wait_for(accepted.wait(), 2)
+                    # Windows 关闭内核发送缓冲，保证重叠写入等待对端接收，而非立即完成。
                     writer.get_extra_info("socket").setsockopt(
-                        socket.SOL_SOCKET, socket.SO_SNDBUF, 4096
+                        socket.SOL_SOCKET,
+                        socket.SO_SNDBUF,
+                        0 if sys.platform == "win32" else 4096,
                     )
                     writer.transport.set_write_buffer_limits(high=2048)
+                    writing = asyncio.Event()
+                    drain = writer.drain
+
+                    async def observe_drain():
+                        writing.set()
+                        await drain()
+
+                    def connected(*args, **kwargs):
+                        # 同步请求校验不属于 IO 预算；仍保留原来的两秒传输/关闭期限。
+                        budget.reschedule(asyncio.get_running_loop().time() + 2)
+                        return reader, writer
+
                     client = Client("unused.sock")
                     request = {
                         "input": {
@@ -77,27 +101,43 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                             ],
                         }
                     }
-                    with (
-                        patch.object(
-                            transport_module,
-                            "sys",
-                            types.SimpleNamespace(platform="linux"),
-                        ),
-                        patch(
-                            "asyncio.open_unix_connection",
-                            return_value=(reader, writer),
-                            create=True,
-                        ),
-                        patch.dict(
-                            BEHAVIOR["timeoutsMs"],
-                            invokeAck=150 if not explicit_close else 5000,
-                        ),
-                    ):
-                        call = asyncio.create_task(client.rpc_submit(request))
-                        try:
-                            async with asyncio.timeout(2):
-                                while writer.transport.get_write_buffer_size() == 0:
-                                    await asyncio.sleep(0.001)
+                    async with asyncio.timeout(None) as budget:
+                        with (
+                            patch.object(
+                                transport_module,
+                                "sys",
+                                types.SimpleNamespace(platform="linux"),
+                            ),
+                            patch(
+                                "asyncio.open_unix_connection",
+                                new_callable=AsyncMock,
+                                side_effect=connected,
+                                create=True,
+                            ) as opened,
+                            patch.object(writer, "drain", side_effect=observe_drain),
+                            patch.dict(
+                                BEHAVIOR["timeoutsMs"],
+                                invokeAck=150 if not explicit_close else 5000,
+                            ),
+                        ):
+                            call = asyncio.create_task(client.rpc_submit(request))
+                            started = asyncio.create_task(writing.wait())
+                            try:
+                                # 提前失败直接取回原异常，避免将错误 Mock 误报为等待超时。
+                                await asyncio.wait(
+                                    (call, started), return_when=asyncio.FIRST_COMPLETED
+                                )
+                                if call.done():
+                                    await call
+                                    self.fail("RPC completed before write backpressure")
+                                self.assertTrue(writing.is_set())
+                                self.assertGreater(
+                                    writer.transport.get_write_buffer_size(), 0
+                                )
+                                opened.assert_awaited_once_with(
+                                    "unused.sock",
+                                    limit=BEHAVIOR["limits"]["readChunkBytes"],
+                                )
                                 if explicit_close:
                                     await client.close()
                                 with self.assertRaisesRegex(
@@ -107,16 +147,18 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
                                     else "KERNEL_TIMEOUT",
                                 ):
                                     await call
-                            self.assertEqual(client.transport.channels, set())
-                            self.assertEqual(
-                                writer.transport.get_write_buffer_size(), 0
-                            )
-                            self.assertFalse(peers[-1][1].is_closing())
-                        finally:
-                            writer.transport.abort()
-                            call.cancel()
-                            await asyncio.gather(call, return_exceptions=True)
-                            await client.close()
+                                self.assertEqual(client.transport.channels, set())
+                                self.assertEqual(
+                                    writer.transport.get_write_buffer_size(), 0
+                                )
+                                self.assertFalse(peers[-1][1].is_closing())
+                            finally:
+                                writer.transport.abort()
+                                call.cancel()
+                                started.cancel()
+                                await asyncio.gather(call, started, return_exceptions=True)
+                                await client.close()
+                                await writer.wait_closed()
         finally:
             server.close()
             for _, writer in peers:
@@ -245,7 +287,10 @@ class TransportTests(unittest.IsolatedAsyncioTestCase):
         writer.wait_closed = wait_closed
         transport = Transport("kernel.sock")
         with patch(
-            "asyncio.open_unix_connection", return_value=(reader, writer)
+            "asyncio.open_unix_connection",
+            new_callable=AsyncMock,
+            return_value=(reader, writer),
+            create=True,
         ) as opened:
             with patch.object(sys, "platform", "linux"):
                 channel = await transport.open()
