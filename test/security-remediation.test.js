@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import fs from "node:fs/promises";
 import { syncBuiltinESMExports } from "node:module";
-import { mkdtemp, mkdir, writeFile, readFile, rm, symlink, chmod } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, chmod } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ import {
 import { readStoredExtra } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { configureCliOpenClaw, syncCliOpenClawToolEnvironment } from "../apps/cli/dist/openclaw.js";
 import { claimAttempt } from "./fixtures/restart-hanging-adapter-host.js";
+import { symlinkFixture } from "../test-support/symlink-fixture.mjs";
 
 const execute = promisify(execFile);
 const cwd = fileURLToPath(new URL("..", import.meta.url));
@@ -67,7 +68,7 @@ test("adversarial PEM, app IDs and API suffixes finish within a bounded child pr
   await execute(process.execPath, ["--input-type=module", "-e", code], { cwd, timeout: 5000 });
 });
 
-test("Extra config reads preserve missing/permission failures and reject links and oversized files", async (t) => {
+test("Extra config reads preserve missing/permission failures and reject directories and oversized files", async (t) => {
   const root = await directory(t);
   await mkdir(join(root, "example"));
   const file = join(root, "example", "config.json");
@@ -85,14 +86,15 @@ test("Extra config reads preserve missing/permission failures and reject links a
   await mkdir(file);
   await assert.rejects(readStoredExtra(root, "example"), /EXTRA_CONFIG_PERMISSIONS_INVALID/);
   await rm(file, { recursive: true });
+});
+
+test("Extra config reads reject symlinks without modifying their targets", async (t) => {
+  const root = await directory(t);
+  await mkdir(join(root, "example"));
+  const file = join(root, "example", "config.json");
   const target = join(root, "target.json");
   await writeFile(target, JSON.stringify({ config: { private: "keep" } }), { mode: 0o600 });
-  try {
-    await symlink(target, file);
-  } catch (error) {
-    if (process.platform === "win32" && error.code === "EPERM") return;
-    throw error;
-  }
+  if (!(await symlinkFixture(t, target, file))) return;
   await assert.rejects(readStoredExtra(root, "example"));
   assert.equal(JSON.parse(await readFile(target, "utf8")).config.private, "keep");
 });
@@ -109,12 +111,7 @@ test("OpenClaw dotenv synchronization refuses a symbolic link without modifying 
   await configureCliOpenClaw(profile, { openclawHome: native });
   const target = join(root, "target.env");
   await writeFile(target, "KEEP=untouched\n");
-  try {
-    await symlink(target, join(native, ".env"));
-  } catch (error) {
-    if (process.platform === "win32" && error.code === "EPERM") return;
-    throw error;
-  }
+  if (!(await symlinkFixture(t, target, join(native, ".env")))) return;
   await assert.rejects(
     syncCliOpenClawToolEnvironment(profile, [
       {

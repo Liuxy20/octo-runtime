@@ -1,15 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  mkdtemp,
-  mkdir,
-  readFile,
-  readdir,
-  rm,
-  writeFile,
-  appendFile,
-  symlink
-} from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile, appendFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -23,6 +14,7 @@ import {
 import { runCli } from "../apps/cli/dist/main.js";
 import { StatusOutput } from "../apps/cli/dist/status-output.js";
 import { waitFor } from "./runtime-fixture.js";
+import { symlinkFixture } from "../test-support/symlink-fixture.mjs";
 
 const extra = "channel-gateway";
 const status = (event = "service.ready", data = {}, time = "2026-10-22T01:00:00.000Z") =>
@@ -221,7 +213,7 @@ for (const component of [extra, "executor-kernel"])
     assert.equal(process.listenerCount("SIGINT"), before);
   });
 
-test("empty logs succeed; non-regular log paths and oversized records cannot expose content", async (t) => {
+test("empty logs succeed and oversized records cannot expose content", async (t) => {
   const { home, directory } = await fixture(t);
   const output = [],
     errors = [];
@@ -232,9 +224,6 @@ test("empty logs succeed; non-regular log paths and oversized records cannot exp
   assert.equal(await runCli([extra, "logs", "--home", home], deps), 0);
   assert.equal(output.length, 0);
   assert.equal(errors.length, 1);
-  const outside = join(home, "outside");
-  await writeFile(outside, "SECRET_OUTSIDE");
-  await symlink(outside, join(directory, `${extra}-status-20261022T00.log`));
   await writeFile(
     join(directory, `${extra}-status-20261022T01.log`),
     "SECRET".repeat(900000) + "\n" + line("service.ready")
@@ -243,4 +232,16 @@ test("empty logs succeed; non-regular log paths and oversized records cannot exp
   assert.equal(output.length, 1);
   assert.equal(JSON.parse(output[0]).event, "service.ready");
   assert.doesNotMatch(output.join(""), /SECRET/);
+  await t.test("symlinked status logs cannot expose target content", async (t) => {
+    const outside = join(home, "outside");
+    await writeFile(outside, "SECRET_OUTSIDE");
+    if (!(await symlinkFixture(t, outside, join(directory, `${extra}-status-20261022T00.log`))))
+      return;
+    output.length = 0;
+    assert.equal(await runCli([extra, "logs", "--home", home, "--json"], deps), 0);
+    assert.equal(output.length, 1);
+    assert.equal(JSON.parse(output[0]).event, "service.ready");
+    assert.doesNotMatch(output.join(""), /SECRET/);
+    assert.equal(await readFile(outside, "utf8"), "SECRET_OUTSIDE");
+  });
 });

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile, rm, symlink, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -26,6 +26,7 @@ import { stableEffectKey } from "../packages/octo-runtime-extra-channel-gateway/
 import { ImDeliveryIdentity } from "../packages/octo-runtime-extra-channel-gateway/dist/delivery/identity.js";
 import { OctoConnector } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/connector.js";
 import { OctoApiError } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/api/errors.js";
+import { symlinkFixture } from "../test-support/symlink-fixture.mjs";
 
 const prepareArtifacts = async (...args) => (await prepareArtifactReply(...args)).text;
 
@@ -1368,63 +1369,70 @@ for (const scenario of [
   });
 }
 
-test("HTML games, arbitrary files and mixed images retain exact Markdown while realpaths upload once", async (t) => {
-  const { workspace, policy } = await fixture(t);
-  const uploads = [];
-  for (const name of [
-    "game.html",
-    "report.pdf",
-    "deck.pptx",
-    "notes.md",
-    "unknown.custom",
-    "a.png",
-    "a.jpg",
-    "a.webp",
-    "a.gif",
-    "a.svg",
-    "a.bmp",
-    "a.tiff",
-    "space name.txt"
-  ])
-    await writeFile(join(workspace, name), `bytes:${name}`);
-  await symlink(join(workspace, "a.png"), join(workspace, "alias.png"));
-  const text = [
-    "# Outputs",
-    '[**Play**](./game.html "Game title") and [PDF](./report.pdf)',
-    "[deck](./deck.pptx) [notes](./notes.md) [custom](unknown.custom)",
-    '![alt](./a.png "image title") [download](./alias.png)',
-    "![photo][PHOTO] and [game][game]",
-    "[PHOTO]: <./a.jpg> 'Photo title'",
-    '[game]: ./game.html "Game"',
-    "![webp](a.webp) ![gif](a.gif) ![svg](a.svg) ![bmp](a.bmp) ![tiff](a.tiff)",
-    "[spaces](<./space name.txt>)",
-    `[absolute](${join(workspace, "notes.md")}) [url](${pathToFileURL(join(workspace, "notes.md"))})`,
-    "[cloud](https://cdn.example.com/already.pdf) ![remote](https://cdn.example.com/image.png)",
-    "[unused]: ./never-uploaded.txt"
-  ].join("\n\n");
-  const result = await prepareArtifacts(text, policy, signal, async (bytes, name, mime) => {
-    uploads.push({ name, mime });
-    assert.equal(Buffer.from(bytes).toString(), `bytes:${name}`);
-    return `https://cdn.example.com/${encodeURIComponent(name)}`;
+for (const links of ["ordinary paths", "symlink aliases"]) {
+  test(`HTML games, arbitrary files and mixed images retain exact Markdown while realpaths upload once: ${links}`, async (t) => {
+    const { workspace, policy } = await fixture(t);
+    const uploads = [];
+    for (const name of [
+      "game.html",
+      "report.pdf",
+      "deck.pptx",
+      "notes.md",
+      "unknown.custom",
+      "a.png",
+      "a.jpg",
+      "a.webp",
+      "a.gif",
+      "a.svg",
+      "a.bmp",
+      "a.tiff",
+      "space name.txt"
+    ])
+      await writeFile(join(workspace, name), `bytes:${name}`);
+    const alias = links === "symlink aliases" ? "alias.png" : "a.png";
+    if (
+      links === "symlink aliases" &&
+      !(await symlinkFixture(t, join(workspace, "a.png"), join(workspace, alias)))
+    )
+      return;
+    const text = [
+      "# Outputs",
+      '[**Play**](./game.html "Game title") and [PDF](./report.pdf)',
+      "[deck](./deck.pptx) [notes](./notes.md) [custom](unknown.custom)",
+      `![alt](./a.png "image title") [download](./${alias})`,
+      "![photo][PHOTO] and [game][game]",
+      "[PHOTO]: <./a.jpg> 'Photo title'",
+      '[game]: ./game.html "Game"',
+      "![webp](a.webp) ![gif](a.gif) ![svg](a.svg) ![bmp](a.bmp) ![tiff](a.tiff)",
+      "[spaces](<./space name.txt>)",
+      `[absolute](${join(workspace, "notes.md")}) [url](${pathToFileURL(join(workspace, "notes.md"))})`,
+      "[cloud](https://cdn.example.com/already.pdf) ![remote](https://cdn.example.com/image.png)",
+      "[unused]: ./never-uploaded.txt"
+    ].join("\n\n");
+    const result = await prepareArtifacts(text, policy, signal, async (bytes, name, mime) => {
+      uploads.push({ name, mime });
+      assert.equal(Buffer.from(bytes).toString(), `bytes:${name}`);
+      return `https://cdn.example.com/${encodeURIComponent(name)}`;
+    });
+    let expected = text;
+    for (const name of ["game.html", "report.pdf", "deck.pptx", "notes.md", "a.png", "a.jpg"])
+      expected = expected.replaceAll(`./${name}`, `https://cdn.example.com/${name}`);
+    expected = expected.replace("./alias.png", "https://cdn.example.com/a.png");
+    expected = expected.replace("unknown.custom", "https://cdn.example.com/unknown.custom");
+    for (const name of ["a.webp", "a.gif", "a.svg", "a.bmp", "a.tiff"])
+      expected = expected.replace(`](${name})`, `](https://cdn.example.com/${name})`);
+    expected = expected.replace("./space name.txt", "https://cdn.example.com/space%20name.txt");
+    expected = expected.replace(join(workspace, "notes.md"), "https://cdn.example.com/notes.md");
+    expected = expected.replace(
+      pathToFileURL(join(workspace, "notes.md")).href,
+      "https://cdn.example.com/notes.md"
+    );
+    assert.equal(result, expected);
+    assert.equal(uploads.length, 13);
+    assert.equal(uploads.find((u) => u.name === "unknown.custom").mime, "application/octet-stream");
+    assert.equal(uploads.find((u) => u.name === "a.tiff").mime, "image/tiff");
   });
-  let expected = text;
-  for (const name of ["game.html", "report.pdf", "deck.pptx", "notes.md", "a.png", "a.jpg"])
-    expected = expected.replaceAll(`./${name}`, `https://cdn.example.com/${name}`);
-  expected = expected.replace("./alias.png", "https://cdn.example.com/a.png");
-  expected = expected.replace("unknown.custom", "https://cdn.example.com/unknown.custom");
-  for (const name of ["a.webp", "a.gif", "a.svg", "a.bmp", "a.tiff"])
-    expected = expected.replace(`](${name})`, `](https://cdn.example.com/${name})`);
-  expected = expected.replace("./space name.txt", "https://cdn.example.com/space%20name.txt");
-  expected = expected.replace(join(workspace, "notes.md"), "https://cdn.example.com/notes.md");
-  expected = expected.replace(
-    pathToFileURL(join(workspace, "notes.md")).href,
-    "https://cdn.example.com/notes.md"
-  );
-  assert.equal(result, expected);
-  assert.equal(uploads.length, 13);
-  assert.equal(uploads.find((u) => u.name === "unknown.custom").mime, "application/octet-stream");
-  assert.equal(uploads.find((u) => u.name === "a.tiff").mime, "image/tiff");
-});
+}
 
 test("code, HTML, quotes and unused definitions are untouched, including definitions shared with examples", async (t) => {
   const { workspace, policy } = await fixture(t);
@@ -1477,32 +1485,45 @@ test("protected reference expansions retain nested image uploads without overlap
   }
 });
 
-test("partial failure preserves successful URLs and reports inaccessible, forbidden and non-file paths", async (t) => {
-  const { workspace, policy } = await fixture(t);
-  const outside = await mkdtemp(join(tmpdir(), "octo-outside-"));
-  t.after(() => rm(outside, { recursive: true, force: true }));
-  await writeFile(join(outside, "secret.txt"), "private");
-  await symlink(join(outside, "secret.txt"), join(workspace, "escape.txt"));
-  await mkdir(join(workspace, "directory"));
-  await writeFile(join(workspace, "good.html"), "game");
-  const calls = [];
-  const upload = async (_bytes, name) => {
-    calls.push(name);
-    return "https://cdn.example.com/good.html";
-  };
-  const text = `[good](good.html) [missing](missing.pdf) [escape](escape.txt) [dir](directory) [outside](${join(outside, "secret.txt")}) [windows](C:/provider/out.pdf)`;
-  const result = await prepareArtifacts(text, policy, signal, upload);
-  assert.deepEqual(calls, ["good.html"]);
-  assert.match(result, /\[good\]\(https:\/\/cdn.example.com\/good.html\)/);
-  for (const reason of [
-    "file-unavailable",
-    "directory-policy",
-    "not-regular-file",
-    "path-unavailable"
-  ])
-    assert.ok(result.includes(reason), reason);
-  assert.match(result, /generation was not rerun/);
-});
+for (const links of ["ordinary paths", "symlink escape"]) {
+  test(`partial failure preserves successful URLs and reports inaccessible, forbidden and non-file paths: ${links}`, async (t) => {
+    const { workspace, policy } = await fixture(t);
+    const outside = await mkdtemp(join(tmpdir(), "octo-outside-"));
+    t.after(() => rm(outside, { recursive: true, force: true }));
+    await writeFile(join(outside, "secret.txt"), "private");
+    if (
+      links === "symlink escape" &&
+      !(await symlinkFixture(t, join(outside, "secret.txt"), join(workspace, "escape.txt")))
+    )
+      return;
+    await mkdir(join(workspace, "directory"));
+    await writeFile(join(workspace, "good.html"), "game");
+    const calls = [];
+    const upload = async (_bytes, name) => {
+      calls.push(name);
+      return "https://cdn.example.com/good.html";
+    };
+    const escape = links === "symlink escape" ? "[escape](escape.txt) " : "";
+    // 盘符路径在 Windows 合法；编码分隔符的 file URL 在所有平台均不可转换为本地路径。
+    const text = `[good](good.html) [missing](missing.pdf) ${escape}[dir](directory) [outside](${join(outside, "secret.txt")}) [windows](C:/provider/out.pdf) [invalid](file:///invalid%2Fpath)`;
+    const result = await prepareArtifacts(text, policy, signal, upload);
+    assert.deepEqual(calls, ["good.html"]);
+    assert.match(result, /\[good\]\(https:\/\/cdn.example.com\/good.html\)/);
+    for (const reason of [
+      "file-unavailable",
+      "directory-policy",
+      "not-regular-file",
+      "path-unavailable"
+    ])
+      assert.ok(result.includes(reason), reason);
+    assert.match(result, /generation was not rerun/);
+    if (links === "symlink escape") {
+      assert.match(result, /\[escape\]\(escape.txt\)/);
+      assert.ok(result.includes("escape.txt (directory-policy)"));
+    }
+    assert.equal(await readFile(join(outside, "secret.txt"), "utf8"), "private");
+  });
+}
 
 test("size, total, count, MIME and root policies reject before transfer", async (t) => {
   const { workspace, policy } = await fixture(t);
@@ -1886,41 +1907,48 @@ for (const cardState of ["failed", "unknown"]) {
   });
 }
 
-test("native card preparation follows ordinary link usage while images stay inline and aliases share one upload", async (t) => {
-  const { workspace, policy } = await fixture(t);
-  await writeFile(join(workspace, "image.png"), "image");
-  await symlink(join(workspace, "image.png"), join(workspace, "alias.png"));
-  let uploads = 0;
-  const upload = async () => {
-    uploads++;
-    return "https://cdn.example.com/image.png";
-  };
-  const imageOnly = await prepareArtifactReply(
-    "> [example][image]\n\n![Photo][image]\n\n[image]: image.png",
-    policy,
-    signal,
-    upload
-  );
-  assert.deepEqual(imageOnly.files, []);
-  const mixed = await prepareArtifactReply(
-    "![Photo][image]\n\n[Download][image] [Alias](alias.png)\n\n[image]: image.png",
-    policy,
-    signal,
-    upload
-  );
-  assert.equal(uploads, 2);
-  assert.deepEqual(mixed.files, [
-    {
-      url: "https://cdn.example.com/image.png",
-      name: "image.png",
-      size: 5,
-      extension: "png"
-    }
-  ]);
-  assert.match(mixed.text, /!\[Photo\]\[image\]/);
-  assert.match(mixed.text, /\[Download\]\[image\]/);
-  assert.match(mixed.text, /\[image\]: https:\/\/cdn.example.com\/image.png/);
-});
+for (const links of ["ordinary paths", "symlink aliases"]) {
+  test(`native card preparation follows ordinary link usage while images stay inline and aliases share one upload: ${links}`, async (t) => {
+    const { workspace, policy } = await fixture(t);
+    await writeFile(join(workspace, "image.png"), "image");
+    const alias = links === "symlink aliases" ? "alias.png" : "./image.png";
+    if (
+      links === "symlink aliases" &&
+      !(await symlinkFixture(t, join(workspace, "image.png"), join(workspace, alias)))
+    )
+      return;
+    let uploads = 0;
+    const upload = async () => {
+      uploads++;
+      return "https://cdn.example.com/image.png";
+    };
+    const imageOnly = await prepareArtifactReply(
+      "> [example][image]\n\n![Photo][image]\n\n[image]: image.png",
+      policy,
+      signal,
+      upload
+    );
+    assert.deepEqual(imageOnly.files, []);
+    const mixed = await prepareArtifactReply(
+      `![Photo][image]\n\n[Download][image] [Alias](${alias})\n\n[image]: image.png`,
+      policy,
+      signal,
+      upload
+    );
+    assert.equal(uploads, 2);
+    assert.deepEqual(mixed.files, [
+      {
+        url: "https://cdn.example.com/image.png",
+        name: "image.png",
+        size: 5,
+        extension: "png"
+      }
+    ]);
+    assert.match(mixed.text, /!\[Photo\]\[image\]/);
+    assert.match(mixed.text, /\[Download\]\[image\]/);
+    assert.match(mixed.text, /\[image\]: https:\/\/cdn.example.com\/image.png/);
+  });
+}
 
 for (const command of ["/stop", "/reset", "shutdown"]) {
   test(`${command} cancels in-flight final delivery without rerunning generation`, async (t) => {

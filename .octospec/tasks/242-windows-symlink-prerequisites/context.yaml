@@ -1,0 +1,29 @@
+brief: .octospec/tasks/242-windows-symlink-prerequisites/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    path: .octospec/rules/architecture.md
+    reason: 任务文档、产品职责及 CI 边界
+  - id: runtime-channel
+    source: repo
+    path: .octospec/rules/channel-integration.md
+    reason: test/im-artifact-delivery.test.js 的真实路径与投递合同
+  - id: runtime-session-reset
+    source: repo
+    path: .octospec/rules/session-reset.md
+    reason: test/im-* 路径命中；不改 reset 合同
+  - id: runtime-engineering
+    source: repo
+    path: .octospec/rules/engineering.md
+    reason: 测试、安全文件操作及验证证据
+  - id: commit
+    source: repo
+    path: .octospec/rules/collaboration.md
+    reason: 文档及本地交付；公开文本语言服从 CONTRIBUTING
+files_expected:
+  - test/extra-status-logs.test.js
+  - test/hourly-log.test.js
+  - test/im-artifact-delivery.test.js
+  - test/security-remediation.test.js
+  - test-support/symlink-fixture.mjs
+updated_at: 2026-11-03T04:10:00Z
