@@ -1,5 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { isCanonicalKernelEndpoint, legacyKernelEndpoint } from "./kernel-endpoint-layout.js";
 import { randomUUID } from "node:crypto";
 import {
   accessSync,
@@ -365,17 +364,8 @@ export function kernelStartupPaths(
   logDirectory?: string
 ): RuntimePath[] {
   const paths: RuntimePath[] = [];
-  if (process.platform !== "win32") {
+  if (process.platform !== "win32")
     paths.push({ path: `${endpoint}.owner.recovery`, resource: "endpoint-ownership" });
-    if (isCanonicalKernelEndpoint(endpoint)) {
-      const legacy = legacyKernelEndpoint(endpoint);
-      // 旧地址只用于互斥/识别遗留状态；检查文件系统预算，绝不作为待 bind 的 IPC 地址。
-      paths.push(
-        { path: `${legacy}.owner.recovery`, resource: "kernel-transition-ownership" },
-        { path: `${legacy}.runs`, resource: "legacy-kernel-state" }
-      );
-    }
-  }
   const statePath = stateDirectory
     ? (process.platform === "win32" ? win32 : posix).join(stateDirectory, "kernel-invocations.json")
     : process.platform !== "win32"

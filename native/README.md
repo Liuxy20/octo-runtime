@@ -13,7 +13,7 @@ SDK 运行时按“一份生成代码 + 一份手写代码”组织：Python 为
 
 ## 构建和运行
 
-从仓库根目录执行；先由宿主安装并启动 Kernel，取得实际 endpoint。macOS/Linux 的 CLI 默认地址为 `$HOME/.octo-runtime/executor-kernel.sock`，SDK 使用宿主显式准备的 Home，自定义 Home 的地址为 `<home>/executor-kernel.sock`。Windows 使用宿主提供的完整 pipe 名，不拼接猜测 hash。旧地址接入方须按[端点升级说明](../docs/zh-CN/guides/kernel-endpoint-upgrade.md)停止并同步重启。
+从仓库根目录执行；先由宿主安装并启动 Kernel，取得实际 endpoint。macOS/Linux 的 CLI 默认地址为 `$HOME/.octo-runtime/executor-kernel.sock`，SDK 使用宿主显式准备的 Home，自定义 Home 的地址为 `<home>/executor-kernel.sock`。Windows 使用宿主提供的完整 pipe 名，不拼接猜测 hash。这是破坏性地址变更；旧接入方停止进程、更新所有组件后重启。
 
 ```sh
 mkdir -p .tmp

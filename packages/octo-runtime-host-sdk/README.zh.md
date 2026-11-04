@@ -1,6 +1,6 @@
 # Host SDK
 
-常驻 POSIX Kernel 端点为 `<home>/executor-kernel.sock`；Windows 保持既有 Home hash 命名管道。替换旧 Kernel 前按[停止、升级、重启流程](../../docs/zh-CN/guides/kernel-endpoint-upgrade.md)操作，并同步升级 attach 客户端与独立 Extra。
+POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
 
 [English](README.md) | [包导航](../README.zh.md)
 

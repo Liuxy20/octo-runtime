@@ -1,6 +1,6 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { chmod, lstat } from "node:fs/promises";
+import { chmod, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { assertIpcEndpoint, runtimePathFailure } from "./runtime-home.js";
 import {
@@ -24,7 +24,7 @@ import { HostRunService } from "./host-run-service.js";
 import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
 import { beforeDeadline } from "./lifecycle.js";
 import { probeOptions, type ExecutionSource } from "./execution-source.js";
-import { acquireKernelEndpoint } from "./endpoint.js";
+import { acquireEndpoint } from "./endpoint.js";
 import { InvocationManifest } from "./invocation-manifest.js";
 import {
   KernelError,
@@ -155,7 +155,6 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   const sockets = new Set<net.Socket>();
   let closing: Promise<void> | undefined;
   let listening = false;
-  let boundEndpoint: { dev: number; ino: number } | undefined;
   let releaseEndpoint: (() => Promise<void>) | undefined;
   const status = (): KernelStatus => ({
     ipc_version: 1,
@@ -426,28 +425,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       }
     };
     if (listening)
-      await attempt(async () => {
-        await new Promise<void>((resolve, reject) =>
-          server.close((error) => (error ? reject(error) : resolve()))
-        );
-        if (process.platform !== "win32") {
-          const remaining = await lstat(options.endpoint).catch((error: unknown) => {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
-            throw error;
-          });
-          // libuv 的 unlink 失败不一定进入 close 回调；只确认本次 socket 是否仍在，不删除替换文件。
-          if (
-            remaining?.isSocket() &&
-            (!boundEndpoint ||
-              (remaining.dev === boundEndpoint.dev && remaining.ino === boundEndpoint.ino))
-          )
-            throw Object.assign(new Error("ENDPOINT_CLEANUP_INCOMPLETE"), {
-              code: "ENDPOINT_CLEANUP_INCOMPLETE",
-              path: options.endpoint,
-              operation: "confirm-socket-removal"
-            });
-        }
-      });
+      await attempt(() => new Promise<void>((resolve) => server.close(() => resolve())));
     // 先停接纳，再取消 Core 并等待 Adapter finally；终态不代替资源释放确认。
     // 同进程不能强杀阻塞的 JS。所有等待共享绝对期限，超时保留所有权证据。
     const executorStopped = await attempt(async () => {
@@ -467,7 +445,8 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     await attempt(() => logging.close());
     if (executorStopped && !errors.length) {
       await attempt(() => manifest?.close() ?? Promise.resolve());
-      // Node 的 server.close 已回收自身创建的 Unix socket；再次按路径 rm 可能误删迟到的新文件。
+      if (listening && process.platform !== "win32")
+        await attempt(() => rm(options.endpoint, { force: true }));
       if (!errors.length) await attempt(() => releaseEndpoint?.() ?? Promise.resolve());
     }
     if (errors.length) {
@@ -483,7 +462,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       logging.kernel("info", "adapter.registered", { adapter_type: adapter.metadata.type });
     }
     signal?.throwIfAborted();
-    releaseEndpoint = await acquireKernelEndpoint(options.endpoint);
+    releaseEndpoint = await acquireEndpoint(options.endpoint);
     signal?.throwIfAborted();
     const statePath = options.stateDirectory
       ? join(options.stateDirectory, "kernel-invocations.json")
@@ -503,12 +482,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       });
     });
     signal?.throwIfAborted();
-    if (process.platform !== "win32") {
-      const info = await lstat(options.endpoint);
-      if (!info.isSocket()) throw new Error("ENDPOINT_PATH_INVALID");
-      boundEndpoint = { dev: info.dev, ino: info.ino };
-      await chmod(options.endpoint, 0o600);
-    }
+    if (process.platform !== "win32") await chmod(options.endpoint, 0o600);
     signal?.throwIfAborted();
     ready = true;
     logging.kernel("info", "kernel.ready", { pid: process.pid });

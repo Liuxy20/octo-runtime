@@ -1,6 +1,6 @@
 # 接入 Extra
 
-常驻 POSIX Kernel 端点为 `<home>/executor-kernel.sock`；Windows 保持既有 Home hash 命名管道。替换旧 Kernel 前按[停止、升级、重启流程](./kernel-endpoint-upgrade.md)操作，并同步升级 attach 客户端与独立 Extra。
+POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
 
 CLI 首选 `<extra> configure` 配置核心参数，或 `<extra> extraset` 导入完整 JSON 声明；用法、去重与重启语义见 [Extra 自有命令](extra-commands.md)。`extraset`/`extraget` 用于进阶的手写完整 JSON 声明。
 

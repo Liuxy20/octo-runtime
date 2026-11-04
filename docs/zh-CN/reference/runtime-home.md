@@ -38,7 +38,7 @@ await kernel.initialize();
 
 Unix 固定使用 OS `/usr/bin/getconf`，不受 Provider 专用 PATH 影响；必需资源查询时工具不可用或不能取得确定值则返回 `HOME_LIMIT_UNAVAILABLE`，不猜测文件系统限制。可选日志的 IO（含文件系统预算查询失败）仍由既有 best-effort 日志层处理，不因日志路径不可用而判定可用 Home 失败；日志路径语法和静态长度预算在该隔离边界外仍严格检查。Home 验证使用只读目录检查和独占短文件探针确认实际权限（特别是 Windows ACL）；探针不修改身份、凭据或配置，正常验证后立即删除。启动校验是同账号互信下的观测，不是阻止同账号并发替换目录的 OS 沙箱。
 
-依据：[Node IPC](https://github.com/nodejs/node/blob/v24.19.0/doc/api/net.md#identifying-paths-for-ipc-connections)、[Microsoft 路径](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)、[Named Pipe](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea)、[Linux limits](https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h)、[Darwin limits](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/syslimits.h)。POSIX Kernel 使用 `<home>/executor-kernel.sock`；Extra 控制端点保留 `<home>/sockets/octo-runtime-<component>.sock`。启动对实际 Kernel 地址检查 IPC 预算，对旧布局兼容租约和状态路径检查文件系统预算。详见 [Kernel 端点升级](../guides/kernel-endpoint-upgrade.md)。
+依据：[Node IPC](https://github.com/nodejs/node/blob/v24.19.0/doc/api/net.md#identifying-paths-for-ipc-connections)、[Microsoft 路径](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)、[Named Pipe](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea)、[Linux limits](https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h)、[Darwin limits](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/syslimits.h)。POSIX Kernel 使用 `<home>/executor-kernel.sock`；Extra 控制端点保留 `<home>/sockets/octo-runtime-<component>.sock`。实际新地址及其普通所有权/状态路径继续使用既有 IPC 和文件系统预算校验。
 
 ## 失败诊断
 

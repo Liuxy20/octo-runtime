@@ -1,6 +1,6 @@
 # Integrate Extras
 
-Persistent POSIX Kernel endpoint: `<home>/executor-kernel.sock`. Windows retains the existing Home-hash named pipe. Before replacing an old Kernel, follow the [stop/upgrade/restart procedure](./kernel-endpoint-upgrade.md); upgrade attached clients and independent Extras together.
+The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
 
 For CLI setup, use `<extra> configure` or `<extra> extraset` for a complete JSON declaration. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
 

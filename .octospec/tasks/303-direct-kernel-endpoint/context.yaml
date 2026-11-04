@@ -2,37 +2,24 @@ brief: .octospec/tasks/303-direct-kernel-endpoint/brief.md
 injected:
   - id: runtime-architecture
     source: repo
-    reason: "原生装配、统一 RPC、资源所有权和 CI 范围"
+    reason: "Home、端点与统一 RPC；按最新 Issue 澄清直接改名"
   - id: runtime-lifecycle
     source: repo
-    reason: "Home 身份、初始化、关闭和未确认清理"
-  - id: runtime-protocol-design
-    source: repo
-    reason: "统一 RPC、接纳与调用身份保持"
-  - id: runtime-extras
-    source: repo
-    reason: "独立 Extra 的 Kernel 地址与控制地址职责"
-  - id: runtime-stateless
-    source: repo
-    reason: "原生资源清单不是业务历史，迁移不删除状态"
+    reason: "保留主线校验、所有权与恢复，不增加旧布局机制"
   - id: runtime-local-execution
     source: repo
-    reason: "IPC、旧端点过渡与恢复"
+    reason: "attach/Extra 共用地址及原有清理边界"
   - id: runtime-engineering
     source: repo
-    reason: "TypeScript、核心中文注释与验证"
+    reason: "中文核心注释、显式专项与验证边界"
   - id: commit
     source: repo
-    reason: "中文任务记录；公开交付以 CONTRIBUTING 英文合同优先"
+    reason: "公开提交与 PR 遵守 CONTRIBUTING 英文要求"
 files_expected:
   - packages/octo-runtime-host-sdk/src/endpoint.ts
-  - packages/octo-runtime-executor-kernel/src/endpoint.ts
-  - packages/octo-runtime-executor-kernel/src/server.ts
-  - packages/octo-runtime-executor-kernel/src/runtime-home.ts
-  - packages/octo-runtime-executor-kernel/src/kernel-endpoint-layout.ts
-  - apps/cli/src/output.ts
   - apps/cli/src/state.ts
+  - test/runtime-endpoint.test.js
   - test/manual/direct-kernel-endpoint-303.test.mjs
-  - docs/en/getting-started/sdk.md
-  - docs/zh-CN/getting-started/sdk.md
-updated_at: 2026-11-04T10:15:00Z
+  - docs/en/reference/runtime-home.md
+  - docs/zh-CN/reference/runtime-home.md
+updated_at: 2026-11-04T11:00:00Z

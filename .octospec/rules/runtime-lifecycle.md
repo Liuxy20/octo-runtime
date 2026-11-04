@@ -36,7 +36,7 @@ KernelClient.invoke 在本 client 的 invocations 登记身份；App 与 Extra �
 
 CLI 是宿主：--home 优先，否则所有平台统一用户 ~/.octo-runtime；由 CLI 准备根。OCTO_RUNTIME_HOME、LOCALAPPDATA、Application Support、XDG 不参与隐式选择。Electron 可按产品设计明确选择这些位置，准备后传入 SDK。既有数据/服务定义不自动移动或重置；继续使用旧位置时显式传 --home。
 
-componentEndpoint 等只计算语法和预算，不证明实际目录可用；预先取得 endpoint 不能绕过服务的必填 Home 验证。attachKernel/acquireEndpoint 的 endpoint-only API 只管理连接/租约，不推断 Home，独立验证实际地址；Core 不提供 Home 服务托管。POSIX 常驻 Kernel 使用 `<home>/executor-kernel.sock`；预算覆盖实际 IPC 地址及旧布局兼容租约/状态文件，后者只按文件系统限制校验。
+componentEndpoint 等只计算语法和预算，不证明实际目录可用；预先取得 endpoint 不能绕过服务的必填 Home 验证。attachKernel/acquireEndpoint 的 endpoint-only API 只管理连接/租约，不推断 Home，独立验证实际地址；Core 不提供 Home 服务托管。POSIX 常驻 Kernel 使用 `<home>/executor-kernel.sock`；沿用该实际地址的普通所有权、清理、恢复和预算校验，不引入旧布局兼容机制。
 
 路径预算区分 Unix UTF-8 字节、Windows UTF-16 单元和实际传输，不使用统一260/108或 JS 字符数。Unix 启动用 OS `/usr/bin/getconf` 查询文件系统 PATH_MAX/NAME_MAX，不能从 Provider 专用 PATH 选择查询工具；Windows 使用 Node 扩展路径合同且保留实际 IO 失败。验证完整附加文件名及资源路径；可选日志的元数据/卷预算查询 IO 失败在资源边界整体隔离，遵守 best-effort 合同，不能仅放行少数 errno 后把其他故障改判为 Home 不可用。字符串/静态长度及必需 Home、状态、IPC 校验仍严格执行。CLI 配置/恢复和 Playboard 不提前计算未使用的常驻 IPC，实际连接/绑定前仍须严格校验。模拟平台计算不能代替该平台真实 bind。
 
