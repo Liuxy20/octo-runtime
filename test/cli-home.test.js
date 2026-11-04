@@ -6,7 +6,9 @@ import { join } from "node:path";
 import { runCli } from "../apps/cli/dist/main.js";
 for (const component of ["executor-kernel", "channel-gateway"]) {
   test(`${component} restart never installs or enables a missing service`, async (t) => {
-    const home = await mkdtemp(join(tmpdir(), "oc-missing-"));
+    const home = await mkdtemp(
+      join(process.platform === "darwin" ? "/tmp" : tmpdir(), "oc-missing-")
+    );
     t.after(() => rm(home, { recursive: true, force: true }));
     const calls = [];
     const backend = {
@@ -28,7 +30,9 @@ for (const component of ["executor-kernel", "channel-gateway"]) {
   });
 
   test(`${component} start reports automatic installation failure without starting`, async (t) => {
-    const home = await mkdtemp(join(tmpdir(), "oc-install-failed-"));
+    const home = await mkdtemp(
+      join(process.platform === "darwin" ? "/tmp" : tmpdir(), "oc-install-failed-")
+    );
     t.after(() => rm(home, { recursive: true, force: true }));
     const calls = [];
     const progress = [];

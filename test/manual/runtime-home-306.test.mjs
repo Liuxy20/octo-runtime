@@ -5,6 +5,7 @@ import net from "node:net";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
 import { execFileSync } from "node:child_process";
+import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { join, resolve, win32, posix } from "node:path";
 import {
@@ -43,6 +44,51 @@ function fixture(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
+
+test("CLI data commands accept a Home whose unused persistent socket would be too long", async (t) => {
+  const home = join(fixture(t), "data-" + "x".repeat(180));
+  fs.mkdirSync(home);
+  if (process.platform !== "win32")
+    assert.throws(() => componentEndpoint(home), { code: "IPC_ENDPOINT_TOO_LONG" });
+  const value = { module: "fixture-package", enabled: false, config: { label: "中文 空格" } };
+  const lines = [];
+  assert.equal(
+    await runCli(["extraset", "sample", "--home", home, "--json"], {
+      input: Readable.from([JSON.stringify(value)]),
+      output: (line) => lines.push(line)
+    }),
+    0,
+    lines.join("\n")
+  );
+  assert.deepEqual(
+    JSON.parse(fs.readFileSync(join(home, "extras/sample/config.json"), "utf8")),
+    value
+  );
+});
+
+test(
+  "native Unix limit queries ignore Provider PATH and preserve optional log failures",
+  { skip: process.platform === "win32" },
+  (t) => {
+    const home = fixture(t),
+      log = join(home, "unavailable-log");
+    fs.writeFileSync(log, "host data");
+    const original = process.env.PATH;
+    process.env.PATH = home;
+    try {
+      assert.equal(
+        validateRuntimeHome(home, [
+          { path: join(log, "status.log.lock"), resource: "kernel-log", optional: true }
+        ]),
+        home
+      );
+      assert.equal(fs.readFileSync(log, "utf8"), "host data");
+    } finally {
+      if (original === undefined) delete process.env.PATH;
+      else process.env.PATH = original;
+    }
+  }
+);
 
 const module = {
   name: "home-validation",

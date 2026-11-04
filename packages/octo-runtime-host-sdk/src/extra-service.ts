@@ -281,7 +281,8 @@ export function createExtraService<D extends object>(
             ? [
                 {
                   path: resolve(logging.directory, "extras", `${name}-status-20000101T00.log.lock`),
-                  resource: "extra-log"
+                  resource: "extra-log",
+                  optional: true
                 }
               ]
             : [])

@@ -38,7 +38,7 @@ CLI 是宿主：--home 优先，否则所有平台统一用户 ~/.octo-runtime�
 
 componentEndpoint 等只计算语法和预算，不证明实际目录可用；预先取得 endpoint 不能绕过服务的必填 Home 验证。attachKernel/acquireEndpoint 的 endpoint-only API 只管理连接/租约，不推断 Home，独立验证实际地址；Core 不提供 Home 服务托管。保持当前端点布局，#303 修改时同步预算。
 
-路径预算区分 Unix UTF-8 字节、Windows UTF-16 单元和实际传输，不使用统一260/108或 JS 字符数。Unix 启动用 OS getconf 查询文件系统 PATH_MAX/NAME_MAX，Windows 使用 Node 扩展路径合同且保留实际 IO 失败；验证完整附加文件名及资源路径。模拟平台计算不能代替该平台真实 bind。
+路径预算区分 Unix UTF-8 字节、Windows UTF-16 单元和实际传输，不使用统一260/108或 JS 字符数。Unix 启动用 OS `/usr/bin/getconf` 查询文件系统 PATH_MAX/NAME_MAX，不能从 Provider 专用 PATH 选择查询工具；Windows 使用 Node 扩展路径合同且保留实际 IO 失败。验证完整附加文件名及资源路径；可选日志的 IO 失败仍遵守 best-effort 合同，不能改判为 Home 不可用。CLI 配置/恢复和 Playboard 不提前计算未使用的常驻 IPC，实际连接/绑定前仍须严格校验。模拟平台计算不能代替该平台真实 bind。
 
 Home 失败在启动域用 RuntimeHomeError.diagnostic 报 code、实际 path、resource、operation、必要 systemCode 和宿主 action；长度包含 measured/limit/unit，IPC 长度包含派生 endpoint。ServiceInitializationError 保留 cause/cleanup，CLI 复用投影；不混为 AgentRun 失败，不把无效 Home 通过日志 mkdir 重新创建。完整合同、迁移及来源见 [Home 参考](../../docs/zh-CN/reference/runtime-home.md)。专项保持 test/manual 显式运行，不扩展默认 selector/CI。
 

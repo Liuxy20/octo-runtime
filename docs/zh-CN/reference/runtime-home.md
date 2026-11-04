@@ -36,7 +36,7 @@ await kernel.initialize();
 | Windows Named Pipe | 按 CreateNamedPipe 的文档支持合同，完整 pipe 名最多 256 UTF-16 code unit；Home hash 保持既有命名，不把 Home 字节数套入 Unix socket 预算 |
 | 附加名称 | 启动前检查端点 owner/recovery、实际 manifest/原子写/确认归档、日志轮转锁；profile/CLI 状态派生检查自身完整路径 |
 
-Unix 的 `getconf` 不可用或不能取得确定值时返回 `HOME_LIMIT_UNAVAILABLE`，不猜测文件系统限制。Home 验证使用只读目录检查和独占短文件探针确认实际权限（特别是 Windows ACL）；探针不修改身份、凭据或配置，正常验证后立即删除。启动校验是同账号互信下的观测，不是阻止同账号并发替换目录的 OS 沙箱。
+Unix 固定使用 OS `/usr/bin/getconf`，不受 Provider 专用 PATH 影响；工具不可用或不能取得确定值时返回 `HOME_LIMIT_UNAVAILABLE`，不猜测文件系统限制。可选日志的 IO 仍由既有 best-effort 日志层处理，不因日志路径不可用而判定可用 Home 失败。Home 验证使用只读目录检查和独占短文件探针确认实际权限（特别是 Windows ACL）；探针不修改身份、凭据或配置，正常验证后立即删除。启动校验是同账号互信下的观测，不是阻止同账号并发替换目录的 OS 沙箱。
 
 依据：[Node IPC](https://github.com/nodejs/node/blob/v24.19.0/doc/api/net.md#identifying-paths-for-ipc-connections)、[Microsoft 路径](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation)、[Named Pipe](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-createnamedpipea)、[Linux limits](https://github.com/torvalds/linux/blob/master/include/uapi/linux/limits.h)、[Darwin limits](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/syslimits.h)。当前 POSIX 布局仍为 `<home>/sockets/octo-runtime-<component>.sock`。后续 #303 修改布局时必须一起调整预算，不能将本次验证当成新布局的证明。
 

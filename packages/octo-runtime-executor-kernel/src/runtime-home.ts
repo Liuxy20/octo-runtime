@@ -193,6 +193,8 @@ export function assertIpcEndpoint(
 export interface RuntimePath {
   path: string;
   resource: string;
+  /** 可选日志只校验名称预算，IO 可用性由既有 best-effort 日志层处理。 */
+  optional?: boolean;
 }
 
 /**
@@ -217,7 +219,7 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
       });
     operation = "filesystem-limits";
     const cache = new Map<string, PathLimits>();
-    const filesystemLimits = (path: string): PathLimits => {
+    const filesystemLimits = (path: string, optional = false): PathLimits => {
       if (process.platform === "win32") return platformLimits(process.platform);
       // 日志/状态可由高级宿主选择在另一文件系统；不能把 Home 所在卷的预算套给它。
       let directory = path;
@@ -225,7 +227,13 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
         try {
           if (statSync(directory).isDirectory()) break;
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+          const code = (error as NodeJS.ErrnoException).code;
+          // 子路径缺失/被普通文件阻断时仍可查询最近目录；不可把日志 IO 失败变成 Home 失败。
+          if (
+            !["ENOENT", "ENOTDIR"].includes(code ?? "") &&
+            !(optional && ["EACCES", "EPERM"].includes(code ?? ""))
+          )
+            throw error;
         }
         const parent = posix.dirname(directory);
         if (parent === directory) throw new Error("PATH_LIMIT_UNAVAILABLE");
@@ -236,7 +244,8 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
       const query = (name: string) => {
         operation = "getconf";
         const value = Number(
-          execFileSync("getconf", [name, directory], {
+          // 使用 OS 工具的固定位置；宿主可能为 Provider 注入受限 PATH，不能据此选择查询程序。
+          execFileSync("/usr/bin/getconf", [name, directory], {
             encoding: "utf8",
             timeout: 1000,
             stdio: ["ignore", "pipe", "ignore"]
@@ -250,13 +259,18 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
       return limits;
     };
     const limits = filesystemLimits(home);
-    for (const entry of [{ path: home, resource: "home" }, ...paths]) {
+    for (const entry of [{ path: home, resource: "home", optional: false }, ...paths]) {
       affected = entry.path;
       resource = entry.resource;
       normalizeRuntimeHome(entry.path, process.platform, entry.resource);
       assertRuntimePath(entry.path, entry.resource);
       operation = "filesystem-limits";
-      assertRuntimePath(entry.path, entry.resource, process.platform, filesystemLimits(entry.path));
+      assertRuntimePath(
+        entry.path,
+        entry.resource,
+        process.platform,
+        filesystemLimits(entry.path, entry.optional)
+      );
     }
     affected = home;
     resource = "home";
@@ -336,7 +350,7 @@ export function runtimePathFailure(
         code === "HOME_PATH_TOO_LONG"
           ? lengthAction
           : code === "HOME_LIMIT_UNAVAILABLE"
-            ? "Make the operating system getconf utility available to the host process to query PATH_MAX/NAME_MAX, then retry with the same prepared directory."
+            ? "Make the operating system /usr/bin/getconf utility available to query PATH_MAX/NAME_MAX, then retry with the same prepared directory."
             : action,
       ...(systemCode ? { systemCode } : {})
     },
@@ -369,7 +383,8 @@ export function kernelStartupPaths(
         logDirectory,
         "kernel-status-20000101T00.log.lock"
       ),
-      resource: "kernel-log"
+      resource: "kernel-log",
+      optional: true
     });
   return paths;
 }

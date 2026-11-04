@@ -85,7 +85,10 @@ test("Windows derivation retains normalization and existing pipe and service nam
 });
 
 test("omitted platform and component retain their native defaults", () => {
-  const home = resolve("runtime-endpoint-fixture");
+  const home =
+    process.platform === "win32"
+      ? resolve("runtime-endpoint-fixture")
+      : "/tmp/runtime-endpoint-fixture";
   assert.equal(normalizedHome(home), normalizedHome(home, process.platform));
   assert.equal(homeHash(home), homeHash(home, process.platform));
   assert.equal(

@@ -85,7 +85,6 @@ export interface RuntimePaths {
   openclawRoot: string;
   setupLock: string;
   pid: string;
-  socket: string;
   logs: string;
 }
 
@@ -148,7 +147,6 @@ export function runtimePaths(
     openclawRoot: join(profileRoot, "adapters", "openclaw"),
     setupLock: join(absoluteHome, "run", "setup.lock"),
     pid: join(absoluteHome, "run", "executor-kernel.pid"),
-    socket: componentEndpoint(absoluteHome, "executor-kernel", platform),
     logs: join(absoluteHome, "logs")
   };
 }

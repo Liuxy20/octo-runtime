@@ -41,3 +41,7 @@ Home 选择和根目录准备属于宿主。SDK 原生服务要求显式、已�
 - 有效中文空格目录直接使用；Windows Node 24/26 真 Kernel initialize/close 与 CLI 准备验证。
 - IPC 与附加文件名预算有边界专项，诊断包含 code、path、resource、operation、host action、测量和限值，wrapper 保留 cleanup。
 - 构建/typecheck、lint/format/names、相关回归、包外 SDK 类型/运行、知识 lint；真实未覆盖平台明确列出。
+
+## PR 310 CI 复核
+
+首轮 Actions run 41795217323 在 Ubuntu/macOS 暴露跨平台边界：CLI 数据路径对象和配置/Playboard 命令提前计算不使用的常驻 IPC；可选日志的 ENOTDIR 被文件系统预算查询升级成致命 Home 失败；OS getconf 受 Provider 专用 PATH 影响。修复要求只在真正消费常驻 IPC 时校验端点、保持 F31 best-effort 日志合同、固定 OS 查询工具来源，并让合法端点测试使用满足预算的目录。保留 Home 根和实际服务绑定前的严格验证，不修改 CI 或默认 selector。

@@ -98,7 +98,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     // 先验证已存在的根，避免普通文件先退化成配置读取 ENOTDIR。
     // 缺失根只由后面已确认的宿主动作准备；未知/已移除命令不能因此创建 Home。
     if (["install", "start", "restart", "run"].includes(positional[1])) {
-      componentEndpoint(home, positional[0], dependencies.platform);
       try {
         validateRuntimeHome(home);
       } catch (error) {
@@ -182,7 +181,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     );
     const profile = flags.profile ?? root?.default_profile ?? "default";
     const paths = runtimePaths(home, profile, dependencies.platform);
-    const endpoint = componentEndpoint(home, "executor-kernel", dependencies.platform);
+    // 配置/恢复和 Playboard 不使用常驻端点；只在实际连接或托管常驻服务时派生并校验。
+    const kernelEndpoint = () => componentEndpoint(home, "executor-kernel", dependencies.platform);
     context = { component: positional[0], action: positional[1], logs: join(home, "logs") };
     const registrations = await readExtraDirectory(join(home, "extras"));
     // 部署、停止及配置修复命令不启动模块，也不因尚未可读的启动清单而无法操作。
@@ -275,7 +275,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       });
     }
     if (positional[0] === "adapter" && positional[1] === "list" && positional.length === 2) {
-      const client = attachKernel({ endpoint });
+      const client = attachKernel({ endpoint: kernelEndpoint() });
       try {
         publish(await client.list());
       } finally {
@@ -284,7 +284,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     if (positional[0] === "adapter" && positional[1] === "probe" && positional.length === 3) {
-      const client = attachKernel({ endpoint });
+      const client = attachKernel({ endpoint: kernelEndpoint() });
       try {
         const adapter = (await client.list()).find((value) => value.type === positional[2]);
         if (!adapter) throw new Error("ADAPTER_NOT_FOUND");
@@ -330,6 +330,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     )
       throw new Error("INVALID_ARGUMENTS");
     if (flags.autostart !== undefined && action !== "install") throw new Error("INVALID_ARGUMENTS");
+    if (["install", "start", "restart", "run"].includes(action))
+      componentEndpoint(home, component, dependencies.platform);
     if (action === "status") {
       const status = await snapshots([component]);
       publish(status[component], formatStatus(component, status[component]));
@@ -346,7 +348,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         handle = createKernelService({
           home,
           logging: { directory: join(home, "logs") },
-          endpoint,
+          endpoint: kernelEndpoint(),
           stateDirectory: kernelStateDirectory,
           adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
             profileRoot: paths.profileRoot,
@@ -380,7 +382,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           config: registration.config,
           dependencies: {},
           enabled: registration.enabled,
-          endpoint,
+          endpoint: kernelEndpoint(),
           controlEndpoint: componentEndpoint(home, component, dependencies.platform)
         });
       }

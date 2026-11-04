@@ -59,4 +59,14 @@ python .octospec/scripts/lint.py
 
 ## 平台与范围边界
 
-真实运行仅 Windows。Linux/macOS 参数化路径/IPC 是计算检查；真实 getconf、文件系统、权限和 socket bind 未验证。没有运行真实 Electron 产品或在线 Provider/IM；Electron 仅提供宿主选目录/准备的接入示例。#303 端点布局和迁移保持独立，后续改布局须同步预算；#304 完整启动 catalog 不并入本次；#14 未关闭。没有扩展 CI workflow/job/matrix/trigger/gate/default test selector。
+本地首轮真实运行仅 Windows。Linux/macOS 参数化路径/IPC 是计算检查；该阶段真实 getconf、文件系统、权限和 socket bind 未验证，后续 PR CI 结果另列如下。没有运行真实 Electron 产品或在线 Provider/IM；Electron 仅提供宿主选目录/准备的接入示例。#303 端点布局和迁移保持独立，后续改布局须同步预算；#304 完整启动 catalog 不并入本次；#14 未关闭。没有扩展 CI workflow/job/matrix/trigger/gate/default test selector。
+
+## PR 310 首轮 CI 与修复复核
+
+PR head `0bb575dec96f53f52dc4d37004700c838a01b657`，Actions run `41795217323`：Windows Node 24/26 发行检查通过；Ubuntu Node24 为 2331 pass / 3 fail / 66 skip，Node26 为 2332 pass / 2 fail / 66 skip；macOS 两版均 2260 pass / 74 fail / 66 skip，总数均 2400。失败日志显示三类本次改动引入的边界问题：
+
+- `runtimePaths.socket` 和 runCli 提前派生未使用的常驻端点，使 macOS 长 TMPDIR 下的配置、Playboard 和恢复等命令被 IPC 预算阻断。删除无人消费的内部 socket 字段，实际常驻 RPC/托管时才派生端点；合法服务测试选用短 Home，不放宽传输限制。
+- 文件系统预算查询只沿 ENOENT 寻找目录，把可选日志路径中的 ENOTDIR 升级成 Home 失败。现在查询最近目录，标记可选日志的 IO 责任，保留 F31 best-effort 行为和真实 Home 根验证。
+- 使用 PATH 查找 getconf 受 fake Provider 的私有 PATH 影响。固定使用 OS `/usr/bin/getconf`，与 Provider 发现环境分离。
+
+修复后在本机 Windows Node24/26 各执行 runtime-debug、runtime-endpoint、cli-dsh、profile-layout、cli-home 及 #306 manual：58 项，54 pass、4 skip、0 fail/0 cancel。Kernel/Host/CLI/public/root 重新编译通过。新增长 Home 数据命令与 Unix 受限 PATH/日志专项仍放 manual，不扩展 CI/default selectors；新增 Unix native 用例在本机跳过。后续 CI 结果以 PR 当前 head 的检查为准。
