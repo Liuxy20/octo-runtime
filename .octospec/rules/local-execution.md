@@ -55,6 +55,8 @@ Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本
 - 连接、客户端 close、iterator.return 或订阅取消不等于业务 cancel。
 - 控制 ACK 丢失返回 OPERATION_OUTCOME_UNKNOWN，不自动重试副作用。
 
+同一取消尝试的并发 Stop 共享在途请求。控制失败后，仅新的公开 `cancelInvocation` 显式调用可对原 RunRef 发起新尝试；drain、signal 与接纳 ACK 接续不能自动重试未知结果，更不能重新 invoke。原 invoke 观察链保留首次取消尝试的真实结果，不能因后续显式 Stop 成功而覆盖原控制失败。专项见 [Issue 302 任务](../tasks/302-explicit-stop-retry/brief.md)，保持显式手动执行。
+
 本地 IPC 同一 OS 账号互信；不增加 APP 注册、共享 Token 或逐应用授权。POSIX socket 权限为 0600；Windows Pipe 的访问机制独立，不能由 POSIX 结果推断。远程入口的授权归 Extra 和业务系统。
 
 ### Playboard 临时端点与常驻 Home

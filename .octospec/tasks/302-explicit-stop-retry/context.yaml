@@ -1,0 +1,28 @@
+brief: .octospec/tasks/302-explicit-stop-retry/brief.md
+baseline: 5d6a1f93136204946be7eebc54c55b62f3287388
+injected:
+  - id: runtime-architecture
+    path: .octospec/rules/architecture.md
+    reason: 原生 RPC、产品显式意图、身份与 CI 范围
+  - id: runtime-protocol-design
+    path: .octospec/rules/protocol-design.md
+    reason: 同一执行的取消、观察、ACK 未知与禁止自动重试
+  - id: runtime-local-execution
+    path: .octospec/rules/local-execution.md
+    reason: KernelClient 登记、排空、终态、共享期限
+  - id: runtime-stateless
+    path: .octospec/rules/stateless-execution.md
+    reason: 有界记录及首次控制观察的生命周期
+  - id: runtime-engineering
+    path: .octospec/rules/engineering.md
+    reason: 隔离夹具、诊断事实、手动专项与验证
+  - id: commit
+    path: .octospec/rules/collaboration.md
+    reason: 内部中文记录；公开交付遵守 CONTRIBUTING
+files_expected:
+  - packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - test/manual/explicit-stop-302.test.mjs
+  - .octospec/rules/local-execution.md
+  - .octospec/tasks/302-explicit-stop-retry/
+updated_at: 2026-11-04T00:00:00Z
