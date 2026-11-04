@@ -67,8 +67,8 @@ import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
 import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-export async function startGateway(endpoint: string, config: JsonObject) {
-  const extra = createExtraService({ endpoint, module: gateway, config, dependencies: {} });
+export async function startGateway(home: string, endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ home, endpoint, module: gateway, config, dependencies: {} });
   await extra.initialize();
   return extra;
 }
@@ -136,7 +136,7 @@ octo-runtime channel-gateway extraget
 
 `model` 和 `effort` 都可省略；省略时使用所选 Harness 框架本身的默认值。示例中的 `<MODEL_ID>` 请替换成该 Harness 支持的模型标识；`effort` 可为 `low`、`medium`、`high` 或 `xhigh`，具体支持范围由 Harness 决定。
 
-这是完整的 CLI 声明：必填 `config`，以及可选的 `module`、`enabled`。通常由有效模块清单提供 `module`；显式填写时必须与选中的模块一致。SDK 只取其中的业务配置：`createExtraService({ endpoint, module: gateway, config: declaration.config, dependencies })`。顶层 `enabled` 由 CLI 处理，Bot 内的 `enabled` 由 Gateway 处理，两者不是同一层配置。
+这是完整的 CLI 声明：必填 `config`，以及可选的 `module`、`enabled`。通常由有效模块清单提供 `module`；显式填写时必须与选中的模块一致。SDK 只取其中的业务配置：`createExtraService({ home, endpoint, module: gateway, config: declaration.config, dependencies })`。顶层 `enabled` 由 CLI 处理，Bot 内的 `enabled` 由 Gateway 处理，两者不是同一层配置。
 
 只有一个 Bot 也写 `bots: [bot]`，没有单对象格式。每次 `extraset` 都整体替换声明——省略的字段不会从旧配置继承，也不会按 `bot_id` 合并。上限：64 个 Bot、64 个在途管理操作、单份声明 256 KiB。
 

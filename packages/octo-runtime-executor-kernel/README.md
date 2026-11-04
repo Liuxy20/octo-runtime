@@ -2,6 +2,8 @@
 
 [简体中文](README.zh.md) | [Package index](../README.md)
 
+The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).
+
 Kernel is the shared execution entry for Electron SDK hosts and CLI. It owns AgentExecutor, injected Adapters, a local RPC endpoint, and a bounded Run event source in the host process. Same-process business code still calls through KernelClient/RPC.
 
 ## Native Composition
@@ -13,8 +15,14 @@ import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kerne
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
 import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
 
+import { mkdir } from "node:fs/promises";
+
+// 宿主拥有目录选择和根准备。
+const home = "/absolute/app-runtime-home";
+await mkdir(home, { recursive: true });
 const kernel = createKernelService({
-  endpoint: componentEndpoint("/absolute/app-runtime-home"),
+  home,
+  endpoint: componentEndpoint(home),
   adapters: [dshAdapter],
   adapterConfigurations: { dsh: { providerOptions: { dshBin: "/absolute/dsh/lib/bin.js" } } }
 });

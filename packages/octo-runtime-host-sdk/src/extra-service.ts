@@ -1,6 +1,6 @@
 import net from "node:net";
 import { performance } from "node:perf_hooks";
-import { chmod, mkdir, rm } from "node:fs/promises";
+import { chmod, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   RuntimeLogging,
@@ -10,6 +10,10 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   acquireEndpoint,
+  assertIpcEndpoint,
+  validateRuntimeHome,
+  prepareHomeDirectory,
+  runtimePathFailure,
   attachKernel,
   ServiceInitializationError,
   type KernelClient,
@@ -27,6 +31,8 @@ import { shutdownDeadline, withShutdownDeadline, withinShutdown } from "./shutdo
 import { snapshotExtraDependencies } from "./extra-dependencies.js";
 
 export interface ExtraServiceOptions<D extends object = Record<string, never>> {
+  /** 宿主已准备的 Runtime Home；先校验，再持有 Extra 名称、日志和控制端点。 */
+  home: string;
   endpoint: string;
   module: ExtraPluginModule<D>;
   config: JsonObject;
@@ -58,6 +64,7 @@ export function createExtraService<D extends object>(
   const module = { ...options.module };
   const pendingDependencies = new Set<Promise<unknown>>();
   const endpoint = options.endpoint;
+  const home = options.home;
   const controlEndpoint = options.controlEndpoint;
   const enabled = options.enabled !== false;
   const logging = options.logging && { ...options.logging };
@@ -266,6 +273,22 @@ export function createExtraService<D extends object>(
       if (signal?.aborted) abort();
       starting = (async () => {
         owner.signal.throwIfAborted();
+        validateRuntimeHome(home, [
+          ...(controlEndpoint && process.platform !== "win32"
+            ? [{ path: `${controlEndpoint}.owner.recovery`, resource: "endpoint-ownership" }]
+            : []),
+          ...(logging
+            ? [
+                {
+                  path: resolve(logging.directory, "extras", `${name}-status-20000101T00.log.lock`),
+                  resource: "extra-log",
+                  optional: true
+                }
+              ]
+            : [])
+        ]);
+        assertIpcEndpoint(endpoint);
+        if (controlEndpoint) assertIpcEndpoint(controlEndpoint);
         const previous = owners.get(key);
         if (previous)
           throw new Error(previous.failed ? "EXTRA_DISPOSE_FAILED" : "EXTRA_ALREADY_LOADED");
@@ -298,8 +321,7 @@ export function createExtraService<D extends object>(
           );
         owner.signal.throwIfAborted();
         if (controlEndpoint) {
-          if (process.platform !== "win32")
-            await mkdir(dirname(controlEndpoint), { recursive: true, mode: 0o700 });
+          if (process.platform !== "win32") prepareHomeDirectory(home, dirname(controlEndpoint));
           owner.signal.throwIfAborted();
           release = await acquireEndpoint(controlEndpoint);
           owner.signal.throwIfAborted();
@@ -346,6 +368,18 @@ export function createExtraService<D extends object>(
       })();
       initialized = Promise.race([starting, cancelled])
         .catch(async (error: unknown) => {
+          const io = error as NodeJS.ErrnoException;
+          if (
+            ["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"].includes(
+              io?.code ?? ""
+            )
+          )
+            error = runtimePathFailure(
+              error,
+              typeof io.path === "string" ? io.path : (controlEndpoint ?? home),
+              "extra-control",
+              typeof io.syscall === "string" ? io.syscall : "listen"
+            );
           logState("service.failed", "failed", "SERVICE_INITIALIZATION_FAILED");
           throw new ServiceInitializationError(error, await close());
         })

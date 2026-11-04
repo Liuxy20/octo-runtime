@@ -2,6 +2,8 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
+宿主须先选择并准备已存在的绝对 `home`，再显式传给服务；SDK 不创建根或选择平台默认。详见 [Runtime Home 合同](../../docs/zh-CN/reference/runtime-home.md)。
+
 Kernel 是 Electron SDK 和 CLI 的统一执行入口。在宿主进程持有 AgentExecutor、已注入的 Adapter、RPC 端点和有界 Run 事件源。即使业务与 Kernel 同进程，也通过 KernelClient/RPC 调用。
 
 ## 原生装配
@@ -13,8 +15,14 @@ import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kerne
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
 import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
 
+import { mkdir } from "node:fs/promises";
+
+// 宿主拥有目录选择和根准备。
+const home = "/absolute/app-runtime-home";
+await mkdir(home, { recursive: true });
 const kernel = createKernelService({
-  endpoint: componentEndpoint("/absolute/app-runtime-home"),
+  home,
+  endpoint: componentEndpoint(home),
   adapters: [dshAdapter],
   adapterConfigurations: { dsh: { providerOptions: { dshBin: "/absolute/dsh/lib/bin.js" } } }
 });

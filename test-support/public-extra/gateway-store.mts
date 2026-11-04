@@ -98,7 +98,7 @@ export class SampleSessionStore implements ImSessionStore {
 }
 
 /** 由 host.mts 的真实 Kernel/worker 启动代码调用；可直接运行发行验证器复现。 */
-export async function verifyGatewayStore(endpoint: string): Promise<void> {
+export async function verifyGatewayStore(home: string, endpoint: string): Promise<void> {
   const backend = new SampleSessionBackend();
   const handles: SampleSessionStore[] = [];
   const config: JsonObject = {
@@ -120,7 +120,7 @@ export async function verifyGatewayStore(endpoint: string): Promise<void> {
       return store;
     }
   };
-  const extra = createExtraService({ endpoint, module: gateway, config, dependencies });
+  const extra = createExtraService({ home, endpoint, module: gateway, config, dependencies });
   try {
     await extra.initialize();
     const status = await extra.status();
@@ -167,7 +167,7 @@ export async function verifyGatewayStore(endpoint: string): Promise<void> {
   const reopened = new SampleSessionStore(backend, handles[0]!.scope);
   assert.equal(reopened.read("chat")?.generation, 2);
   reopened.close();
-  const memory = createExtraService({ endpoint, module: gateway, config, dependencies: {} });
+  const memory = createExtraService({ home, endpoint, module: gateway, config, dependencies: {} });
   try {
     await memory.initialize();
     assert.deepEqual((await memory.status()).plugin.errors, []);

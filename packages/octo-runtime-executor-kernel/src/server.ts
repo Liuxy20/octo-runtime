@@ -1,7 +1,8 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
-import { chmod, mkdir, rm } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { chmod, rm } from "node:fs/promises";
+import { join } from "node:path";
+import { assertIpcEndpoint, runtimePathFailure } from "./runtime-home.js";
 import {
   readBoundedLines,
   RuntimeLogging,
@@ -116,6 +117,7 @@ function validateParams(method: string, params: Record<string, unknown>): void {
  * 启动失败也执行回收；close 失败会保留所有权证据，客户端断开不等同于 owner 关闭。
  */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
+  assertIpcEndpoint(options.endpoint);
   assertRuntimeLogging(options.logging);
   const instance = randomUUID();
   const logging = new RuntimeLogging(options.logging);
@@ -459,8 +461,6 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       executor.register(adapter);
       logging.kernel("info", "adapter.registered", { adapter_type: adapter.metadata.type });
     }
-    if (process.platform !== "win32")
-      await mkdir(dirname(options.endpoint), { recursive: true, mode: 0o700 });
     signal?.throwIfAborted();
     releaseEndpoint = await acquireEndpoint(options.endpoint);
     signal?.throwIfAborted();
@@ -486,7 +486,18 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     signal?.throwIfAborted();
     ready = true;
     logging.kernel("info", "kernel.ready", { pid: process.pid });
-  } catch (error) {
+  } catch (cause) {
+    const io = cause as NodeJS.ErrnoException;
+    const error = ["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"].includes(
+      io?.code ?? ""
+    )
+      ? runtimePathFailure(
+          cause,
+          typeof io.path === "string" ? io.path : options.endpoint,
+          typeof io.path === "string" ? "kernel-state" : "ipc-endpoint",
+          typeof io.syscall === "string" ? io.syscall : "listen"
+        )
+      : cause;
     logging.kernel("error", "kernel.start_failed", { code: safeCode(error) });
     try {
       await teardown();

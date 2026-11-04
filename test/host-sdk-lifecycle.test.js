@@ -1,3 +1,4 @@
+import { fixtureHome, fixtureEndpoint } from "./fixtures/service-home.js";
 import { testAdapter } from "./fixtures/test-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -29,6 +30,7 @@ test("closing an Extra drains its accepted Run while sibling and Kernel remain l
   const appRef = app.invocations.snapshot()[0].ref;
   const siblingInput = kernelInput("wait-for-cancel");
   const siblingExtra = createExtraService({
+    home: fixtureHome,
     endpoint,
     module: siblingInvoking,
     config: { input: siblingInput },
@@ -52,6 +54,7 @@ test("closing an Extra drains its accepted Run while sibling and Kernel remain l
   const sibling = await client.get(siblingKey);
   const input = kernelInput("wait-for-cancel");
   const extra = createExtraService({
+    home: fixtureHome,
     endpoint,
     module: invoking,
     config: { input },
@@ -90,6 +93,7 @@ for (const failDispose of [false, true])
     const { directory, endpoint } = await kernelFixture(t);
     const deliveryFile = join(directory, "delivery");
     const extra = createExtraService({
+      home: fixtureHome,
       endpoint,
       module: invoking,
       config: { input: kernelInput(), deliveryFile, failDispose },
@@ -106,10 +110,7 @@ for (const failDispose of [false, true])
 test("native Kernel belongs to this process; replacement is explicit construction", async (t) => {
   const home = await mkdtemp(join(tmpdir(), "okh-"));
   t.after(() => rm(home, { recursive: true, force: true }));
-  const options = {
-    endpoint: componentEndpoint(home),
-    adapters: [testAdapter]
-  };
+  const options = { home, endpoint: componentEndpoint(home), adapters: [testAdapter] };
   const kernel = createKernelService(options);
   t.after(() => kernel.close());
   assert.equal((await kernel.status()).phase, "created");
@@ -138,7 +139,8 @@ test("Extra sees live same-process business state without requiring Kernel", asy
   let text = "first";
   let callbackPid;
   const extra = createExtraService({
-    endpoint: "/unused-native-kernel.sock",
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module: independent,
     config: {},
     dependencies: {
@@ -162,7 +164,8 @@ test("Extra sees live same-process business state without requiring Kernel", asy
 
 test("failed Extra disposal blocks replacement only for the same Kernel endpoint", async () => {
   const options = {
-    endpoint: "/failed-native-kernel.sock",
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module: independent,
     config: { failDispose: true },
     dependencies: {}
@@ -178,7 +181,7 @@ test("failed Extra disposal blocks replacement only for the same Kernel endpoint
   );
   const other = createExtraService({
     ...options,
-    endpoint: "/other-native-kernel.sock",
+    endpoint: fixtureEndpoint(),
     config: {}
   });
   await other.initialize();
@@ -196,6 +199,7 @@ test("Extra disposers observe source terminal and persisted business tail before
   let pluginClient;
   let task;
   const extra = createExtraService({
+    home: fixtureHome,
     endpoint,
     config: {},
     dependencies: {
@@ -272,6 +276,7 @@ test("close cancels an initializer's owned Run even when it omitted the plugin s
   const { endpoint, client } = await kernelFixture(t);
   const input = kernelInput("wait-for-cancel");
   const extra = createExtraService({
+    home: fixtureHome,
     endpoint,
     config: {},
     dependencies: {},
@@ -320,6 +325,7 @@ test("initializer failure cancels its Run before awaiting disposal and saves the
   let task;
   let saved;
   const options = {
+    home: fixtureHome,
     endpoint,
     config: {},
     dependencies: {

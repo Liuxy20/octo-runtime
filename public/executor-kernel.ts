@@ -24,3 +24,12 @@ export type {
   RunRef,
   RunSnapshot
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
+
+export {
+  RuntimeHomeError,
+  normalizeRuntimeHome,
+  validateRuntimeHome,
+  assertRuntimePath,
+  assertIpcEndpoint
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+export type { StartupPathDiagnostic } from "@mininglamp-oss/octo-runtime-executor-kernel";

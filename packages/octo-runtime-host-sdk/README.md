@@ -2,6 +2,8 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
+The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).
+
 Composes Runtime components inside your own application: turns an Extra module plus JSON configuration into a service in the calling process, injects business functions, reports status, and coordinates bounded shutdown. It also carries the shared Home, identity, and endpoint conventions so hosts stop re-inventing them. Execution stays in Core and Kernel; a host may load no Extras at all.
 
 ## When to use it
@@ -19,12 +21,13 @@ import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/ch
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
 export async function withGateway(
+  home: string,
   endpoint: string,
   config: JsonObject,
   dependencies: GatewayDependencies,
   runHost: (extra: ExtraService) => Promise<void>
 ): Promise<void> {
-  const extra = createExtraService({ endpoint, module: gateway, config, dependencies });
+  const extra = createExtraService({ home, endpoint, module: gateway, config, dependencies });
   const errors: unknown[] = [];
   try {
     await extra.initialize();

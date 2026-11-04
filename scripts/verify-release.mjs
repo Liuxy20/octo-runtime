@@ -323,8 +323,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
       import { testAdapter } from "./docs-adapter.mjs";
       import { runOwnedInvocation } from "./docs-examples/service.mts";
+      const home = resolve("docs-home");
+      await (await import("node:fs/promises")).mkdir(home, {recursive:true});
       let completed = false;
       await runOwnedInvocation({
+        home,
         endpoint: componentEndpoint(resolve("docs-home")),
         adapters: [testAdapter]
       }, {

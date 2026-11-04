@@ -164,6 +164,7 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
   const home = await mkdtemp(join(tmpdir(), "acp236-"));
   const endpoint = componentEndpoint(home);
   const service = createKernelService({
+    home: home,
     endpoint,
     stateDirectory: home,
     adapters: [createAcpAdapter({ ...definition, command: join(process.cwd(), randomUUID()) })]
@@ -196,6 +197,7 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
     await assert.rejects(access(`${endpoint}.owner`), { code: "ENOENT" });
   }
   const replacement = createKernelService({
+    home: home,
     endpoint,
     stateDirectory: home,
     adapters: [createAcpAdapter({ ...definition, command: join(process.cwd(), randomUUID()) })]

@@ -103,7 +103,7 @@ sequenceDiagram
 
 ## 原生装配与统一 RPC
 
-Electron 主进程原生 import 并构造 Adapter，CLI 则由自己的装配层读取 manifest、动态 import 并调用工厂。两者都将实际对象传入 `createKernelService({ endpoint, adapters })`，等待 `initialize()`，再通过 `kernel.client` 执行业务。Kernel 不接受清单、模块路径或执行 worker 入口，不加载产品模块。
+Electron 主进程原生 import 并构造 Adapter，CLI 则由自己的装配层读取 manifest、动态 import 并调用工厂。两者都将实际对象传入 `createKernelService({ home, endpoint, adapters })`，等待 `initialize()`，再通过 `kernel.client` 执行业务。Kernel 不接受清单、模块路径或执行 worker 入口，不加载产品模块。
 
 `endpoint` 是本地通信地址；Home 是宿主配置目录，`componentEndpoint(home)` 只是地址派生函数。同进程不省略 RPC：业务和 Extra 统一走 `KernelClient -> RPC -> Kernel -> AgentExecutor -> Adapter`。对象注入属于装配，RPC 传递调用数据；方法和闭包无需经过 RPC。
 

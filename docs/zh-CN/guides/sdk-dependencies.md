@@ -110,8 +110,9 @@ export const catalogExtra: ExtraPluginModule<CatalogDependencies> = {
 };
 
 /** 业务服务地址由宿主显式选择；调用方负责 initialize/close，Extra 不关闭 Kernel。 */
-export function createCatalogService(endpoint: string, catalogUrl: string) {
+export function createCatalogService(home: string, endpoint: string, catalogUrl: string) {
   return createExtraService({
+    home,
     endpoint,
     module: catalogExtra,
     config: {},
@@ -129,4 +130,4 @@ export function createCatalogService(endpoint: string, catalogUrl: string) {
 }
 ```
 
-宿主调用 `createCatalogService(endpoint, catalogUrl)`，随后 initialize/status/close；取消通过 `signal` 传给网络请求。若自定义 Extra 订阅宿主事件或持有定时器，必须在 `ctx.onDispose` 注销并等待尾部工作。业务授权、凭据与是否发布数据由宿主和该 Extra 决定。
+宿主调用 `createCatalogService(home, endpoint, catalogUrl)`，随后 initialize/status/close；取消通过 `signal` 传给网络请求。若自定义 Extra 订阅宿主事件或持有定时器，必须在 `ctx.onDispose` 注销并等待尾部工作。业务授权、凭据与是否发布数据由宿主和该 Extra 决定。

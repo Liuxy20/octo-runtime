@@ -122,6 +122,7 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     const manifest = await loadCliManifest(home, options.manifest);
     const configuration = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
     kernel = createKernelService({
+      home: temporary,
       endpoint:
         process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
       adapters: await loadCliAdapters(resolveAdapterModules(manifest), {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { validateRuntimeHome } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { readJsonOptional, writeJsonAtomic, type HostProfilePaths } from "./home.js";
 import type { AuthorizedTenant } from "./types.js";
 
@@ -15,6 +16,11 @@ export function ensureLocalRuntime(
   profile: HostProfilePaths,
   tenant: AuthorizedTenant
 ): LocalRuntimeIdentity {
+  // 路径对象可能来自先前读取；写身份前重新确认根，不能递归补建已经消失的 Home。
+  validateRuntimeHome(profile.home, [
+    { path: profile.identityFile, resource: "runtime-identity" },
+    { path: profile.configFile, resource: "profile-configuration" }
+  ]);
   const saved = readJsonOptional<LocalRuntimeIdentity>(profile.identityFile);
   if (
     saved &&

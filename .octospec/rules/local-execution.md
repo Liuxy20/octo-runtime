@@ -61,9 +61,9 @@ Kernel 宿主的 configurations 回调每次提交尝试只读取一次，按本
 
 ### Playboard 临时端点与常驻 Home
 
-常驻 POSIX socket 保留在宿主配置的 Runtime Home 内；SDK 自配 Home，Unix CLI 默认 `~/.octo-runtime`，既有覆盖方式不变。一次性 Playboard 的 POSIX socket 则在固定短根 `/tmp` 下以 `mkdtemp` 创建本次独占的私有目录，使用短文件名；不能把受 TMPDIR/TMP/TEMP 影响的长或多字节路径继续拼进 Unix socket。Windows Playboard 保留系统临时目录与既有哈希命名管道。
+常驻 POSIX socket 保留在宿主配置的 Runtime Home 内；SDK 要求宿主显式提供并准备已存在的绝对 Home；CLI 所有平台统一 `--home` 或用户 `~/.octo-runtime`，不保留额外环境覆盖，见 [#306 合同](runtime-lifecycle.md#runtime-home-所有权与启动校验)。一次性 Playboard 的 POSIX socket 则在固定短根 `/tmp` 下以 `mkdtemp` 创建本次独占的私有目录，使用短文件名；不能把受 TMPDIR/TMP/TEMP 影响的长或多字节路径继续拼进 Unix socket。Windows Playboard 保留系统临时目录与既有哈希命名管道。
 
-Playboard 直接构造临时 Kernel，只有真实 close 完成才删除所属目录；incomplete 时保留资源事实，不删除其他实例或用户 Home。创建临时目录失败时尚未注册进程级监听，不能留下 signal/stdout handler。此修复不迁移常驻端点、不改变公共 SDK、不新增 Home 限制。验证与范围见 [Issue 184](../tasks/184-ci-ipc-reliability/brief.md)。
+Playboard 直接构造临时 Kernel，只有真实 close 完成才删除所属目录；incomplete 时保留资源事实，不删除其他实例或用户 Home。创建临时目录失败时尚未注册进程级监听，不能留下 signal/stdout handler。#184 的临时 IPC 修复不迁移常驻端点、不改变公共 SDK、不新增 Home 限制；#306 的 Home 输入合同独立见上述链接。临时 IPC 验证与范围见 [Issue 184](../tasks/184-ci-ipc-reliability/brief.md)。
 
 ## 原生执行与故障边界
 

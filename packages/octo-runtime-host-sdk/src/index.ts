@@ -11,3 +11,13 @@ export * from "./endpoint.js";
 export * from "./home.js";
 export * from "./identity.js";
 export * from "./extra-commands.js";
+
+export {
+  RuntimeHomeError,
+  normalizeRuntimeHome,
+  validateRuntimeHome,
+  assertRuntimePath,
+  assertIpcEndpoint,
+  runtimePathFailure,
+  type StartupPathDiagnostic
+} from "@mininglamp-oss/octo-runtime-executor-kernel";

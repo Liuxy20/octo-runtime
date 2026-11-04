@@ -78,10 +78,7 @@ test(
     const { ref } = await f.client.submit(input());
     const q = await question(f.client, ref);
     assert.equal((await f.server.close()).complete, true);
-    const restarted = createKernelService({
-      endpoint: f.endpoint,
-      ...options
-    });
+    const restarted = createKernelService({ home: f.directory, endpoint: f.endpoint, ...options });
     t.after(() => restarted.close());
     await restarted.initialize();
     const client = attachKernel({ endpoint: f.endpoint });

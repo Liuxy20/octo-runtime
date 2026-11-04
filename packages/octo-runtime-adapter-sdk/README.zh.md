@@ -32,7 +32,7 @@ export const echoAdapter = defineAdapter({
 });
 ```
 
-注册方式和别的 Adapter 一样：宿主使用 `createKernelService({ endpoint, adapters: [echoAdapter] })`，直接 Core 里 `executor.register(echoAdapter)`。
+注册方式和别的 Adapter 一样：宿主使用 `createKernelService({ home, endpoint, adapters: [echoAdapter] })`，直接 Core 里 `executor.register(echoAdapter)`。
 
 `Adapter` 和 `AdapterMetadata` 是编写输入，`protocolSupport` 可选。`defineAdapter()` 和 `createJsonCliAdapter()` 返回 `DefinedAdapter`，其类型保证协议声明必有；省略时默认协议为 `${type}.canonical`、模式仅 `["canonical"]`、原生方法为空。传给 Core 时保留工厂推导出的返回类型。手写 `HostedAdapter` 必须显式填写 `protocolSupport`，注册入口只校验，不补默认值。canonical-only Adapter 的调用方须显式选择 canonical 模式。
 

@@ -16,7 +16,7 @@ export async function runDshExample(
 ): Promise<void> {
   if (!isAbsolute(dshBin)) throw new Error("DSH_BIN must be an absolute JavaScript entry path");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ord-"));
-  const kernel = createDshKernel(componentEndpoint(directory), dshBin);
+  const kernel = createDshKernel(directory, componentEndpoint(directory), dshBin);
   const errors: unknown[] = [];
   try {
     await kernel.initialize({ signal });
@@ -62,8 +62,7 @@ export async function runDshExample(
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const dshBin = process.env.DSH_BIN;
-  if (!dshBin)
-    throw new Error("Usage: DSH_BIN=<absolute JS entry> node dsh-invoke.mts");
+  if (!dshBin) throw new Error("Usage: DSH_BIN=<absolute JS entry> node dsh-invoke.mts");
   const controller = new AbortController();
   const cancel = () => controller.abort(new Error("Interrupted"));
   process.once("SIGINT", cancel);

@@ -8,6 +8,7 @@ Extra 用于把业务系统接到 Kernel。例如，IM Extra 接收聊天消息�
 
 从 `@mininglamp-oss/octo-runtime/host` 导入 `createExtraService`，传入以下参数：
 
+- `home`：宿主已准备的绝对 Runtime Home 目录。
 - `endpoint`：已有 Kernel 的地址。Extra 连接这个服务，不会替应用启动 Kernel。
 - `module`：Extra 模块，例如 Channel Gateway、企业微信或 WebUI。
 - `config`：该模块需要的 JSON 配置。
@@ -23,6 +24,7 @@ Extra 用于把业务系统接到 Kernel。例如，IM Extra 接收聊天消息�
 
 | 变量 | 宿主提供的值 |
 | --- | --- |
+| `RUNTIME_HOME` | 宿主已准备的绝对 Runtime Home 目录 |
 | `KERNEL_ENDPOINT` | 已有 Kernel 的 socket 或 Named Pipe 地址，取得方式见 SDK 入门 |
 | `GATEWAY_API_URL` | 使用的 Octo IM API 基础地址 |
 | `GATEWAY_BOT_ID` | 在该服务获授权的 Bot 身份 |

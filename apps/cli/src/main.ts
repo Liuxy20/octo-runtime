@@ -3,7 +3,7 @@ import { runExtraCommand, commandError } from "./extra-commands.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { lstat, mkdir } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   attachKernel,
@@ -15,6 +15,8 @@ import {
 import {
   componentEndpoint,
   createExtraService,
+  validateRuntimeHome,
+  RuntimeHomeError,
   type ExtraService
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { getExtra, readExtra, setExtra } from "./extras.js";
@@ -24,7 +26,8 @@ import { runForegroundService } from "./foreground.js";
 import { showExtraLogs } from "./logs.js";
 import { StatusOutput } from "./status-output.js";
 import {
-  defaultRuntimeHome,
+  selectRuntimeHome,
+  prepareRuntimeHome,
   runtimePaths,
   withSetupLock,
   readJsonFile,
@@ -91,7 +94,16 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       output(cliVersionInfo);
       return 0;
     }
-    const home = resolve(flags.home ?? defaultRuntimeHome(dependencies.env, dependencies.platform));
+    const home = selectRuntimeHome(flags.home, dependencies.env, dependencies.platform);
+    // 先验证已存在的根，避免普通文件先退化成配置读取 ENOTDIR。
+    // 缺失根只由后面已确认的宿主动作准备；未知/已移除命令不能因此创建 Home。
+    if (["install", "start", "restart", "run"].includes(positional[1])) {
+      try {
+        validateRuntimeHome(home);
+      } catch (error) {
+        if (!(error instanceof RuntimeHomeError && error.code === "HOME_NOT_FOUND")) throw error;
+      }
+    }
     // 模块清单不决定运行状态位置；前台 Kernel、doctor 和恢复确认共用 Home 下的同一路径。
     const kernelStateDirectory = join(home, "run");
     const kernelInvocationManifest = join(kernelStateDirectory, "kernel-invocations.json");
@@ -169,7 +181,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     );
     const profile = flags.profile ?? root?.default_profile ?? "default";
     const paths = runtimePaths(home, profile, dependencies.platform);
-    const endpoint = componentEndpoint(home, "executor-kernel", dependencies.platform);
+    // 配置/恢复和 Playboard 不使用常驻端点；只在实际连接或托管常驻服务时派生并校验。
+    const kernelEndpoint = () => componentEndpoint(home, "executor-kernel", dependencies.platform);
     context = { component: positional[0], action: positional[1], logs: join(home, "logs") };
     const registrations = await readExtraDirectory(join(home, "extras"));
     // 部署、停止及配置修复命令不启动模块，也不因尚未可读的启动清单而无法操作。
@@ -262,7 +275,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       });
     }
     if (positional[0] === "adapter" && positional[1] === "list" && positional.length === 2) {
-      const client = attachKernel({ endpoint });
+      const client = attachKernel({ endpoint: kernelEndpoint() });
       try {
         publish(await client.list());
       } finally {
@@ -271,7 +284,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     if (positional[0] === "adapter" && positional[1] === "probe" && positional.length === 3) {
-      const client = attachKernel({ endpoint });
+      const client = attachKernel({ endpoint: kernelEndpoint() });
       try {
         const adapter = (await client.list()).find((value) => value.type === positional[2]);
         if (!adapter) throw new Error("ADAPTER_NOT_FOUND");
@@ -317,6 +330,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     )
       throw new Error("INVALID_ARGUMENTS");
     if (flags.autostart !== undefined && action !== "install") throw new Error("INVALID_ARGUMENTS");
+    if (["install", "start", "restart", "run"].includes(action))
+      componentEndpoint(home, component, dependencies.platform);
     if (action === "status") {
       const status = await snapshots([component]);
       publish(status[component], formatStatus(component, status[component]));
@@ -326,13 +341,14 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       if (!manifest) throw new Error("MANIFEST_INVALID");
       runningComponent = component;
       dependencies.onComponentRun?.();
-      await mkdir(home, { recursive: true, mode: 0o700 });
+      await prepareRuntimeHome(home);
       let handle: KernelService | ExtraService;
       if (component === "executor-kernel") {
         const config = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
         handle = createKernelService({
+          home,
           logging: { directory: join(home, "logs") },
-          endpoint,
+          endpoint: kernelEndpoint(),
           stateDirectory: kernelStateDirectory,
           adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
             profileRoot: paths.profileRoot,
@@ -355,6 +371,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         if (module.name !== registration.name) throw new Error("EXTRA_NAME_MISMATCH");
         if (!dependencies.output) statusOutput = new StatusOutput(process.stdout);
         handle = createExtraService({
+          home,
           logging: {
             directory: join(home, "logs"),
             statusOutput: dependencies.output
@@ -365,7 +382,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           config: registration.config,
           dependencies: {},
           enabled: registration.enabled,
-          endpoint,
+          endpoint: kernelEndpoint(),
           controlEndpoint: componentEndpoint(home, component, dependencies.platform)
         });
       }
@@ -400,7 +417,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       async () => {
         if (action === "install") {
           spec = { ...spec, enabled: flags.autostart !== "false" };
-          await mkdir(home, { recursive: true, mode: 0o700 });
+          await prepareRuntimeHome(home);
           await service.backend.install(spec);
         } else {
           if (action === "start") {
@@ -410,7 +427,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
                 dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`));
               progress(`${component}: service not installed; installing with autostart enabled...`);
               spec = { ...spec, enabled: true };
-              await mkdir(home, { recursive: true, mode: 0o700 });
+              await prepareRuntimeHome(home);
               await service.backend.install(spec);
               progress(`${component}: installation complete; starting service...`);
             }

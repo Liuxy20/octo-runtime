@@ -25,6 +25,7 @@ async function options(t) {
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ord-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   return {
+    home: directory,
     endpoint: componentEndpoint(directory),
     adapters: [testAdapter]
   };

@@ -25,6 +25,7 @@ export async function kernelFixture(t, overrides = {}) {
   t.after(close);
   try {
     server = createKernelService({
+      home: directory,
       endpoint,
       adapters: [testAdapter],
       ...configuration

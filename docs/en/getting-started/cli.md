@@ -104,7 +104,7 @@ octo-runtime executor-kernel stop
 octo-runtime executor-kernel uninstall
 ```
 
-Global options are `--home <path>`, `--profile <name>`, and `--manifest <path>`. Use the same Home for commands targeting one service. A profile selects configuration within that Home; it does not create another Kernel service. The default Home is `~/.octo-runtime` on macOS/Linux and `%LOCALAPPDATA%\OctoRuntime` on Windows when `LOCALAPPDATA` is set; `OCTO_RUNTIME_HOME` overrides it.
+Global options are `--home <path>`, `--profile <name>`, and `--manifest <path>`. Use the same Home for commands targeting one service. A profile selects configuration within that Home; it does not create another Kernel service. The CLI selects explicit `--home` or the user's `~/.octo-runtime` on every supported platform and prepares that root. `OCTO_RUNTIME_HOME`, LOCALAPPDATA, Application Support, and XDG do not override it. Invalid explicit input fails without falling back. Existing state in a former default is preserved; pass its location with `--home` to continue using it. See [Home migration](../reference/runtime-home.md).
 
 The global `--version` / `-v` flag prints the installed artifact's version, commit and build time. It works before or after commands, including Extra subcommands, without loading modules or requiring valid configuration. After `--`, it remains a literal argument.
 
@@ -276,9 +276,9 @@ octo-runtime executor-kernel logs --lines 200
 octo-runtime executor-kernel logs --follow --json
 ```
 
-CLI reads the selected manifest, imports modules, constructs Adapters in its host process, then calls `createKernelService({ endpoint, adapters })`. Kernel executes in that process; business calls use RPC. No internal execution worker is started.
+CLI reads the selected manifest, imports modules, constructs Adapters in its host process, then calls `createKernelService({ home, endpoint, adapters })`. Kernel executes in that process; business calls use RPC. No internal execution worker is started.
 
-Kernel initialization, readiness, shutdown, and incomplete cleanup are recorded in `<Home>/logs/kernel-status-<UTC hour>.log`, with the retention and read limits above and no execution content. SDK hosts opt in using `createKernelService({ endpoint, adapters, logging: { directory } })`.
+Kernel initialization, readiness, shutdown, and incomplete cleanup are recorded in `<Home>/logs/kernel-status-<UTC hour>.log`, with the retention and read limits above and no execution content. SDK hosts opt in using `createKernelService({ home, endpoint, adapters, logging: { directory } })`.
 
 `service.state=running` only describes the service process; use `runtime.execution_ready` for execution availability. Kernel no longer provides worker heartbeat or replacement; the native service manager owns host-process restart. RPC reconnection queries the original identity and resumes observation without replaying requests. A rebuilt host has a new instance; old calls cannot be assumed successful.
 
@@ -300,7 +300,7 @@ Recovery acknowledges one manifest archive; it never kills unknown processes and
 
 | CLI entry | Composition and connection |
 | --- | --- |
-| `executor-kernel run` | CLI reads its manifest, imports Adapters, then calls `createKernelService({ endpoint, adapters })` |
+| `executor-kernel run` | CLI reads its manifest, imports Adapters, then calls `createKernelService({ home, endpoint, adapters })` |
 | `channel-gateway run` | CLI creates ExtraService, which internally uses `attachKernel({ endpoint })` across processes; it does not create or close Kernel |
 | `playboard` | CLI creates a temporary Kernel with the same createKernelService, invokes through kernel.client, and closes its service |
 

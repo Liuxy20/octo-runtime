@@ -46,8 +46,8 @@ import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
 import * as wecom from "@mininglamp-oss/octo-runtime/extras/channel-wecom";
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-export async function startWeCom(endpoint: string, config: JsonObject) {
-  const extra = createExtraService({ endpoint, module: wecom, config, dependencies: {} });
+export async function startWeCom(home: string, endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ home, endpoint, module: wecom, config, dependencies: {} });
   await extra.initialize();
   return extra;
 }

@@ -1,9 +1,11 @@
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { lstat, open, readFile, rm } from "node:fs/promises";
+import { assertIpcEndpoint } from "./runtime-home.js";
 
 /** 端点租约保护启动竞争；只移除已确认无人监听的旧 socket，不替换用户文件。 */
 export async function acquireEndpoint(endpoint: string): Promise<() => Promise<void>> {
+  assertIpcEndpoint(endpoint);
   if (process.platform === "win32") return async () => {};
   const file = `${endpoint}.owner`;
   const nonce = randomUUID();

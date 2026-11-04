@@ -30,6 +30,18 @@ supersedes: []
 
 KernelClient.invoke 在本 client 的 invocations 登记身份；App 与 Extra 使用相同方法。owner shutdown 显式调用 stopAdmission/drain，以绝对共享 deadline 返回 complete/unresolved；SDK 为独立 Extra 各建一个 client，停止 A 只排空 A。低层 submit 的所有权由高级调用方自行管理。执行完成、取消请求 ACK、业务 delivery/dispose 和进程退出分别确认，lost/未知不释放登记。具体语义见[本地执行](local-execution.md)。
 
+## Runtime Home 所有权与启动校验
+
+[#306](https://github.com/Mininglamp-OSS/octo-runtime/issues/306) 明确：Home 选择和根准备归宿主。KernelService / ExtraService 必填 `home`，initialize 在任何日志、身份、资源所有权和监听启动前统一验证原始输入、绝对路径支持、实际存在/类型/权限、附加文件名和 IPC 预算。SDK 不选择 appId/平台/环境/cwd 默认，不展开 ~、创建根或失败换根；删除 resolveHostHome。Runtime 只在已验证根内创建自己的内部资源。
+
+CLI 是宿主：--home 优先，否则所有平台统一用户 ~/.octo-runtime；由 CLI 准备根。OCTO_RUNTIME_HOME、LOCALAPPDATA、Application Support、XDG 不参与隐式选择。Electron 可按产品设计明确选择这些位置，准备后传入 SDK。既有数据/服务定义不自动移动或重置；继续使用旧位置时显式传 --home。
+
+componentEndpoint 等只计算语法和预算，不证明实际目录可用；预先取得 endpoint 不能绕过服务的必填 Home 验证。attachKernel/acquireEndpoint 的 endpoint-only API 只管理连接/租约，不推断 Home，独立验证实际地址；Core 不提供 Home 服务托管。保持当前端点布局，#303 修改时同步预算。
+
+路径预算区分 Unix UTF-8 字节、Windows UTF-16 单元和实际传输，不使用统一260/108或 JS 字符数。Unix 启动用 OS `/usr/bin/getconf` 查询文件系统 PATH_MAX/NAME_MAX，不能从 Provider 专用 PATH 选择查询工具；Windows 使用 Node 扩展路径合同且保留实际 IO 失败。验证完整附加文件名及资源路径；可选日志的元数据/卷预算查询 IO 失败在资源边界整体隔离，遵守 best-effort 合同，不能仅放行少数 errno 后把其他故障改判为 Home 不可用。字符串/静态长度及必需 Home、状态、IPC 校验仍严格执行。CLI 配置/恢复和 Playboard 不提前计算未使用的常驻 IPC，实际连接/绑定前仍须严格校验。模拟平台计算不能代替该平台真实 bind。
+
+Home 失败在启动域用 RuntimeHomeError.diagnostic 报 code、实际 path、resource、operation、必要 systemCode 和宿主 action；长度包含 measured/limit/unit，IPC 长度包含派生 endpoint。ServiceInitializationError 保留 cause/cleanup，CLI 复用投影；不混为 AgentRun 失败，不把无效 Home 通过日志 mkdir 重新创建。完整合同、迁移及来源见 [Home 参考](../../docs/zh-CN/reference/runtime-home.md)。专项保持 test/manual 显式运行，不扩展默认 selector/CI。
+
 ## 身份保护
 
 Home 表示本地设备实例的状态边界，machine_id 是安装分组，不是硬件指纹或认证凭据。Runtime/profile ID、业务 Agent/session、Provider session 不可混用。既有 machine、profile、Runtime identity、凭据和配置格式保持不变，不因重启、断线、换进程名称或卸载服务自动重新生成。

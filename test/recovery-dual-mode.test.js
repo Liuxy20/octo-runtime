@@ -86,7 +86,7 @@ for (const mode of ["cli", "sdk"]) {
           probe = createRecoveryProbe(process.env.OCTO_RECOVERY_TEARDOWN_PROBE);
           probe.register({ home, children });
         }
-        kernelDependency = launchRecoveryKernel(children, endpoint, env);
+        kernelDependency = launchRecoveryKernel(children, endpoint, env, home);
         probe?.register({ home, children });
         await waitFor(
           async () =>
@@ -110,7 +110,7 @@ for (const mode of ["cli", "sdk"]) {
             env,
             true
           );
-          gatewayHost.child.send({ endpoint, controlEndpoint, config });
+          gatewayHost.child.send({ home, endpoint, controlEndpoint, config });
         } else {
           await mkdir(join(home, "extras", "channel-gateway"), { recursive: true });
           await writeFile(

@@ -9,6 +9,7 @@ if (process.env.OCTO_RUN_CODEX_APPROVAL_LIVE !== "1")
   throw new Error("Explicit live opt-in required");
 const directory = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "oa-"));
 const kernel = createKernelService({
+  home: directory,
   endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
   adapters: (
     await import(

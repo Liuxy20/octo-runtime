@@ -21,6 +21,7 @@ test("native startup cancellation rolls back Core, endpoint and lease and permit
     controller.abort();
   });
   const options = {
+    home: home,
     endpoint: componentEndpoint(home),
     stateDirectory: home,
     adapters: [testAdapter]

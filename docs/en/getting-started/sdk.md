@@ -4,11 +4,13 @@
 
 Electron/Node.js hosts import their selected modules natively. Choose your own loading approach; **pnpm workspace + Git submodule** is one option for source integration. Examples use source workspace package names; published equivalents include `/executor-kernel`, `/host`, and `/extras/channel-gateway`.
 
+Home ownership, validation and migration are described in [Runtime Home](../reference/runtime-home.md). SDK has no default Home.
+
 ## 1. Quick Start: KernelService
 
 | Purpose | Signature | Notes |
 | --- | --- | --- |
-| Create | `createKernelService(options: KernelServiceOptions): KernelService` | Requires `endpoint: string` and `adapters: readonly HostedAdapter[]`; actual objects |
+| Create | `createKernelService(options: KernelServiceOptions): KernelService` | Requires an existing `home: string`, `endpoint: string` and `adapters: readonly HostedAdapter[]`; actual objects |
 | Derive address | `componentEndpoint(home: string): string` | Local socket / Named Pipe address, not the Home directory itself |
 | Initialize | `kernel.initialize({ signal? }?): Promise<void>` | Makes `kernel.client` available |
 | Service status | `kernel.status(): Promise<KernelServiceStatus>` | Lifecycle and Kernel state |
@@ -21,8 +23,13 @@ import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kerne
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
 
-const endpoint = componentEndpoint("/absolute/app-runtime-home");
-const kernel = createKernelService({ endpoint, adapters: [createCodexAdapter()] });
+import { mkdir } from "node:fs/promises";
+
+// 宿主按产品设计选择根并准备；SDK 不选择默认目录。
+const home = "/absolute/app-runtime-home";
+await mkdir(home, { recursive: true });
+const endpoint = componentEndpoint(home);
+const kernel = createKernelService({ home, endpoint, adapters: [createCodexAdapter()] });
 await kernel.initialize();
 // 原生 SDK 已取得 RPC 客户端；无需 attachKernel，也无需立即发起 AgentRun。
 const client = kernel.client;
@@ -42,7 +49,7 @@ Create Gateway when you need Octo IM integration. Kernel alone does not require 
 
 | Purpose | Signature | Notes |
 | --- | --- | --- |
-| Create Extra | `createExtraService<D>(options: ExtraServiceOptions<D>): ExtraService` | Reuse the Kernel `endpoint`; import `module` natively; `config` is JSON and `dependencies` contains host functions |
+| Create Extra | `createExtraService<D>(options: ExtraServiceOptions<D>): ExtraService` | Supply the prepared `home`; reuse the Kernel `endpoint`; import `module` natively; `config` is JSON and `dependencies` contains host functions |
 | Initialize | `gateway.initialize({ signal? }?): Promise<void>` | Initializes the plugin; does not prove the Bot is online |
 | Inspect | `gateway.status(): Promise<ExtraServiceStatus>` | Lifecycle, Kernel availability, and plugin state |
 | Close | `gateway.close(): Promise<ServiceCleanupResult>` | Drains this Extra without closing shared Kernel |
@@ -61,6 +68,7 @@ function required(name: string): string {
 
 // 使用上一章已初始化的 Kernel endpoint；配置/凭据来源由宿主决定。
 const gateway = createExtraService({
+  home,
   endpoint,
   module: channelGateway,
   config: {

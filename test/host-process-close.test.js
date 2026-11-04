@@ -37,7 +37,12 @@ for (const failure of [false, true])
       }
     };
     const endpoint = componentEndpoint(home);
-    const kernel = createKernelService({ endpoint, adapters: [adapter], stateDirectory: home });
+    const kernel = createKernelService({
+      home: home,
+      endpoint,
+      adapters: [adapter],
+      stateDirectory: home
+    });
     await kernel.initialize();
     const record = join(home, "kernel-invocations.json");
     assert.equal((await inspectOrphanCleanup(record)).state, "available");

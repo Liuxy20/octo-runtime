@@ -23,3 +23,12 @@ export type {
   ServiceLifecycle,
   ServicePhase
 } from "./executor-kernel.js";
+
+export {
+  RuntimeHomeError,
+  normalizeRuntimeHome,
+  validateRuntimeHome,
+  assertRuntimePath,
+  assertIpcEndpoint
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+export type { StartupPathDiagnostic } from "@mininglamp-oss/octo-runtime-executor-kernel";

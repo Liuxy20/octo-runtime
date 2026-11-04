@@ -1,3 +1,4 @@
+import { fixtureHome, fixtureEndpoint } from "./fixtures/service-home.js";
 import { adapters } from "./fixtures/drain-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -411,7 +412,8 @@ for (const factory of [
   test("invalid host factory reports a sanitized Bot error and never falls back to memory", async (t) => {
     const callbacks = transport(t);
     const extra = createExtraService({
-      endpoint: `/unused-${randomUUID()}`,
+      home: fixtureHome,
+      endpoint: fixtureEndpoint(),
       module: gateway,
       config: { bots: [bot()] },
       dependencies: { createSessionStore: factory }
@@ -625,7 +627,8 @@ test("native cancellation during Gateway initialization closes the factory handl
     raw = hostHandle(backend);
   t.after(() => backend.close());
   const extra = createExtraService({
-    endpoint: `/unused-${randomUUID()}`,
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module: gateway,
     config: { bots: [bot()] },
     dependencies: { createSessionStore: () => raw }
@@ -702,6 +705,7 @@ for (const name of ["save", "remember", "close"]) {
         return original(...args);
       };
       const options = {
+        home: fixtureHome,
         endpoint,
         module: gateway,
         config: { bots: [bot()] },
@@ -770,6 +774,7 @@ test(
       return save(key, binding);
     };
     const extra = createExtraService({
+      home: fixtureHome,
       endpoint,
       module: gateway,
       config: { bots: [bot()] },

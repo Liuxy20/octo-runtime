@@ -39,8 +39,8 @@ import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
 import * as webui from "@mininglamp-oss/octo-runtime/extras/webui";
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-export async function startWebUI(endpoint: string, config: JsonObject) {
-  const extra = createExtraService({ endpoint, module: webui, config, dependencies: {} });
+export async function startWebUI(home: string, endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ home, endpoint, module: webui, config, dependencies: {} });
   await extra.initialize();
   return extra;
 }

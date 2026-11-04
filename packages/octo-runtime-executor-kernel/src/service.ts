@@ -1,4 +1,11 @@
 import { attachKernel } from "./client.js";
+import { dirname } from "node:path";
+import {
+  assertIpcEndpoint,
+  kernelStartupPaths,
+  validateRuntimeHome,
+  prepareHomeDirectory
+} from "./runtime-home.js";
 import { startKernelServer, type KernelServerOptions } from "./server.js";
 import type { KernelClient, KernelStatus } from "./types.js";
 import {
@@ -9,7 +16,10 @@ import {
   type ServicePhase
 } from "./lifecycle.js";
 
-export type KernelServiceOptions = KernelServerOptions;
+export interface KernelServiceOptions extends KernelServerOptions {
+  /** 宿主选择并预先准备的绝对目录；SDK 不选择默认 Home 或创建根。 */
+  home: string;
+}
 export interface KernelServiceStatus {
   phase: ServicePhase;
   endpoint: string;
@@ -21,7 +31,7 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
 }
 
 /**
- * 宿主传入本地 RPC 地址和已装配的 Adapter；initialize 注册成功后才开放 client。
+ * 宿主传入已存在的 Home、本地 RPC 地址和已装配的 Adapter；initialize 校验后启动并开放 client。
  * socket、Core 和本服务创建的日志由 close 回收；宿主依赖仍由宿主拥有。
  * 即使与调用方同进程，client 也始终通过 RPC，不能绕过 Run 接纳和观察管理。
  */
@@ -105,7 +115,25 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
         if (combined.aborted) onAbort();
       });
       // 原 server 负责部分启动的回滚；初始化失败后仍保留其清理事实。
-      starting = startKernelServer(configuration, combined)
+      starting = Promise.resolve()
+        .then(async () => {
+          combined.throwIfAborted();
+          const home = validateRuntimeHome(
+            configuration.home,
+            kernelStartupPaths(
+              configuration.endpoint,
+              configuration.stateDirectory,
+              configuration.logging?.directory
+            )
+          );
+          assertIpcEndpoint(configuration.endpoint);
+          if (process.platform !== "win32") {
+            // 只为 Home 内的端点准备内部目录；自选外部 endpoint 的父目录由高级宿主准备。
+            // helper 按完整 .. 路径分量判断边界，合法的 ..hidden 子目录仍属于 Home。
+            prepareHomeDirectory(home, dirname(configuration.endpoint));
+          }
+          return startKernelServer(configuration, combined);
+        })
         .then((value) => {
           server = value;
           combined.throwIfAborted();

@@ -1,11 +1,10 @@
 import { Command, CommanderError, Option, type Help } from "commander";
-import { resolve } from "node:path";
 import type { ExtraModuleEntry } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import type { ExtraCommand, ExtraCommandInput } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { cliHelpHeader, lifecycleCommands, preferredRootCommands, rootCommands } from "./help.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { loadExtraCommands, validateCommands } from "./extra-commands.js";
-import { defaultRuntimeHome } from "./state.js";
+import { selectRuntimeHome } from "./state.js";
 import type { CliDependencies } from "./main.js";
 
 export interface ParsedCliCommand {
@@ -264,9 +263,7 @@ export async function parseCliCommand(
       dependencies
     );
   }
-  const home = resolve(
-    selected.home ?? defaultRuntimeHome(dependencies.env, dependencies.platform)
-  );
+  const home = selectRuntimeHome(selected.home, dependencies.env, dependencies.platform);
   const isExtra = Boolean(name && !rootCommands.has(name));
   const offline = isExtra && lifecycleCommands.has(operands[1]);
   const needsDirectory = !selected.version && (!name || (isExtra && !offline));

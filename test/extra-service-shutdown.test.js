@@ -1,3 +1,4 @@
+import { fixtureHome, fixtureEndpoint } from "./fixtures/service-home.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
@@ -8,7 +9,8 @@ import { withShutdownDeadline } from "@mininglamp-oss/octo-runtime-host-sdk/shut
 
 function service(module, dependencies) {
   return createExtraService({
-    endpoint: `/unused-${randomUUID()}`,
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module,
     dependencies,
     config: {}
@@ -162,7 +164,8 @@ test("shared deadline revokes late dependency calls and retains unfinished occup
     }
   };
   const options = {
-    endpoint: `/unused-${randomUUID()}`,
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module,
     config: {},
     dependencies: {

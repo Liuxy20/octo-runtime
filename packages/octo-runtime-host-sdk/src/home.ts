@@ -11,8 +11,13 @@ import {
   rmSync,
   writeFileSync
 } from "node:fs";
-import { homedir } from "node:os";
-import { basename, dirname, isAbsolute, join, parse, resolve, win32 } from "node:path";
+import { basename, dirname, join } from "node:path";
+import {
+  normalizeRuntimeHome,
+  validateRuntimeHome,
+  assertRuntimePath,
+  prepareHomeDirectory
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { HostRuntimeError } from "./errors.js";
 import { componentEndpoint } from "./endpoint.js";
 
@@ -33,6 +38,7 @@ export interface HostHomePaths {
 }
 
 export interface HostAccountPaths {
+  home: string;
   accountKey: string;
   root: string;
   configFile: string;
@@ -40,6 +46,7 @@ export interface HostAccountPaths {
 }
 
 export interface HostProfilePaths {
+  home: string;
   name: string;
   root: string;
   configFile: string;
@@ -47,42 +54,18 @@ export interface HostProfilePaths {
   credentialFile: string;
 }
 
-export function resolveHostHome(
-  appId: string,
-  options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv; userHome?: string } = {}
-): string {
-  const slug = appSlug(appId);
-  const platform = options.platform ?? process.platform;
-  const env = options.env ?? process.env;
-  const userHome = options.userHome ?? homedir();
-  if (platform === "win32") {
-    const localAppData = env.LOCALAPPDATA?.trim();
-    if (!localAppData) {
-      throw new HostRuntimeError(
-        "HOME_UNAVAILABLE",
-        "home",
-        false,
-        "LOCALAPPDATA is required on Windows"
-      );
-    }
-    return win32.join(localAppData, slug, "OctoRuntime");
-  }
-  if (platform === "darwin")
-    return join(userHome, "Library", "Application Support", slug, "octo-runtime");
-  return join(
-    env.XDG_STATE_HOME?.trim() || join(userHome, ".local", "state"),
-    slug,
-    "octo-runtime"
-  );
-}
-
-export function hostHomePaths(
-  homeInput: string,
-  platform: NodeJS.Platform = process.platform
-): HostHomePaths {
-  const home = validateHome(homeInput, platform);
+/** 宿主先准备根；返回经过实际存在/权限与当前 endpoint 预算校验的 Home 路径，不创建身份。 */
+export function hostHomePaths(homeInput: string): HostHomePaths {
+  const home = normalizeRuntimeHome(homeInput);
   const run = join(home, "run");
-  const socket = componentEndpoint(home, "executor-kernel", platform);
+  const socket = componentEndpoint(home, "executor-kernel");
+  validateRuntimeHome(home, [
+    { path: join(home, "octo-runtime-executor-kernel.pid"), resource: "kernel-pid" },
+    {
+      path: join(home, `.machine.json.${"0".repeat(10)}.${"0".repeat(36)}.tmp`),
+      resource: "machine-identity"
+    }
+  ]);
   return {
     home,
     machineFile: join(home, "machine.json"),
@@ -122,6 +105,7 @@ export function profileNameFor(appId: string, tenantId: string): string {
 export function accountPaths(paths: HostHomePaths, accountKey: string): HostAccountPaths {
   const root = join(paths.home, "accounts", accountKey);
   return {
+    home: paths.home,
     accountKey,
     root,
     configFile: join(root, "config.json"),
@@ -133,7 +117,12 @@ export function profilePaths(account: HostAccountPaths, name: string): HostProfi
   if (!PROFILE_PATTERN.test(name))
     throw new HostRuntimeError("PROFILE_INVALID", "home", false, `invalid profile: ${name}`);
   const root = join(account.root, name);
+  assertRuntimePath(
+    join(root, "credentials", `.runtime-token.json.${"0".repeat(10)}.${"0".repeat(36)}.tmp`),
+    "profile-credential"
+  );
   return {
+    home: account.home,
     name,
     root,
     configFile: join(root, "config.json"),
@@ -142,10 +131,15 @@ export function profilePaths(account: HostAccountPaths, name: string): HostProfi
   };
 }
 
+/** 仅在宿主已存在的 Home 中创建 Runtime 子目录/身份；根不可用时失败，不自动修复根。 */
 export function ensureHostHome(paths: HostHomePaths): MachineIdentity {
-  for (const directory of [paths.home, paths.run, join(paths.home, "accounts")])
-    mkdirSync(directory, { recursive: true });
-  if (process.platform !== "win32") mkdirSync(dirname(paths.socket), { recursive: true });
+  validateRuntimeHome(paths.home, [
+    { path: paths.machineFile, resource: "machine-identity" },
+    { path: paths.run, resource: "runtime-state" }
+  ]);
+  for (const directory of [paths.run, join(paths.home, "accounts")])
+    prepareHomeDirectory(paths.home, directory);
+  if (process.platform !== "win32") prepareHomeDirectory(paths.home, dirname(paths.socket));
   if (existsSync(paths.machineFile)) {
     const machine = readJson<MachineIdentity>(paths.machineFile);
     if (machine.schema_version !== 1 || !MACHINE_PATTERN.test(machine.machine_id)) {
@@ -164,6 +158,9 @@ export function ensureHostHome(paths: HostHomePaths): MachineIdentity {
 }
 
 export function ensureAccount(account: HostAccountPaths, profiles: readonly string[]): void {
+  validateRuntimeHome(account.home, [
+    { path: account.configFile, resource: "account-configuration" }
+  ]);
   if (profiles.length === 0)
     throw new HostRuntimeError(
       "TENANTS_EMPTY",
@@ -173,8 +170,8 @@ export function ensureAccount(account: HostAccountPaths, profiles: readonly stri
     );
   for (const profile of profiles) {
     const paths = profilePaths(account, profile);
-    mkdirSync(dirname(paths.identityFile), { recursive: true });
-    mkdirSync(dirname(paths.credentialFile), { recursive: true });
+    prepareHomeDirectory(account.home, dirname(paths.identityFile));
+    prepareHomeDirectory(account.home, dirname(paths.credentialFile));
   }
   const existing = existsSync(account.configFile)
     ? readJson<Record<string, unknown>>(account.configFile)
@@ -207,8 +204,9 @@ export function readJsonOptional<T>(path: string): T | undefined {
 }
 
 export function writeJsonAtomic(path: string, value: unknown, secret = false): void {
-  mkdirSync(dirname(path), { recursive: true });
   const temporary = join(dirname(path), `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`);
+  assertRuntimePath(temporary, "runtime-state");
+  mkdirSync(dirname(path), { recursive: true });
   const fd = openSync(temporary, "wx", secret ? 0o600 : 0o644);
   try {
     writeFileSync(fd, `${JSON.stringify(value, null, 2)}\n`, "utf8");
@@ -223,39 +221,6 @@ export function writeJsonAtomic(path: string, value: unknown, secret = false): v
 
 export function removeFile(path: string): void {
   rmSync(path, { force: true });
-}
-
-function validateHome(homeInput: string, platform: NodeJS.Platform): string {
-  const pathApi = platform === "win32" ? win32 : { isAbsolute, resolve, parse };
-  if (!homeInput.trim() || !pathApi.isAbsolute(homeInput)) {
-    throw new HostRuntimeError(
-      "HOME_INVALID",
-      "home",
-      false,
-      "Embedded Runtime Home must be an absolute path"
-    );
-  }
-  const home = pathApi.resolve(homeInput);
-  const root = pathApi.parse(home).root;
-  if (home === root)
-    throw new HostRuntimeError(
-      "HOME_INVALID",
-      "home",
-      false,
-      "filesystem root cannot be used as Embedded Runtime Home"
-    );
-  if (platform === "win32") {
-    const input = homeInput.replaceAll("/", "\\");
-    if (input.startsWith("\\\\") || input.startsWith("\\\\?\\") || /^[A-Za-z]:[^\\]/.test(input)) {
-      throw new HostRuntimeError(
-        "HOME_UNSUPPORTED",
-        "home",
-        false,
-        "Windows Embedded Runtime Home must be a local absolute path"
-      );
-    }
-  }
-  return home;
 }
 
 function appSlug(appId: string): string {

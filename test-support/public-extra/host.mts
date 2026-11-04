@@ -1,7 +1,7 @@
 import { adapters } from "./worker.mjs";
 import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {
   createKernelService,
@@ -17,11 +17,10 @@ import { verifyKernelInvoke } from "./kernel-invoke.mjs";
 import { verifyGatewayStore } from "./gateway-store.mjs";
 import { recoveryProbe } from "./recovery-kernel-probe.mjs";
 
-const endpoint = componentEndpoint(resolve("h"));
-const owner = createKernelService({
-  endpoint,
-  adapters
-});
+const home = resolve("h");
+await mkdir(home, { recursive: true });
+const endpoint = componentEndpoint(home);
+const owner = createKernelService({ home, endpoint, adapters });
 await owner.initialize();
 assert.equal((await owner.client.status()).pid, process.pid);
 try {
@@ -73,6 +72,7 @@ try {
       observer.close();
     }
     const extra = createExtraService({
+      home,
       endpoint,
       module: plugin,
       dependencies: {},
@@ -115,6 +115,7 @@ try {
           }
         };
         const business = createExtraService({
+          home,
           endpoint,
           module,
           config: {},
@@ -125,8 +126,8 @@ try {
         assert.equal((await business.status()).plugin.pid, process.pid);
         assert.equal((await business.close()).complete, true);
         assert.equal(database.prepare("SELECT text FROM business").get()?.text, "kept");
-        await verifyBuiltinExtras(endpoint);
-        await verifyGatewayStore(endpoint);
+        await verifyBuiltinExtras(home, endpoint);
+        await verifyGatewayStore(home, endpoint);
       } finally {
         database.close();
       }

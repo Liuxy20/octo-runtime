@@ -3,8 +3,9 @@ import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 import { extraStatusRecord } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 
 // SDK 原生宿主只收到 RPC endpoint 与 Gateway 配置，不拥有 Kernel。
-process.once("message", async ({ endpoint, controlEndpoint, config }) => {
+process.once("message", async ({ home, endpoint, controlEndpoint, config }) => {
   const extra = createExtraService({
+    home,
     endpoint,
     controlEndpoint,
     module: {

@@ -24,7 +24,7 @@ Kernel、Core、Host SDK 不得依赖具体 Provider Adapter 或业务 Extra；�
 | 用户扩展 | `<Runtime Home>/manifest.json`，macOS/Linux 通常为 `~/.octo-runtime/manifest.json` | 追加 Adapter 与 Extra 模块 |
 | 全局 Extra | 当前 CLI 经验证的 npm/pnpm 全局环境 | 无需清单声明的额外 Extra 包 |
 
-原默认 Adapter JSON 已迁入统一内置 manifest，不再维护第二份默认目录。两份清单均有 `version: 1`、`adapters` 和 `extras`。指定 `--home` 后，扩展清单也从指定 Home 读取；平台默认路径和 `OCTO_RUNTIME_HOME` 沿用既有 Home 选择规则。
+原默认 Adapter JSON 已迁入统一内置 manifest，不再维护第二份默认目录。两份清单均有 `version: 1`、`adapters` 和 `extras`。指定 `--home` 后，扩展清单也从指定 Home 读取；CLI 统一选择显式 `--home` 或 `~/.octo-runtime`，不再使用额外的环境覆盖分支。
 
 例如，Home 扩展可声明本地模块：
 

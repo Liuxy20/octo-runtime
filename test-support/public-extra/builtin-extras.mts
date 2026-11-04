@@ -8,10 +8,11 @@ import * as wecom from "@mininglamp-oss/octo-runtime/extras/channel-wecom";
 import * as webui from "@mininglamp-oss/octo-runtime/extras/webui";
 
 /** 只安装实际主包，原生构造全部内置模块并确认发行物包含可读取的静态资源。 */
-export async function verifyBuiltinExtras(endpoint: string): Promise<void> {
+export async function verifyBuiltinExtras(home: string, endpoint: string): Promise<void> {
   for (const module of [gateway, wecom]) {
     const statusRows: ExtraStatusRecord[] = [];
     const extra = createExtraService({
+      home,
       endpoint,
       module,
       config: { bots: [] },
@@ -46,6 +47,7 @@ export async function verifyBuiltinExtras(endpoint: string): Promise<void> {
     listener.close((error) => (error ? reject(error) : accept()))
   );
   const extra = createExtraService({
+    home,
     endpoint,
     module: webui,
     dependencies: {},

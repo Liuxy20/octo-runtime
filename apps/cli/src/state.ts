@@ -2,7 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { access, chmod, link, mkdir, open, readFile, rename, rm, rmdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import {
+  componentEndpoint,
+  normalizeRuntimeHome,
+  assertRuntimePath,
+  runtimePathFailure,
+  validateRuntimeHome
+} from "@mininglamp-oss/octo-runtime-host-sdk";
 
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const RESERVED_PROFILE_NAMES = new Set([
@@ -79,20 +85,40 @@ export interface RuntimePaths {
   openclawRoot: string;
   setupLock: string;
   pid: string;
-  socket: string;
   logs: string;
 }
 
-export function defaultRuntimeHome(
-  env: NodeJS.ProcessEnv = process.env,
+export function defaultRuntimeHome(env: NodeJS.ProcessEnv = process.env): string {
+  return normalizeRuntimeHome(join(env.HOME?.trim() || homedir(), ".octo-runtime"));
+}
+
+/** CLI 明确接受相对 --home 并转为绝对路径；不展开 ~，空值必须失败。 */
+export function selectRuntimeHome(
+  input: string | undefined,
+  env?: NodeJS.ProcessEnv,
   platform: NodeJS.Platform = process.platform
 ): string {
-  if (env.OCTO_RUNTIME_HOME?.trim()) return resolve(env.OCTO_RUNTIME_HOME.trim());
-  if (platform === "win32") {
-    const localAppData = env.LOCALAPPDATA?.trim();
-    if (localAppData) return resolve(localAppData, "OctoRuntime");
+  if (input === undefined) return normalizeRuntimeHome(defaultRuntimeHome(env), platform);
+  if (typeof input !== "string" || !input.trim() || input.startsWith("~"))
+    return normalizeRuntimeHome(input, platform);
+  return normalizeRuntimeHome(resolve(input), platform);
+}
+
+/** 根目录只由 CLI 准备；先检查完整预算，创建失败保留原 path/errno，不换根。 */
+export async function prepareRuntimeHome(home: string): Promise<void> {
+  const selected = normalizeRuntimeHome(home);
+  componentEndpoint(selected);
+  assertRuntimePath(
+    join(selected, "run", `kernel-invocations.json.acknowledged.${"0".repeat(36)}.json`),
+    "kernel-state"
+  );
+  try {
+    await mkdir(selected, { recursive: true, mode: 0o700 });
+  } catch (error) {
+    if (isNodeError(error, "EEXIST")) validateRuntimeHome(selected);
+    throw runtimePathFailure(error, selected, "home", "mkdir");
   }
-  return resolve(env.HOME?.trim() || homedir(), ".octo-runtime");
+  validateRuntimeHome(selected);
 }
 
 export function runtimePaths(
@@ -101,8 +127,15 @@ export function runtimePaths(
   platform: NodeJS.Platform = process.platform
 ): RuntimePaths {
   assertProfileName(profile);
-  const absoluteHome = resolve(home);
+  const absoluteHome = normalizeRuntimeHome(home, platform);
   const profileRoot = join(absoluteHome, profile);
+  // CLI 的身份/锁原子写另有后缀，不可只检查 Home 或 hash pipe 的短地址。
+  for (const path of [
+    join(profileRoot, "credentials", `runtime-token.json.${"0".repeat(10)}.${"0".repeat(36)}.tmp`),
+    join(absoluteHome, "run", `kernel-invocations.json.acknowledged.${"0".repeat(36)}.json`),
+    join(absoluteHome, "run", `.reclaim-${"0".repeat(64)}.${"0".repeat(10)}.${"0".repeat(36)}.tmp`)
+  ])
+    assertRuntimePath(path, "cli-state", platform);
   return {
     home: absoluteHome,
     rootConfig: join(absoluteHome, "config.json"),
@@ -114,7 +147,6 @@ export function runtimePaths(
     openclawRoot: join(profileRoot, "adapters", "openclaw"),
     setupLock: join(absoluteHome, "run", "setup.lock"),
     pid: join(absoluteHome, "run", "executor-kernel.pid"),
-    socket: componentEndpoint(absoluteHome, "executor-kernel", platform),
     logs: join(absoluteHome, "logs")
   };
 }

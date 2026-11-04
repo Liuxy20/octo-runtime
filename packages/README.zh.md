@@ -27,7 +27,7 @@ Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 C
   -> Kernel 宿主内的 AgentExecutor -> 已注入的 Adapter -> Provider
 ```
 
-原生 SDK 宿主 import 并构造 Adapter，将对象交给 `createKernelService({ endpoint, adapters })`，初始化后使用 `kernel.client`。即使同进程，业务调用也经过真实本地 RPC。Electron 宿主可在主进程创建 Kernel 和可选 Extra；CLI 通过相同工厂部署独立服务宿主。裸 Core 是显式低层 API，不是普通同进程 SDK 接入入口。
+原生 SDK 宿主 import 并构造 Adapter，将对象交给 `createKernelService({ home, endpoint, adapters })`，初始化后使用 `kernel.client`。即使同进程，业务调用也经过真实本地 RPC。Electron 宿主可在主进程创建 Kernel 和可选 Extra；CLI 通过相同工厂部署独立服务宿主。裸 Core 是显式低层 API，不是普通同进程 SDK 接入入口。
 
 ## 协议
 

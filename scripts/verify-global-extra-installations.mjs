@@ -13,7 +13,10 @@ if (!archive || !pnpmCli)
   throw new Error(
     "Usage: node scripts/verify-global-extra-installations.mjs <runtime.tgz> <pnpm.cjs>"
   );
-const root = await realpath(await mkdtemp(join(tmpdir(), "octo-global-install-")));
+// 本脚本实际启动常驻服务；macOS 的长 TMPDIR 不适合作为 pathname socket 的验收 Home。
+const root = await realpath(
+  await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "octo-global-install-"))
+);
 const npmCli = join(
   dirname(process.execPath),
   process.platform === "win32"

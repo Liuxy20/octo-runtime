@@ -1,3 +1,4 @@
+import { fixtureHome } from "./fixtures/service-home.js";
 import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
 import { nativeHost } from "./native-host-fixture.js";
 import assert from "node:assert/strict";
@@ -223,6 +224,7 @@ test(
         ? `\\\\.\\pipe\\octo-snapshot-${Date.now()}`
         : join(home, "k.sock");
     const kernel = createKernelService({
+      home: fixtureHome,
       endpoint,
       adapters: await loadCliAdapters(resolveAdapterModules(await readModuleManifest(file)))
     });

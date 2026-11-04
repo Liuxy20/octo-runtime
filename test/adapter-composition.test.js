@@ -1,3 +1,4 @@
+import { fixtureHome } from "./fixtures/service-home.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import childProcess from "node:child_process";
@@ -65,11 +66,17 @@ test("native Kernel accepts an explicit empty selection and rejects duplicate or
 });
 
 test("native Kernel requires explicit endpoint and instances and rejects legacy process composition", () => {
-  assert.throws(() => createKernelService({ adapters: [] }), /endpoint/);
-  assert.throws(() => createKernelService({ endpoint: "/unused" }), /adapters/);
+  assert.throws(() => createKernelService({ home: fixtureHome, adapters: [] }), /endpoint/);
+  assert.throws(() => createKernelService({ home: fixtureHome, endpoint: "/unused" }), /adapters/);
   for (const field of ["manifest", "adapterModules", "workerEntrypoint", "env"])
     assert.throws(
-      () => createKernelService({ endpoint: "/unused", adapters: [], [field]: "unused" }),
+      () =>
+        createKernelService({
+          home: fixtureHome,
+          endpoint: "/unused",
+          adapters: [],
+          [field]: "unused"
+        }),
       /does not accept/
     );
 });

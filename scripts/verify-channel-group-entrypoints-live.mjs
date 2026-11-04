@@ -142,6 +142,7 @@ try {
     let processHandle, extra;
     const endpoint = componentEndpoint(home);
     const kernel = createKernelService({
+      home: home,
       endpoint,
       adapters: (await import((await import("node:url")).pathToFileURL(entrypoint).href)).adapters
     });
@@ -154,6 +155,7 @@ try {
     };
     const loadExtra = async (config, dependencies) => {
       extra = createExtraService({
+        home: home,
         endpoint,
         module: await import(gatewayPath),
         config,
