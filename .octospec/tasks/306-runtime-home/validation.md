@@ -72,3 +72,5 @@ PR head `0bb575dec96f53f52dc4d37004700c838a01b657`，Actions run `41795217323`�
 修复后在本机 Windows Node24/26 各执行 runtime-debug、runtime-endpoint、cli-dsh、profile-layout、cli-home 及 #306 manual：58 项，54 pass、4 skip、0 fail/0 cancel。Kernel/Host/CLI/public/root 重新编译通过。新增长 Home 数据命令与 Unix 受限 PATH/日志专项仍放 manual，不扩展 CI/default selectors；新增 Unix native 用例在本机跳过。后续 CI 结果以 PR 当前 head 的检查为准。
 
 评审还复现了 service 层用 `startsWith("..")` 把合法 `..hidden` 子目录误当作穿越路径。服务现在直接委托已按完整分量判断边界的 prepareHomeDirectory；补充显式 Unix 专项覆盖 normal、..hidden、未准备和已准备的 Home 外端点父目录。外部根仍由宿主准备，不补建替代 Home。补充后本机 Windows Node24/26 的 #306/#237/#302 专项各 41 项：38 pass、3 skip、0 fail/0 cancel；编译和受影响服务的 ESLint 通过。3 项 skip 均为新增或既有 Unix native 专项。
+
+Actions run `41797963053`（8fd2550e）：Ubuntu Node24/26 完整任务通过；macOS Node26 的完整测试通过，随后全局 Extra 安装验收在读取 factory marker 时失败。该脚本用真实 macOS TMPDIR/realpath 生成安装根和常驻 Home，使实际服务的 socket 超预算、未执行 factory。验收夹具改用 macOS `/tmp` 下独占根并保留 realpath；不改变产品 Home 选择、传输限值、默认 selector 或 CI 配置。其余旧任务在新提交触发后由原工作流自动取消，不记为通过。
