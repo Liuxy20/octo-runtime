@@ -90,6 +90,41 @@ test(
   }
 );
 
+test(
+  "native Unix endpoint parents distinguish dot-prefixed children from outside Home",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const root = fixture(t),
+      home = join(root, "home");
+    fs.mkdirSync(home);
+    const start = (endpoint) => createKernelService({ home, endpoint, adapters: [] });
+    for (const name of ["normal", "..hidden"]) {
+      const endpoint = join(home, name, "k.sock"),
+        kernel = start(endpoint);
+      try {
+        await kernel.initialize();
+        assert.ok(fs.statSync(join(home, name)).isDirectory());
+        assert.equal((await kernel.client.status()).pid, process.pid);
+      } finally {
+        assert.equal((await kernel.close()).complete, true);
+      }
+    }
+    const endpoint = join(home, "..", "outside", "k.sock"),
+      missing = start(endpoint);
+    await assert.rejects(missing.initialize(), (error) => error.cause?.code === "HOME_NOT_FOUND");
+    assert.equal((await missing.close()).complete, true);
+    assert.equal(fs.existsSync(join(root, "outside")), false);
+    fs.mkdirSync(join(root, "outside"));
+    const prepared = start(endpoint);
+    try {
+      await prepared.initialize();
+      assert.equal((await prepared.client.status()).pid, process.pid);
+    } finally {
+      assert.equal((await prepared.close()).complete, true);
+    }
+  }
+);
+
 const module = {
   name: "home-validation",
   default: () => () => {

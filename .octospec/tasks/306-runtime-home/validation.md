@@ -70,3 +70,5 @@ PR head `0bb575dec96f53f52dc4d37004700c838a01b657`，Actions run `41795217323`�
 - 使用 PATH 查找 getconf 受 fake Provider 的私有 PATH 影响。固定使用 OS `/usr/bin/getconf`，与 Provider 发现环境分离。
 
 修复后在本机 Windows Node24/26 各执行 runtime-debug、runtime-endpoint、cli-dsh、profile-layout、cli-home 及 #306 manual：58 项，54 pass、4 skip、0 fail/0 cancel。Kernel/Host/CLI/public/root 重新编译通过。新增长 Home 数据命令与 Unix 受限 PATH/日志专项仍放 manual，不扩展 CI/default selectors；新增 Unix native 用例在本机跳过。后续 CI 结果以 PR 当前 head 的检查为准。
+
+评审还复现了 service 层用 `startsWith("..")` 把合法 `..hidden` 子目录误当作穿越路径。服务现在直接委托已按完整分量判断边界的 prepareHomeDirectory；补充显式 Unix 专项覆盖 normal、..hidden、未准备和已准备的 Home 外端点父目录。外部根仍由宿主准备，不补建替代 Home。补充后本机 Windows Node24/26 的 #306/#237/#302 专项各 41 项：38 pass、3 skip、0 fail/0 cancel；编译和受影响服务的 ESLint 通过。3 项 skip 均为新增或既有 Unix native 专项。

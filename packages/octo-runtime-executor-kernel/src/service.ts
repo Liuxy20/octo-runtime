@@ -1,5 +1,5 @@
 import { attachKernel } from "./client.js";
-import { dirname, relative, isAbsolute } from "node:path";
+import { dirname } from "node:path";
 import {
   assertIpcEndpoint,
   kernelStartupPaths,
@@ -128,11 +128,9 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
           );
           assertIpcEndpoint(configuration.endpoint);
           if (process.platform !== "win32") {
-            const parent = dirname(configuration.endpoint);
-            const child = relative(home, parent);
             // 只为 Home 内的端点准备内部目录；自选外部 endpoint 的父目录由高级宿主准备。
-            if (child && !child.startsWith("..") && !isAbsolute(child))
-              prepareHomeDirectory(home, parent);
+            // helper 按完整 .. 路径分量判断边界，合法的 ..hidden 子目录仍属于 Home。
+            prepareHomeDirectory(home, dirname(configuration.endpoint));
           }
           return startKernelServer(configuration, combined);
         })
