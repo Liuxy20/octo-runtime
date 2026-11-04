@@ -1,5 +1,7 @@
 # SDK 接入
 
+POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
+
 [English](../../en/getting-started/sdk.md) | [文档目录](../README.md)
 
 Electron/Node.js 宿主原生导入所需模块。加载方式由宿主选择，也可以尝试基于 **pnpm workspace + Git submodule** 引入源码。下例使用源码 workspace 包名；发行包对应 `/executor-kernel`、`/host`、`/extras/channel-gateway` 等公开子路径。

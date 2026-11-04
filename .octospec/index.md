@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 303：直接 Kernel 端点](tasks/303-direct-kernel-endpoint/brief.md)：直接修改 POSIX 地址，保留现有 Home 和生命周期合同；[验证](tasks/303-direct-kernel-endpoint/validation.md)记录精简版本的结果与限制。
+
 - [Issue 294：原生 Adapter 装配与统一 RPC](tasks/294-native-kernel-sdk/brief.md)：工作树已实现宿主注入 Adapter、Kernel 原生托管与统一 RPC，CLI 装配同步迁移；流程和职责案例见[计划](tasks/294-native-kernel-sdk/plan.md)。提交与合并按用户授权推进，验证边界见任务记录。
 
 - [Issue 166：Playboard 自动审批](tasks/166-playboard-auto-approval/brief.md)：仅 CLI 默认 full_access，自动审批与外部回答分离；[验证](tasks/166-playboard-auto-approval/validation.md)记录 19 项手动专项、全量及真实 Codex 两模式结果，等待验证审查。

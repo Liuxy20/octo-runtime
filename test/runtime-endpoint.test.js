@@ -30,7 +30,7 @@ test("endpoints and service identities isolate both Home and component on POSIX 
     else
       assert.equal(
         componentEndpoint(home, "executor-kernel", platform),
-        "/tmp/runtime/sockets/octo-runtime-executor-kernel.sock"
+        "/tmp/runtime/executor-kernel.sock"
       );
   }
 });
@@ -42,7 +42,7 @@ for (const platform of ["darwin", "linux"]) {
     assert.equal(homeHash(home, platform), "b7751491b5d75faf");
     assert.equal(
       componentEndpoint(home, "executor-kernel", platform),
-      "/tmp/runtime/sockets/octo-runtime-executor-kernel.sock"
+      "/tmp/runtime/executor-kernel.sock"
     );
     assert.equal(
       componentServiceId(home, "executor-kernel", platform),
@@ -59,7 +59,7 @@ for (const platform of ["darwin", "linux"]) {
     assert.equal(normalizedHome("/tmp/runtime\\literal", platform), "/tmp/runtime\\literal");
     assert.equal(
       componentEndpoint("/tmp/runtime\\literal", "executor-kernel", platform),
-      "/tmp/runtime\\literal/sockets/octo-runtime-executor-kernel.sock"
+      "/tmp/runtime\\literal/executor-kernel.sock"
     );
   });
 }

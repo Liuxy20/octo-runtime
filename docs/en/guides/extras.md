@@ -1,5 +1,7 @@
 # Integrate Extras
 
+The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
+
 For CLI setup, use `<extra> configure` or `<extra> extraset` for a complete JSON declaration. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
 
 [简体中文](../../zh-CN/guides/extras.md) | [Documentation](../README.md)

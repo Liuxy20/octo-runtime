@@ -1,5 +1,7 @@
 # Host SDK
 
+The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
+
 [简体中文](README.zh.md) | [Packages](../README.md)
 
 The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).

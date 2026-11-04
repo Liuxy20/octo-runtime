@@ -1,5 +1,7 @@
 # CLI 安装与运维
 
+POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
+
 [English](../../en/getting-started/cli.md) | [文档目录](../README.md)
 
 通过 Runtime CLI 可以安装、启动和运维 Executor Kernel 与可选 Extra，检查 Adapter，并试运行一次 Agent 调用。运行环境使用 Node.js 24.x 或 26.x（LTS）。

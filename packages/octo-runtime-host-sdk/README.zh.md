@@ -1,5 +1,7 @@
 # Host SDK
 
+POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
+
 [English](README.md) | [包导航](../README.zh.md)
 
 宿主须先选择并准备已存在的绝对 `home`，再显式传给服务；SDK 不创建根或选择平台默认。详见 [Runtime Home 合同](../../docs/zh-CN/reference/runtime-home.md)。

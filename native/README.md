@@ -13,14 +13,14 @@ SDK 运行时按“一份生成代码 + 一份手写代码”组织：Python 为
 
 ## 构建和运行
 
-从仓库根目录执行；先由宿主安装并启动 Kernel，取得实际 endpoint。macOS/Linux 默认 Runtime Home 的地址通常是 `$HOME/.octo-runtime/sockets/octo-runtime-executor-kernel.sock`，自定义 Home 请使用对应地址。Windows 使用宿主提供的完整 pipe 名，不拼接猜测 hash。
+从仓库根目录执行；先由宿主安装并启动 Kernel，取得实际 endpoint。macOS/Linux 的 CLI 默认地址为 `$HOME/.octo-runtime/executor-kernel.sock`，SDK 使用宿主显式准备的 Home，自定义 Home 的地址为 `<home>/executor-kernel.sock`。Windows 使用宿主提供的完整 pipe 名，不拼接猜测 hash。这是破坏性地址变更；旧接入方停止进程、更新所有组件后重启。
 
 ```sh
 mkdir -p .tmp
 (cd native/go && go build -o ../../.tmp/playboard-demo-go ./examples/demo_playboard.go)
 uv sync --project native/python --frozen --python 3.11
 
-export OCTO_KERNEL_ENDPOINT="$HOME/.octo-runtime/sockets/octo-runtime-executor-kernel.sock"
+export OCTO_KERNEL_ENDPOINT="$HOME/.octo-runtime/executor-kernel.sock"
 .tmp/playboard-demo-go playboard --request native/examples/request.json --receipt .tmp/go-run.json
 native/python/.venv/bin/python -I native/python/demo_playboard.py playboard --request native/examples/request.json --receipt .tmp/python-run.json
 ```

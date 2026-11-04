@@ -1,5 +1,7 @@
 # SDK Integration
 
+The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
+
 [简体中文](../../zh-CN/getting-started/sdk.md) | [Documentation](../README.md)
 
 Electron/Node.js hosts import their selected modules natively. Choose your own loading approach; **pnpm workspace + Git submodule** is one option for source integration. Examples use source workspace package names; published equivalents include `/executor-kernel`, `/host`, and `/extras/channel-gateway`.

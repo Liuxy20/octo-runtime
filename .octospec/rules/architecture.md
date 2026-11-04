@@ -3,7 +3,7 @@ type: Rule
 title: Octo Runtime 基础架构
 description: 运行时设备、统一执行内核与 Extra 的责任边界及执行约束。
 tags: [architecture, runtime, adapter, extra, context, installation]
-timestamp: 2026-11-02T00:00:00+08:00
+timestamp: 2026-11-04T14:40:00+08:00
 id: runtime-architecture
 tier: repo
 priority: 100
@@ -68,7 +68,9 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
 
 [#306 Home 合同](runtime-lifecycle.md#runtime-home-所有权与启动校验)要求显式 `home`，不改变 #294 原生装配和 RPC。
 
-`endpoint` 与 Home 分别定义：Home 是数据/身份目录，`componentEndpoint(home)` 只派生本地地址。例如 POSIX 的 `<home>/sockets/octo-runtime-executor-kernel.sock`；Windows 使用命名管道，不把 `~/.octo-runtime` 目录直接作为 RPC 地址。Electron 自选 Home/endpoint，CLI 从自己的配置派生；不新增隐式 Home 扫描或省略 endpoint 的直调模式。
+`endpoint` 与 Home 分别定义：Home 是数据/身份目录，`componentEndpoint(home)` 只派生本地地址。#303 将常驻 POSIX Kernel 地址收敛为准确的 `<home>/executor-kernel.sock`；Windows 保留同一规范 Home hash 的既有命名管道，不改变状态根。Extra 控制端点仅查询 Extra 状态，继续独立派生，不因 Kernel 文件名更改而改名。Home 选择/准备归宿主，SDK 的显式 Home 与校验按优先级更高的 #306 合同；只有 CLI 默认 `~/.octo-runtime`。不新增隐式 Home 扫描、环境覆盖或省略 endpoint 的直调模式。
+
+#303 是直接的破坏性地址变更，测试消费者停止旧进程、更新所有组件后重启。不添加旧布局检测、兼容租约或跨版本迁移框架；当前地址的普通所有权、清理和恢复沿用现有实现。
 
 ### 装配职责与典型案例
 

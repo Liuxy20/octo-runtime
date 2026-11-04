@@ -1,5 +1,7 @@
 # CLI Installation and Operations
 
+The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
+
 [简体中文](../../zh-CN/getting-started/cli.md) | [Documentation](../README.md)
 
 Use the Runtime CLI to install, start, and operate Executor Kernel and the optional Extras, inspect Adapters, and try an Agent invocation. Use Node.js 24.x or 26.x (LTS).

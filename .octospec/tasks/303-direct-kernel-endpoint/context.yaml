@@ -1,0 +1,25 @@
+brief: .octospec/tasks/303-direct-kernel-endpoint/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: "Home、端点与统一 RPC；按最新 Issue 澄清直接改名"
+  - id: runtime-lifecycle
+    source: repo
+    reason: "保留主线校验、所有权与恢复，不增加旧布局机制"
+  - id: runtime-local-execution
+    source: repo
+    reason: "attach/Extra 共用地址及原有清理边界"
+  - id: runtime-engineering
+    source: repo
+    reason: "中文核心注释、显式专项与验证边界"
+  - id: commit
+    source: repo
+    reason: "公开提交与 PR 遵守 CONTRIBUTING 英文要求"
+files_expected:
+  - packages/octo-runtime-host-sdk/src/endpoint.ts
+  - apps/cli/src/state.ts
+  - test/runtime-endpoint.test.js
+  - test/manual/direct-kernel-endpoint-303.test.mjs
+  - docs/en/reference/runtime-home.md
+  - docs/zh-CN/reference/runtime-home.md
+updated_at: 2026-11-04T11:00:00Z
