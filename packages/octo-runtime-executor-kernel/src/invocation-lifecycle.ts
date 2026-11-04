@@ -22,6 +22,8 @@ export interface TrackedInvocation {
   observationError?: string;
   reason?: string;
   cancelTask?: Promise<{ accepted: boolean }>;
+  /** 原 invoke 观察首次控制结果；新的显式 Stop 不得覆盖已经发生的控制失败。 */
+  firstCancelTask?: Promise<{ accepted: boolean }>;
   admitted: Promise<void>;
   settleAdmission(): void;
   admissionError?: Error;
@@ -166,7 +168,11 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
     return record.ref;
   }
 
-  cancel(record: TrackedInvocation, reason = "caller_cancelled"): Promise<{ accepted: boolean }> {
+  cancel(
+    record: TrackedInvocation,
+    reason = "caller_cancelled",
+    { explicit = false }: { explicit?: boolean } = {}
+  ): Promise<{ accepted: boolean }> {
     if (record.ref && this.#records.get(record.key.invocation_id) !== record)
       return Promise.resolve({ accepted: false });
     if (record.observationError === "RUN_OUTCOME_UNKNOWN")
@@ -177,9 +183,14 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
     if (!record.ref)
       return record.admitted.then(() => {
         if (!record.ref) throw record.admissionError ?? new KernelError("ACCEPTANCE_UNKNOWN");
+        // ACK 接续仍属于原意图；不能因其首次控制已失败而暗中再发送一次。
         return this.cancel(record, reason);
       });
-    if (!record.cancelTask) {
+    // 仅新的公开 Stop 可重试未知控制；drain/signal 保留原 Promise，并发 Stop 共享在途尝试。
+    const retry = explicit && record.cancellation === "unknown";
+    if (!record.cancelTask || retry) {
+      if (retry) record.reason = reason;
+      record.cancellation = "requested";
       const controller = new AbortController();
       this.#cancelControllers.add(controller);
       record.cancelTask = new Promise<{ accepted: boolean }>((resolve, reject) => {
@@ -213,6 +224,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
           throw error;
         })
         .finally(() => this.#cancelControllers.delete(controller));
+      record.firstCancelTask ??= record.cancelTask;
       // Automatic signal cancellation may outlive its consumer; always consume rejection.
       void record.cancelTask.catch(() => undefined);
     }

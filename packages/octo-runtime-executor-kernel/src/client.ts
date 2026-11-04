@@ -217,7 +217,8 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
             throw new KernelError("RUN_OUTCOME_UNKNOWN");
         }
         if (!terminal) throw new KernelError("HOST_ENDED_WITHOUT_TERMINAL");
-        if (record.cancelTask) await record.cancelTask;
+        // 调用观察绑定首次控制结果；后续显式 Stop 成功不能抹去原来的 ACK 未知或失败。
+        if (record.firstCancelTask) await record.firstCancelTask;
       } catch (error) {
         registry.interrupted(record, error);
         throw error;
@@ -226,7 +227,8 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
         registry.interrupted(record);
       }
     }),
-    cancelInvocation: async (id, reason) => registry.cancel(registry.active(id), reason),
+    cancelInvocation: async (id, reason) =>
+      registry.cancel(registry.active(id), reason, { explicit: true }),
     respondInteraction: async (id, response) => client.respond(registry.ref(id), response),
     respondNativeInteraction: async (id, response) =>
       client.respondNative(registry.ref(id), response),
