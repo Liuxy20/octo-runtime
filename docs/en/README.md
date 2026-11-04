@@ -22,6 +22,7 @@ For module selection, read [Adapter and Extra Loading](concepts/module-loading.m
 | Supply business context, environment, images, or session continuation                 | [Context and Sessions](guides/context-and-sessions.md) |
 | Connect an installed MCP server                                                       | [MCP](guides/mcp.md)                                   |
 | Add an optional business integration                                                  | [Extras](guides/extras.md)                             |
+| Diagnose component construction or initialization                                     | [Startup diagnostics](guides/startup-diagnostics.md)   |
 | Diagnose a failed or interrupted invocation                                           | [Troubleshooting](guides/troubleshooting.md)           |
 
 ## SDK Chapters

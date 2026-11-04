@@ -22,6 +22,7 @@ Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、
 | 提供业务背景、环境变量、图片或续聊信息                         | [Context 与会话](guides/context-and-sessions.md) |
 | 连接已安装的 MCP server                                        | [MCP](guides/mcp.md)                             |
 | 增加可选业务接入                                               | [Extra](guides/extras.md)                        |
+| 排查组件构造或初始化失败                                       | [启动诊断](guides/startup-diagnostics.md)        |
 | 排查失败或中断的调用                                           | [故障排查](guides/troubleshooting.md)            |
 
 ## SDK 分章阅读

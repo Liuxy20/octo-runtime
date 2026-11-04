@@ -27,6 +27,7 @@ export {
   type StartupPathDiagnostic,
   type RuntimePath
 } from "./runtime-home.js";
+export * from "./startup-diagnostics.js";
 export { attachKernel } from "./client.js";
 export { AsyncQuestionReply, type AsyncQuestionReplyResult } from "./async-question-reply.js";
 export { isInvocationNotSubmitted } from "./submission-error.js";
@@ -38,3 +39,5 @@ export {
   reapOrphanedInvocationManifest
 } from "./invocation-manifest.js";
 export { acquireEndpoint } from "./endpoint.js";
+
+export { assertStartupLogging } from "./startup-logging.js";

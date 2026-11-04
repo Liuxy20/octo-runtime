@@ -2,6 +2,8 @@
 
 [简体中文](../../zh-CN/guides/troubleshooting.md) | [Documentation](../README.md)
 
+For construction or initialization failures, use the [startup diagnostic contract and catalog](startup-diagnostics.md). These failures can occur before any Run or IPC endpoint exists; inspect the failed call's diagnostic directly. The execution guidance below applies after a Run has been submitted.
+
 Record the error code and relevant `runId` and `invocationId`, then locate the problem below. A connection failure after submission does not necessarily mean the task never ran; query the original execution before retrying. Log only necessary metadata, excluding input bodies, secrets, and substituted MCP authentication headers.
 
 ## Cannot Connect to the Service

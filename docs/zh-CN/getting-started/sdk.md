@@ -107,3 +107,7 @@ if (!extraCleanup.complete || !kernelCleanup.complete)
 ## 4. 可选：使用 AgentRun
 
 服务接入完成后，业务需要主动执行 AgentRun 时再阅读[调用、事件与控制](../guides/agent-runs.md)。`invoke`、事件消费、交互和取消不属于接入必做步骤；Gateway 会按收到的消息发起调用。
+
+## 启动失败
+
+稳定码分支、安全资源 context、清理事实及 CLI JSON 兼容方式见[启动诊断合同与目录](../guides/startup-diagnostics.md)。

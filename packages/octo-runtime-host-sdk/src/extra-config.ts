@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { lstat, open, readdir } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   assertExtraName,
   type ExtraRegistration,
@@ -62,7 +63,17 @@ export function extraRegistration(descriptor: ExtraDescriptor): ExtraRegistratio
     config: stored.config,
     enabled: stored.enabled,
     load: () =>
-      import(isAbsolute(module) ? pathToFileURL(module).href : module) as Promise<ExtraPluginModule>
+      (
+        import(
+          isAbsolute(module) ? pathToFileURL(module).href : module
+        ) as Promise<ExtraPluginModule>
+      ).catch((error: unknown) => {
+        throw withStartupContext(error, {
+          component: name,
+          phase: "created",
+          context: { module, resource: "extra-module", operation: "import", configKey: "module" }
+        });
+      })
   };
 }
 
@@ -95,7 +106,7 @@ export async function readExtraDirectory(directory: string): Promise<ExtraRegist
       registrations.push({
         name: entry.name,
         config: {},
-        load: () => Promise.reject(new Error(code))
+        load: () => Promise.reject(new Error(code, { cause: error }))
       });
     }
   }
@@ -109,7 +120,13 @@ export async function readStoredExtra(directory: string, name: string): Promise<
   const handle = await open(
     file,
     constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
-  );
+  ).catch((error: unknown) => {
+    throw withStartupContext(error, {
+      component: name,
+      phase: "created",
+      context: { path: file, resource: "extra-config", operation: "open", configKey: "config" }
+    });
+  });
   try {
     // 权限、大小和读取绑定同一个文件，不允许检查后换成链接或其他目标。
     const info = await handle.stat();
@@ -133,6 +150,12 @@ export async function readStoredExtra(directory: string, name: string): Promise<
     const stored: unknown = JSON.parse(bytes.subarray(0, length).toString("utf8"));
     assertStoredExtra(stored);
     return stored;
+  } catch (error) {
+    throw withStartupContext(error, {
+      component: name,
+      phase: "created",
+      context: { path: file, resource: "extra-config", operation: "read", configKey: "config" }
+    });
   } finally {
     await handle.close();
   }

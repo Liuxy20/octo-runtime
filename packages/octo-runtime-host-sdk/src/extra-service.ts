@@ -4,11 +4,11 @@ import { chmod, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import {
   RuntimeLogging,
-  assertRuntimeLogging,
   readBoundedLines,
   type RuntimeLoggingOptions
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
+  assertStartupLogging,
   acquireEndpoint,
   assertIpcEndpoint,
   validateRuntimeHome,
@@ -16,9 +16,11 @@ import {
   runtimePathFailure,
   attachKernel,
   ServiceInitializationError,
+  withStartupContext,
   type KernelClient,
   type ServiceCleanupResult,
   type ServiceLifecycle,
+  type StartupContext,
   type ServicePhase
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
@@ -57,8 +59,20 @@ const owners = new Map<string, { failed: boolean }>();
 export function createExtraService<D extends object>(
   options: ExtraServiceOptions<D>
 ): ExtraService {
+  try {
+    return constructExtraService(options);
+  } catch (error) {
+    throw withStartupContext(error, {
+      component: "extra",
+      phase: "created",
+      context: { operation: "validate-options", resource: "extra" }
+    });
+  }
+}
+
+function constructExtraService<D extends object>(options: ExtraServiceOptions<D>): ExtraService {
   assertExtraName(options.module.name);
-  assertRuntimeLogging(options.logging);
+  assertStartupLogging(options.logging, { component: options.module.name, phase: "created" });
   const name = options.module.name;
   const config = structuredClone(options.config);
   const module = { ...options.module };
@@ -271,6 +285,7 @@ export function createExtraService<D extends object>(
       };
       signal?.addEventListener("abort", abort, { once: true });
       if (signal?.aborted) abort();
+      let startupContext: StartupContext = { resource: "extra", operation: "initialize" };
       starting = (async () => {
         owner.signal.throwIfAborted();
         validateRuntimeHome(home, [
@@ -321,6 +336,11 @@ export function createExtraService<D extends object>(
           );
         owner.signal.throwIfAborted();
         if (controlEndpoint) {
+          startupContext = {
+            resource: "extra-control",
+            endpoint: controlEndpoint,
+            operation: "listen"
+          };
           if (process.platform !== "win32") prepareHomeDirectory(home, dirname(controlEndpoint));
           owner.signal.throwIfAborted();
           release = await acquireEndpoint(controlEndpoint);
@@ -370,6 +390,7 @@ export function createExtraService<D extends object>(
         .catch(async (error: unknown) => {
           const io = error as NodeJS.ErrnoException;
           if (
+            startupContext.resource === "extra-control" &&
             ["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"].includes(
               io?.code ?? ""
             )
@@ -381,7 +402,14 @@ export function createExtraService<D extends object>(
               typeof io.syscall === "string" ? io.syscall : "listen"
             );
           logState("service.failed", "failed", "SERVICE_INITIALIZATION_FAILED");
-          throw new ServiceInitializationError(error, await close());
+          throw new ServiceInitializationError(error, await close(), {
+            component: name,
+            phase: "initializing",
+            context: {
+              endpoint: controlEndpoint ?? endpoint,
+              ...startupContext
+            }
+          });
         })
         .finally(() => {
           signal?.removeEventListener("abort", abort);

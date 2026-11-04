@@ -1,0 +1,25 @@
+brief: .octospec/tasks/304-startup-diagnostics/brief.md
+injected:
+  - { id: runtime-architecture, source: repo, reason: "共享启动错误与原生装配边界" }
+  - { id: runtime-protocol-design, source: repo, reason: "启动和 Run 域分离" }
+  - { id: runtime-lifecycle, source: repo, reason: "Kernel/CLI 生命周期与安全日志" }
+  - { id: runtime-local-execution, source: repo, reason: "IPC 与所有权" }
+  - {
+      id: runtime-context-extensions,
+      source: repo,
+      reason: "启动投影不改变模型 Context 或扩展转发"
+    }
+  - { id: runtime-invoke-input, source: repo, reason: "诊断不改变 InvokeInput 或执行默认值" }
+  - { id: runtime-output-protocol, source: repo, reason: "启动错误不进入 Run 帧或任务终态" }
+  - { id: runtime-stateless, source: repo, reason: "只保存单份有界启动元数据，无业务历史" }
+  - { id: runtime-extras, source: repo, reason: "宿主管理 Extra 回滚" }
+  - { id: runtime-engineering, source: repo, reason: "核心中文注释、验收、凭据、工具版本" }
+  - { id: commit, source: repo, reason: "中文知识记录；按 OSS 规则使用英文公开提交和 PR" }
+files_expected:
+  - packages/octo-runtime-executor-kernel/src/startup-diagnostics.ts
+  - packages/octo-runtime-executor-kernel/src/lifecycle.ts
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - apps/cli/src/output.ts
+  - apps/cli/src/main.ts
+  - test/manual/startup-diagnostics.test.js
+updated_at: 2026-11-04T12:30:52.816Z

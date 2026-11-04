@@ -287,6 +287,22 @@ export class ExtraPlugins {
           error: cleanupFailed ? "EXTRA_DISPOSE_FAILED" : code
         });
         if (!instance.disposing && !instance.disposalError) this.#instances.delete(name);
+        if (cleanupFailed && instance.disposalError) {
+          // 回滚失败不能只留在加载器内部；聚合保留主失败与真实 disposer 链。
+          // 外层服务继续使用原 ServiceInitializationError/cleanup，主 message/code 保持兼容。
+          const failure = new AggregateError(
+            [error, instance.disposalError],
+            error instanceof Error ? error.message : code,
+            { cause: error }
+          );
+          const primaryCode: unknown =
+            error instanceof Error
+              ? Object.getOwnPropertyDescriptor(error, "code")?.value
+              : undefined;
+          if (typeof primaryCode === "string")
+            Object.defineProperty(failure, "code", { value: primaryCode });
+          throw failure;
+        }
         throw error;
       }
     });

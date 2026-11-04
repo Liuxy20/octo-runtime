@@ -193,7 +193,8 @@ export function readJson<T>(path: string): T {
     return JSON.parse(readFileSync(path, "utf8")) as T;
   } catch (error) {
     throw new HostRuntimeError("LOCAL_STATE_INVALID", "home", false, `cannot read ${path}`, {
-      cause: error
+      cause: error,
+      context: { path, resource: "local-state", operation: "read" }
     });
   }
 }

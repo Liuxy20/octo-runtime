@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { resolveExtraModule } from "./global-extras.js";
 import {
   assertExtraName,
@@ -66,7 +67,16 @@ export async function readExtra(
         return plugin;
       } catch (error) {
         if (error instanceof Error && error.message === "EXTRA_NAME_MISMATCH") throw error;
-        throw new Error("EXTRA_MODULE_LOAD_FAILED", { cause: error });
+        throw withStartupContext(new Error("EXTRA_MODULE_LOAD_FAILED", { cause: error }), {
+          component: name,
+          phase: "created",
+          context: {
+            module: entry.module,
+            resource: "extra-module",
+            operation: "import",
+            configKey: "module"
+          }
+        });
       }
     }
   };

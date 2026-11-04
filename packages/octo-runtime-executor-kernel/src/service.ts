@@ -1,3 +1,4 @@
+import { assertStartupLogging } from "./startup-logging.js";
 import { attachKernel } from "./client.js";
 import { dirname } from "node:path";
 import {
@@ -6,6 +7,7 @@ import {
   validateRuntimeHome,
   prepareHomeDirectory
 } from "./runtime-home.js";
+import { describeStartupError } from "./startup-diagnostics.js";
 import { startKernelServer, type KernelServerOptions } from "./server.js";
 import type { KernelClient, KernelStatus } from "./types.js";
 import {
@@ -36,17 +38,31 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
  * 即使与调用方同进程，client 也始终通过 RPC，不能绕过 Run 接纳和观察管理。
  */
 export function createKernelService(options: KernelServiceOptions): KernelService {
+  const invalid = (message: string, configKey: string): TypeError => {
+    const error = new TypeError(message);
+    Object.defineProperty(error, "diagnostic", {
+      value: describeStartupError(
+        { code: "KERNEL_CONFIGURATION_INVALID" },
+        {
+          component: "executor-kernel",
+          phase: "created",
+          context: { configKey, operation: "validate-options" }
+        }
+      )
+    });
+    return error;
+  };
   if (
     !options ||
     typeof options.endpoint !== "string" ||
     !options.endpoint ||
     !Array.isArray(options.adapters)
   )
-    throw new TypeError("Kernel requires endpoint and adapters");
+    throw invalid("Kernel requires endpoint and adapters", "endpoint/adapters");
   // 旧 JS 接入不能静默退回文件加载或忽略 worker 环境；模块装配完全归宿主。
   for (const field of ["workerEntrypoint", "manifest", "adapterModules", "env"])
     if (field in options)
-      throw new TypeError(`Kernel does not accept ${field}; compose adapters in the host`);
+      throw invalid(`Kernel does not accept ${field}; compose adapters in the host`, field);
   const configuration = {
     ...options,
     adapters: [...(options.adapters as KernelServiceOptions["adapters"])],
@@ -118,6 +134,10 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
       starting = Promise.resolve()
         .then(async () => {
           combined.throwIfAborted();
+          assertStartupLogging(configuration.logging, {
+            component: "executor-kernel",
+            phase: "initializing"
+          });
           const home = validateRuntimeHome(
             configuration.home,
             kernelStartupPaths(
@@ -157,7 +177,11 @@ export function createKernelService(options: KernelServiceOptions): KernelServic
                   cause: error
                 })
               : error;
-          throw new ServiceInitializationError(cause, cleanup);
+          throw new ServiceInitializationError(cause, cleanup, {
+            component: "executor-kernel",
+            phase: "initializing",
+            context: { endpoint: configuration.endpoint }
+          });
         })
         .finally(() => combined.removeEventListener("abort", onAbort));
       return initialized;
