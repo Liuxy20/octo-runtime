@@ -2,6 +2,7 @@ export {
   attachKernel,
   AsyncQuestionReply,
   KernelError,
+  KernelEndpointUpgradeError,
   isInvocationNotSubmitted,
   createKernelService,
   ServiceInitializationError

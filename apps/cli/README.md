@@ -42,7 +42,7 @@ Gateway 的 cardDeliveries、Gateway/WeCom 的 deliveries 仅展示当前保留�
 
 status/doctor/服务操作默认输出便于阅读的文本，`--json` 输出缩进 JSON。status 仍查询每个已配置 Extra 自身的状态，文本展示业务健康、Bot 与任务等计数，完整公开数据保留在 JSON 中。旧版解析 status JSON 的脚本须添加 --json。extraget 仍输出完整紧凑 JSON，playboard 仍输出 NDJSON。文本错误写 stderr；--json 错误写 stdout，包含稳定错误码、组件、动作和日志位置，均须检查退出码。
 
-服务名包含规范化 Home 的 SHA-256 前 16 位及组件名。POSIX 端点在 Home/sockets 下；Windows 使用 Home hash 命名管道。不同 Home 和组件不共用服务 ID。
+服务名包含规范化 Home 的 SHA-256 前 16 位及组件名。POSIX Kernel 端点准确为 `<home>/executor-kernel.sock`，Extra 状态控制端点继续在 Home/sockets 下；Windows 保留 Home hash 命名管道。不同 Home 和组件不共用服务 ID。旧地址须先停止旧 Kernel/Extra 再同步升级重启，详见[端点升级说明](../../docs/zh-CN/guides/kernel-endpoint-upgrade.md)。
 
 ## Extra 配置（常用）
 

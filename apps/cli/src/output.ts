@@ -1,6 +1,7 @@
 import { ServiceError } from "@mininglamp-oss/octo-runtime-cross-service";
 import type { ServiceStatus } from "@mininglamp-oss/octo-runtime-cross-service";
 import { RuntimeLogging } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { KernelEndpointUpgradeError } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -114,10 +115,15 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
   const pending: unknown[] = [error];
   const seen = new Set<unknown>();
   let homeFailure: RuntimeHomeError | undefined;
+  let upgrade: KernelEndpointUpgradeError | undefined;
   for (let checked = 0; pending.length && checked < 16; checked++) {
     const current = pending.shift();
     if (!(current instanceof Error) || seen.has(current)) continue;
     seen.add(current);
+    if (current instanceof KernelEndpointUpgradeError) {
+      upgrade = current;
+      break;
+    }
     if (current instanceof RuntimeHomeError) {
       homeFailure = current;
       break;
@@ -144,6 +150,8 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
       "The original Kernel or worker is still alive or its identity cannot be verified. Stop it safely before acknowledging cleanup.",
     ORPHAN_CLEANUP_NOT_PENDING:
       "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home.",
+    KERNEL_ENDPOINT_UPGRADE_REQUIRED:
+      "Stop Kernel and Extras with the old version and the same --home; resolve old ownership and cleanup with that version, then upgrade and restart all clients.",
     SERVICE_NOT_INSTALLED: "Run this component's install command, then start it.",
     NOT_INSTALLED: "Run this component's install command, then start it.",
     EXTRA_COMMAND_FAILED:
@@ -187,7 +195,10 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     code,
     message: homeFailure
       ? `${homeFailure.diagnostic.action} ${JSON.stringify(homeFailure.diagnostic)}`
-      : (hints[code] ?? "Check --help, component status and service logs for this operation."),
+      : upgrade
+        ? `${upgrade.diagnostic.action} ${JSON.stringify(upgrade.diagnostic)}`
+        : (hints[code] ?? "Check --help, component status and service logs for this operation."),
+    ...(upgrade ? { diagnostic: upgrade.diagnostic } : {}),
     ...(causeCode ? { cause_code: causeCode } : {}),
     ...(homeFailure
       ? {

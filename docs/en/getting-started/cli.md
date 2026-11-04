@@ -1,5 +1,7 @@
 # CLI Installation and Operations
 
+Persistent POSIX Kernel endpoint: `<home>/executor-kernel.sock`. Windows retains the existing Home-hash named pipe. Before replacing an old Kernel, follow the [stop/upgrade/restart procedure](../guides/kernel-endpoint-upgrade.md); upgrade attached clients and independent Extras together.
+
 [简体中文](../../zh-CN/getting-started/cli.md) | [Documentation](../README.md)
 
 Use the Runtime CLI to install, start, and operate Executor Kernel and the optional Extras, inspect Adapters, and try an Agent invocation. Use Node.js 24.x or 26.x (LTS).

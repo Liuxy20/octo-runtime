@@ -14,7 +14,11 @@ export type {
   RuntimeLoggingOptions,
   ExtraStatusRecord
 } from "@mininglamp-oss/octo-runtime-host-sdk";
-export { createKernelService, ServiceInitializationError } from "./executor-kernel.js";
+export {
+  createKernelService,
+  ServiceInitializationError,
+  KernelEndpointUpgradeError
+} from "./executor-kernel.js";
 export type {
   KernelService,
   KernelServiceOptions,

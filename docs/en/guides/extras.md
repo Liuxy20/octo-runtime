@@ -1,5 +1,7 @@
 # Integrate Extras
 
+Persistent POSIX Kernel endpoint: `<home>/executor-kernel.sock`. Windows retains the existing Home-hash named pipe. Before replacing an old Kernel, follow the [stop/upgrade/restart procedure](./kernel-endpoint-upgrade.md); upgrade attached clients and independent Extras together.
+
 For CLI setup, use `<extra> configure` or `<extra> extraset` for a complete JSON declaration. See [Extra-owned commands](extra-commands.md). `extraset`/`extraget` are advanced interfaces for manually written full JSON declarations.
 
 [简体中文](../../zh-CN/guides/extras.md) | [Documentation](../README.md)

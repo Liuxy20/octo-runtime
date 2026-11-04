@@ -1,5 +1,7 @@
 # SDK Integration
 
+Persistent POSIX Kernel endpoint: `<home>/executor-kernel.sock`. Windows retains the existing Home-hash named pipe. Before replacing an old Kernel, follow the [stop/upgrade/restart procedure](../guides/kernel-endpoint-upgrade.md); upgrade attached clients and independent Extras together.
+
 [简体中文](../../zh-CN/getting-started/sdk.md) | [Documentation](../README.md)
 
 Electron/Node.js hosts import their selected modules natively. Choose your own loading approach; **pnpm workspace + Git submodule** is one option for source integration. Examples use source workspace package names; published equivalents include `/executor-kernel`, `/host`, and `/extras/channel-gateway`.

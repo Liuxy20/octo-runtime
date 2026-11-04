@@ -1,5 +1,7 @@
 # SDK 接入
 
+常驻 POSIX Kernel 端点为 `<home>/executor-kernel.sock`；Windows 保持既有 Home hash 命名管道。替换旧 Kernel 前按[停止、升级、重启流程](../guides/kernel-endpoint-upgrade.md)操作，并同步升级 attach 客户端与独立 Extra。
+
 [English](../../en/getting-started/sdk.md) | [文档目录](../README.md)
 
 Electron/Node.js 宿主原生导入所需模块。加载方式由宿主选择，也可以尝试基于 **pnpm workspace + Git submodule** 引入源码。下例使用源码 workspace 包名；发行包对应 `/executor-kernel`、`/host`、`/extras/channel-gateway` 等公开子路径。

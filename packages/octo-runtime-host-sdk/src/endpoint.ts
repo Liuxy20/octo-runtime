@@ -25,7 +25,9 @@ export function componentEndpoint(
   const endpoint =
     platform === "win32"
       ? `\\\\.\\pipe\\octo-runtime-${component === "executor-kernel" ? "kernel" : component}-${homeHash(home, platform)}`
-      : posix.join(normalizedHome(home, platform), "sockets", `octo-runtime-${component}.sock`);
+      : component === "executor-kernel"
+        ? posix.join(normalizedHome(home, platform), "executor-kernel.sock")
+        : posix.join(normalizedHome(home, platform), "sockets", `octo-runtime-${component}.sock`);
   assertIpcEndpoint(endpoint, platform);
   return endpoint;
 }

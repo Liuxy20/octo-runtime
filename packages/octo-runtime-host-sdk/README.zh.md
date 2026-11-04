@@ -1,5 +1,7 @@
 # Host SDK
 
+常驻 POSIX Kernel 端点为 `<home>/executor-kernel.sock`；Windows 保持既有 Home hash 命名管道。替换旧 Kernel 前按[停止、升级、重启流程](../../docs/zh-CN/guides/kernel-endpoint-upgrade.md)操作，并同步升级 attach 客户端与独立 Extra。
+
 [English](README.md) | [包导航](../README.zh.md)
 
 宿主须先选择并准备已存在的绝对 `home`，再显式传给服务；SDK 不创建根或选择平台默认。详见 [Runtime Home 合同](../../docs/zh-CN/reference/runtime-home.md)。

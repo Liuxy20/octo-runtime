@@ -1,5 +1,7 @@
 # Host SDK
 
+Persistent POSIX Kernel endpoint: `<home>/executor-kernel.sock`. Windows retains the existing Home-hash named pipe. Before replacing an old Kernel, follow the [stop/upgrade/restart procedure](../../docs/en/guides/kernel-endpoint-upgrade.md); upgrade attached clients and independent Extras together.
+
 [简体中文](README.zh.md) | [Packages](../README.md)
 
 The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).

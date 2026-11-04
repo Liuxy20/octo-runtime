@@ -37,4 +37,4 @@ export {
   inspectOrphanCleanup,
   reapOrphanedInvocationManifest
 } from "./invocation-manifest.js";
-export { acquireEndpoint } from "./endpoint.js";
+export { acquireEndpoint, KernelEndpointUpgradeError } from "./endpoint.js";
