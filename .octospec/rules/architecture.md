@@ -17,6 +17,14 @@ supersedes: []
 
 # Octo Runtime 基础架构
 
+## Extra 双模式装配（Issue 312）
+
+#312 明确增加独立的 `execution: { kind: "direct", executor }` 装配：宿主直接构造并注册 Core，Extra 借用同一对象，不创建 Kernel、执行 socket、Home 或 worker。`execution: { kind: "ipc", endpoint }` 及旧 endpoint 使用已有 Kernel；二者互斥。下文 #294 的“统一 RPC”约束适用于 Kernel 托管路径，不禁止这一明确选择的 direct Extra 模式，也不允许 KernelService 内部绕过其 RPC。
+
+三个内置 Extra 使用 `context.execution`。每 Extra 仅拥有自己的调用、交互和插件资源；direct 按 executor 对象身份/name 去重，IPC 按 endpoint/name 去重。direct 复用 HostRunService 的独立消费与有界窗口，停止观察不取消执行；Core 按原 receipt 提供首次清理结果，终态不能代替 complete。共享 Core 仅由宿主关闭；IPC Extra 不创建或停止 Kernel。
+
+direct 不承诺 Provider 常驻、IPC 重连、持久回放或宿主故障隔离。用户明确暂缓 [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313)，该 app-server 生命周期问题不纳入本专项。实现与验证见 [#312](../tasks/312-extra-execution-modes/brief.md)。
+
 ## SDK 原生装配与统一 RPC
 
 2026-11-02 用户确认 [Issue 294](https://github.com/Mininglamp-OSS/octo-runtime/issues/294)：**Electron 原生 SDK 接入是核心模式，Runtime CLI 是使用同一 SDK 的特殊宿主。宿主 import 并注入 Adapter 对象，普通执行统一经过 KernelClient / RPC / ExecutorKernel；即使调用方与 Kernel 同进程，也不得绕过 RPC。Kernel 不再启动执行 worker。** 本节取代 #71、#85 等旧合同中“SDK 提供 worker 入口、Kernel 监督独立 worker、worker 装配 Adapter”的要求；服务所有权、统一调用和稳定性责任继续有效。

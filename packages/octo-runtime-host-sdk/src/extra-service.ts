@@ -1,4 +1,5 @@
 import net from "node:net";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { performance } from "node:perf_hooks";
 import { chmod, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -11,6 +12,7 @@ import {
 import {
   acquireEndpoint,
   assertIpcEndpoint,
+  assertRuntimePath,
   validateRuntimeHome,
   prepareHomeDirectory,
   runtimePathFailure,
@@ -29,11 +31,14 @@ import {
 } from "./extras.js";
 import { shutdownDeadline, withShutdownDeadline, withinShutdown } from "./shutdown.js";
 import { snapshotExtraDependencies } from "./extra-dependencies.js";
+import {
+  createDirectExecutionScope,
+  createIpcExecutionScope,
+  type ExtraExecution,
+  type ExtraExecutionScope
+} from "./execution.js";
 
-export interface ExtraServiceOptions<D extends object = Record<string, never>> {
-  /** 宿主已准备的 Runtime Home；先校验，再持有 Extra 名称、日志和控制端点。 */
-  home: string;
-  endpoint: string;
+interface ExtraServiceCommonOptions<D extends object> {
   module: ExtraPluginModule<D>;
   config: JsonObject;
   dependencies: Readonly<D>;
@@ -41,34 +46,76 @@ export interface ExtraServiceOptions<D extends object = Record<string, never>> {
   controlEndpoint?: string;
   logging?: RuntimeLoggingOptions;
 }
+/** IPC/legacy 继续校验宿主 Home；direct 可以完全不配置 Home 和控制端点。 */
+export type ExtraServiceOptions<D extends object = Record<string, never>> =
+  ExtraServiceCommonOptions<D> &
+    (
+      | { execution: Extract<ExtraExecution, { kind: "direct" }>; endpoint?: never; home?: string }
+      | { execution: Extract<ExtraExecution, { kind: "ipc" }>; endpoint?: never; home: string }
+      | { execution?: never; endpoint: string; home: string }
+    );
 export interface ExtraServiceStatus {
   phase: ServicePhase;
   name: string;
   pid: number;
-  kernel_available: boolean;
+  execution: { kind: "direct" | "ipc"; available: boolean };
+  kernel_available?: boolean;
   plugin: JsonObject;
 }
 export type ExtraService = ServiceLifecycle<ExtraServiceStatus>;
 
 // 未确认清理的实例仍占有名称；不同 Kernel/Home 的同名 Extra 相互独立。
 const owners = new Map<string, { failed: boolean }>();
+const directOwners = new WeakMap<AgentExecutor, Map<string, { failed: boolean }>>();
+let ownerCount = 0;
 
-/** 装配插件和同进程业务函数；只借用指定 Kernel，不启动或关闭它。 */
+/** 装配插件与独立调用 scope；只借用宿主的 Core 或既有 Kernel，关闭不接管执行服务。 */
 export function createExtraService<D extends object>(
   options: ExtraServiceOptions<D>
 ): ExtraService {
+  // 以字段存在性拒绝混用，显式 undefined 不能绕过互斥；保存 executor 原对象身份。
+  let execution: ExtraExecution;
+  if ("execution" in options) {
+    if ("endpoint" in options) throw new TypeError("EXTRA_EXECUTION_MIXED");
+    const value = options.execution;
+    if (!value || typeof value !== "object" || Array.isArray(value))
+      throw new TypeError("EXTRA_EXECUTION_INVALID");
+    if (value.kind === "direct") {
+      if ("endpoint" in value || !(value.executor instanceof AgentExecutor))
+        throw new TypeError(
+          "EXTRA_EXECUTOR_INVALID: use the AgentExecutor exported by the same Runtime installation"
+        );
+      execution = { kind: "direct", executor: value.executor };
+    } else if (value.kind === "ipc") {
+      if ("executor" in value || typeof value.endpoint !== "string" || !value.endpoint)
+        throw new TypeError("EXTRA_EXECUTION_INVALID");
+      execution = { kind: "ipc", endpoint: value.endpoint };
+    } else throw new TypeError("EXTRA_EXECUTION_INVALID");
+  } else {
+    if (typeof options.endpoint !== "string" || !options.endpoint)
+      throw new TypeError("EXTRA_EXECUTION_REQUIRED");
+    execution = { kind: "ipc", endpoint: options.endpoint };
+  }
   assertExtraName(options.module.name);
   assertRuntimeLogging(options.logging);
   const name = options.module.name;
   const config = structuredClone(options.config);
   const module = { ...options.module };
   const pendingDependencies = new Set<Promise<unknown>>();
-  const endpoint = options.endpoint;
+  const endpoint = execution.kind === "ipc" ? execution.endpoint : undefined;
   const home = options.home;
   const controlEndpoint = options.controlEndpoint;
   const enabled = options.enabled !== false;
   const logging = options.logging && { ...options.logging };
-  const key = `${process.platform === "win32" ? endpoint.toLowerCase() : resolve(endpoint)}\0${name}`;
+  let ownerships = owners;
+  if (execution.kind === "direct") {
+    ownerships = directOwners.get(execution.executor) ?? new Map<string, { failed: boolean }>();
+    directOwners.set(execution.executor, ownerships);
+  }
+  const key =
+    endpoint === undefined
+      ? name
+      : `${process.platform === "win32" ? endpoint.toLowerCase() : resolve(endpoint)}\0${name}`;
   const owner = new AbortController();
   let dependenciesOpen = true;
   let shutdownUntil: number | undefined;
@@ -90,6 +137,7 @@ export function createExtraService<D extends object>(
   let acquired = false;
   let phase: ServicePhase = "created";
   let client: KernelClient | undefined;
+  let scope: ExtraExecutionScope | undefined;
   let logs: RuntimeLogging | undefined;
   let plugins: ExtraPlugins | undefined;
   let starting: Promise<void> | undefined;
@@ -107,17 +155,12 @@ export function createExtraService<D extends object>(
     logs?.extra(name)(code ? "warn" : "info", event, { state, ...(code ? { code } : {}) });
   const kernelAvailable = (): Promise<boolean> => {
     if (healthCheck) return healthCheck;
-    healthCheck = (
-      client?.status().then(
-        (value) => value.execution_ready,
-        () => false
-      ) ?? Promise.resolve(false)
-    )
+    healthCheck = (scope?.available() ?? Promise.resolve(false))
       .then((available) => {
         if (!owner.signal.aborted && available !== lastAvailable) {
           lastAvailable = available;
           logState(
-            available ? "kernel.available" : "kernel.unavailable",
+            `${execution.kind === "ipc" ? "kernel" : "execution"}.${available ? "available" : "unavailable"}`,
             available ? "available" : "unavailable"
           );
         }
@@ -145,7 +188,8 @@ export function createExtraService<D extends object>(
     phase,
     name,
     pid: process.pid,
-    kernel_available: await kernelAvailable(),
+    execution: { kind: execution.kind, available: await kernelAvailable() },
+    ...(execution.kind === "ipc" ? { kernel_available: await kernelAvailable() } : {}),
     plugin: !enabled
       ? { phase: "disabled" }
       : phase === "ready" && plugins
@@ -153,8 +197,8 @@ export function createExtraService<D extends object>(
         : { phase }
   });
   const drainRuns = async (): Promise<void> => {
-    if (!client) return;
-    const result = await client.invocations.drain({
+    if (!scope) return;
+    const result = await scope.drain({
       deadline: (cleanupDeadline ??= Date.now() + 5000),
       reason: "extra_shutdown"
     });
@@ -163,7 +207,7 @@ export function createExtraService<D extends object>(
   const beginDrain = (signal?: AbortSignal): Promise<void> => {
     shutdownUntil ??= shutdownDeadline(signal);
     cleanupDeadline ??= Date.now() + Math.max(0, Math.floor(shutdownUntil - performance.now()));
-    client?.invocations.stopAdmission();
+    scope?.stopAdmission();
     // 回滚通知先于加载器等待 disposer；立即取消源调用，避免消费者与清理互相等待。
     if (!draining) {
       draining = drainRuns();
@@ -216,7 +260,7 @@ export function createExtraService<D extends object>(
             server!.close((error) => (error ? reject(error) : resolve()));
           });
       });
-      client?.close();
+      await attempt("execution", () => scope?.release());
       if (!errors.length)
         await attempt("control-endpoint", async () => {
           if (!release) return;
@@ -232,7 +276,10 @@ export function createExtraService<D extends object>(
       await attempt("logs", () => logs?.close());
       if (acquired) {
         if (errors.length) ownership.failed = true;
-        else owners.delete(key);
+        else {
+          ownerships.delete(key);
+          ownerCount--;
+        }
       }
       phase = errors.length ? "failed" : "closed";
       const result = {
@@ -273,7 +320,7 @@ export function createExtraService<D extends object>(
       if (signal?.aborted) abort();
       starting = (async () => {
         owner.signal.throwIfAborted();
-        validateRuntimeHome(home, [
+        const paths = [
           ...(controlEndpoint && process.platform !== "win32"
             ? [{ path: `${controlEndpoint}.owner.recovery`, resource: "endpoint-ownership" }]
             : []),
@@ -286,20 +333,38 @@ export function createExtraService<D extends object>(
                 }
               ]
             : [])
-        ]);
-        assertIpcEndpoint(endpoint);
+        ];
+        if (execution.kind === "ipc" || home !== undefined) validateRuntimeHome(home!, paths);
+        else {
+          // 没有隐式 Home；控制目录必须已由宿主准备，日志继续沿可选 best-effort 合同。
+          if (controlEndpoint && process.platform !== "win32")
+            validateRuntimeHome(dirname(controlEndpoint), paths);
+          else for (const path of paths) assertRuntimePath(path.path, path.resource);
+        }
+        if (endpoint !== undefined) assertIpcEndpoint(endpoint);
         if (controlEndpoint) assertIpcEndpoint(controlEndpoint);
-        const previous = owners.get(key);
+        const previous = ownerships.get(key);
         if (previous)
           throw new Error(previous.failed ? "EXTRA_DISPOSE_FAILED" : "EXTRA_ALREADY_LOADED");
-        if (owners.size >= 64) throw new Error("EXTRA_CAPACITY_EXHAUSTED");
-        owners.set(key, ownership);
+        if (ownerCount >= 64) throw new Error("EXTRA_CAPACITY_EXHAUSTED");
+        ownerships.set(key, ownership);
+        ownerCount++;
         acquired = true;
-        client = attachKernel({ endpoint });
+        if (execution.kind === "ipc") {
+          client = attachKernel({ endpoint: execution.endpoint });
+          scope = createIpcExecutionScope(client);
+        } else {
+          if (!execution.executor.status().available) throw new Error("EXECUTOR_CLOSED");
+          scope = createDirectExecutionScope(execution.executor);
+        }
         logs = new RuntimeLogging(logging);
         logState("service.initializing", phase);
         if (logging) watchKernel();
-        plugins = new ExtraPlugins([], client, () => logs!.extra(name));
+        plugins = new ExtraPlugins(
+          [],
+          { execution: scope.context, ...(client ? { kernel: client } : {}) },
+          () => logs!.extra(name)
+        );
         if (enabled)
           await plugins.load(
             {
@@ -321,7 +386,8 @@ export function createExtraService<D extends object>(
           );
         owner.signal.throwIfAborted();
         if (controlEndpoint) {
-          if (process.platform !== "win32") prepareHomeDirectory(home, dirname(controlEndpoint));
+          if (process.platform !== "win32" && home !== undefined)
+            prepareHomeDirectory(home, dirname(controlEndpoint));
           owner.signal.throwIfAborted();
           release = await acquireEndpoint(controlEndpoint);
           owner.signal.throwIfAborted();
@@ -346,7 +412,7 @@ export function createExtraService<D extends object>(
                   void status().then(
                     (value) =>
                       socket.end(
-                        `${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { name, pid: process.pid, status: { ...value.plugin, kernel_available: value.kernel_available } } })}\n`
+                        `${JSON.stringify({ jsonrpc: "2.0", id: request.id, result: { name, pid: process.pid, status: { ...value.plugin, execution: value.execution, ...(value.kernel_available === undefined ? {} : { kernel_available: value.kernel_available }) } } })}\n`
                       ),
                     () => socket.destroy()
                   );
@@ -376,7 +442,7 @@ export function createExtraService<D extends object>(
           )
             error = runtimePathFailure(
               error,
-              typeof io.path === "string" ? io.path : (controlEndpoint ?? home),
+              typeof io.path === "string" ? io.path : (controlEndpoint ?? home ?? ""),
               "extra-control",
               typeof io.syscall === "string" ? io.syscall : "listen"
             );

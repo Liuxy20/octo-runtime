@@ -18,6 +18,8 @@ supersedes: []
 
 # Runtime 调用关系与协议
 
+#312 增加 Extra → scoped execution → 同一 Core 的显式 direct 路径，输入、输出及交互协议保持。下文 KernelClient/RPC 的要求限定 IPC；通用 Extra 使用 context.execution，Kernel 专属原语只存在于 IPC 的可选 context.kernel。direct 不模拟 ACK 恢复或 Kernel 身份，见[架构范围](architecture.md#extra-双模式装配issue-312)。
+
 按 [#294 原生装配合同](architecture.md#sdk-原生装配与统一-rpc)，执行链为 HostApp/Extra → KernelClient → 本地 RPC → ExecutorKernel → 本进程唯一 AgentExecutor → 宿主注入的 Provider Adapter。Electron 同进程业务也走 RPC，Kernel 不读取模块 manifest、不启动执行 worker。CLI 服务进程与 Electron 主进程使用相同服务工厂；`createKernelService` 的目标签名见[架构声明](architecture.md#createkernelservice-目标签名)。当前工作树使用原生对象装配，实际验证范围见 #294 任务。Kernel 不加载业务插件。
 
 ## 合同与版本

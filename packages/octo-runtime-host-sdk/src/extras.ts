@@ -2,6 +2,8 @@ import type { KernelClient } from "@mininglamp-oss/octo-runtime-executor-kernel"
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { abortForShutdown, shutdownDeadline, withinShutdown } from "./shutdown.js";
 import { snapshotExtraDependencies } from "./extra-dependencies.js";
+import { ipcExecutionContext, type ExtraExecutionContext } from "./execution.js";
+export type { ExtraExecution, ExtraExecutionContext } from "./execution.js";
 export type { ChannelDependencies, LoadContexts } from "./context-loader.js";
 export type { RuntimeLog, RuntimeLogLevel } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
@@ -16,7 +18,9 @@ export type ExtraStatusHandler = () => JsonObject;
 export interface ExtraContext {
   /** F31：.octospec/tasks/gateway-august-feature-assessment/assessment.md；无日志宿主也提供 no-op。 */
   readonly log: RuntimeLog;
-  readonly kernel: KernelClient;
+  readonly execution: ExtraExecutionContext;
+  /** 仅 IPC 装配提供真实 client；旧插件使用前必须检查存在性。 */
+  readonly kernel?: KernelClient;
   readonly signal: AbortSignal;
   onDispose(dispose: ExtraDisposer): void;
   onStatus(handler: ExtraStatusHandler): void;
@@ -88,7 +92,8 @@ export class ExtraPlugins {
 
   constructor(
     registrations: readonly ExtraRegistration[],
-    private readonly kernel: KernelClient,
+    private readonly binding:
+      KernelClient | { execution: ExtraExecutionContext; kernel?: KernelClient },
     private readonly logForExtra: (name: string) => RuntimeLog = () => noopRuntimeLog
   ) {
     ExtraPlugins.validate(registrations);
@@ -235,7 +240,9 @@ export class ExtraPlugins {
         instance.controller.signal.throwIfAborted();
         const initialize = plugin.default(
           {
-            kernel: this.kernel,
+            ...("execution" in this.binding
+              ? this.binding
+              : { kernel: this.binding, execution: ipcExecutionContext(this.binding) }),
             log: (level, event, data) => {
               try {
                 this.logForExtra(name)(level, event, data);

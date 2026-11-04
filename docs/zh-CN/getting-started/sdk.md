@@ -1,5 +1,40 @@
 # SDK 接入
 
+## 选择 Extra 执行方式
+
+已有 Core 的嵌入宿主可以直接组合 Extra，无需 Kernel 监听或 Runtime Home：
+
+```ts
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { createCodexAdapter } from "@mininglamp-oss/octo-runtime/adapters/codex";
+import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
+import * as channelGateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import { config, dependencies } from "./host-config.js";
+
+// 宿主持有 Core；注册不执行模型调用，也不证明 Provider 已就绪。
+const executor = new AgentExecutor();
+executor.register(createCodexAdapter());
+const extra = createExtraService({
+  execution: { kind: "direct", executor },
+  module: channelGateway, config, dependencies
+});
+await extra.initialize();
+
+export async function shutdown() {
+  // 宿主先停止新业务，并在共享 Core 的所有使用方结束后关闭 Core。
+  const extraCleanup = await extra.close();
+  if (!extraCleanup.complete) throw new Error("EXTRA_CLEANUP_INCOMPLETE");
+  const cleanup = await executor.shutdown();
+  if (cleanup.cleanup !== "complete") throw new Error("EXECUTOR_CLEANUP_INCOMPLETE");
+}
+```
+
+`config`、`dependencies` 沿用下文 Gateway 合同。多个 Extra 可共享同一 executor，取消和关闭只影响本 Extra 的调用；不同 executor 可加载同名 Extra。Extra 不会关闭借用的 Core。
+
+连接独立托管的 Kernel 时，使用 `createExtraService({ home, execution: { kind: "ipc", endpoint }, module, config, dependencies })`。Kernel owner 按下文创建服务；Extra 只连接已有服务，不启动、重启或停止它。旧 `{ home, endpoint, ... }` 保留兼容，但不能与 `execution` 同时提供。
+
+两种模式均向插件提供 `context.execution`。停止观察不取消已接纳工作，显式取消及 Extra 关闭才会取消。direct 与宿主共享故障域，只有有界观察窗口，不承诺 IPC 重连或持久回放。direct 描述调用 Core 的方式，不决定 Provider 的进程生命周期；Codex app-server 常驻与恢复问题 [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313) 单独暂缓。
+
 POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
 
 [English](../../en/getting-started/sdk.md) | [文档目录](../README.md)
@@ -71,7 +106,7 @@ function required(name: string): string {
 // 使用上一章已初始化的 Kernel endpoint；配置/凭据来源由宿主决定。
 const gateway = createExtraService({
   home,
-  endpoint,
+  execution: { kind: "ipc", endpoint },
   module: channelGateway,
   config: {
     bots: [{

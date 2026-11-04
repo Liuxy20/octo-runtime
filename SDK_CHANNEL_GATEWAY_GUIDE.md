@@ -6,7 +6,7 @@
 
 宿主使用 /host 的 createExtraService 在当前进程管理 Channel Gateway，执行通过指定的 Kernel endpoint。模块从 /extras/channel-gateway 导入。完整调用方式及 loadContexts 注入见 [Extra 指南](docs/zh-CN/guides/extras.md)。
 
-Gateway 直接调用注入的 ctx.kernel.invoke，消费返回结果完成 delivery 数据处理。提交、身份关联、ACK 查询和订阅修复由同一个 KernelClient 负责。App 内部模块也可直接 attach 后 invoke，无需加载 Gateway 或任何 Extra；Gateway 的展示、存储和业务重试策略不进入 Kernel。
+Gateway 调用 `ctx.execution.invoke`，消费结果完成 delivery。宿主显式选择 `execution: { kind: "direct", executor }` 借用 Core，或 `{ kind: "ipc", endpoint }` 连接已有 Kernel。IPC 的提交、身份关联、ACK 查询和订阅修复沿用 KernelClient；direct 复用 Core 和有界源窗口，不要求 Home。App 也可自行调用 Core 或 Kernel，无需 Extra；Gateway 的展示、存储和业务重试策略不进入执行层。
 
 ## 源码 submodule
 
@@ -17,7 +17,7 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 1. 宿主原生导入并构造 Adapter，传给 createKernelService 后 initialize；原生 SDK 使用 kernel.client，Gateway 的独立 RPC client 由 ExtraService 内部管理，宿主无需 attachKernel。显式 attach 用于另一个进程中的独立应用连接已有 Kernel，CLI 客户端是其中一种。
 2. 从受保护配置源取得 Bot 值，并导入 Gateway 模块。
 3. createExtraService({home, endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
-4. extra.status() 的 plugin 为插件 JSON；Bot online 与 kernel_available 分别判断。
+4. `extra.status()` 的 plugin 为插件 JSON；Bot online 与 `execution.available` 分别判断，IPC 兼容保留 `kernel_available`。
 5. 配置变更先等待 extra.close() 且 complete=true，再保存并创建新实例；Kernel 保持运行。
 
 连接恢复在 Gateway 内完成：上线后收到可恢复的断线回调，立即进入 retrying，旧连接回收成功后立即首次重连；失败后追加最多 10 次快速重试，每次失败清理完成后等待 1 秒再试，仍失败才按 5、10、15 秒退避，之后每 15 秒。首次启动暂态失败仍按 5、10、15 秒退避；Retry-After 可延长等待。宿主无需另写重连或重建服务。合法服务端 DISCONNECT 默认重连（含 reason 12、滚动更新及未知断开码）；明确认证/权限/封禁/协议错误仍失败。握手同样默认重试未知服务端原因；HTTP 超时、冲突、限流、5xx 及未知服务故障默认重试，只有明确认证/配置/协议错误停止。立即重连指确认断线后不再增加固定退避，不是连接成功时限：仍需检测断网、回收旧连接和完成鉴权握手；静默失联通过每 10 秒发送协议 PING、等待最多一个 10 秒周期的 PONG 检测，普通推送不能代替 PONG。正常调度下约 10–20 秒发现，仅影响接收连接恢复，不阻塞已受理任务或 REST 投递。睡眠或事件循环阻塞会延迟检测；未订阅操作系统网络切换事件，不能保证点击切网即断开或固定时限内上线。旧任务结果未知时不重新 invoke。

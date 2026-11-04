@@ -5,6 +5,7 @@ import {
   isTerminal,
   type ExtraPlugin,
   type ExtraContext,
+  type ExtraExecutionContext,
   type ExtraDescriptor,
   type ExtraPluginModule,
   ExtraPlugins,
@@ -21,7 +22,6 @@ import {
   type ContextMcpPayload,
   type FailureEnvelope
 } from "@mininglamp-oss/octo-runtime/extra";
-import type { KernelClient } from "@mininglamp-oss/octo-runtime/executor-kernel";
 import { assertCanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
 import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 
@@ -29,7 +29,7 @@ export const name = "public-extra";
 
 // 编译器必须保留 invoke 的模式重载、事件判别联合及交互参数检查。
 export async function checkPort(ctx: ExtraContext, input: InvokeInput): Promise<void> {
-  const host: KernelClient = ctx.kernel;
+  const host: ExtraExecutionContext = ctx.execution;
   for await (const event of host.invoke({ ...input, protocol_mode: "canonical" })) {
     const typed: CanonicalEvent = event;
     assertCanonicalEvent(typed);
@@ -85,7 +85,7 @@ const load: ExtraPlugin = (ctx, config) => async () => {
   if (config.input !== undefined) {
     const input = InvokeInput.check(config.input);
     let answer = "";
-    for await (const event of ctx.kernel.invoke(
+    for await (const event of ctx.execution.invoke(
       { ...input, protocol_mode: "canonical" },
       { signal: ctx.signal }
     )) {

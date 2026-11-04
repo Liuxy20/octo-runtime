@@ -1,6 +1,8 @@
 export * from "./protocol.js";
 export type {
   ExtraContext,
+  ExtraExecution,
+  ExtraExecutionContext,
   RuntimeLog,
   RuntimeLogLevel,
   ExtraDisposer,

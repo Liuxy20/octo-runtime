@@ -179,7 +179,7 @@ async function initialize(ctx: ExtraContext, config: JsonObject): Promise<void> 
     if (req.method === "GET" && url.pathname === "/api/bootstrap")
       return json(res, 200, { token: secret, defaultProjectPath });
     if (req.method === "GET" && url.pathname === "/api/adapters") {
-      const adapters = await ctx.kernel.list();
+      const adapters = await ctx.execution.list();
       return json(
         res,
         200,
@@ -366,7 +366,7 @@ async function initialize(ctx: ExtraContext, config: JsonObject): Promise<void> 
           Readable.from(
             (async function* () {
               try {
-                for await (const event of ctx.kernel.invoke(input, {
+                for await (const event of ctx.execution.invoke(input, {
                   signal: controller.signal
                 }))
                   yield `data: ${JSON.stringify(event)}\n\n`;
@@ -395,10 +395,10 @@ async function initialize(ctx: ExtraContext, config: JsonObject): Promise<void> 
       const run = active.get(runMatch[1]);
       if (!run) throw new HttpError(409, "WEBUI_INVOCATION_INACTIVE");
       if (runMatch[2] === "cancel") {
-        await ctx.kernel.cancelInvocation(runMatch[1], "user");
+        await ctx.execution.cancelInvocation(runMatch[1], "user");
         return json(res, 200, { requested: true });
       }
-      await ctx.kernel.respondInteraction(
+      await ctx.execution.respondInteraction(
         runMatch[1],
         (await bodyJson(req)) as unknown as InteractionResponse
       );

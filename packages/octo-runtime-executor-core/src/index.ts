@@ -110,6 +110,9 @@ export interface ExecutorShutdownResult {
   failedCleanupInvocationIds: readonly string[];
 }
 
+/** 单次已接纳调用的资源事实；unknown 不表示已清理，pending 不触发取消或重试。 */
+export type InvocationCleanupState = "complete" | "pending" | "failed" | "unknown";
+
 interface InvocationOwner {
   streamId: string;
   controller: AbortController;
@@ -160,9 +163,47 @@ export class AgentExecutor {
     {
       receipt: HostRunReceipt;
       at: number;
+      cleanup: Promise<"complete" | "failed">;
+      finishCleanup: (state: "complete" | "failed") => void;
     }
   >();
   readonly #modes = new Map<string, "native" | "canonical">();
+  /** 只报告 Core 准入状态，不探测 Provider，也不代表认证或业务连接可用。 */
+  status(): { state: "open" | "closing" | "closed"; available: boolean } {
+    return { state: this.#state, available: this.#state === "open" };
+  }
+
+  /**
+   * 按完整接纳凭据等待首次 Adapter 清理结果；借用方只观察自己的调用，不能由此关闭共享 Core。
+   * deadline 是绝对毫秒截止；过期、错误凭据和 finally 失败均不能推定成功。
+   */
+  async waitForInvocationCleanup(
+    receipt: HostRunReceipt,
+    options?: { deadline: number }
+  ): Promise<InvocationCleanupState> {
+    if (options && !Number.isFinite(options.deadline))
+      throw new TypeError("CLEANUP_DEADLINE_INVALID");
+    const run = this.#runs.get(receipt.invocation_id);
+    if (
+      !run ||
+      Object.entries(run.receipt).some(
+        ([key, value]) => receipt[key as keyof HostRunReceipt] !== value
+      )
+    )
+      return "unknown";
+    if (!options) return run.cleanup;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        run.cleanup,
+        new Promise<"pending">((resolve) => {
+          timer = setTimeout(() => resolve("pending"), Math.max(0, options.deadline - Date.now()));
+        })
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
   /** 按 type 注册完整 Adapter 并校验协议声明，不补默认值或启动 Provider；同类型不可覆盖。 */
   register(adapter: HostedAdapter): void {
     this.#assertOpen();
@@ -182,7 +223,8 @@ export class AgentExecutor {
 
   /** Report installed provider identity separately from adapter registration. */
   async describe(
-    configurations: Record<string, AdapterProbeOptions> = {}
+    configurations: Record<string, AdapterProbeOptions> = {},
+    lifecycle?: { onProbe: (pending: Promise<unknown>) => void }
   ): Promise<HostedAdapterMetadata[]> {
     this.#assertOpen();
     return Promise.all(
@@ -192,11 +234,15 @@ export class AgentExecutor {
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
           const result: unknown = await Promise.race([
-            Promise.resolve().then(() =>
-              adapter.probe
-                ? this.probe(adapter.metadata.type, configurations[adapter.metadata.type])
-                : undefined
-            ),
+            Promise.resolve().then(() => {
+              if (!adapter.probe) return undefined;
+              const pending = Promise.resolve(
+                this.probe(adapter.metadata.type, configurations[adapter.metadata.type])
+              );
+              // 展示超时不结束实际探测；借用方可据此等待自己发起的操作而不排空整个 Core。
+              lifecycle?.onProbe(pending);
+              return pending;
+            }),
             new Promise<undefined>((resolve) => {
               timer = setTimeout(() => {
                 unavailableReason = "probe_timeout";
@@ -279,9 +325,15 @@ export class AgentExecutor {
       protocol_mode: resolved.protocolMode,
       protocol: support.protocol
     };
+    let finishCleanup!: (state: "complete" | "failed") => void;
+    const cleanup = new Promise<"complete" | "failed">((resolve) => {
+      finishCleanup = resolve;
+    });
     this.#runs.set(request.invocationId, {
       receipt,
-      at: Date.now()
+      at: Date.now(),
+      cleanup,
+      finishCleanup
     });
     return { ...receipt };
   }
@@ -384,6 +436,7 @@ export class AgentExecutor {
       .then(() => owner.close?.())
       .then(
         () => {
+          if (this.#isCurrent(id, owner)) this.#runs.get(id)!.finishCleanup("complete");
           if (this.#owners.get(id) === owner) this.#owners.delete(id);
           if (this.#isCurrent(id, owner)) {
             this.#active.delete(id);
@@ -393,6 +446,7 @@ export class AgentExecutor {
         },
         (error: unknown) => {
           owner.cleanupState = "failed";
+          if (this.#isCurrent(id, owner)) this.#runs.get(id)!.finishCleanup("failed");
           throw error;
         }
       )

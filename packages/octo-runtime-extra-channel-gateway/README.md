@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-The Extra that connects an Octo IM bot to local Agent execution: bot credentials, the Wukong WebSocket, message admission, per-conversation sessions, `ctx.kernel.invoke`, and streaming replies back to the chat. Gateway and Executor Kernel start independently. Gateway stays running while Kernel is unavailable and waits for recovery; Agent execution requires a reachable Kernel. WeCom uses a separate Extra.
+The Extra that connects an Octo IM bot to Agent execution: bot credentials, the Wukong WebSocket, message admission, per-conversation sessions, `ctx.execution.invoke`, and streaming replies. SDK hosts select direct Core or IPC through `createExtraService`; see [SDK integration](../../docs/en/getting-started/sdk.md). CLI uses IPC: Gateway and Kernel start independently, and Gateway waits for Kernel availability. WeCom uses a separate Extra.
 
 ## When to use it
 

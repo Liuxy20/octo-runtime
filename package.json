@@ -6,6 +6,10 @@
   "license": "Apache-2.0",
   "type": "module",
   "exports": {
+    "./adapters/codex": {
+      "types": "./dist/public/codex.d.ts",
+      "import": "./dist/public/codex.js"
+    },
     "./adapters/dsh": {
       "types": "./dist/public/dsh.d.ts",
       "import": "./dist/public/dsh.js"

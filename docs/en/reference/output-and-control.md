@@ -1,5 +1,7 @@
 # Output and Control
 
+Extras use `context.execution` in both direct and IPC modes. Ending observation does not cancel admitted work; explicit cancellation and Extra shutdown do. A terminal event is separate from resource cleanup: direct Extra shutdown also awaits the Core's first cleanup result for the exact accepted receipt. Raw Core iterator closure retains its cancellation semantics.
+
 [简体中文](../../zh-CN/reference/output-and-control.md) | [Documentation](../README.md)
 
 ## Output Modes

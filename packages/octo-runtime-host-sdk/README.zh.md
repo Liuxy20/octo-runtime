@@ -1,5 +1,7 @@
 # Host SDK
 
+Extra 显式选择 `execution: { kind: "direct", executor }` 或 `execution: { kind: "ipc", endpoint }`。direct 借用同一 Core，可省略 Home；IPC 要求宿主准备 Home 并连接已有 Kernel。旧顶层 endpoint 保留兼容，不能混用 execution。插件使用 `context.execution`，仅 IPC 提供可选的真实 `context.kernel`。每 Extra 独立取消、交互与清理，关闭不接管共享 Core/Kernel；参见[双模式接入](../../docs/zh-CN/getting-started/sdk.md)。
+
 POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
 
 [English](README.md) | [包导航](../README.zh.md)

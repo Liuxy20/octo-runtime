@@ -58,7 +58,7 @@ async function initialize(
   }
   const allowed = spaces as string[] | undefined;
   channels = new ImChannelManager({
-    kernel: context.kernel,
+    kernel: context.execution,
     signal: context.signal,
     log: context.log,
     createSessionStore: dependencies.createSessionStore,

@@ -29,7 +29,7 @@ export {
 } from "./runtime-home.js";
 export { attachKernel } from "./client.js";
 export { AsyncQuestionReply, type AsyncQuestionReplyResult } from "./async-question-reply.js";
-export { isInvocationNotSubmitted } from "./submission-error.js";
+export { isInvocationNotSubmitted, admissionClosedError } from "./submission-error.js";
 export * from "./types.js";
 export {
   InvocationManifest,

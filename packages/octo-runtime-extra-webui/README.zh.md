@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-可选的 `webui` Extra，提供一个本地浏览器工作台：托管界面、调用已有 Kernel、通过 SSE 把源事件推到浏览器。它拥有自己的 HTTP 监听、内置静态资源和一份显式配置的 session JSON 文件。它是调试面，不是生产应用，也从不启动第二个执行器。
+可选的 `webui` Extra 托管本地浏览器工作台，通过 `context.execution` 调用执行层并用 SSE 传递事件。SDK 可选择 direct Core 或已有 Kernel 的 IPC；CLI 继续使用 IPC。它拥有 HTTP 监听、内置静态资源和显式配置的 session JSON 文件，接入见[SDK 说明](../../docs/zh-CN/getting-started/sdk.md)。
 
 ## 什么时候用它
 

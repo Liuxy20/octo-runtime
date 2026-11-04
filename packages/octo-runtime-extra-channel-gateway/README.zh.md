@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-把 Octo IM 机器人接到本地 Agent 执行服务的 Extra：负责 Bot 凭据、悟空 WebSocket、消息准入、按会话维护的 session、`ctx.kernel.invoke`，以及把回复流式发回聊天。Gateway 与 Executor Kernel 独立启动；Kernel 暂不可用时 Gateway 保持运行并等待恢复，执行 Agent 任务时才需要 Kernel 可达。企业微信使用独立的 WeCom Extra。
+把 Octo IM 机器人接到 Agent 执行层的 Extra：负责凭据、悟空 WebSocket、消息准入、会话、`ctx.execution.invoke` 和流式回复。SDK 通过 createExtraService 选择 direct Core 或 IPC，见[接入说明](../../docs/zh-CN/getting-started/sdk.md)。CLI 使用 IPC，Gateway 与 Kernel 独立启动，Kernel 暂不可用时等待恢复。企业微信使用独立 WeCom Extra。
 
 ## 什么时候用它
 
