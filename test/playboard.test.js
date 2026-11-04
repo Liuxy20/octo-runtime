@@ -102,6 +102,8 @@ async function execute(
       "playboard",
       "--manifest",
       manifest,
+      "--home",
+      join(directory, "unconfigured-home"),
       ...args
     ];
     const childOptions = {
@@ -111,7 +113,6 @@ async function execute(
         OPENCLAW_GATEWAY_URL: undefined,
         OPENCLAW_GATEWAY_TOKEN: undefined,
         OPENCLAW_HOME: join(directory, "absent-openclaw"),
-        OCTO_RUNTIME_HOME: join(directory, "unconfigured-home"),
         OCTO_RUNTIME_DEBUG: "0",
         ...(cleanupFailure ? { TEST_PLAYBOARD_CLEANUP: cleanupFailure } : {}),
         ...env

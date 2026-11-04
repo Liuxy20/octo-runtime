@@ -16,7 +16,7 @@ Electron/Buddy 通过 submodule 接入时，必须使用最新远端 `main`。�
 
 1. 宿主原生导入并构造 Adapter，传给 createKernelService 后 initialize；原生 SDK 使用 kernel.client，Gateway 的独立 RPC client 由 ExtraService 内部管理，宿主无需 attachKernel。显式 attach 用于另一个进程中的独立应用连接已有 Kernel，CLI 客户端是其中一种。
 2. 从受保护配置源取得 Bot 值，并导入 Gateway 模块。
-3. createExtraService({endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
+3. createExtraService({home, endpoint, module, config: {bots}, dependencies}) 后 await initialize()。
 4. extra.status() 的 plugin 为插件 JSON；Bot online 与 kernel_available 分别判断。
 5. 配置变更先等待 extra.close() 且 complete=true，再保存并创建新实例；Kernel 保持运行。
 

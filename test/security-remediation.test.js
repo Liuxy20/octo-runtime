@@ -46,11 +46,10 @@ test("adversarial PEM, app IDs and API suffixes finish within a bounded child pr
   const code = `
     import assert from 'node:assert/strict';
     import { sanitizePublicValue } from './packages/octo-runtime-adapter-sdk/dist/index.js';
-    import { resolveHostHome, profileNameFor } from './packages/octo-runtime-host-sdk/dist/index.js';
+    import { profileNameFor } from './packages/octo-runtime-host-sdk/dist/index.js';
     import { getJson } from './packages/octo-runtime-extra-channel-gateway/dist/transport/api/client.js';
     assert.equal(sanitizePublicValue('-----BEGIN PRIVATE KEY-----'.repeat(30000)), '[REDACTED]');
     const suffix = '-'.repeat(200000);
-    assert.equal(resolveHostHome('My App'+suffix), resolveHostHome('My App'));
     assert.equal(profileNameFor('My App'+suffix, 'tenant'), profileNameFor('My App', 'tenant'));
     assert.equal(profileNameFor('My App'+suffix+'x', 'tenant').slice(0, 48), 'my-app'+'-'.repeat(42));
     assert.equal(profileNameFor('---My App---', 'tenant'), profileNameFor('My App', 'tenant'));

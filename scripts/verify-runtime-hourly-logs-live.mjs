@@ -22,6 +22,7 @@ const previous = process.env.OCTO_RUNTIME_DEBUG;
 process.env.OCTO_RUNTIME_DEBUG = "1";
 const endpoint = componentEndpoint(home);
 const kernel = createKernelService({
+  home: home,
   endpoint,
   // 原生 SDK 显式接收日志目录，不再依赖 worker 环境中的 Home。
   logging: { directory: join(home, "logs") },
@@ -45,6 +46,7 @@ const stopExtras = async () => {
 const loadExtra = async (declaration) => {
   const registration = extraRegistration(declaration);
   const extra = createExtraService({
+    home: home,
     endpoint,
     module: await registration.load(),
     config: registration.config,

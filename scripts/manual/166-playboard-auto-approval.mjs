@@ -64,7 +64,6 @@ async function fixture(t, { nativeHost = false } = {}) {
   const env = {
     ...process.env,
     ORT166_TRACE: trace,
-    OCTO_RUNTIME_HOME: join(directory, "home"),
     OCTO_RUNTIME_CLI_SYNC_OPENCLAW_TOOLS: "0"
   };
   t.after(async () => {
@@ -106,7 +105,15 @@ async function cli(settings, value, { signal, cleanup } = {}) {
     : [];
   const child = spawn(
     process.execPath,
-    [...args, entry, "playboard", "--manifest", settings.manifest],
+    [
+      ...args,
+      entry,
+      "playboard",
+      "--home",
+      join(settings.directory, "home"),
+      "--manifest",
+      settings.manifest
+    ],
     {
       cwd: settings.directory,
       env: { ...settings.env, ...(cleanup ? { TEST_PLAYBOARD_CLEANUP: cleanup } : {}) },
@@ -231,6 +238,7 @@ for (const mode of ["canonical", "native"]) {
     const settings = await fixture(t, { nativeHost: true });
     // 原生装配保留 Provider 工厂参数；每轮环境通过 RPC 传递，不修改宿主 process.env。
     const kernel = createKernelService({
+      home: settings.directory,
       endpoint: join(settings.directory, "k.sock"),
       adapters: [createCodexAdapter(settings.adapter.options)]
     });

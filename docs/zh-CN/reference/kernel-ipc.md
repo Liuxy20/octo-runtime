@@ -23,7 +23,7 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## 创建服务
 
-`createKernelService(options)` 必须提供本地通信地址 `endpoint` 和宿主已构造的 `adapters`。可选配置包括 `adapterConfigurations`、`configurations(runtimeId?)`、`logging` 和 `stateDirectory`。Kernel 本进程注册对象并通过 RPC 服务业务调用，不接受模块清单、路径、worker 入口或子进程 env；CLI 自行 import 后传对象。见[模块载入](../concepts/module-loading.md)。
+`createKernelService(options)` 必须提供已存在的绝对目录 `home`、本地通信地址 `endpoint` 和宿主已构造的 `adapters`。可选配置包括 `adapterConfigurations`、`configurations(runtimeId?)`、`logging` 和 `stateDirectory`。Kernel 本进程注册对象并通过 RPC 服务业务调用，不接受模块清单、路径、worker 入口或子进程 env；CLI 自行 import 后传对象。见[模块载入](../concepts/module-loading.md)。
 
 1. 创建服务对象后，等待 `initialize({signal?})` 完成。
 2. 初始化成功后，使用 `kernel.client` 发起调用，或通过 `status()` 查看服务状态。

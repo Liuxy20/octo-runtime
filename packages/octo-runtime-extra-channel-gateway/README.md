@@ -67,8 +67,8 @@ import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
 import * as gateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
-export async function startGateway(endpoint: string, config: JsonObject) {
-  const extra = createExtraService({ endpoint, module: gateway, config, dependencies: {} });
+export async function startGateway(home: string, endpoint: string, config: JsonObject) {
+  const extra = createExtraService({ home, endpoint, module: gateway, config, dependencies: {} });
   await extra.initialize();
   return extra;
 }
@@ -136,7 +136,7 @@ octo-runtime channel-gateway extraget
 
 Both `model` and `effort` are optional. When omitted, the selected Harness uses its own defaults. Replace `<MODEL_ID>` with a model identifier supported by that Harness; `effort` accepts `low`, `medium`, `high`, or `xhigh`, subject to Harness support.
 
-This is the complete CLI declaration: required `config` and optional `module`/`enabled`. The effective module manifest normally provides `module`; an explicit value must match the selected module. The SDK receives only the business configuration: `createExtraService({ endpoint, module: gateway, config: declaration.config, dependencies })`. The CLI handles top-level `enabled`, while Gateway handles each Bot's `enabled`; they belong to different configuration levels.
+This is the complete CLI declaration: required `config` and optional `module`/`enabled`. The effective module manifest normally provides `module`; an explicit value must match the selected module. The SDK receives only the business configuration: `createExtraService({ home, endpoint, module: gateway, config: declaration.config, dependencies })`. The CLI handles top-level `enabled`, while Gateway handles each Bot's `enabled`; they belong to different configuration levels.
 
 One bot is still `bots: [bot]`; there is no single-object form. Each `extraset` replaces the whole declaration — omitted fields are not carried over, and bots are not merged by `bot_id`. Limits: 64 bots, 64 in-flight management operations, 256 KiB per declaration.
 

@@ -1,3 +1,4 @@
+import { fixtureHome, fixtureEndpoint } from "./fixtures/service-home.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -57,7 +58,8 @@ for (const native of [false, true]) {
     const loader = new ExtraPlugins([], {});
     const extra = native
       ? createExtraService({
-          endpoint: `/unused-${randomUUID()}`,
+          home: fixtureHome,
+          endpoint: fixtureEndpoint(),
           module,
           config: {},
           dependencies: host
@@ -116,7 +118,8 @@ test("class dependency operations retain capacity and incomplete ownership until
   const host = new PendingDependencies();
   let captured;
   const options = {
-    endpoint: `/unused-${randomUUID()}`,
+    home: fixtureHome,
+    endpoint: fixtureEndpoint(),
     module: {
       name: "class-capacity",
       default: () => (dependencies) => {

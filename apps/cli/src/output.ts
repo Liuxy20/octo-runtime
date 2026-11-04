@@ -3,6 +3,10 @@ import type { ServiceStatus } from "@mininglamp-oss/octo-runtime-cross-service";
 import { RuntimeLogging } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { open, readdir } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  RuntimeHomeError,
+  ServiceInitializationError
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 export interface ComponentSnapshot {
   service: ServiceStatus;
@@ -106,6 +110,24 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
     fallback;
   const cause = record(value.cause);
   const causeCode = stableCode(cause.code) ?? stableCode(cause.message);
+  // Home 的具体失败沿已有 cause 链投影；不读取任意对象声称的 diagnostic 或异常正文。
+  const pending: unknown[] = [error];
+  const seen = new Set<unknown>();
+  let homeFailure: RuntimeHomeError | undefined;
+  for (let checked = 0; pending.length && checked < 16; checked++) {
+    const current = pending.shift();
+    if (!(current instanceof Error) || seen.has(current)) continue;
+    seen.add(current);
+    if (current instanceof RuntimeHomeError) {
+      homeFailure = current;
+      break;
+    }
+    if (current instanceof AggregateError) {
+      const nested: readonly unknown[] = current.errors;
+      pending.push(...nested.slice(0, 8));
+    }
+    pending.push(current.cause);
+  }
   const hints: Record<string, string> = {
     COMMAND_FAILED: "The command failed. Check the native manager, configuration and service logs.",
     ENOENT:
@@ -163,8 +185,16 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
   };
   return {
     code,
-    message: hints[code] ?? "Check --help, component status and service logs for this operation.",
+    message: homeFailure
+      ? `${homeFailure.diagnostic.action} ${JSON.stringify(homeFailure.diagnostic)}`
+      : (hints[code] ?? "Check --help, component status and service logs for this operation."),
     ...(causeCode ? { cause_code: causeCode } : {}),
+    ...(homeFailure
+      ? {
+          startup: homeFailure.diagnostic,
+          ...(error instanceof ServiceInitializationError ? { cleanup: error.cleanup } : {})
+        }
+      : {}),
     ...(error instanceof ServiceError
       ? { backend: error.backend, command: error.command, exit_code: error.exitCode }
       : {})
@@ -177,6 +207,8 @@ export async function recordStartupFailure(
   component: string,
   error: unknown
 ): Promise<void> {
+  // 无效 Home 不能被诊断日志的递归 mkdir 再次创建；完整诊断由当前 CLI 输出和 SDK cause 返回。
+  if (describeError(error).startup) return;
   const logging = new RuntimeLogging({ directory });
   try {
     const log = component === "executor-kernel" ? logging.kernel : logging.extra(component);

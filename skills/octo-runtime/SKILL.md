@@ -37,7 +37,7 @@ doctor reports native manager availability and component service/runtime checks.
 
 ### Prepare The Local Home
 
-CLI 不提供 login。显式 --home 优先于 OCTO_RUNTIME_HOME，再使用平台默认目录。executor-kernel run 使用本地配置和显式 Adapter 集合；channel-gateway run 需要已保存的完整插件声明。运行组件不要求重新初始化或删除已有身份。
+CLI 不提供 login。CLI 使用显式 --home，否则所有平台统一用户 ~/.octo-runtime；OCTO_RUNTIME_HOME、LOCALAPPDATA、Application Support 和 XDG 不参与选择。根目录由 CLI 准备，SDK 服务必须显式传入已存在的绝对 home。executor-kernel run 使用本地配置和显式 Adapter 集合；channel-gateway run 需要已保存的完整插件声明。运行组件不要求重新初始化或删除已有身份。
 
 登录、登记与共享属于可选 Extra，不是本地设备存在或执行的条件。不得以本地就绪推导云端注册或连接成功，也不得按历史重置说明删除现有身份。
 

@@ -8,6 +8,7 @@ An Extra connects a business system to Kernel. For example, an IM Extra receives
 
 Import `createExtraService` from `@mininglamp-oss/octo-runtime/host` and supply:
 
+- `home`: an existing absolute Runtime Home directory prepared by the host.
 - `endpoint`: the existing Kernel address. Extra connects to it without starting Kernel.
 - `module`: the Extra module, such as Channel Gateway, WeCom, or WebUI.
 - `config`: the JSON configuration required by that module.
@@ -23,6 +24,7 @@ Prepare these variables in the example host's environment; they are not new Runt
 
 | Variable | Host-supplied value |
 | --- | --- |
+| `RUNTIME_HOME` | An existing absolute Home prepared by this example host |
 | `KERNEL_ENDPOINT` | The existing Kernel's socket or Named Pipe address; see SDK setup |
 | `GATEWAY_API_URL` | Your Octo IM API base URL |
 | `GATEWAY_BOT_ID` | The Bot identity authorized for that service |

@@ -391,10 +391,7 @@ test(
       join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ort145-")
     );
     const endpoint = componentEndpoint(directory);
-    const service = createKernelService({
-      endpoint,
-      adapters
-    });
+    const service = createKernelService({ home: directory, endpoint, adapters });
     const sockets = new Set();
     const errors = [];
     let client;

@@ -35,7 +35,7 @@ supersedes: []
 
 ```text
 装配：Electron 原生 import / CLI 自己读取 manifest 后动态 import
-      → Adapter 对象 → createKernelService({ endpoint, adapters, ... })
+      → Adapter 对象 → createKernelService({ home, endpoint, adapters, ... })
 
 执行：业务 / Extra / CLI client → KernelClient → 本地 RPC → ExecutorKernel
       → 本进程 AgentExecutor → 已注入的 Adapter → Provider
@@ -47,6 +47,7 @@ supersedes: []
 
 ```ts
 export interface KernelServiceOptions {
+  home: string; // #306：宿主已准备的绝对目录
   endpoint: string;
   adapters: readonly HostedAdapter[];
   // 仅列本轮确定的装配字段；其他现有选项不在此展开。
@@ -64,6 +65,8 @@ export interface KernelService extends ServiceLifecycle<KernelServiceStatus> {
 构造仍同步返回服务对象；`initialize()` 成功后才可取得 `kernel.client`。初始化在对外报告 ready 前完成 Adapter 注册、端点建立与调用可用性检查；失败沿既有回滚与 `ServiceInitializationError` 合同报告。注册不表示 Provider 已安装、已认证或本次执行必然成功。
 
 数组集合在构造时固定，宿主不得在服务存续期修改已注册 Adapter 的类型与协议声明；需要更换集合或实现时，关闭并确认旧服务清理完成，再构造新服务。宿主通过方法读取的业务依赖仍可变化，本要求不冻结宿主对象、不增加热加载。服务拥有自己的 Core、Run、连接与日志；调用结束时执行 Adapter 的既有清理，不能自动关闭 Adapter 引用的宿主数据库或推定任意资源归 Kernel 所有。
+
+[#306 Home 合同](runtime-lifecycle.md#runtime-home-所有权与启动校验)要求显式 `home`，不改变 #294 原生装配和 RPC。
 
 `endpoint` 与 Home 分别定义：Home 是数据/身份目录，`componentEndpoint(home)` 只派生本地地址。例如 POSIX 的 `<home>/sockets/octo-runtime-executor-kernel.sock`；Windows 使用命名管道，不把 `~/.octo-runtime` 目录直接作为 RPC 地址。Electron 自选 Home/endpoint，CLI 从自己的配置派生；不新增隐式 Home 扫描或省略 endpoint 的直调模式。
 

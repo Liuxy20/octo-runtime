@@ -64,7 +64,12 @@ async function fixture(t) {
       resources.hostClosed = true;
     }
   };
-  const options = { endpoint: componentEndpoint(home), stateDirectory: home, adapters: [adapter] };
+  const options = {
+    home,
+    endpoint: componentEndpoint(home),
+    stateDirectory: home,
+    adapters: [adapter]
+  };
   const services = [];
   const repairs = [];
   t.after(async () => {

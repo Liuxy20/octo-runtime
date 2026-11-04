@@ -55,10 +55,7 @@ for (const mode of ["success", "failure", "late-failure"])
     { timeout: 10000 },
     async (t) => {
       const bind = await delayedBind(t);
-      const options = {
-        endpoint: bind.endpoint,
-        adapters: [testAdapter]
-      };
+      const options = { home: bind.home, endpoint: bind.endpoint, adapters: [testAdapter] };
       const kernel = createKernelService(options);
       const controller = new AbortController();
       const initializing = kernel.initialize({ signal: controller.signal });
@@ -105,6 +102,7 @@ for (const failBind of [false, true]) {
   test(`Extra closes a control bind settled after its cleanup deadline (failure=${failBind})`, async (t) => {
     const bind = await delayedBind(t);
     const options = {
+      home: bind.home,
       endpoint: componentEndpoint(bind.home, "kernel"),
       controlEndpoint: bind.endpoint,
       config: {},

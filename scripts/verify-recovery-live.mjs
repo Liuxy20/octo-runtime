@@ -290,6 +290,7 @@ try {
   if (mode === "sdk") {
     restoreFaults = recoveryLiveFaults({ controlFile, eventsFile });
     kernel = createKernelService({
+      home: directory,
       endpoint,
       adapters: (
         await import(
@@ -300,6 +301,7 @@ try {
       ).adapters
     });
     extra = createExtraService({
+      home: directory,
       endpoint,
       controlEndpoint: extraEndpoint,
       module: gatewayModule,

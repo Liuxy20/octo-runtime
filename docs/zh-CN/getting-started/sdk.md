@@ -4,11 +4,13 @@
 
 Electron/Node.js 宿主原生导入所需模块。加载方式由宿主选择，也可以尝试基于 **pnpm workspace + Git submodule** 引入源码。下例使用源码 workspace 包名；发行包对应 `/executor-kernel`、`/host`、`/extras/channel-gateway` 等公开子路径。
 
+Home 选择、准备、路径预算与 API 迁移见 [Runtime Home 合同](../reference/runtime-home.md)。SDK 不选择默认目录；CLI 默认值不属于 SDK。
+
 ## 1. 快速接入 KernelService
 
 | 用途 | 签名 | 说明 |
 | --- | --- | --- |
-| 创建服务 | `createKernelService(options: KernelServiceOptions): KernelService` | 必填 `endpoint: string`、`adapters: readonly HostedAdapter[]`，接收实际对象 |
+| 创建服务 | `createKernelService(options: KernelServiceOptions): KernelService` | 必填已存在目录 `home: string`、`endpoint: string`、`adapters: readonly HostedAdapter[]`，接收实际对象 |
 | 派生地址 | `componentEndpoint(home: string): string` | 本地 socket / Named Pipe 地址，不能把 Home 目录直接当 endpoint |
 | 初始化 | `kernel.initialize({ signal? }?): Promise<void>` | 成功后取得 `kernel.client` |
 | 服务状态 | `kernel.status(): Promise<KernelServiceStatus>` | 生命周期及 Kernel 状态 |
@@ -21,8 +23,13 @@ import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kerne
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
 
-const endpoint = componentEndpoint("/absolute/app-runtime-home");
-const kernel = createKernelService({ endpoint, adapters: [createCodexAdapter()] });
+import { mkdir } from "node:fs/promises";
+
+// 宿主按产品设计选择根并准备；SDK 不选择默认目录。
+const home = "/absolute/app-runtime-home";
+await mkdir(home, { recursive: true });
+const endpoint = componentEndpoint(home);
+const kernel = createKernelService({ home, endpoint, adapters: [createCodexAdapter()] });
 await kernel.initialize();
 // 原生 SDK 已取得 RPC 客户端；无需 attachKernel，也无需立即发起 AgentRun。
 const client = kernel.client;
@@ -42,7 +49,7 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 | 用途 | 签名 | 说明 |
 | --- | --- | --- |
-| 创建 Extra | `createExtraService<D>(options: ExtraServiceOptions<D>): ExtraService` | `endpoint` 复用 Kernel 地址；`module` 为原生导入模块；`config` 是 JSON；`dependencies` 是宿主函数 |
+| 创建 Extra | `createExtraService<D>(options: ExtraServiceOptions<D>): ExtraService` | 必填 `home` 为宿主已准备目录；`endpoint` 复用 Kernel 地址；`module` 为原生导入模块；`config` 是 JSON；`dependencies` 是宿主函数 |
 | 初始化 | `gateway.initialize({ signal? }?): Promise<void>` | 初始化插件；不等于 Bot 已在线 |
 | 查询状态 | `gateway.status(): Promise<ExtraServiceStatus>` | 查看生命周期、Kernel 可用性和插件状态 |
 | 关闭 | `gateway.close(): Promise<ServiceCleanupResult>` | 排空本 Extra；不关闭共享 Kernel |
@@ -61,6 +68,7 @@ function required(name: string): string {
 
 // 使用上一章已初始化的 Kernel endpoint；配置/凭据来源由宿主决定。
 const gateway = createExtraService({
+  home,
   endpoint,
   module: channelGateway,
   config: {

@@ -37,6 +37,7 @@ export function createGatewayExample(env: NodeJS.ProcessEnv, loadContexts: LoadC
   if (!isAbsolute(workdir)) throw new Error("GATEWAY_WORKDIR must be absolute");
   const dependencies: GatewayDependencies = { loadContexts };
   return createExtraService({
+    home: required("RUNTIME_HOME"),
     endpoint: required("KERNEL_ENDPOINT"),
     module: gateway,
     config: {

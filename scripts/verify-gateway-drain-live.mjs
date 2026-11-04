@@ -191,6 +191,7 @@ try {
     );
     const endpoint = componentEndpoint(directory);
     kernel = createKernelService({
+      home: directory,
       endpoint,
       configurations: () =>
         dshFault ? { dsh: { providerOptions: { command: join(directory, "absent-dsh") } } } : {},
@@ -279,6 +280,7 @@ OctoConnector.prototype.card = async function (...args) {
       if (!cliMode) {
         // SDK 模式直接在验证进程构造服务；故障注入也在同一进程加载。
         const service = createExtraService({
+          home: directory,
           endpoint,
           module: await import(pathToFileURL(options.declaration.module).href),
           config: options.declaration.config,

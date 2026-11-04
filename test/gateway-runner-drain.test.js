@@ -1,3 +1,4 @@
+import { fixtureHome } from "./fixtures/service-home.js";
 import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import { adapters } from "./fixtures/drain-worker.mjs";
 import test from "node:test";
@@ -119,6 +120,7 @@ test(
     const trace = join(directory, "drain.ndjson");
     const records = async () => (await readFile(trace, "utf8")).trim().split("\n").map(JSON.parse);
     const extra = createExtraService({
+      home: fixtureHome,
       endpoint,
       module: drainGateway,
       config: { trace },

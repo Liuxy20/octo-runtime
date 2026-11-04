@@ -157,10 +157,7 @@ test(
     await complete(f);
     const saved = JSON.parse(JSON.stringify(f.handle.snapshot()));
     assert.equal((await f.server.close()).complete, true);
-    const server = createKernelService({
-      endpoint: f.endpoint,
-      ...options
-    });
+    const server = createKernelService({ home: f.directory, endpoint: f.endpoint, ...options });
     t.after(() => server.close());
     await server.initialize();
     const client = attachKernel({ endpoint: f.endpoint });

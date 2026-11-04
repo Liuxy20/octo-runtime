@@ -27,7 +27,7 @@ Application or Extra
   -> AgentExecutor in the Kernel host -> injected Adapter -> Provider
 ```
 
-For native SDK integration, the host imports and constructs Adapters, passes them to `createKernelService({ endpoint, adapters })`, initializes the service, and uses `kernel.client`. Even in the same process, business calls use real local RPC. An Electron host can construct Kernel and optional Extras in its main process; the CLI deploys separate service hosts through the same factories. Bare Core is an explicit low-level API, not the ordinary in-process SDK entry point.
+For native SDK integration, the host imports and constructs Adapters, passes them to `createKernelService({ home, endpoint, adapters })`, initializes the service, and uses `kernel.client`. Even in the same process, business calls use real local RPC. An Electron host can construct Kernel and optional Extras in its main process; the CLI deploys separate service hosts through the same factories. Bare Core is an explicit low-level API, not the ordinary in-process SDK entry point.
 
 ## Protocol
 

@@ -95,7 +95,7 @@ octo-runtime channel-gateway extraset <<< '{
 
 `model` and `effort` are optional: remove either field to use the selected Harness framework's own default. Replace `<MODEL_ID>` with a model supported by that Harness; supported effort values depend on the Harness. You can also use `octo-runtime channel-gateway extraset < channel-gateway.json` with the same complete JSON in a file. `octo-runtime channel-gateway extraget` returns the complete declaration, including credentials.
 
-Both methods save configuration without starting or reloading services. Configuration is saved under your Runtime Home, normally `~/.octo-runtime` (`%LOCALAPPDATA%\OctoRuntime` on Windows). If you omit `workdir`, Gateway defaults to `~/octo-runtime/channels/{bot_id}`. See the [Gateway guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/octo-runtime-extra-channel-gateway/README.md) for multiple Bots, permissions and other Provider settings. For a browser workspace or WeCom, use the [Extra configuration guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/.octospec/guides/extra-configuration.md).
+Both methods save configuration without starting or reloading services. Configuration is saved under your Runtime Home, normally `~/.octo-runtime` on every supported platform. If you omit `workdir`, Gateway defaults to `~/octo-runtime/channels/{bot_id}`. See the [Gateway guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/packages/octo-runtime-extra-channel-gateway/README.md) for multiple Bots, permissions and other Provider settings. For a browser workspace or WeCom, use the [Extra configuration guide](https://github.com/Mininglamp-OSS/octo-runtime/blob/main/.octospec/guides/extra-configuration.md).
 
 ### 3. Start
 

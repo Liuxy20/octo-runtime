@@ -13,6 +13,7 @@ const home = process.cwd();
 const endpoint =
   process.platform === "win32" ? `\\\\.\\pipe\\octo-native-${process.pid}` : join(home, "k.sock");
 const kernel = createKernelService({
+  home,
   endpoint,
   adapters: [
     testAdapter as unknown as import("@mininglamp-oss/octo-runtime-executor-kernel").HostedAdapter
@@ -20,6 +21,7 @@ const kernel = createKernelService({
 });
 let released = false;
 const extra = createExtraService({
+  home,
   endpoint,
   module: selectedExtra,
   config: {},

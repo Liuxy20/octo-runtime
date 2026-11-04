@@ -2,6 +2,8 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
+宿主须先选择并准备已存在的绝对 `home`，再显式传给服务；SDK 不创建根或选择平台默认。详见 [Runtime Home 合同](../../docs/zh-CN/reference/runtime-home.md)。
+
 在你自己的应用里装配 Runtime 组件：把 Extra 模块加 JSON 配置变成调用进程内的服务，注入业务函数，报告状态，协调有界关闭。它还收了 Home、身份、端点这些共享约定，宿主不用各写一套。执行仍然在 Core 和 Kernel；宿主可以一个 Extra 都不加载。
 
 ## 什么时候用它
@@ -19,12 +21,13 @@ import type { GatewayDependencies } from "@mininglamp-oss/octo-runtime/extras/ch
 import type { JsonObject } from "@mininglamp-oss/octo-runtime/extra";
 
 export async function withGateway(
+  home: string,
   endpoint: string,
   config: JsonObject,
   dependencies: GatewayDependencies,
   runHost: (extra: ExtraService) => Promise<void>
 ): Promise<void> {
-  const extra = createExtraService({ endpoint, module: gateway, config, dependencies });
+  const extra = createExtraService({ home, endpoint, module: gateway, config, dependencies });
   const errors: unknown[] = [];
   try {
     await extra.initialize();

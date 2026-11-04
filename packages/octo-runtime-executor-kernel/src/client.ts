@@ -1,4 +1,5 @@
 import net from "node:net";
+import { assertIpcEndpoint } from "./runtime-home.js";
 import { randomUUID } from "node:crypto";
 import {
   assertHostFrame,
@@ -31,13 +32,15 @@ import { markSubmissionRejected } from "./submission-error.js";
  * invoke 提供登记、取消和尾流观察；关闭连接或迭代器不会隐式取消已接纳 Run。
  */
 export function attachKernel(options: { endpoint: string }): KernelClient {
+  const endpoint = options.endpoint;
+  assertIpcEndpoint(endpoint);
   const sockets = new Set<net.Socket>();
   let closed = false;
   const open = async (signal?: AbortSignal, timeout = 5000): Promise<net.Socket> => {
     if (closed) throw new KernelError("CLIENT_CLOSED");
     if (sockets.size >= 32) throw new KernelError("CLIENT_CAPACITY_EXHAUSTED");
     signal?.throwIfAborted();
-    const socket = net.createConnection(options.endpoint);
+    const socket = net.createConnection(endpoint);
     sockets.add(socket);
     socket.once("close", () => sockets.delete(socket));
     socket.on("error", () => {});

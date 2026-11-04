@@ -24,7 +24,7 @@ Kernel, Core, and Host SDK must not depend on concrete Provider Adapters or busi
 | User extension | `<Runtime Home>/manifest.json`, normally `~/.octo-runtime/manifest.json` on macOS/Linux | Additional Adapter and Extra modules |
 | Global Extras | The running CLI’s verified npm/pnpm global environment | Additional matching Extra packages, without manifest edits |
 
-The former default Adapter JSON is consolidated into this built-in manifest. Both manifests contain `version: 1`, `adapters`, and `extras`. Selecting `--home` also changes the user-extension path; platform defaults and `OCTO_RUNTIME_HOME` follow the existing Home selection rules.
+The former default Adapter JSON is consolidated into this built-in manifest. Both manifests contain `version: 1`, `adapters`, and `extras`. Selecting `--home` also changes the user-extension path; the CLI uses explicit `--home` or `~/.octo-runtime` on every supported platform; environment overrides are retired.
 
 For example, a Home extension can declare local modules:
 

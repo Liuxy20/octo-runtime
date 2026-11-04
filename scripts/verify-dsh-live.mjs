@@ -14,6 +14,7 @@ const dshBin = process.env.OCTO_DSH_NATIVE_BIN;
 assert.ok(dshBin, "Host must supply OCTO_DSH_NATIVE_BIN: the npm-installed JavaScript entry");
 const directory = await mkdtemp(join(tmpdir(), "od-dsh-"));
 const kernel = createKernelService({
+  home: directory,
   endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
   adapterConfigurations: { dsh: { providerOptions: { dshBin } } },
   adapters: (

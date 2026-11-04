@@ -12,6 +12,7 @@ async function fixture(t) {
   const home = await mkdtemp(join(tmpdir(), "oes-"));
   t.after(() => rm(home, { recursive: true, force: true }));
   return {
+    home,
     endpoint: componentEndpoint(home, "kernel"),
     controlEndpoint: componentEndpoint(home, "extra"),
     config: {},

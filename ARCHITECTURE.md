@@ -232,7 +232,7 @@ flowchart TB
 
 宿主 App 可能将 Agent 提示词和业务 Context 存在内存、SQLite 或远端服务。启动时复制一次会让后续任务继续使用旧数据；每次编辑都重载 Gateway 又会中断连接。我们需要下一轮能读取新数据，同时保持宿主对存储和授权的管理权，以及 Extra 的整体封装。
 
-Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `createExtraService({ endpoint, module, config, dependencies: { loadContexts } })` 后 initialize，在调用进程直接装配业务函数。CLI 的组件 run 与原生应用主进程使用同一服务实现，不经外部 Node 或 Runtime CLI 代替构造。JSON 不携带函数，Kernel 不装配业务依赖。Extra 使用共享 KernelClient.invoke；关闭只清理自己的调用和资源，不停止指定 Kernel。
+Extra 沿用两阶段函数入口 `extra(context, jsonConfig)(dependencies)`。宿主调用 `createExtraService({ home, endpoint, module, config, dependencies: { loadContexts } })` 后 initialize，在调用进程直接装配业务函数。CLI 的组件 run 与原生应用主进程使用同一服务实现，不经外部 Node 或 Runtime CLI 代替构造。JSON 不携带函数，Kernel 不装配业务依赖。Extra 使用共享 KernelClient.invoke；关闭只清理自己的调用和资源，不停止指定 Kernel。
 
 | 时间点                 | 执行内容                                             | 目的                                               |
 | ---------------------- | ---------------------------------------------------- | -------------------------------------------------- |

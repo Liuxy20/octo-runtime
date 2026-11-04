@@ -23,7 +23,7 @@ All paths are under `@mininglamp-oss/octo-runtime`. For example, import the clie
 
 ## Create a Service
 
-`createKernelService(options)` requires a local `endpoint` and host-constructed `adapters`. Optional settings include `adapterConfigurations`, `configurations(runtimeId?)`, `logging`, and `stateDirectory`. Kernel registers objects in its process and exposes business calls through RPC. It accepts no module manifests, paths, worker entries, or subprocess env. CLI imports modules before passing objects. See [Module Loading](../concepts/module-loading.md).
+`createKernelService(options)` requires an existing absolute `home`, a local `endpoint` and host-constructed `adapters`. Optional settings include `adapterConfigurations`, `configurations(runtimeId?)`, `logging`, and `stateDirectory`. Kernel registers objects in its process and exposes business calls through RPC. It accepts no module manifests, paths, worker entries, or subprocess env. CLI imports modules before passing objects. See [Module Loading](../concepts/module-loading.md).
 
 1. Create the service and await `initialize({signal?})`.
 2. After initialization, invoke through `kernel.client` or inspect the service with `status()`.

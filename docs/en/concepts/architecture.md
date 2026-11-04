@@ -103,7 +103,7 @@ A submission receipt confirms that the request was received; read the output str
 
 ## Native Composition and Unified RPC
 
-Electron imports and constructs Adapter objects in its main process. CLI owns manifest reading, resolution, imports, and factory calls. Both pass actual objects to `createKernelService({ endpoint, adapters })`, await initialization, and execute through `kernel.client`. Kernel never loads product modules or accepts a module manifest, module path, or execution-worker entrypoint.
+Electron imports and constructs Adapter objects in its main process. CLI owns manifest reading, resolution, imports, and factory calls. Both pass actual objects to `createKernelService({ home, endpoint, adapters })`, await initialization, and execute through `kernel.client`. Kernel never loads product modules or accepts a module manifest, module path, or execution-worker entrypoint.
 
 `endpoint` is a local communication address; Home is a host-owned configuration directory. `componentEndpoint(home)` only derives an address. Even same-process calls follow `KernelClient -> RPC -> Kernel -> AgentExecutor -> Adapter`. Object injection is composition; RPC carries invocation data rather than methods or closures.
 

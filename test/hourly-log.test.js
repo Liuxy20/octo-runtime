@@ -193,7 +193,7 @@ test("concurrent processes cannot jointly exceed the same hourly file budget", a
 test("native service specs use explicit structured logging rather than implicit output capture", () => {
   for (const platform of ["darwin", "linux", "win32"]) {
     const spec = resolveServiceControl({ platform, backend: {} }).spec(
-      "/tmp/runtime",
+      platform === "win32" ? "C:\\runtime" : "/tmp/runtime",
       "executor-kernel"
     );
     assert.equal(spec.args.includes("--managed-logs"), false);

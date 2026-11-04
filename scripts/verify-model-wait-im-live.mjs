@@ -175,6 +175,7 @@ try {
     })
   );
   kernel = createKernelService({
+    home: directory,
     endpoint: join(directory, "k.sock"),
     adapters: await (
       await import("../apps/cli/dist/adapters.js")

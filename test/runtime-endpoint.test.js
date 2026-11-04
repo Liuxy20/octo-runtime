@@ -108,8 +108,11 @@ test("endpoint and service derivation retain component validation and Home isola
       );
       for (const component of ["", "../kernel", "Kernel", "a".repeat(71)])
         assert.throws(() => derive(home, component, platform), /COMPONENT_INVALID/);
-      for (const component of ["a", "a".repeat(70)])
-        assert.doesNotThrow(() => derive(home, component, platform));
+      for (const component of ["a", "a".repeat(70)]) {
+        if (derive === componentEndpoint && platform !== "win32" && component.length === 70)
+          assert.throws(() => derive(home, component, platform), { code: "IPC_ENDPOINT_TOO_LONG" });
+        else assert.doesNotThrow(() => derive(home, component, platform));
+      }
     }
   }
 });

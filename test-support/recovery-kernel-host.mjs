@@ -4,6 +4,7 @@ import { createKernelService } from "@mininglamp-oss/octo-runtime/host";
 
 // 此入口属于外层测试环境；Gateway 不加载它，也不取得服务对象。
 const kernel = createKernelService({
+  home: process.argv[3],
   endpoint: process.argv[2],
   adapters: [testAdapter]
 });

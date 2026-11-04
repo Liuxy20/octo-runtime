@@ -104,7 +104,7 @@ octo-runtime executor-kernel stop
 octo-runtime executor-kernel uninstall
 ```
 
-全局参数包括 `--home <path>`、`--profile <name>` 和 `--manifest <path>`。操作同一个服务时使用相同的 Home；profile 选择该 Home 内的配置，不会另建一个 Kernel 服务。默认 Home 在 macOS/Linux 上为 `~/.octo-runtime`；Windows 设置了 `LOCALAPPDATA` 时为 `%LOCALAPPDATA%\OctoRuntime`，也可以通过 `OCTO_RUNTIME_HOME` 覆盖。
+全局参数包括 `--home <path>`、`--profile <name>` 和 `--manifest <path>`。操作同一个服务时使用相同的 Home；profile 选择该 Home 内的配置，不会另建一个 Kernel 服务。CLI 显式 `--home` 优先，否则所有平台统一使用用户 `~/.octo-runtime`，由 CLI 准备根目录。`OCTO_RUNTIME_HOME`、LOCALAPPDATA、Application Support、XDG 不参与选择。显式无效输入报错，不回退。旧默认位置的数据原样保留；继续使用时明确传 `--home <旧目录>`，详见 [Home 迁移](../reference/runtime-home.md)。
 
 全局 `--version` / `-v` 输出安装产物的版本、commit 和 build 时间，可放在命令前后，包括 Extra 自有子命令之后；查询不加载模块，也不要求配置可用。放在 `--` 后时仍是字面位置参数。
 
@@ -278,9 +278,9 @@ octo-runtime executor-kernel logs --lines 200
 octo-runtime executor-kernel logs --follow --json
 ```
 
-CLI 在宿主进程读取所选 manifest、import 并构造 Adapter，然后调用 `createKernelService({ endpoint, adapters })`。Kernel 在该进程执行，业务调用统一经过 RPC，不启动内部执行 worker。
+CLI 在宿主进程读取所选 manifest、import 并构造 Adapter，然后调用 `createKernelService({ home, endpoint, adapters })`。Kernel 在该进程执行，业务调用统一经过 RPC，不启动内部执行 worker。
 
-Kernel 的初始化、就绪、关闭和清理失败记录于 `<Home>/logs/kernel-status-<UTC小时>.log`，沿用上述保留和读取限制，不含执行正文。SDK 宿主通过 `createKernelService({ endpoint, adapters, logging: { directory } })` 显式选择日志目录。
+Kernel 的初始化、就绪、关闭和清理失败记录于 `<Home>/logs/kernel-status-<UTC小时>.log`，沿用上述保留和读取限制，不含执行正文。SDK 宿主通过 `createKernelService({ home, endpoint, adapters, logging: { directory } })` 显式选择日志目录。
 
 `service.state=running` 只表示服务进程存在，执行能力以 `runtime.execution_ready` 为准。Kernel 不再提供 worker 心跳或自动替换；宿主进程重启归原生服务管理器负责。RPC 重连只查回原身份和续读事件，不重新执行旧请求；宿主重建导致 instance 改变时，旧调用结果不能假定成功。
 
@@ -302,7 +302,7 @@ octo-runtime executor-kernel start --home <home>
 
 | CLI 入口 | 服务装配与连接 |
 | --- | --- |
-| `executor-kernel run` | CLI 读取 manifest、import Adapter，再调用 `createKernelService({ endpoint, adapters })` |
+| `executor-kernel run` | CLI 读取 manifest、import Adapter，再调用 `createKernelService({ home, endpoint, adapters })` |
 | `channel-gateway run` | CLI 创建 ExtraService；其内部通过 `attachKernel({ endpoint })` 跨进程连接已有 Kernel，不创建或关闭 Kernel |
 | `playboard` | CLI 用同一 createKernelService 创建临时 Kernel，经 kernel.client 执行并回收本次服务 |
 

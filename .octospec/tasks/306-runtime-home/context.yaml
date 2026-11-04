@@ -1,0 +1,21 @@
+brief: .octospec/tasks/306-runtime-home/brief.md
+injected:
+  - { id: runtime-architecture, source: repo, reason: "宿主策略、原生装配、CI 范围、凭据与数据所有权" }
+  - { id: runtime-protocol-design, source: repo, reason: "服务 API 和既有 RPC" }
+  - { id: runtime-local-execution, source: repo, reason: "IPC 地址、底层 API 与生命周期" }
+  - { id: runtime-lifecycle, source: repo, reason: "Home、CLI 选择和原生服务" }
+  - { id: runtime-extras, source: repo, reason: "Extra initialize 前置校验与清理" }
+  - { id: runtime-engineering, source: repo, reason: "严格类型、中文注释和实际验证" }
+  - { id: runtime-invoke-input, source: repo, reason: "跨包 API 保持执行输入合同" }
+  - { id: runtime-context-extensions, source: repo, reason: "Kernel 路径命中，保持 Context" }
+  - { id: runtime-output-protocol, source: repo, reason: "启动错误不混为 Run 失败" }
+  - { id: runtime-stateless, source: repo, reason: "身份/配置和日志保留" }
+  - { id: commit, source: repo, reason: "内部中文记录；CONTRIBUTING 公共 English 优先" }
+files_expected:
+  - packages/octo-runtime-executor-kernel/src/
+  - packages/octo-runtime-host-sdk/src/
+  - apps/cli/src/
+  - public/
+  - docs/
+  - test/manual/
+updated_at: 2026-11-04T06:00:00Z

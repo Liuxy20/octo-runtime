@@ -15,6 +15,18 @@ export {
   type KernelServiceStatus
 } from "./service.js";
 export * from "./lifecycle.js";
+export {
+  RuntimeHomeError,
+  normalizeRuntimeHome,
+  validateRuntimeHome,
+  assertRuntimePath,
+  assertIpcEndpoint,
+  runtimePathFailure,
+  kernelStartupPaths,
+  prepareHomeDirectory,
+  type StartupPathDiagnostic,
+  type RuntimePath
+} from "./runtime-home.js";
 export { attachKernel } from "./client.js";
 export { AsyncQuestionReply, type AsyncQuestionReplyResult } from "./async-question-reply.js";
 export { isInvocationNotSubmitted } from "./submission-error.js";

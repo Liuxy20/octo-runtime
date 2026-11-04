@@ -110,8 +110,9 @@ export const catalogExtra: ExtraPluginModule<CatalogDependencies> = {
 };
 
 /** 业务服务地址由宿主显式选择；调用方负责 initialize/close，Extra 不关闭 Kernel。 */
-export function createCatalogService(endpoint: string, catalogUrl: string) {
+export function createCatalogService(home: string, endpoint: string, catalogUrl: string) {
   return createExtraService({
+    home,
     endpoint,
     module: catalogExtra,
     config: {},
@@ -129,4 +130,4 @@ export function createCatalogService(endpoint: string, catalogUrl: string) {
 }
 ```
 
-The host calls `createCatalogService(endpoint, catalogUrl)`, then initialize/status/close. Cancellation reaches fetch through `signal`. Extras that subscribe to host events or own timers must unregister them in `ctx.onDispose` and await pending work. Authorization, credentials, and publication decisions belong to the host and that Extra.
+The host calls `createCatalogService(home, endpoint, catalogUrl)`, then initialize/status/close. Cancellation reaches fetch through `signal`. Extras that subscribe to host events or own timers must unregister them in `ctx.onDispose` and await pending work. Authorization, credentials, and publication decisions belong to the host and that Extra.

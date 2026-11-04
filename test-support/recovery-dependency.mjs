@@ -25,11 +25,11 @@ export function launchRecoveryChild(children, component, args, env, ipc = false)
 }
 
 /** Kernel 是独立依赖；返回的清理句柄仅由外层环境保存。 */
-export function launchRecoveryKernel(children, endpoint, env) {
+export function launchRecoveryKernel(children, endpoint, env, home) {
   return launchRecoveryChild(
     children,
     "executor-kernel",
-    [resolve("test-support/recovery-kernel-host.mjs"), endpoint],
+    [resolve("test-support/recovery-kernel-host.mjs"), endpoint, home],
     env,
     true
   );
