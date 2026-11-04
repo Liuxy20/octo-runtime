@@ -74,3 +74,11 @@ PR head `0bb575dec96f53f52dc4d37004700c838a01b657`，Actions run `41795217323`�
 评审还复现了 service 层用 `startsWith("..")` 把合法 `..hidden` 子目录误当作穿越路径。服务现在直接委托已按完整分量判断边界的 prepareHomeDirectory；补充显式 Unix 专项覆盖 normal、..hidden、未准备和已准备的 Home 外端点父目录。外部根仍由宿主准备，不补建替代 Home。补充后本机 Windows Node24/26 的 #306/#237/#302 专项各 41 项：38 pass、3 skip、0 fail/0 cancel；编译和受影响服务的 ESLint 通过。3 项 skip 均为新增或既有 Unix native 专项。
 
 Actions run `41797963053`（8fd2550e）：Ubuntu Node24/26 完整任务通过；macOS Node26 的完整测试通过，随后全局 Extra 安装验收在读取 factory marker 时失败。该脚本用真实 macOS TMPDIR/realpath 生成安装根和常驻 Home，使实际服务的 socket 超预算、未执行 factory。验收夹具改用 macOS `/tmp` 下独占根并保留 realpath；不改变产品 Home 选择、传输限值、默认 selector 或 CI 配置。其余旧任务在新提交触发后由原工作流自动取消，不记为通过。
+
+## 可选日志评论复核
+
+Head `98a3cb84e3e77113b600057f9f6c83b5cbf94fca` 的 Actions run `41799060365` 六个矩阵任务与 CI Gate 均通过。随后核对 mochashanyao 的可选日志评论，确认现有 errno 白名单仍遗漏 ELOOP/EIO。使用实际编译 validator、VM 隔离的 Unix process 分支、真实本机临时目录和注入的 getconf 返回值/IO errno，修复前 stat/getconf × ELOOP/EIO 四例均得到 HOME_LIMIT_UNAVAILABLE；修复后四例均接受可选日志，Home 自身的 ELOOP/EIO 和静态文件名超限仍拒绝。该探针是 Windows 下的故障注入，不是原生 Unix 实机证据。
+
+修复在可选资源查询调用处隔离 IO 失败，不再补充 errno 白名单；必要资源与字符串/静态长度检查不在隔离范围。公共服务显式回归新增循环日志链接、Home 根同类错误、Home EIO、可选日志长度及 Unix log-stat/getconf EIO。只处理本 PR 的日志启动边界，不修改 #237 历史断言，不扩充工作流或默认测试 selector。
+
+本机 Windows Node24/26 各执行 #306 manual、runtime-debug、extra-startup、service-bind-startup：44 项，39 pass、5 skip、0 fail/0 cancel。真实自循环目录 junction 返回 ELOOP；日志使用该路径时 Kernel/Extra 均 ready、可 RPC 查询并 complete close，同一路径作为 Home 则拒绝。Home EIO 注入和可选日志长度拒绝也通过。编译、ESLint、文档 4/4 行为检查和知识 lint 通过。Unix 公共服务 EIO 专项在 Windows 跳过，不能把 VM 注入结果算作原生 Unix 验收。

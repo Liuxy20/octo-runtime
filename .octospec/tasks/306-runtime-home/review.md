@@ -34,3 +34,9 @@ source: self
 - 公共服务 home 必填、resolveHostHome 删除、HostAccount/ProfilePaths.home 及 hostHomePaths 的存在性合同均已迁移并写明。历史 #210/#224 worker 复现脚本保留历史，不将其作为现行接入样例。
 
 临时 PowerShell ModuleAnalysisCache 已移出 checkout；提交只包含本次实现、调用迁移、专项与资料。未更改 .github、package.json、pnpm-lock.yaml，不携带真实身份、凭据或配置。
+
+## 当前评论独立核对
+
+mochashanyao 在 head 98a3cb84 指出可选日志 ELOOP/EIO 被升级为启动失败。独立读取生产 validator 并在 Windows 上隔离执行 Unix 分支：注入 stat/getconf 两处的 ELOOP/EIO，四种组合均复现可选日志被拒绝；这不是原生 Linux 验收。该具体问题成立，属于本 PR 新增的可选资源探测传播边界。修复只隔离可选日志的元数据/卷预算查询失败，语法和长度预算置于隔离范围外，必需 Home/状态/IPC 校验仍严格传播失败。
+
+不据评论的 P1 标签直接扩大问题范围。#237 的既有消息断言、Provider/IM 真实验收及建议扩充 CI/default selector 均不并入本次；显式公共服务回归仍在 test/manual 内。公共 Kernel/Extra 覆盖损坏日志链接下就绪/关闭、Home 自身同类错误拒绝和可选日志长度拒绝；Unix EIO 公共服务用例在 Windows 明确跳过。

@@ -219,7 +219,7 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
       });
     operation = "filesystem-limits";
     const cache = new Map<string, PathLimits>();
-    const filesystemLimits = (path: string, optional = false): PathLimits => {
+    const filesystemLimits = (path: string): PathLimits => {
       if (process.platform === "win32") return platformLimits(process.platform);
       // 日志/状态可由高级宿主选择在另一文件系统；不能把 Home 所在卷的预算套给它。
       let directory = path;
@@ -228,12 +228,8 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
           if (statSync(directory).isDirectory()) break;
         } catch (error) {
           const code = (error as NodeJS.ErrnoException).code;
-          // 子路径缺失/被普通文件阻断时仍可查询最近目录；不可把日志 IO 失败变成 Home 失败。
-          if (
-            !["ENOENT", "ENOTDIR"].includes(code ?? "") &&
-            !(optional && ["EACCES", "EPERM"].includes(code ?? ""))
-          )
-            throw error;
+          // 子路径缺失/被普通文件阻断时仍可查询最近目录；其他 IO 失败由调用方按资源必要性处理。
+          if (!["ENOENT", "ENOTDIR"].includes(code ?? "")) throw error;
         }
         const parent = posix.dirname(directory);
         if (parent === directory) throw new Error("PATH_LIMIT_UNAVAILABLE");
@@ -265,12 +261,15 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
       normalizeRuntimeHome(entry.path, process.platform, entry.resource);
       assertRuntimePath(entry.path, entry.resource);
       operation = "filesystem-limits";
-      assertRuntimePath(
-        entry.path,
-        entry.resource,
-        process.platform,
-        filesystemLimits(entry.path, entry.optional)
-      );
+      let observed: PathLimits | undefined;
+      try {
+        observed = filesystemLimits(entry.path);
+      } catch (error) {
+        // 可选日志的 stat/getconf 失败（循环链接、坏盘等）仍归日志层 best-effort 隔离，不能枚举少数 errno。
+        // 前面的输入/静态长度检查不在此隔离范围；Home 和状态等必需资源仍传播原始 IO 失败。
+        if (!entry.optional) throw error;
+      }
+      if (observed) assertRuntimePath(entry.path, entry.resource, process.platform, observed);
     }
     affected = home;
     resource = "home";

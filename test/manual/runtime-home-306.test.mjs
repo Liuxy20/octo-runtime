@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import net from "node:net";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
-import { execFileSync } from "node:child_process";
+import childProcess, { execFileSync } from "node:child_process";
 import { Readable } from "node:stream";
 import { tmpdir } from "node:os";
 import { join, resolve, win32, posix } from "node:path";
@@ -44,6 +44,175 @@ function fixture(t) {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   return directory;
 }
+
+async function readyWithOptionalLog(home, directory) {
+  const endpoint = componentEndpoint(home);
+  let loaded = false;
+  const kernel = createKernelService({
+    home,
+    endpoint,
+    adapters: [],
+    stateDirectory: join(home, "run"),
+    logging: { directory }
+  });
+  const extra = createExtraService({
+    home,
+    endpoint,
+    logging: { directory },
+    module: {
+      name: "optional-log-check",
+      default: () => () => {
+        loaded = true;
+      }
+    },
+    config: {},
+    dependencies: {}
+  });
+  try {
+    await kernel.initialize();
+    await extra.initialize();
+    assert.equal((await kernel.client.status()).pid, process.pid);
+    assert.equal((await extra.status()).phase, "ready");
+    assert.equal(loaded, true);
+  } finally {
+    assert.equal((await extra.close()).complete, true);
+    assert.equal((await kernel.close()).complete, true);
+  }
+}
+
+test("looping optional log links preserve both services, while a looping Home fails", async (t) => {
+  const home = fixture(t),
+    log = join(home, "loop-log");
+  try {
+    fs.symlinkSync(log, log, process.platform === "win32" ? "junction" : "dir");
+  } catch (error) {
+    if (["EPERM", "EACCES", "ENOSYS", "ENOTSUP"].includes(error.code)) {
+      t.skip(`loop-link creation unavailable: ${error.code}`);
+      return;
+    }
+    throw error;
+  }
+  t.after(() => {
+    try {
+      fs.unlinkSync(log);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+  });
+  let loopCode;
+  try {
+    fs.statSync(log);
+  } catch (error) {
+    loopCode = error.code;
+  }
+  assert.ok(loopCode, "native loop must produce an observed filesystem failure");
+  t.diagnostic(`native loop returned ${loopCode}`);
+  await readyWithOptionalLog(home, log);
+  const endpoint = componentEndpoint(home);
+  for (const service of [
+    createKernelService({ home: log, endpoint, adapters: [] }),
+    createExtraService({
+      home: log,
+      endpoint,
+      module: { name: "loop-home", default: () => () => {} },
+      config: {},
+      dependencies: {}
+    })
+  ]) {
+    await assert.rejects(service.initialize(), (error) => {
+      assert.ok(error instanceof ServiceInitializationError);
+      assert.ok(error.cause instanceof RuntimeHomeError);
+      assert.equal(error.cause.diagnostic.resource, "home");
+      assert.equal(error.cause.diagnostic.systemCode, loopCode);
+      assert.equal(error.cleanup.complete, true);
+      return true;
+    });
+    assert.equal((await service.close()).complete, true);
+  }
+});
+
+test("optional logging keeps pure filename budgets outside its IO isolation", async (t) => {
+  const home = fixture(t),
+    endpoint = componentEndpoint(home),
+    logging = { directory: join(home, "l".repeat(256)) };
+  for (const service of [
+    createKernelService({ home, endpoint, adapters: [], logging }),
+    createExtraService({
+      home,
+      endpoint,
+      logging,
+      module: { name: "log-budget", default: () => () => {} },
+      config: {},
+      dependencies: {}
+    })
+  ]) {
+    await assert.rejects(
+      service.initialize(),
+      (error) => error.cause?.code === "HOME_PATH_TOO_LONG" && error.cleanup.complete
+    );
+    assert.equal((await service.close()).complete, true);
+  }
+});
+
+test("Home EIO still rejects both public services before resources", async (t) => {
+  const home = fixture(t),
+    original = fs.statSync;
+  let hits = 0;
+  fs.statSync = (file, ...args) => {
+    if (file === home) {
+      hits++;
+      throw Object.assign(new Error("injected Home IO failure"), { code: "EIO" });
+    }
+    return original(file, ...args);
+  };
+  syncBuiltinESMExports();
+  try {
+    await failsBeforeResources(t, home, "HOME_UNUSABLE", home);
+    assert.ok(hits >= 2);
+  } finally {
+    fs.statSync = original;
+    syncBuiltinESMExports();
+  }
+});
+
+test(
+  "native Unix optional stat and filesystem-query EIO do not prevent Kernel or Extra readiness",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    const home = fixture(t),
+      log = join(home, "logs"),
+      originalStat = fs.statSync,
+      originalExec = childProcess.execFileSync;
+    fs.mkdirSync(log);
+    for (const kind of ["stat", "query"]) {
+      let hits = 0;
+      const inside = (file) => file === log || String(file).startsWith(log + "/");
+      fs.statSync = (file, ...args) => {
+        if (kind === "stat" && inside(file)) {
+          hits++;
+          throw Object.assign(new Error("injected log stat IO failure"), { code: "EIO" });
+        }
+        return originalStat(file, ...args);
+      };
+      childProcess.execFileSync = (file, args, ...options) => {
+        if (kind === "query" && file === "/usr/bin/getconf" && inside(args[1])) {
+          hits++;
+          throw Object.assign(new Error("injected log query IO failure"), { code: "EIO" });
+        }
+        return originalExec(file, args, ...options);
+      };
+      syncBuiltinESMExports();
+      try {
+        await readyWithOptionalLog(home, log);
+        assert.ok(hits >= 2, "both services must reach the injected query failure");
+      } finally {
+        fs.statSync = originalStat;
+        childProcess.execFileSync = originalExec;
+        syncBuiltinESMExports();
+      }
+    }
+  }
+);
 
 test("CLI data commands accept a Home whose unused persistent socket would be too long", async (t) => {
   const home = join(fixture(t), "data-" + "x".repeat(180));
