@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 157：rg 退出码归因](tasks/157-ripgrep-command-status/brief.md)：独立 Windows clone 修复复合命令失败被改为 completed；Node 24/26 手动专项各 26 通过，完整门禁与未验范围见 [验证](tasks/157-ripgrep-command-status/validation.md)。用户追加授权提交及创建关联 PR，全量仍有六项失败；未授权合并或发布。
+
 - [Issue 309：独立客户端与双包发行](tasks/309-runtime-client/brief.md)：确认完整 runtime 内置 client/protocol、client 独立发布。[设计](tasks/309-runtime-client/design.md)、[计划](tasks/309-runtime-client/plan.md)、[验收](tasks/309-runtime-client/acceptance.md)及[95 分规划自评](tasks/309-runtime-client/assessment.md)完整；本地实现、双包/离线/global/恢复与基线互操作结果见[验证](tasks/309-runtime-client/validation.md)，两轴[Review](tasks/309-runtime-client/review.md)问题已关闭。未扩大 CI；用户追加授权英文提交及目标 main 的 PR，未执行合并或正式发布。
 
 - [Issue 313：Codex 服务级所有权与自动恢复](tasks/313-codex-service-lifecycle/brief.md)：独立 worktree 已实施 Core scope、常驻服务、恢复、finalization 及 doctor 常驻 PID；macOS 真实 direct/IPC、26 项手动专项及全量回归通过。[审查](tasks/313-codex-service-lifecycle/review.md)六个独立问题修复后无未关闭 finding；[分层验收](tasks/313-codex-service-lifecycle/acceptance.md)明确跨平台/IM 等未验项；[验证与交付](tasks/313-codex-service-lifecycle/validation.md)保留实际命令，按后续授权提交 main PR，不扩大 CI。规划 [96/100](tasks/313-codex-service-lifecycle/assessment.md) 不作为实现评分。
