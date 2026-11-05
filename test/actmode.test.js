@@ -13,7 +13,7 @@ import {
 import { assertJsonValue } from "../packages/octo-runtime-protocol/dist/context.js";
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
 import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
-import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { createAcpAdapter } from "../packages/octo-runtime-adapter-acp/dist/index.js";
 import { invokeRequest, contextEnvelope } from "./runtime-fixture.js";

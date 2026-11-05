@@ -6,6 +6,8 @@ const emit = (method, params = {}) =>
   send({ method, params: { threadId: "thread-activity", turnId: "turn-activity", ...params } });
 reader.on("line", (line) => {
   const m = JSON.parse(line);
+  if (m.method === "thread/unsubscribe")
+    return send({ id: m.id, result: { status: "unsubscribed" } });
   if (["initialize", "thread/name/set"].includes(m.method)) reply(m.id, {});
   if (m.method === "thread/start") reply(m.id, { thread: { id: "thread-activity" } });
   if (m.method === "turn/start") {

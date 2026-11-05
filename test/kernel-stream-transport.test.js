@@ -104,14 +104,25 @@ for (const transport of ["direct", "relay"])
 test("Kernel client decodes a UTF-8 character split across native IPC writes", async (t) => {
   const text = "大".repeat(476_921) + "xy";
   const client = await peer(t, async ({ id }, socket) => {
-    const bytes = Buffer.from(JSON.stringify({ jsonrpc: "2.0", id, result: { text } }) + "\n");
+    const bytes = Buffer.from(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          ipc_version: 1,
+          kernel_instance_id: text,
+          pid: process.pid,
+          execution_ready: true
+        }
+      }) + "\n"
+    );
     const offset = bytes.indexOf(Buffer.from("大")) + 1;
     socket.write(bytes.subarray(0, offset));
     await tick();
     socket.end(bytes.subarray(offset));
   });
   // 合成响应仅验证接收解码；业务协议与终态由上面的真实 Kernel/worker 测试验证。
-  assert.equal((await client.status()).text, text);
+  assert.equal((await client.status()).kernel_instance_id, text);
 });
 
 test("Kernel client rejects unterminated UTF-8 by bytes and keeps the next connection usable", async (t) => {
@@ -119,7 +130,18 @@ test("Kernel client rejects unterminated UTF-8 by bytes and keeps the next conne
   assert.ok(text.length < HOST_RPC_MAX_LINE_BYTES);
   assert.ok(Buffer.byteLength(text) > HOST_RPC_MAX_LINE_BYTES);
   const client = await peer(t, ({ id }, socket) => {
-    socket.end(JSON.stringify({ jsonrpc: "2.0", id, result: { execution_ready: true } }) + "\n");
+    socket.end(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        id,
+        result: {
+          ipc_version: 1,
+          kernel_instance_id: "utf8-test",
+          pid: process.pid,
+          execution_ready: true
+        }
+      }) + "\n"
+    );
   });
   // 容量判断使用受控分块，避免把约 40 MiB 的 OS 分片/拷贝耗时计入查询预算。
   // 下一次查询恢复真实 IPC；大文本与 UTF-8 拆包仍由上面的原生传输测试验证。

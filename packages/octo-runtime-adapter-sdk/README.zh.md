@@ -1,5 +1,7 @@
 # Adapter SDK
 
+常驻资源 Adapter 可提供同步、惰性的 `createExecutionScope({log})`。Core 每次注册独占 scope，绑定调用及回复；取消前同步调用 `beginShutdown(reason)`，再等待 `close({deadline})`，deadline 为 `performance.now()` 绝对毫秒值。服务遗留和失败 ID 独立于 invocation 清理报告；可选 `processes()` 只返回安全常驻所有权快照。turn 释放订阅，scope 负责 transport 和进程清理。见[接口](src/execution-scope.ts)及 [Codex 实现](../octo-runtime-adapter-codex/src/service.ts)。
+
 [English](README.md) | [包导航](../README.zh.md)
 
 写 Provider Adapter 用的工具箱：编写输入 `Adapter` 接口、用来校验并冻结定义的 `defineAdapter`，以及每个 Adapter 本来都要重写一遍的机制——子进程流、有界队列、ACP 映射、审批桥、环境与 MCP 映射、日志、清理。编排归 Core，Adapter 只翻译一个 Provider。

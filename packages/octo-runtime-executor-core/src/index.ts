@@ -13,11 +13,16 @@ export {
 import type {
   AdapterInvocationContext,
   AdapterProbeOptions,
-  AdapterOutput
+  AdapterOutput,
+  AdapterExecutionScope,
+  AdapterScopeCleanup,
+  CreateAdapterExecutionScope,
+  ServiceProcessSnapshot
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   createInputInvoke,
   assertInvokeRequestSize,
+  assertServiceProcessSnapshot,
   type InvokeInput,
   type InvokeEnvironment,
   assertProtocolSupport,
@@ -85,6 +90,7 @@ export interface HostedAdapterMetadata {
  */
 export interface HostedAdapter {
   metadata: HostedAdapterMetadata;
+  createExecutionScope?: CreateAdapterExecutionScope;
   probe?: (options?: AdapterProbeOptions) => unknown;
   /** Execute a turn and report progress for host deadline enforcement. */
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<AdapterOutput>;
@@ -108,6 +114,8 @@ export interface ExecutorShutdownResult {
   cleanup: "complete" | "incomplete";
   unresolvedInvocationIds: readonly string[];
   failedCleanupInvocationIds: readonly string[];
+  unresolvedServiceIds: readonly string[];
+  failedCleanupServiceIds: readonly string[];
 }
 
 /** 单次已接纳调用的资源事实；unknown 不表示已清理，pending 不触发取消或重试。 */
@@ -148,6 +156,8 @@ export class AgentExecutor {
     this.invokeFrames(input, environment)
   );
   readonly #adapters = new Map<string, HostedAdapter>();
+  readonly #scopes = new Map<string, AdapterExecutionScope>();
+  readonly #scopeCleanup = new Map<string, AdapterScopeCleanup>();
   readonly #active = new Map<string, AbortController>();
   readonly #activeAdapters = new Map<string, HostedAdapter>();
   // 资源所有权独立于活动执行/终态：清理未确认的 owner 必须留存，供 shutdown 返回真实遗留项。
@@ -210,7 +220,36 @@ export class AgentExecutor {
     assertAdapterProtocolSupport(adapter.metadata.protocolSupport);
     if (this.#adapters.has(adapter.metadata.type))
       throw new Error(`duplicate adapter: ${adapter.metadata.type}`);
-    this.#adapters.set(adapter.metadata.type, adapter);
+    // 先完整构造再发布；不展开对象，以免丢失宿主方法的 this 或原型。
+    const scope = adapter.createExecutionScope?.({ log: this.#log });
+    if (scope) {
+      if (
+        typeof scope.invoke !== "function" ||
+        typeof scope.beginShutdown !== "function" ||
+        typeof scope.close !== "function"
+      )
+        throw new TypeError("ADAPTER_EXECUTION_SCOPE_INVALID");
+      this.#scopes.set(adapter.metadata.type, scope);
+      this.#adapters.set(adapter.metadata.type, {
+        metadata: adapter.metadata,
+        ...(adapter.probe ? { probe: adapter.probe.bind(adapter) } : {}),
+        invoke: scope.invoke.bind(scope),
+        ...(scope.respondInteraction
+          ? { respondInteraction: scope.respondInteraction.bind(scope) }
+          : {}),
+        ...(scope.respondNative ? { respondNative: scope.respondNative.bind(scope) } : {})
+      });
+    } else this.#adapters.set(adapter.metadata.type, adapter);
+  }
+
+  /** 只取已拥有的常驻进程快照，不启动、探测或发现其他宿主的 Provider。 */
+  processes(): readonly ServiceProcessSnapshot[] {
+    const snapshots = [...this.#scopes.values()].flatMap((scope) => [
+      ...(scope.processes?.() ?? [])
+    ]);
+    if (snapshots.length > 256) throw new Error("SERVICE_PROCESS_SNAPSHOT_LIMIT");
+    for (const snapshot of snapshots) assertServiceProcessSnapshot(snapshot);
+    return snapshots.map((snapshot) => ({ ...snapshot }));
   }
 
   /** List registered adapters, for Agent registration and control-plane display. */
@@ -735,6 +774,7 @@ export class AgentExecutor {
     let iteratorDone = false;
     let cleanupWait: Promise<void> | undefined;
     let cleanupDeadline: number | undefined;
+    let completedBeforeCleanup = false;
     const beginCleanup = (): number =>
       (cleanupDeadline ??= performance.now() + watchdog.limits.cancelGraceMs);
     const remainingCleanup = (): number => Math.max(0, beginCleanup() - performance.now());
@@ -783,7 +823,15 @@ export class AgentExecutor {
           );
         conversions++;
       },
-      reportActivity: (activity) => watchdog.activity(activity)
+      reportActivity: (activity) => watchdog.activity(activity),
+      reportExecutionResult: (result) => {
+        if (
+          result.status === "completed" &&
+          result.basis === "final_answer_cleanup_fallback" &&
+          !controller.signal.aborted
+        )
+          completedBeforeCleanup = true;
+      }
     };
 
     // A provider may emit only deltas; here the host fills in the message lifecycle and stabilizes the messageId.
@@ -1036,6 +1084,19 @@ export class AgentExecutor {
       watchdog.dispose();
       if (!controller.signal.aborted) controller.abort(error);
       await waitCleanup().catch(() => undefined);
+      // #307：仅已确认的最终回答 fallback 保留成功；owner 的清理失败仍由 cleanup/shutdown 报告。
+      if (
+        completedBeforeCleanup &&
+        (terminal?.type === "run.completed" || nativeTerminal?.state === "completed")
+      ) {
+        outcome = "completed";
+        if (protocolMode === "native") yield { kind: "control", control: nativeTerminal! };
+        else {
+          for (const event of closeMessages("completed")) yield event;
+          yield terminal!;
+        }
+        return;
+      }
       if (protocolMode === "native") {
         const nativeFailureCode = errorCode(error);
         if (!userCancelled)
@@ -1167,23 +1228,78 @@ export class AgentExecutor {
     if (this.#shutdownAttempt) return this.#shutdownAttempt;
     if (this.#shutdownResult?.cleanup === "complete") return Promise.resolve(this.#shutdownResult);
     this.#state = "closing";
+    const deadline = performance.now() + timeoutMs;
     const pending: Promise<unknown>[] = [...this.#probes];
+    // 关闭恢复许可必须先于取消各轮，避免空闲服务在 shutdown 期间又启动新进程。
+    for (const [type, scope] of this.#scopes) {
+      try {
+        scope.beginShutdown(reason);
+      } catch {
+        this.#scopeCleanup.set(type, {
+          complete: false,
+          unresolvedServiceIds: [type],
+          failedCleanupServiceIds: [type]
+        });
+      }
+    }
     for (const [id, owner] of this.#owners) {
       if (!this.#acceptedTerminals.has(id)) owner.controller.abort(reason);
       pending.push(this.#cleanupOwner(id, owner));
     }
-    this.#shutdownAttempt = boundedCleanup(Promise.allSettled(pending), timeoutMs).then(() => {
+    for (const [type, scope] of this.#scopes) {
+      pending.push(
+        Promise.resolve()
+          .then(() => scope.close({ deadline }))
+          .then(
+            (result) => {
+              this.#scopeCleanup.set(type, result);
+            },
+            () => {
+              this.#scopeCleanup.set(type, {
+                complete: false,
+                unresolvedServiceIds: [type],
+                failedCleanupServiceIds: [type]
+              });
+            }
+          )
+      );
+    }
+    this.#shutdownAttempt = boundedCleanup(
+      Promise.allSettled(pending),
+      Math.max(0, deadline - performance.now())
+    ).then(() => {
       this.#state = "closed";
       const unresolvedInvocationIds = Object.freeze([...this.#owners.keys()]);
       const failedCleanupInvocationIds = Object.freeze(
         [...this.#owners].filter(([, owner]) => owner.cleanupState === "failed").map(([id]) => id)
       );
+      const unresolvedServiceIds = Object.freeze(
+        [...this.#scopes.keys()].flatMap((type) => {
+          const result = this.#scopeCleanup.get(type);
+          return result?.complete === true
+            ? result.unresolvedServiceIds
+            : result?.unresolvedServiceIds.length
+              ? result.unresolvedServiceIds
+              : [type];
+        })
+      );
+      const failedCleanupServiceIds = Object.freeze(
+        [...this.#scopeCleanup.values()].flatMap((result) => result.failedCleanupServiceIds)
+      );
       const result: ExecutorShutdownResult = Object.freeze({
         state: "closed",
         // probe 不属于某个 invocation，不能伪造 invocationId；仍在途时独立阻止 complete。
-        cleanup: unresolvedInvocationIds.length || this.#probes.size ? "incomplete" : "complete",
+        cleanup:
+          unresolvedInvocationIds.length ||
+          unresolvedServiceIds.length ||
+          failedCleanupServiceIds.length ||
+          this.#probes.size
+            ? "incomplete"
+            : "complete",
         unresolvedInvocationIds,
-        failedCleanupInvocationIds
+        failedCleanupInvocationIds,
+        unresolvedServiceIds,
+        failedCleanupServiceIds
       });
       this.#shutdownResult = result;
       this.#shutdownAttempt = undefined;

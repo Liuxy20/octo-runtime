@@ -78,6 +78,7 @@ function completeTurn() {
 
 reader.on("line", (line) => {
   const message = JSON.parse(line);
+  if (message.method === "thread/unsubscribe") return reply(message.id, { status: "unsubscribed" });
   if (["initialize", "thread/name/set"].includes(message.method)) return reply(message.id, {});
   if (message.method === "thread/start")
     return reply(message.id, { thread: { id: "thread-interaction" } });

@@ -4,10 +4,8 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import {
-  createCodexAdapter,
-  CodexEventNormalizer
-} from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { CodexEventNormalizer } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import {
   createClaudeCodeAdapter,
   ClaudeEventNormalizer
@@ -55,6 +53,7 @@ async function failed(adapter, workdir = process.cwd()) {
     { protocolMode: "canonical" }
   ))
     if (frame.kind === "canonical") events.push(frame.event);
+  await host.shutdown();
   assert.equal(events.filter((event) => event.type === "run.failed").length, 1);
   return events.find((event) => event.type === "run.failed");
 }

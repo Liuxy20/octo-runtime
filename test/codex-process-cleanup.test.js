@@ -5,7 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
-import { runCodexAppServerTurn } from "../packages/octo-runtime-adapter-codex/dist/app-server.js";
+import { runOwnedCodexTurn as runCodexAppServerTurn } from "../test-support/owned-codex-turn.mjs";
+import { CodexService } from "../packages/octo-runtime-adapter-codex/dist/service.js";
+import { runCodexAppServerTurn as runTurn } from "../packages/octo-runtime-adapter-codex/dist/app-server.js";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
 
 function alive(pid) {
@@ -26,7 +28,7 @@ async function waitGone(pid) {
 for (const protocolMode of ["canonical", "native"]) {
   for (const mode of ["cancel", "complete", "complete-eof", "cancel-paused"]) {
     test(
-      `Codex ${protocolMode} ${mode} reaps tools after leader exits`,
+      `Codex owned service shutdown ${protocolMode} ${mode} reaps tools after leader exits`,
       {
         skip: process.platform === "win32", // POSIX 组专项；Windows 真机验收由 issue #2 跟踪。
         timeout: 6000
@@ -123,7 +125,7 @@ for (const protocolMode of ["canonical", "native"]) {
 }
 
 for (const protocolMode of ["canonical", "native"]) {
-  test(`Codex ${protocolMode} preserves execution and cleanup failures`, async () => {
+  test(`Codex ${protocolMode} reports execution and service cleanup failures separately`, async () => {
     const fixture = codexAppServerFixture({ turnStartError: "original provider failure" });
     const child = fixture.spawnFn();
     // 纯模拟 child：不发送系统信号，验证新关闭失败不会覆盖原始 RPC 错误。
@@ -135,34 +137,30 @@ for (const protocolMode of ["canonical", "native"]) {
     };
     let released = false;
     try {
-      const stream = runCodexAppServerTurn({
+      const spec = {
+        command: "fixture",
+        args: [],
+        cwd: process.cwd(),
+        env: {},
+        cleanup: () => {
+          released = true;
+        }
+      };
+      const service = new CodexService("cleanup-test", spec, () => child);
+      const channel = await service.acquire();
+      const stream = runTurn({
         request: invokeRequest(),
-        spec: {
-          command: "fixture",
-          args: [],
-          cwd: process.cwd(),
-          env: {},
-          cleanup: () => {
-            released = true;
-          }
-        },
-        spawnFn: () => child,
+        spec,
+        channel,
         context: { protocolMode }
       });
-      await assert.rejects(
-        async () => {
-          for await (const event of stream) {
-            void event;
-          }
-        },
-        (error) => {
-          assert.ok(error instanceof AggregateError);
-          assert.match(error.errors[0].message, /original provider failure/);
-          assert.equal(error.errors[1], cleanupError);
-          assert.equal(error.cause, cleanupError);
-          return true;
-        }
-      );
+      if (protocolMode === "native")
+        await assert.rejects(Array.fromAsync(stream), /original provider failure/);
+      else {
+        const events = await Array.fromAsync(stream);
+        assert.match(events.at(-1).payload.message, /original provider failure/);
+      }
+      await assert.rejects(service.close(), (error) => error === cleanupError);
       assert.equal(released, true);
     } finally {
       fixture.close();

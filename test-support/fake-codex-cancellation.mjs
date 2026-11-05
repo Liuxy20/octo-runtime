@@ -10,6 +10,8 @@ let threadId = "thread-cancel";
 
 reader.on("line", (line) => {
   const message = JSON.parse(line);
+  if (message.method === "thread/unsubscribe")
+    return respond(message.id, { status: "unsubscribed" });
   if (message.method === "initialize") {
     respond(message.id, { userAgent: "fake-codex-cancellation" });
     return;

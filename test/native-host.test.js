@@ -1,6 +1,6 @@
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
@@ -33,9 +33,22 @@ const collect = async (source) => {
   for await (const value of source) values.push(value);
   return values;
 };
+const ownedHosts = new Map();
+afterEach(async () => {
+  const owned = [...ownedHosts];
+  ownedHosts.clear();
+  const results = await Promise.allSettled(owned.map(([host]) => host.shutdown()));
+  for (const [index, result] of results.entries()) {
+    assert.equal(result.status, "fulfilled");
+    assert.equal(result.value.cleanup, owned[index][1]);
+    assert.deepEqual(result.value.unresolvedServiceIds, []);
+    assert.deepEqual(result.value.failedCleanupServiceIds, []);
+  }
+});
 function hostFor(adapter) {
   const host = new AgentExecutor();
   host.register(adapter);
+  ownedHosts.set(host, "complete");
   return host;
 }
 const codexHost = () =>
@@ -143,11 +156,10 @@ test("explicit canonical runs the converter and retains the existing terminal se
 });
 
 test("native raw RPC errors retain numeric codes and nested data before Host failure", async () => {
+  const host = codexHost();
+  ownedHosts.set(host, "incomplete");
   const frames = await collect(
-    preparedTestInvoke((...args) => preparedFrames(codexHost(), ...args))(
-      "codex",
-      input("rpc-error")
-    )
+    preparedTestInvoke((...args) => preparedFrames(host, ...args))("codex", input("rpc-error"))
   );
   assert.deepEqual(
     frames.find((frame) => frame.kind === "native" && frame.payload.error).payload.error,
@@ -159,11 +171,10 @@ test("native raw RPC errors retain numeric codes and nested data before Host fai
 
 for (const scenario of ["unknown", "eof"])
   test(`native ${scenario} handles unsupported requests and missing terminal`, async () => {
+    const host = codexHost();
+    if (scenario === "eof") ownedHosts.set(host, "incomplete");
     const frames = await collect(
-      preparedTestInvoke((...args) => preparedFrames(codexHost(), ...args))(
-        "codex",
-        input(scenario)
-      )
+      preparedTestInvoke((...args) => preparedFrames(host, ...args))("codex", input(scenario))
     );
     assert.equal(frames.at(-1).control.state, scenario === "unknown" ? "completed" : "failed");
     assert.equal(frames.filter(isHostTerminal).length, 1);
@@ -515,5 +526,6 @@ for (const protocolMode of ["native", "canonical"])
     assert.equal(frames.at(-1).control.state, "failed");
     assert.equal(frames.filter(isHostTerminal).length, 1);
     assert.ok(!frames.some((frame) => frame.event?.type === "run.completed"));
+    ownedHosts.set(host, "incomplete");
     await host.shutdown();
   });

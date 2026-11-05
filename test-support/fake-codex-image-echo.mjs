@@ -2,6 +2,14 @@ import { createInterface } from "node:readline";
 const send = (value) => process.stdout.write(JSON.stringify(value) + "\n");
 for await (const line of createInterface({ input: process.stdin })) {
   const rpc = JSON.parse(line);
+  if (rpc.method === "turn/interrupt") {
+    send({ id: rpc.id, result: {} });
+    continue;
+  }
+  if (rpc.method === "thread/unsubscribe") {
+    send({ id: rpc.id, result: { status: "unsubscribed" } });
+    continue;
+  }
   if (["initialize", "thread/name/set"].includes(rpc.method)) send({ id: rpc.id, result: {} });
   else if (rpc.method === "thread/start")
     send({ id: rpc.id, result: { thread: { id: "image-thread" } } });

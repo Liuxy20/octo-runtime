@@ -11,19 +11,16 @@ import {
   contextHash,
   contextActmode,
   assertJsonByteLimit,
-  INVOKE_REQUEST_MAX_BYTES,
-  hasImageInput,
   providerInputParts,
   PROVIDER_DIAGNOSTIC_MAX_BYTES,
   resolveStreamLimitPolicy,
   streamCapacityError,
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
-import { CodexStdinWriter, codexTransportError } from "./stdin-writer.js";
+import { codexTransportError } from "./stdin-writer.js";
+import type { CodexTurnChannel } from "./service.js";
 import { codexEnvironmentConfig } from "./environment.js";
 import { CodexAsyncQuestions, asyncQuestionMetadata } from "./async-questions.js";
-import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
-import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 /**
  * Codex app-server transport and event adaptation layer.
  *
@@ -32,7 +29,7 @@ import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/p
  * initialize/thread/turn requests and must respond to approval/elicitation
  * requests that Codex sends back. That is why this does not reuse the generic
  * JSON CLI helper, but instead maintains a request pending map, notification
- * parser, cancellation and process-reaping state.
+ * parser and per-turn cancellation state. The service owns transport and process cleanup.
  *
  * This module upholds four key invariants:
  * - the provider session becomes visible to the Core only after turn/start
@@ -40,13 +37,11 @@ import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/p
  * - each invocation publishes at most one run.* terminal;
  * - only notifications for the current active thread are consumed, avoiding
  *   crosstalk;
- * - all pending RPCs and subprocess resources eventually converge via
- *   close()/finally.
+ * - close()/finally releases only the current turn's RPCs and subscription.
  */
 import {
   sanitizePublicValue,
   DriverQueue,
-  watchLineLimit,
   type AdapterInvocationContext,
   type AdapterOutput,
   type CanonicalEvent,
@@ -59,17 +54,11 @@ import {
   type InteractionResponse,
   type NativeInteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createInterface, type Interface as ReadLineInterface } from "node:readline";
 
 const APP_SERVER_REQUEST_TIMEOUT_MS = 30_000;
-// R06b：EOF 宽限 250 ms + 共享 TERM/KILL 确认 600 ms，位于默认 Host 1 秒预算内。
-const APP_SERVER_CLOSE_GRACE_MS = 250;
 const FINALIZATION_TIMEOUT_MS = 15_000;
-const FINALIZATION_INTERRUPT_GRACE_MS = 2_000;
-// Keep only the tail of stderr, balancing error diagnosability against the memory ceiling of a long-lived process.
-const STDERR_TAIL_LIMIT = 64 * 1024;
 
 type JsonRecord = Record<string, unknown>;
 type RpcId = string | number;
@@ -166,14 +155,14 @@ export function buildCodexAppServerArgs(): string[] {
 export async function* runCodexAppServerTurn({
   request,
   spec,
-  spawnFn = defaultSpawn,
+  channel,
   context,
   onInteractionResponder,
   onNativeResponder
 }: {
   request: InvokeRequest;
   spec: CodexAppServerCommand;
-  spawnFn?: CodexAppServerSpawn;
+  channel?: CodexTurnChannel;
   context?: AdapterInvocationContext;
   onInteractionResponder?: (responder: CodexInteractionResponder | undefined) => void;
   onNativeResponder?: (
@@ -182,14 +171,8 @@ export async function* runCodexAppServerTurn({
 }): AsyncGenerator<AdapterOutput> {
   const requestTimeoutMs = appServerRequestTimeout(request);
   const interactive = request.approvalMode !== "full_access";
-  let client = new CodexAppServerClient(
-    spec,
-    spawnFn,
-    requestTimeoutMs,
-    interactive,
-    request,
-    context
-  );
+  if (!channel) throw codexTransportError("CODEX_SERVICE_SCOPE_REQUIRED");
+  const client = new CodexAppServerClient(channel, requestTimeoutMs, interactive, request, context);
   onInteractionResponder?.((response) => client.respondInteraction(response));
   onNativeResponder?.((response) => client.respondNative(response));
   let terminal = false;
@@ -198,27 +181,7 @@ export async function* runCodexAppServerTurn({
   try {
     throwIfAborted(request.signal);
 
-    // Phase 1: negotiate the experimental app-server API first; no thread request is sent until initialize completes.
-    try {
-      await initializeClient(client);
-    } catch (error) {
-      if (!isInitializeTimeout(error) || request.signal?.aborted) throw error;
-      onInteractionResponder?.(undefined);
-      await client.close();
-      throwIfAborted(request.signal);
-      client = new CodexAppServerClient(
-        spec,
-        spawnFn,
-        requestTimeoutMs,
-        interactive,
-        request,
-        context
-      );
-      onInteractionResponder?.((response) => client.respondInteraction(response));
-      onNativeResponder?.((response) => client.respondNative(response));
-      await initializeClient(client);
-    }
-    client.notify("initialized");
+    // 作用域已完成服务初始化；这里仅装配本轮 thread/turn，不重复握手。
     let environmentConfig: JsonRecord | undefined;
     if (Object.keys(invocationEnvs(request)).length || spec.mcpServers) {
       const result = recordValue(
@@ -274,6 +237,7 @@ export async function* runCodexAppServerTurn({
         );
         resumed = true;
       } catch (error) {
+        if (!(error instanceof CodexAppServerRpcError)) throw error;
         if (request.providerSession?.requireResume === true) throw error;
         // A failed resume does not abort this turn; record a low-cardinality reason and fall back to a fresh thread.
         resumeFallback = rpcFailureReason(error);
@@ -421,8 +385,7 @@ export async function* runCodexAppServerTurn({
 
     if (!terminal) {
       // Ending without a terminal in the queue is a protocol/process anomaly and must not be disguised as success.
-      const exit = await client.exit();
-      throw new CodexAppServerProcessError(client.processErrorMessage(exit), exit);
+      throw codexTransportError("HOST_ENDED_WITHOUT_TERMINAL");
     }
   } catch (error) {
     executionFailure = error;
@@ -468,16 +431,15 @@ export async function* runCodexAppServerTurn({
       }
     }
   } finally {
-    // close() handles RPC/stdio/process; spec.cleanup handles any caller-owned resources.
+    // The turn releases its subscription; only the scope closes transport and process resources.
     onInteractionResponder?.(undefined);
     onNativeResponder?.(undefined);
-    await closeClientAndResources(client, spec, executionFailure);
+    await closeClientAndResources(client, executionFailure);
   }
 }
 
 async function closeClientAndResources(
   client: CodexAppServerClient,
-  spec: CodexAppServerCommand,
   executionFailure: unknown
 ): Promise<void> {
   try {
@@ -487,7 +449,7 @@ async function closeClientAndResources(
     if (executionFailure !== undefined) {
       const error = new AggregateError(
         [executionFailure, cleanupError],
-        "Codex execution and process cleanup failed",
+        "Codex execution and turn cleanup failed",
         { cause: cleanupError }
       );
       // Core 从顶层 code 分类；保留本地执行首因，同时用 errors/cause 暴露清理失败。
@@ -495,30 +457,7 @@ async function closeClientAndResources(
       throw isCodexLocalFailureReason(code) ? Object.assign(error, { code }) : error;
     }
     throw cleanupError;
-  } finally {
-    await spec.cleanup?.();
   }
-}
-
-function initializeClient(client: CodexAppServerClient): Promise<unknown> {
-  return client.request("initialize", {
-    clientInfo: {
-      name: "@mininglamp-oss/octo-runtime-adapter-codex",
-      version: "0.1.0"
-    },
-    capabilities: {
-      experimentalApi: true,
-      requestAttestation: false,
-      optOutNotificationMethods: ["mcpServer/startupStatus/updated", "remoteControl/status/changed"]
-    }
-  });
-}
-
-function isInitializeTimeout(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    /^codex app-server initialize timed out after \d+ms$/.test(error.message)
-  );
 }
 
 function stringErrorCode(error: unknown): string | undefined {
@@ -1192,53 +1131,39 @@ function boundedJson(value: unknown, depth = 0): unknown {
 }
 
 /**
- * JSON-RPC client for a single invocation, backed by a single app-server subprocess.
+ * JSON-RPC client for a single invocation using a channel on the shared service.
  *
  * Three kinds of frame may interleave on stdout:
  * 1. a response carrying id + result/error, which settles a Promise in #pending;
  * 2. a notification with no id, which is converted and pushed into #queue;
  * 3. a server request carrying id + method, which the adapter must respond to.
  *
- * This class does not decide the resume/fresh strategy; it only owns the wire,
- * the process and the active thread/turn state.
+ * This class owns turn state and interactions; the service owns the wire and process.
  */
 class CodexAppServerClient {
-  readonly #child: ChildProcessWithoutNullStreams;
-  readonly #cleanupProcess: () => Promise<void>;
   #closePromise?: Promise<void>;
-  readonly #reader: ReadLineInterface;
-  readonly #removeLineGuard: () => void;
   readonly #queue: DriverQueue<AdapterOutput>;
   readonly #streamLimits: Readonly<StreamLimitPolicy>;
   readonly #normalizer?: CodexEventNormalizer;
   readonly #native: boolean;
   readonly #pending = new Map<RpcId, PendingRequest>();
-  readonly #writer: CodexStdinWriter;
   readonly #interactions = new Map<string, PendingInteraction>();
   readonly #asyncQuestions: CodexAsyncQuestions;
   readonly #nativeRequestIds = new Set<RpcId>();
   readonly #requestTimeoutMs: number;
   readonly #interactive: boolean;
   readonly #signal?: AbortSignal;
-  readonly #exitPromise: Promise<ProcessExit>;
-  #resolveExit: (exit: ProcessExit) => void = () => undefined;
-  #nextId = 1;
   #nextInteractionId = 1;
-  #stderr = "";
   #closed = false;
   #transportFailure?: Error;
   #closing = false;
-  #exited = false;
   #terminal = false;
   #activeThreadId?: string;
   #activeTurnId?: string;
   #lastUsage = -1;
   readonly #seenItems = new Set<string>();
-  #abortTimer?: NodeJS.Timeout;
   #finalizationTimer?: NodeJS.Timeout;
-  #finalizationGraceTimer?: NodeJS.Timeout;
   #finalizationTimedOut = false;
-  #finalizationTimeoutMs = FINALIZATION_TIMEOUT_MS;
   readonly #openItems = new Set<string>();
 
   #clearFinalizationTimer(): void {
@@ -1246,28 +1171,19 @@ class CodexAppServerClient {
     this.#finalizationTimer = undefined;
   }
 
-  #finalizationFailure(): AdapterOutput {
+  #finalizationResult(): AdapterOutput {
     if (this.#native)
       return {
         kind: "control",
         control: {
-          type: "error",
-          code: "HOST_EXECUTION_FAILED",
-          message: "CODEX_FINALIZATION_TIMEOUT"
+          type: "state",
+          state: "completed"
         }
       };
     return {
       protocolVersion: 2,
-      type: "run.failed",
-      payload: {
-        code: "CODEX_FINALIZATION_TIMEOUT",
-        adapterType: "codex",
-        message:
-          "Codex final answer completed but the turn did not finish before the finalization deadline",
-        timeoutStage: "rpc",
-        timeoutReason: "rpc_timeout",
-        timeoutMs: this.#finalizationTimeoutMs
-      }
+      type: "run.completed",
+      payload: {}
     };
   }
 
@@ -1300,6 +1216,7 @@ class CodexAppServerClient {
       item?.type !== "agentMessage" ||
       item.phase !== "final_answer" ||
       item.delivery === "async" ||
+      !stringValue(item.text).trim() ||
       params.threadId !== this.#activeThreadId ||
       notificationTurnId(params) !== this.#activeTurnId ||
       this.#openItems.size ||
@@ -1316,24 +1233,18 @@ class CodexAppServerClient {
       typeof configured === "number" && Number.isFinite(configured) && configured > 0
         ? configured
         : FINALIZATION_TIMEOUT_MS;
-    this.#finalizationTimeoutMs = timeoutMs;
     this.#finalizationTimer = setTimeout(() => {
+      if (this.#terminal || this.#closed || this.#signal?.aborted) return;
       this.#finalizationTimedOut = true;
-      // RPC acknowledgement is not a turn terminal; await the notification separately.
-      this.#finalizationGraceTimer = setTimeout(() => {
-        if (this.#terminal || this.#closed) return;
-        this.#invalidateInteractions("run_terminal");
-        this.#terminal = true;
-        this.#queue.push(this.#finalizationFailure());
-        if (this.#native)
-          this.#queue.push({ kind: "control", control: { type: "state", state: "failed" } });
-        this.#queue.close();
-      }, FINALIZATION_INTERRUPT_GRACE_MS);
-      void this.request(
-        "turn/interrupt",
-        { threadId: this.#activeThreadId, turnId: this.#activeTurnId },
-        FINALIZATION_INTERRUPT_GRACE_MS
-      ).catch(() => undefined);
+      // #307：结果在清理之前锁定；release 负责有界中断/退订，失败不得改写成功。
+      this.context?.reportExecutionResult?.({
+        status: "completed",
+        basis: "final_answer_cleanup_fallback"
+      });
+      this.#invalidateInteractions("run_completed");
+      this.#terminal = true;
+      this.#queue.push(this.#finalizationResult());
+      this.#queue.close();
     }, timeoutMs);
   }
 
@@ -1360,26 +1271,12 @@ class CodexAppServerClient {
         payload: { reason: String(this.#signal?.reason ?? "cancelled") }
       });
     this.#queue.close();
-    if (this.#activeThreadId && this.#activeTurnId) {
-      void this.request(
-        "turn/interrupt",
-        {
-          threadId: this.#activeThreadId,
-          turnId: this.#activeTurnId
-        },
-        1_000
-      ).catch(() => undefined);
-    }
-    this.#abortTimer = setTimeout(() => {
-      // 观察异步失败以免产生 unhandled rejection；close 仍等待同一 Promise 并返回失败。
-      void this.#cleanupProcess().catch((error: Error) => this.#handleProcessError(error));
-    }, APP_SERVER_CLOSE_GRACE_MS);
-    this.#abortTimer.unref?.();
+    // release 单独发送一次中断；ACK 未知也不重发。消费者停读时仍有独立清理机会。
+    void this.channel.close().catch((error: Error) => this.#handleProcessError(error));
   };
 
   constructor(
-    spec: CodexAppServerCommand,
-    spawnFn: CodexAppServerSpawn,
+    readonly channel: CodexTurnChannel,
     requestTimeoutMs: number,
     interactive: boolean,
     readonly invocation: InvokeRequest,
@@ -1411,58 +1308,17 @@ class CodexAppServerClient {
     this.#interactive = interactive;
     const signal = invocation.signal;
     this.#signal = signal;
-    this.#exitPromise = new Promise((resolve) => {
-      this.#resolveExit = resolve;
-    });
-    this.#child = spawnFn(spec.command, spec.args, { cwd: spec.cwd, env: spec.env });
-    this.#writer = new CodexStdinWriter(this.#child.stdin, (error) =>
-      this.#handleProcessError(error)
-    );
-    this.#cleanupProcess = createProcessCleanup(this.#child, {
-      // 只有 production defaultSpawn 明确拥有独立组；注入的 child 不推定拥有组。
-      processGroup: isolatedProcessGroups.has(this.#child)
-    });
-
-    // The app-server protocol requires one JSON-RPC frame per line; readline handles chunk boundaries.
-    const transportLimit =
-      !this.#native && hasImageInput(invocation)
-        ? INVOKE_REQUEST_MAX_BYTES
-        : this.#streamLimits.rawMessageMaxBytes;
-    this.#removeLineGuard = watchLineLimit(this.#child.stdout, transportLimit, (error) => {
-      this.#reader.close();
-      this.#child.stdout.destroy();
-      this.#handleProcessError(error);
-      signalProcessTree(this.#child, "SIGTERM");
-    });
-    this.#reader = createInterface({ input: this.#child.stdout });
-    this.#reader.on("line", (line) => {
+    channel.onMessage = (message) => {
       try {
-        this.#handleLine(line);
+        this.#handleLine(JSON.stringify(message));
       } catch (error) {
         this.#handleProcessError(
           error instanceof Error ? error : new Error(String(error)),
           "protocol"
         );
       }
-    });
-    this.#child.stderr.setEncoding("utf8");
-    this.#child.stderr.on("data", (chunk: string | Buffer) => {
-      this.#stderr = (this.#stderr + chunk.toString()).slice(-STDERR_TAIL_LIMIT);
-    });
-
-    // spawn error and normal/abnormal close are watched separately, but both ultimately reject pending RPCs and close the event stream.
-    // S01（Jerry-Xin R05 同类）：write 回调不能代替流 error 监听。
-    // .octospec/tasks/pr1-yujiawei-review/assessment.md
-    for (const source of [
-      this.#child,
-      this.#child.stdin,
-      this.#child.stdout,
-      this.#child.stderr,
-      this.#reader
-    ]) {
-      source.on("error", (error: Error) => this.#handleProcessError(error));
-    }
-    this.#child.once("close", (code, exitSignal) => this.#handleExit({ code, signal: exitSignal }));
+    };
+    channel.onFailure = (error) => this.#handleProcessError(error);
     if (signal?.aborted) queueMicrotask(this.#abortListener);
     else signal?.addEventListener("abort", this.#abortListener, { once: true });
   }
@@ -1484,7 +1340,7 @@ class CodexAppServerClient {
 
   /** Accept only a provider reply to a pending request in this invocation. */
   async respondNative(response: NativeInteractionResponse): Promise<void> {
-    if (!this.#native || this.#closed || this.#exited || this.#terminal)
+    if (!this.#native || this.#closed || this.#terminal)
       throw protocolError("INTERACTION_NOT_ACTIVE");
     const entry = [...this.#interactions.entries()].find(
       ([, value]) => value.rpcId === response.requestId
@@ -1602,11 +1458,11 @@ class CodexAppServerClient {
   /** Resume one provider reverse request after the durable Worker response reaches this invocation. */
   respondInteraction(response: InteractionResponse): Promise<void> {
     if (response.interactionId.startsWith("codex:async:")) {
-      if (this.#native || this.#closed || this.#exited || this.#terminal)
+      if (this.#native || this.#closed || this.#terminal)
         return Promise.reject(protocolError("INTERACTION_NOT_ACTIVE"));
       return this.#asyncQuestions.respond(response);
     }
-    if (this.#closed || this.#exited || this.#terminal) {
+    if (this.#closed || this.#terminal) {
       return Promise.reject(new Error("codex interaction is no longer active"));
     }
     const pending = this.#interactions.get(response.interactionId);
@@ -1634,10 +1490,6 @@ class CodexAppServerClient {
     );
   }
 
-  exit(): Promise<ProcessExit> {
-    return this.#exitPromise;
-  }
-
   request(
     method: string,
     params: unknown,
@@ -1656,7 +1508,7 @@ class CodexAppServerClient {
             : {})
         })
       );
-    if (this.#closed || this.#exited) {
+    if (this.#closed) {
       return Promise.reject(
         Object.assign(new Error("codex app-server is closed"), { deliveryNotAttempted: true })
       );
@@ -1711,7 +1563,7 @@ class CodexAppServerClient {
 
   /** Allocate the exact JSON-RPC id a subsequent request will put on the wire. */
   reserveRequestId(): RpcId {
-    return this.#nextId++;
+    return this.channel.reserveRequestId();
   }
 
   notify(method: string, params?: unknown): void {
@@ -1723,45 +1575,23 @@ class CodexAppServerClient {
   }
 
   /**
-   * R06b：父进程退出只结束 EOF 等待，不能代替本次受管组清理完成。
-   * 重复 close 共享同一结果；保留已接纳终态，清理失败继续向调用方抛出。
-   * .octospec/tasks/pr1-yujiawei-review/second-review.md
+   * 关闭本轮交互、RPC 与订阅；进程所有权仍留在 service。
+   * 重复 close 共用首次释放，失败向原调用方报告，不能据此关闭共享进程。
    */
   close(): Promise<void> {
     return (this.#closePromise ??= (async () => {
       this.#closed = true;
-      this.#writer.stop(protocolError("INTERACTION_NOT_ACTIVE"));
       this.#clearFinalizationTimer();
-      if (this.#finalizationGraceTimer) clearTimeout(this.#finalizationGraceTimer);
       this.#closing = true;
       this.#signal?.removeEventListener("abort", this.#abortListener);
-      if (this.#abortTimer) clearTimeout(this.#abortTimer);
-      this.#reader.close();
-      this.#removeLineGuard();
       this.#rejectPending(new Error("codex app-server closed"));
       this.#invalidateInteractions("execution_lost");
-      try {
-        if (!this.#exited) {
-          this.#child.stdin.end();
-          await waitForExit(this.#exitPromise, APP_SERVER_CLOSE_GRACE_MS);
-        }
-      } finally {
-        // 即使 leader 早已退出或 EOF 已成功，仍确认后代消失并按需升级 KILL。
-        await this.#cleanupProcess();
-      }
+      await this.channel.close();
     })());
   }
 
   errorMessage(error: unknown): string {
-    const raw = error instanceof Error ? error.message : String(error);
-    return this.#stderr.trim() ? `${raw}\n\n[codex stderr]\n${this.#stderr.trim()}` : raw;
-  }
-
-  processErrorMessage(exit: ProcessExit): string {
-    const base = exit.signal
-      ? `codex app-server exited on ${exit.signal}`
-      : `codex app-server exited with code ${exit.code ?? -1}`;
-    return this.#stderr.trim() ? `${base}: ${this.#stderr.trim()}` : base;
+    return this.channel.errorMessage(error);
   }
 
   /** Dispatch one stdout frame. Ordering of the checks matters: a response may also lack a method. */
@@ -1776,7 +1606,7 @@ class CodexAppServerClient {
       });
       this.#rejectPending(error);
       this.#queue.fail(error);
-      signalProcessTree(this.#child, "SIGTERM");
+      this.#handleProcessError(error);
       return;
     }
     if (!message) return;
@@ -1791,6 +1621,7 @@ class CodexAppServerClient {
       this.#handleServerRequest(id, method, recordValue(message.params) ?? {}, message);
       return;
     }
+    if (this.#terminal) return;
     const params = recordValue(message.params) ?? {};
     if (
       this.#native &&
@@ -1812,7 +1643,6 @@ class CodexAppServerClient {
         );
         this.#terminal = true;
         this.#clearFinalizationTimer();
-        if (this.#finalizationGraceTimer) clearTimeout(this.#finalizationGraceTimer);
         const status = recordValue(params.turn)?.status;
         this.#queue.push({
           kind: "control",
@@ -1838,10 +1668,9 @@ class CodexAppServerClient {
         );
         this.#terminal = true;
         this.#clearFinalizationTimer();
-        if (this.#finalizationGraceTimer) clearTimeout(this.#finalizationGraceTimer);
         this.#queue.push(
           this.#finalizationTimedOut && event.type !== "run.completed"
-            ? this.#finalizationFailure()
+            ? this.#finalizationResult()
             : event
         );
         this.#queue.close();
@@ -1916,6 +1745,11 @@ class CodexAppServerClient {
     // A late response arriving after timeout has no pending entry; drop it so it cannot pollute the next request.
     const pending = this.#pending.get(id);
     if (!pending) return;
+    if (!message.error) {
+      if (pending.method === "thread/start" || pending.method === "thread/resume")
+        this.setActiveThread(extractThreadId(message.result));
+      if (pending.method === "turn/start") this.setActiveTurn(extractTurnId(message.result));
+    }
     if (
       this.#native &&
       ["thread/start", "thread/resume", "turn/start", "turn/interrupt"].includes(pending.method)
@@ -1951,7 +1785,7 @@ class CodexAppServerClient {
       this.#rejectServerRequest(id, method);
       return;
     }
-    if (this.#terminal || this.#closed || this.#exited) {
+    if (this.#terminal || this.#closed) {
       this.#write({
         jsonrpc: "2.0",
         id,
@@ -2145,12 +1979,12 @@ class CodexAppServerClient {
   ): () => void {
     const error =
       this.#transportFailure ??
-      (this.#closed || this.#exited ? codexTransportError("CODEX_TRANSPORT_FAILED") : undefined);
+      (this.#closed ? codexTransportError("CODEX_TRANSPORT_FAILED") : undefined);
     if (error) {
       onError?.(error);
       return () => {};
     }
-    return this.#writer.write(message, onError ?? (() => {}), onWritten, {
+    return this.channel.write(message, onError ?? (() => {}), onWritten, {
       ...options,
       // 普通容量拒绝可显式走普通队列；协议拒绝默认使用控制预留，批准不借用预留。
       control: options.control ?? Object.hasOwn(message, "error")
@@ -2245,8 +2079,6 @@ class CodexAppServerClient {
     )
       error = codexTransportError("CODEX_TRANSPORT_FAILED", error);
     this.#transportFailure = error;
-    this.#writer.stop(error);
-    this.#reader.close();
     this.#clearFinalizationTimer();
     this.#rejectPending(error);
     this.#invalidateInteractions("execution_lost");
@@ -2258,20 +2090,8 @@ class CodexAppServerClient {
     }
   }
 
-  #handleExit(exit: ProcessExit): void {
-    this.#clearFinalizationTimer();
-    if (this.#exited) return;
-    this.#exited = true;
-    this.#resolveExit(exit);
-    const error = new CodexAppServerProcessError(this.processErrorMessage(exit), exit);
-    this.#writer.stop(error);
-    this.#rejectPending(error);
-    this.#invalidateInteractions("execution_lost");
-    if (!this.#closing && !this.#terminal) this.#queue.fail(error);
-  }
-
   #invalidateInteractions(reasonCode: string): void {
-    this.#writer.cancelPending(protocolError("INTERACTION_NOT_ACTIVE"));
+    this.channel.cancelPending(protocolError("INTERACTION_NOT_ACTIVE"));
     this.#asyncQuestions.invalidate(reasonCode);
     for (const [interactionId, pending] of this.#interactions) {
       clearTimeout(pending.timer);
@@ -2288,37 +2108,6 @@ class CodexAppServerClient {
     }
     this.#pending.clear();
   }
-}
-
-function defaultSpawn(
-  command: string,
-  args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv }
-): ChildProcessWithoutNullStreams {
-  const launch = resolveProcessLaunch(command, args, options);
-  const child = spawn(launch.command, [...launch.args], {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: ["pipe", "pipe", "pipe"],
-    detached: process.platform !== "win32",
-    windowsHide: process.platform === "win32"
-  });
-  if (process.platform !== "win32") isolatedProcessGroups.add(child);
-  return child;
-}
-
-const isolatedProcessGroups = new WeakSet<ChildProcessWithoutNullStreams>();
-
-function signalProcessTree(child: ChildProcessWithoutNullStreams, signal: NodeJS.Signals): void {
-  if (isolatedProcessGroups.has(child) && child.pid !== undefined) {
-    try {
-      process.kill(-child.pid, signal);
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
-    }
-  }
-  child.kill(signal);
 }
 
 /** Shared params for thread/start and thread/resume; the permission policy is fixed at the thread level. */
@@ -2828,16 +2617,4 @@ function stringArray(value: unknown): string[] {
 
 function rpcId(value: unknown): RpcId | undefined {
   return typeof value === "string" || typeof value === "number" ? value : undefined;
-}
-
-async function waitForExit(exit: Promise<ProcessExit>, timeoutMs: number): Promise<boolean> {
-  let timer: NodeJS.Timeout | undefined;
-  return Promise.race([
-    exit.then(() => true),
-    new Promise<boolean>((resolve) => {
-      timer = setTimeout(() => resolve(false), timeoutMs);
-    })
-  ]).finally(() => {
-    if (timer) clearTimeout(timer);
-  });
 }

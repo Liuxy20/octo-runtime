@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
 
 for (const source of ["stdin", "stdout", "stderr"]) {
@@ -30,7 +30,8 @@ for (const source of ["stdin", "stdout", "stderr"]) {
         events.some((event) => event.type === "run.completed"),
         false
       );
-      assert.notEqual(child.exitCode, null);
+      await adapter.close();
+      assert.ok(child.exitCode !== null || child.signalCode !== null);
     }
   );
 }

@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { contextHash } from "../packages/octo-runtime-protocol/dist/index.js";
 import { codexAppServerFixture, invokeRequest, withTimeout } from "./runtime-fixture.js";
 
@@ -115,16 +115,21 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
     });
     const events = [];
     let finalAnswerAt;
-    for await (const event of adapter.invoke(
-      invokeRequest({
-        modelInput: mode,
-        signal: AbortSignal.timeout(5_000),
-        agentConfig: { providerOptions: { finalizationTimeoutMs: 60 } }
-      })
-    )) {
-      if (event.type === "message.update" && event.payload.text === "answer preserved")
-        finalAnswerAt ??= performance.now();
-      events.push(event);
+    try {
+      for await (const event of adapter.invoke(
+        invokeRequest({
+          modelInput: mode,
+          signal: AbortSignal.timeout(5_000),
+          agentConfig: { providerOptions: { finalizationTimeoutMs: 60 } }
+        })
+      )) {
+        if (event.type === "message.update" && event.payload.text === "answer preserved")
+          finalAnswerAt ??= performance.now();
+        events.push(event);
+      }
+    } catch (error) {
+      assert.equal(mode, "ignore-interrupt");
+      assert.equal(error.code, "CODEX_TURN_CLEANUP_INCOMPLETE");
     }
     const terminals = events.filter((event) =>
       ["run.failed", "run.completed", "run.cancelled"].includes(event.type)
@@ -136,9 +141,7 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
       )
     );
     if (["stall", "ignore-interrupt"].includes(mode)) {
-      assert.equal(terminals[0].type, "run.failed");
-      assert.equal(terminals[0].payload.code, "CODEX_FINALIZATION_TIMEOUT");
-      assert.equal(terminals[0].payload.timeoutMs, 60);
+      assert.equal(terminals[0].type, "run.completed");
       // 收尾截止从最终答案开始；子进程启动和协议握手不属于这个预算。
       assert.ok(Number.isFinite(finalAnswerAt));
       const elapsed = performance.now() - finalAnswerAt;
@@ -222,6 +225,7 @@ test(
       }
 
       assert.equal(events.at(-1).type, "run.cancelled");
+      await adapter.close();
       const grandchildPid = Number(await readFile(pidFile, "utf8"));
       await new Promise((resolve) => setTimeout(resolve, 100));
       assert.throws(
@@ -318,7 +322,7 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
             interactionId: payload.interactionId,
             outcome: "accepted"
           }),
-          /no active Codex interaction invocation/
+          /INTERACTION_NOT_ACTIVE/
         );
         await assert.rejects(
           adapter.respondInteraction(request.invocationId, {
@@ -365,7 +369,7 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
           interactionId: "after-terminal",
           outcome: "accepted"
         }),
-        /no active Codex interaction invocation/
+        /INTERACTION_NOT_ACTIVE/
       );
     }
   );
@@ -714,7 +718,7 @@ for (const termination of ["process_death", "cancellation"]) {
             interactionId: event.payload.interactionId,
             outcome: "accepted"
           }),
-          /codex interaction is no longer active/
+          /codex interaction is no longer active|unknown codex interaction/
         );
       }
       const requested = events.find((event) => event.type === "interaction.requested");

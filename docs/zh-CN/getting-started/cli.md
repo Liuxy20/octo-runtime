@@ -288,6 +288,8 @@ Kernel 的初始化、就绪、关闭和清理失败记录于 `<Home>/logs/kerne
 
 `status` 分别返回原生 `service` 状态和 IPC `runtime` 状态，退出码 0 不代表业务可用。`doctor` 报告服务管理器探测和服务定义；`adapter list`、`adapter probe` 查询已运行的 Kernel，不会启动它。
 
+`doctor` 还从所选实例已有快照投影常驻进程。文本和 JSON 的 `processes` 同源，包含 Host/Kernel、独立托管 Extra 和自有 app-server。仅在记录均存活、PID 和归属身份相同时合并角色；OS 复用 PID 时，旧清理记录保持独立。树表示所有权，不推断 OS 父 PID；不列 turn、thread、Run、调用计数和临时工具。读取不会启动或 probe Provider，首次调用前没有 Provider PID；恢复后展示新 PID/代次，owner 不可达和清理未确认保持明确状态。direct Core owner 可通过 `executor.processes()` 读取同源服务快照。
+
 返回码：0 成功；2 参数或声明非法；3 组件未安装；4 不可达或未就绪；5 清理不完整；1 其他失败。文本错误写 stderr，JSON 错误写 stdout。
 
 宿主异常退出后遗留资源状态未确认时，启动会以 `ORPHAN_CLEANUP_INCOMPLETE` 失败。确认遗留进程已停止后再执行：

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
 
 const context = (servers, envs = {}) => ({

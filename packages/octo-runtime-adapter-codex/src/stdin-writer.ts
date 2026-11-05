@@ -2,6 +2,7 @@ import type { Writable } from "node:stream";
 import { performance } from "node:perf_hooks";
 
 interface WriteEntry {
+  owner?: object;
   line: string;
   bytes: number;
   control: boolean;
@@ -74,7 +75,7 @@ export class CodexStdinWriter {
     message: Record<string, unknown>,
     onError: (error: Error) => void,
     onWritten?: () => void,
-    options: { control?: boolean; timeoutMs?: number } = {}
+    options: { control?: boolean; timeoutMs?: number; owner?: object } = {}
   ): () => void {
     const denied = this.#failure ?? (!options.control ? this.#admissionError : undefined);
     if (denied) {
@@ -110,6 +111,7 @@ export class CodexStdinWriter {
     if (!this.#active && !this.#normal.length && !this.#control.length)
       this.#lastProgress = performance.now();
     const entry: WriteEntry = {
+      owner: options.owner,
       line,
       bytes,
       control,
@@ -142,6 +144,19 @@ export class CodexStdinWriter {
     const entries = [...this.#normal.splice(0), ...this.#control.splice(0)];
     if (this.#active) entries.push(this.#active);
     for (const entry of entries) this.#reject(entry, error);
+    this.#arm();
+  }
+
+  /** 共享服务只撤销原调用的未写入条目；已写出的字节不重放，也不关闭其他 owner 的准入。 */
+  cancelOwner(owner: object, error: Error): void {
+    for (const queue of [this.#normal, this.#control]) {
+      for (let i = queue.length - 1; i >= 0; i--) {
+        if (queue[i].owner !== owner) continue;
+        const [entry] = queue.splice(i, 1);
+        this.#reject(entry, error);
+      }
+    }
+    if (this.#active?.owner === owner) this.#reject(this.#active, error);
     this.#arm();
   }
 

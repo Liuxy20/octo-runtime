@@ -17,7 +17,9 @@
 
 使用 HostFrame 时，通过公开的 `isHostTerminal` 判断 Runtime 最终状态。状态包括 `running`、`completed`、`failed`、`cancelled` 和 `lost`。终态不能替代资源清理确认；direct Extra 还会按完整调用凭据等待 Core 的首次清理结果，再汇总 close.complete。
 
-`lost` 表示无法确定执行结果，KernelClient 会报告 `RUN_OUTCOME_UNKNOWN`。没有收到最终状态，或发生输出缺失、清理失败时，都不能按成功处理。应用是否已保存结果、投递消息或更新 UI，需要应用另外确认。
+`lost` 表示无法确定执行结果，KernelClient 会报告 `RUN_OUTCOME_UNKNOWN`。最终状态缺失、输出缺失和清理失败本身都不能证明成功。应用是否已保存结果、投递消息或更新 UI，需要应用另外确认。
+
+Codex 的非空且完成的 `final_answer` 在无活动工作、无同步交互时，可于 15 秒 finalization fallback 后确认 completed。新工作、取消或已知错误使资格失效。确认后的成功不会被后续中断/退订失败改写，但清理仍独立报告 failed/incomplete。其他 Adapter 保持原有完成规则。轮次释放不关闭常驻 app-server。
 
 ## HostFrame 的结构
 

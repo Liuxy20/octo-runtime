@@ -5,6 +5,13 @@ import { delimiter, isAbsolute, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import type { AdapterInvocationContext } from "./activity.js";
+import type { CreateAdapterExecutionScope } from "./execution-scope.js";
+export type {
+  AdapterExecutionScope,
+  AdapterScopeCleanup,
+  CreateAdapterExecutionScope,
+  ServiceProcessSnapshot
+} from "./execution-scope.js";
 import {
   invocationEnvironment,
   mergeProcessEnvironment,
@@ -111,6 +118,7 @@ export interface ProbeResult {
 /** 工厂的编写输入；直接交给 Core 注册时须满足完整的 HostedAdapter 合同。 */
 export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
   metadata: AdapterMetadata;
+  createExecutionScope?: CreateAdapterExecutionScope;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
   /**
    * Execute one provider turn, optionally reporting watchdog progress.

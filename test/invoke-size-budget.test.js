@@ -10,7 +10,7 @@ import {
   resolveStreamLimitPolicy
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { readBoundedLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { invokeRequest } from "./runtime-fixture.js";
 import { fileURLToPath } from "node:url";
 

@@ -122,6 +122,43 @@
         }
       }
     },
+    "ServiceProcessSnapshot": {
+      "title": "ServiceProcessSnapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_id",
+        "service_id",
+        "incarnation",
+        "provider",
+        "owner_pid",
+        "state",
+        "observation",
+        "ownership"
+      ],
+      "properties": {
+        "scope_id": { "type": "string", "minLength": 1 },
+        "service_id": { "type": "string", "minLength": 1 },
+        "incarnation": { "type": "integer", "minimum": 0 },
+        "provider": { "type": "string", "minLength": 1 },
+        "owner_pid": { "type": "integer", "minimum": 1 },
+        "pid": { "type": "integer", "minimum": 1 },
+        "state": {
+          "enum": [
+            "not_started",
+            "starting",
+            "ready",
+            "recovering",
+            "degraded",
+            "closing",
+            "closed",
+            "cleanup_incomplete"
+          ]
+        },
+        "observation": { "enum": ["alive", "exited", "unknown"] },
+        "ownership": { "const": "owned" }
+      }
+    },
     "KernelStatus": {
       "title": "KernelStatus",
       "type": "object",
@@ -141,6 +178,11 @@
         },
         "execution_ready": {
           "type": "boolean"
+        },
+        "service_processes": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/definitions/ServiceProcessSnapshot" }
         }
       }
     },

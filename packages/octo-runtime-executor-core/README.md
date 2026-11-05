@@ -83,6 +83,8 @@ Closing a direct iterator early _requests cancellation_ — unlike Kernel, where
 
 `shutdown()` returns an immutable snapshot. `state: "closed"` only means no new runs are accepted; only `cleanup: "complete"` means every owned resource was actually released. When it is `incomplete`, `unresolvedInvocationIds` and `failedCleanupInvocationIds` name what is still holding on.
 
+Each registered Adapter may create an independent execution scope. Core binds invocation and interaction methods to that scope, synchronously stops its recovery/admission during shutdown, then awaits service cleanup. `unresolvedServiceIds` and `failedCleanupServiceIds` report service ownership separately, including when no invocation remains. `processes()` returns validated resident-service snapshots without starting a Provider or probe. Codex keeps healthy services alive between turns; only the owner closes them.
+
 Admission never reopens and a failed finalizer is never retried — a later `shutdown()` waits again but cannot resurrect the attempt. A rejected `next()`, a `return()` that reports `done: false`, or a generator without a usable finalizer is not proof of disposal.
 
 Provider terminal draining and iterator closure share one monotonic `cancelGraceMs` budget, starting at the first terminal, abort, or cleanup request; the `shutdown` timeout bounds only that caller's wait.

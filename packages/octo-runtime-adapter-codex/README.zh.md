@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-驱动双向的 `codex app-server` 协议：每次调用拉起一个 app-server，按 `initialize` → `thread/start` 或 `thread/resume` → `turn/start` 推进，应答反向请求，最后映射成 canonical 事件，或保留 Provider 负载作为 native 帧。Codex 的会话、审批和取消都收在这里，Core 不需要任何 Codex 逻辑。
+驱动双向的 `codex app-server` 协议。每次 Core 注册拥有独立服务作用域；兼容调用复用一个常驻 stdio app-server，每个进程代次只初始化一次。每轮启动或续接自己的 thread/turn，应答反向请求，返回 canonical 事件或 native 帧。Codex 会话、审批和取消由 Adapter 负责。
 
 ## 什么时候用它
 
@@ -39,7 +39,7 @@ const input = InvokeInput.check({
 | Adapter 类型 | `codex`                                                                                                       |
 | 导出         | `codexAdapter`、`createCodexAdapter`                                                                          |
 | 协议         | `codex.app-server`，模式 `native` 与 `canonical`                                                              |
-| 传输         | 每次调用一个 stdio JSON-RPC app-server                                                                        |
+| 传输         | Core 注册作用域拥有的常驻 stdio JSON-RPC app-server                                                           |
 | 会话         | 显式 Provider 会话对应原生 thread；resume 被拒或 rollout 缺失时，可以用调用方给的恢复输入做一次新 thread 兜底 |
 | 交互         | 命令/文件审批、用户输入、MCP elicitation，都回到同一个活动请求上应答                                          |
 
@@ -49,6 +49,10 @@ const input = InvokeInput.check({
 
 调用方保存会话更新中的完整 `providerSession`（含 Provider 扩展字段），并在下一轮显式回传。只复用业务 `sessionId` 会新开 Provider 会话；Core 不持久维护业务会话到 Provider 的绑定表。续接与恢复输入步骤见[背景资料与会话](../../docs/zh-CN/guides/context-and-sessions.md)。
 
+兼容配置包含可执行文件身份、argv、cwd、完整有效环境、`CODEX_HOME`、MCP 语义配置、有效 `rawMessageMaxBytes` 预算和 `agentConfig.providerOptions.codexServiceRevision`。原地修改原生配置或凭据后，更新该修订值或重建 owner。兼容键和凭据不进入诊断；进程快照只报告归属、PID、状态及代次。裸描述对象调用要求显式创建执行作用域；通过 Core 注册时自动绑定。
+
+空闲或活动期间 transport 失效都会主动恢复自有进程；每个恢复周期最多替换 5 次，总预算 90 秒，不重放原业务或控制请求。可执行文件不存在等启动错误直接失败，不反复重试。连续健康 60 秒后重置恢复预算。
+
 ## 限制
 
 - `ask` 和 `assisted` 模式通过当前交互桥处理审批；`full_access` 自动处理支持的审批，但不回答用户问题或 MCP elicitation。
@@ -56,11 +60,14 @@ const input = InvokeInput.check({
 - 权威的 session update 只在 turn start 成功后上报；Adapter 从不重建应用历史。
 - turn 回执、一段文本、子进程退出，都不证明执行成功或清理完成。
 - native 模式下必须同时读 Runtime 控制帧和 Provider 负载。
+- 每个 scope 最多 8 种服务配置，每个服务最多 8 个不同活动 thread；同 thread 并发明确拒绝。启动/恢复等待最多 128 条、32 MiB；每代次保留最多 4096 个已用 thread 的归属历史。容量不足不驱逐健康服务。
+- 缺少 turnId 的 elicitation 只在首次活动订阅上可归属；复用 thread 时无法证明因果关系，明确拒绝。
+- 非空且完成的 `final_answer` 在无活动工作、无同步交互时，可于 15 秒 finalization fallback 后完成。取消、Provider error 和后续新工作会使资格失效。轮次清理独立记录，结果完成后仍可能清理失败。
 
 
 人工审批额度按每次调用的「等待决定」计数，上限 256；第 257 条收到明确拒绝，已接纳审批保持有效。接受合法决定后立即释放额度；自动审批不占此额度。问题与 MCP elicitation 保留独立的 16 条未完成额度。`full_access` 仍使用 Codex `untrusted` 策略，由 Runtime 自动处理支持的审批，以保留动态 MCP 行为。
 
-同一 app-server 的所有 stdin 帧共用有界发送器：普通队列最多 4096 条 / 64 MiB（含在途帧），协议拒绝与中断另留 8 条 / 64 KiB；人工额度拒绝走普通队列，避免正常超额突发挤满控制预留。按序等待写回调，并在 `write=false` 时等待 `drain`；连续 5 秒无写入进展或入队后 30 秒未完成投递即失败。人工决定期限仍为 10 分钟。resolved 仅表示本地写回调成功，不代表 Provider 已读取或工具执行完成。取消会删除尚未发送的响应；已进入管道的字节无法撤回。
+同一 app-server 的所有 stdin 帧共用有界发送器：普通队列最多 128 条 / 32 MiB（含在途帧），协议拒绝与中断另留 8 条 / 64 KiB；人工额度拒绝走普通队列，避免正常超额突发挤满控制预留。按序等待写回调，并在 `write=false` 时等待 `drain`；连续 5 秒无写入进展或入队后 30 秒未完成投递即失败。人工决定期限仍为 10 分钟。resolved 仅表示本地写回调成功，不代表 Provider 已读取或工具执行完成。取消只删除所属调用的排队响应；已进入管道的字节无法撤回。
 
 本地容量、写入和超时故障使用结构化原因，优先于无关插件 stderr 中的 Unauthorized。native 的 `HOST_EXECUTION_FAILED.failure` 与 canonical 失败保留相同原因；真实 Provider 认证拒绝仍按凭据错误处理。
 
@@ -68,13 +75,15 @@ const input = InvokeInput.check({
 
 默认 POSIX spawn 创建自有独立进程组。清理会 await 有界的 `SIGTERM` → `SIGKILL` 升级及进程组退出确认；app-server leader 已退出但工具仍在时也会清理该组。注入的 `spawnFn` child 不推定拥有进程组，清理目标是直接子进程。
 
-Windows 上本 Adapter 未启用共享工具的 `processTree` 选项；直接子进程终止与退出确认不能证明全部后代已退出。Kernel 的额外清理由其自身所有权路径负责。宿主崩溃和逃离自有组的进程不在正常清理保证内；消费方须检查清理失败，不能把取消回执当作退出证明。
+正常完成、Stop 和 Extra 关闭只释放所属调用的订阅，不终止共享 app-server。Core owner 在 `shutdown()` 时关闭服务；direct 调用方可只读 `executor.processes()`，不会启动或 probe Provider。
+
+Windows 默认自有 spawn 启用既有系统命令的进程树清理；注入 child 仅清理直接子进程。Windows 进程树清理依赖仍可识别的 leader；父进程先退出、宿主崩溃及逃逸后代不能保证全部清空。须检查清理结果，不能把取消回执当作退出证明。
 
 执行终态与取消见[输出与交互控制](../../docs/zh-CN/reference/output-and-control.md)，`shutdown()` 清理结果见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ## 导入与分发
 
-private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，也没有公开 SDK 子路径。
+private workspace 包，包含在 CLI 发行物里。外部通过 `@mininglamp-oss/octo-runtime/adapters/codex` 导入，没有单独的 npm 包。
 
 ## 延伸阅读
 

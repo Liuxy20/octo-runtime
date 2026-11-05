@@ -23,4 +23,9 @@ export interface AdapterInvocationContext {
   log?: RuntimeLog;
   reportConversion?(): void;
   reportActivity?(activity: ProviderActivity): void;
+  /** 本地资格确认：成功结果已确定，后续 cleanup 失败独立报告；不是 wire 事件。 */
+  reportExecutionResult?(result: {
+    status: "completed";
+    basis: "final_answer_cleanup_fallback";
+  }): void;
 }

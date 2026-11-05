@@ -672,6 +672,21 @@ export interface ExecutionEvidence {
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ServiceProcessSnapshot".
+ */
+export interface ServiceProcessSnapshot {
+  scope_id: string;
+  service_id: string;
+  incarnation: number;
+  provider: string;
+  owner_pid: number;
+  pid?: number;
+  state: "not_started" | "starting" | "ready" | "recovering" | "degraded" | "closing" | "closed" | "cleanup_incomplete";
+  observation: "alive" | "exited" | "unknown";
+  ownership: "owned";
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "KernelStatus".
  */
 export interface KernelStatus {
@@ -679,6 +694,10 @@ export interface KernelStatus {
   kernel_instance_id: string;
   pid: number;
   execution_ready: boolean;
+  /**
+   * @maxItems 256
+   */
+  service_processes?: ServiceProcessSnapshot[];
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema

@@ -1,5 +1,6 @@
 import {
   invocationEnvironment,
+  invocationMcpServers,
   mergeProcessEnvironment,
   processEnvironmentValue
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -7,10 +8,8 @@ import { codexMcpConfig } from "./mcp.js";
 /**
  * Assembly entry point for the Codex adapter.
  *
- * This file only handles "how to prepare one invocation": selecting the real
- * CODEX_HOME, declaring adapter metadata, and delegating execution to the
- * app-server transport. Per-run developer instructions travel in native thread
- * params, so app-server sees the complete state database and plugin runtime.
+ * 描述对象注册时创建独立 scope；按兼容配置选择常驻服务，再绑定本轮 channel。
+ * scope 负责最终关闭，逐轮 developer instructions 仍放在原生 thread 参数中。
  */
 import {
   defineAdapter,
@@ -19,6 +18,8 @@ import {
   type InvokeRequest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
+  hasImageInput,
+  resolveStreamLimitPolicy,
   type InteractionResponse,
   type NativeInteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -31,6 +32,16 @@ import {
   type CodexAppServerSpawn,
   type CodexInteractionResponder
 } from "./app-server.js";
+import { CodexService } from "./service.js";
+import { createHmac, randomBytes, randomUUID } from "node:crypto";
+import { realpathSync, statSync } from "node:fs";
+import { delimiter, isAbsolute, resolve } from "node:path";
+import type {
+  AdapterExecutionScope,
+  AdapterScopeCleanup,
+  AdapterOutput,
+  RuntimeLog
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export {
   buildCodexAppServerArgs,
@@ -109,11 +120,6 @@ export function createCodexAdapter({
   spawnFn?: CodexAppServerSpawn;
   env?: NodeJS.ProcessEnv;
 } = {}) {
-  const interactionResponders = new Map<string, CodexInteractionResponder>();
-  const nativeResponders = new Map<
-    string,
-    (response: NativeInteractionResponse) => Promise<void>
-  >();
   return defineAdapter({
     metadata: {
       mcp: true,
@@ -135,56 +141,211 @@ export function createCodexAdapter({
       },
       type: "codex",
       agentSources: ["provisioned"],
-      processModel: "subprocess-per-invocation",
+      processModel: "service-owned-subprocess",
       transport: "json-rpc-2.0/stdio"
     },
     probe: () => probeCommand(command),
-    async respondNative(invocationId: string, response: NativeInteractionResponse): Promise<void> {
-      const responder = nativeResponders.get(invocationId);
-      if (!responder) throw new Error("INTERACTION_NOT_ACTIVE");
-      await responder(response);
-    },
-    async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
-      const responder = interactionResponders.get(invocationId);
-      if (!responder) throw new Error(`no active Codex interaction invocation: ${invocationId}`);
-      await responder(response);
-    },
-    async *invoke(request: InvokeRequest, context?: AdapterInvocationContext) {
-      if (interactionResponders.has(request.invocationId)) {
-        throw new Error(`duplicate active Codex invocation: ${request.invocationId}`);
-      }
-      // The transport owns subprocess cleanup and observation ordering.
-      const spec = buildCodexCommand(request, command, appServerArgs, env);
-      let activeResponder: CodexInteractionResponder | undefined;
-      const onInteractionResponder = (responder: CodexInteractionResponder | undefined): void => {
-        if (responder) {
-          activeResponder = responder;
-          interactionResponders.set(request.invocationId, responder);
-        } else if (
-          !activeResponder ||
-          interactionResponders.get(request.invocationId) === activeResponder
-        ) {
-          interactionResponders.delete(request.invocationId);
-          activeResponder = undefined;
+    createExecutionScope: ({ log }: { log: RuntimeLog }): AdapterExecutionScope => {
+      const scopeId = randomUUID();
+      const salt = randomBytes(32);
+      const services = new Map<string, { semantic: string; service: CodexService }>();
+      const interactionResponders = new Map<string, CodexInteractionResponder>();
+      const nativeResponders = new Map<
+        string,
+        (response: NativeInteractionResponse) => Promise<void>
+      >();
+      const active = new Set<string>();
+      let closing = false;
+      let close: Promise<void> | undefined;
+      const unresolved = new Set<string>();
+      const failed = new Set<string>();
+      const scope = {
+        metadata: {
+          type: "codex",
+          agentSources: ["provisioned" as const],
+          mcp: true,
+          protocolSupport: {
+            protocol: "codex.app-server",
+            modes: ["native", "canonical"] as ["native", "canonical"],
+            nativeMethods: []
+          }
+        },
+        async *invoke(request: InvokeRequest, context?: AdapterInvocationContext) {
+          if (closing) throw new Error("CODEX_SERVICE_CLOSED");
+          if (active.has(request.invocationId)) throw new Error("CODEX_INVOCATION_BUSY");
+          active.add(request.invocationId);
+          try {
+            const runEnv = invocationEnvironment(request, {}, env);
+            const rawMessageMaxBytes = resolveStreamLimitPolicy(
+              context?.streamLimits
+            ).rawMessageMaxBytes;
+            // 比较解析后的语义，而非每轮随机 MCP header 环境名；私有键从不进入诊断。
+            const semantic = stableJson({
+              command: executableIdentity(command, runEnv, request.workdir),
+              args: [...appServerArgs, ...nativeCapacityOverrides(request)],
+              cwd: request.workdir,
+              env: runEnv,
+              home: processEnvironmentValue(runEnv, "CODEX_HOME") || join(homedir(), ".codex"),
+              mcp: invocationMcpServers(request, runEnv),
+              revision: request.agentConfig.providerOptions?.codexServiceRevision ?? "",
+              rawMessageMaxBytes
+            });
+            const key = createHmac("sha256", salt).update(semantic).digest("hex");
+            let entry = services.get(key);
+            if (entry && entry.semantic !== semantic)
+              throw new Error("CODEX_SERVICE_KEY_COLLISION");
+            if (!entry) {
+              if (services.size >= 8) throw new Error("CODEX_SERVICE_CONFIGURATIONS_EXCEEDED");
+              entry = {
+                semantic,
+                service: new CodexService(
+                  scopeId,
+                  buildCodexCommand(request, command, appServerArgs, env),
+                  spawnFn,
+                  rawMessageMaxBytes
+                )
+              };
+              services.set(key, entry);
+            }
+            const channel = await entry.service.acquire(
+              request.signal,
+              Buffer.byteLength(JSON.stringify(request)),
+              context?.protocolMode !== "native" && hasImageInput(request)
+            );
+            try {
+              yield* runCodexAppServerTurn({
+                request,
+                spec: entry.service.spec,
+                channel,
+                context,
+                onInteractionResponder: (responder) => {
+                  if (responder) interactionResponders.set(request.invocationId, responder);
+                  else interactionResponders.delete(request.invocationId);
+                },
+                onNativeResponder: (responder) => {
+                  if (responder) nativeResponders.set(request.invocationId, responder);
+                  else nativeResponders.delete(request.invocationId);
+                }
+              });
+            } finally {
+              await channel.close();
+            }
+          } finally {
+            active.delete(request.invocationId);
+            interactionResponders.delete(request.invocationId);
+            nativeResponders.delete(request.invocationId);
+          }
+        },
+        async respondNative(invocationId: string, response: NativeInteractionResponse) {
+          const responder = nativeResponders.get(invocationId);
+          if (!responder) throw new Error("INTERACTION_NOT_ACTIVE");
+          await responder(response);
+        },
+        async respondInteraction(invocationId: string, response: InteractionResponse) {
+          const responder = interactionResponders.get(invocationId);
+          if (!responder) throw new Error("INTERACTION_NOT_ACTIVE");
+          await responder(response);
+        },
+        processes: () => [...services.values()].map(({ service }) => service.snapshot()),
+        beginShutdown() {
+          closing = true;
+          for (const { service } of services.values()) service.beginShutdown();
+        },
+        close({ deadline }: { deadline: number }) {
+          scope.beginShutdown();
+          if (!close) {
+            for (const { service } of services.values()) unresolved.add(service.id);
+            close = Promise.all(
+              [...services.values()].map(async ({ service }) => {
+                try {
+                  await service.close();
+                  unresolved.delete(service.id);
+                } catch {
+                  failed.add(service.id);
+                  log("warn", "codex.service.cleanup_incomplete", { service_id: service.id });
+                }
+              })
+            ).then(() => {});
+          }
+          return (async (): Promise<AdapterScopeCleanup> => {
+            let timer: NodeJS.Timeout | undefined;
+            try {
+              await Promise.race([
+                close,
+                new Promise<void>((resolve) => {
+                  timer = setTimeout(resolve, Math.max(0, deadline - performance.now()));
+                })
+              ]);
+            } finally {
+              clearTimeout(timer);
+            }
+            return {
+              complete: unresolved.size === 0,
+              unresolvedServiceIds: [...unresolved],
+              failedCleanupServiceIds: [...failed]
+            };
+          })();
         }
       };
-      try {
-        yield* runCodexAppServerTurn({
-          request,
-          spec,
-          context,
-          onInteractionResponder,
-          onNativeResponder: (responder) => {
-            if (responder) nativeResponders.set(request.invocationId, responder);
-            else nativeResponders.delete(request.invocationId);
-          },
-          ...(spawnFn ? { spawnFn } : {})
-        });
-      } finally {
-        onInteractionResponder(undefined);
-      }
+      const defined = defineAdapter(scope);
+      return { ...scope, invoke: defined.invoke };
+    },
+    respondNative(invocationId: string, response: NativeInteractionResponse): Promise<void> {
+      void invocationId;
+      void response;
+      return Promise.reject(new Error("CODEX_SERVICE_SCOPE_REQUIRED"));
+    },
+    respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
+      void invocationId;
+      void response;
+      return Promise.reject(new Error("CODEX_SERVICE_SCOPE_REQUIRED"));
+    },
+    invoke(
+      request: InvokeRequest,
+      context?: AdapterInvocationContext
+    ): AsyncIterable<AdapterOutput> {
+      void request;
+      void context;
+      throw new Error("CODEX_SERVICE_SCOPE_REQUIRED");
     }
   });
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object")
+    return `{${Object.entries(value)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
+      .join(",")}}`;
+  return JSON.stringify(value);
+}
+
+/** 每轮校验入口文件身份；安装文件变化会换服务，不额外启动版本探针。 */
+function executableIdentity(command: string, env: NodeJS.ProcessEnv, cwd: string): unknown {
+  const extensions =
+    process.platform === "win32" && !/\.[a-z]+$/i.test(command)
+      ? (processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT").split(";")
+      : [""];
+  // 带路径的命令只相对 cwd 解析一次；裸命令仍按 PATH 搜索。
+  const directories =
+    isAbsolute(command) || /[/\\]/.test(command)
+      ? [""]
+      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter);
+  for (const directory of directories)
+    for (const extension of extensions) {
+      try {
+        const path = realpathSync(resolve(cwd, directory, command + extension));
+        const info = statSync(path);
+        if (info.isFile())
+          return { path, dev: info.dev, ino: info.ino, size: info.size, mtime: info.mtimeMs };
+      } catch (error) {
+        if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? ""))
+          throw error;
+      }
+    }
+  return { command };
 }
 
 export const codexAdapter = createCodexAdapter();

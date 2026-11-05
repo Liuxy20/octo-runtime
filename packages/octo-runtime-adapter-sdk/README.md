@@ -52,6 +52,8 @@ Register it like any other Adapter: `createKernelService({ home, endpoint, adapt
 
 ## Rules the interface assumes
 
+An Adapter with resident resources may supply synchronous, lazy `createExecutionScope({log})`. Core creates one scope per registration, binds invocation and replies to it, calls `beginShutdown(reason)` before cancellation, and awaits `close({deadline})`. The deadline is absolute `performance.now()` milliseconds. Report unresolved and failed service IDs independently of invocation cleanup; optional `processes()` returns only safe resident ownership snapshots. A turn releases its subscription, while the scope owns transport and process cleanup. See [scope types](src/execution-scope.ts) and the [Codex implementation](../octo-runtime-adapter-codex/src/service.ts).
+
 - You receive a prepared `InvokeRequest`, not the public `InvokeInput`.
 - Emit output for the declared and selected mode: `CanonicalEvent`s in canonical mode, native payloads and control output in native mode. A native-only Adapter does not need a canonical converter. Read the selected mode from internal `context.protocolMode`; public callers select it with `InvokeInput.protocol_mode`.
 - Keep unsupported settings visible. Never report a setting as applied when the Provider rejected or ignored it.

@@ -5,6 +5,7 @@ import {
   assertHostFrame,
   assertHostFrameIdentity,
   assertHostRunReceipt,
+  assertKernelStatus,
   createInputInvoke,
   identifyInvokeInput,
   isHostTerminal,
@@ -17,7 +18,6 @@ import {
 import {
   KernelError,
   type KernelClient,
-  type KernelStatus,
   type LookupKey,
   type RunRef,
   type RunSnapshot
@@ -235,7 +235,11 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
     respondInteraction: async (id, response) => client.respond(registry.ref(id), response),
     respondNativeInteraction: async (id, response) =>
       client.respondNative(registry.ref(id), response),
-    status: async () => (await exchange("status")) as KernelStatus,
+    status: async () => {
+      const result = await exchange("status");
+      assertKernelStatus(result);
+      return result;
+    },
     list: async () => (await exchange("adapter.list")) as Awaited<ReturnType<KernelClient["list"]>>,
     get: query,
     submit: (input, environment) => submit(input, environment),

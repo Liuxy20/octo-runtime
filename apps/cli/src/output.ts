@@ -20,6 +20,86 @@ export interface ComponentSnapshot {
   runtime: unknown;
 }
 
+export interface ResidentProcessView {
+  pid?: number;
+  owner_pid?: number;
+  roles: string[];
+  state: string;
+  observation: string;
+  service_id?: string;
+  incarnation?: number;
+}
+
+/** doctor 仅投影已取得的常驻快照；同 PID 合并角色，层级表示所有权而非猜测 OS PPID。 */
+export function residentProcesses(
+  snapshots: Record<string, ComponentSnapshot>
+): ResidentProcessView[] {
+  const processes: ResidentProcessView[] = [];
+  const pid = (value: unknown): number | undefined =>
+    typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+  const add = (entry: ResidentProcessView) => {
+    const existing =
+      entry.pid &&
+      processes.find(
+        (value) =>
+          value.pid === entry.pid &&
+          value.observation === "alive" &&
+          entry.observation === "alive" &&
+          value.owner_pid === entry.owner_pid &&
+          value.service_id === entry.service_id &&
+          value.incarnation === entry.incarnation
+      );
+    if (existing)
+      existing.roles.push(...entry.roles.filter((role) => !existing.roles.includes(role)));
+    else processes.push(entry);
+  };
+  for (const [name, snapshot] of Object.entries(snapshots)) {
+    const runtime = record(snapshot.runtime);
+    const actualPid = pid(runtime.pid);
+    const managedPid = pid(snapshot.service.pid);
+    add({
+      ...(actualPid || managedPid ? { pid: actualPid ?? managedPid } : {}),
+      roles: [name === "executor-kernel" ? "Host/Kernel" : `Extra:${name}`],
+      state: actualPid ? "running" : snapshot.service.state,
+      observation: actualPid ? "alive" : "unknown"
+    });
+    if (!Array.isArray(runtime.service_processes)) continue;
+    for (const value of runtime.service_processes.slice(0, 256)) {
+      const service = record(value);
+      add({
+        ...(pid(service.pid) ? { pid: pid(service.pid) } : {}),
+        owner_pid: pid(service.owner_pid),
+        roles: [`${text(service.provider)} app-server`],
+        state: text(service.state),
+        observation: text(service.observation),
+        service_id: text(service.service_id),
+        incarnation: typeof service.incarnation === "number" ? service.incarnation : undefined
+      });
+    }
+  }
+  return processes;
+}
+
+export function formatResidentProcesses(processes: readonly ResidentProcessView[]): string {
+  const lines = ["Resident processes (ownership):"];
+  for (const entry of processes.filter((value) => !value.owner_pid)) {
+    lines.push(
+      `  ${entry.roles.join(", ")}  PID ${entry.pid ?? "unknown"}  ${entry.state} (${entry.observation})`
+    );
+    for (const child of processes.filter((value) => entry.pid && value.owner_pid === entry.pid))
+      lines.push(
+        `    +-- ${child.roles.join(", ")}  PID ${child.pid ?? "-"}  ${child.state} (${child.observation})  incarnation ${child.incarnation ?? "-"}  service ${child.service_id ?? "-"}`
+      );
+  }
+  for (const entry of processes.filter(
+    (value) => value.owner_pid && !processes.some((parent) => parent.pid === value.owner_pid)
+  ))
+    lines.push(
+      `  ${entry.roles.join(", ")}  PID ${entry.pid ?? "-"}  ${entry.state} (${entry.observation})  owner PID ${entry.owner_pid}`
+    );
+  return lines.join("\n");
+}
+
 const record = (value: unknown): Record<string, unknown> =>
   value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)

@@ -286,6 +286,8 @@ Kernel initialization, readiness, shutdown, and incomplete cleanup are recorded 
 
 `status` reports native `service` state and IPC `runtime` state separately, and exit code 0 does not prove business readiness. `doctor` reports service-manager probing and service definitions; `adapter list` and `adapter probe` query a running Kernel without starting one.
 
+`doctor` also projects resident processes from the selected instance's existing snapshots. Text and JSON (`processes`) share the same data: Host/Kernel, independently hosted Extras and owned app-servers. Roles merge only for live records sharing the same PID and ownership identity; a stale cleanup record stays separate if the OS reuses its PID. The tree expresses ownership, not an inferred OS parent PID. It excludes turns, threads, Runs, invocation counts and transient tools. Reading it never launches or probes a Provider; before the first invocation there is no Provider PID. Recovery changes the displayed PID/incarnation; unavailable owners and unconfirmed cleanup remain explicit. Direct Core owners can read the same service snapshots with `executor.processes()`.
+
 Exit codes: 0 success; 2 invalid arguments or declaration; 3 component not installed; 4 unreachable or not ready; 5 incomplete cleanup; 1 other failure. Text errors go to stderr, JSON errors to stdout.
 
 When an unexpected host exit leaves resource cleanup unconfirmed, startup fails with `ORPHAN_CLEANUP_INCOMPLETE`. After confirming the leftovers stopped:

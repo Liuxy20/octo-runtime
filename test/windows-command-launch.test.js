@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { probeCommand, spawnJsonLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
 import { spawnGrokBuildAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";

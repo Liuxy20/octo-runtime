@@ -33,7 +33,7 @@ export async function shutdown() {
 
 连接独立托管的 Kernel 时，使用 `createExtraService({ home, execution: { kind: "ipc", endpoint }, module, config, dependencies })`。Kernel owner 按下文创建服务；Extra 只连接已有服务，不启动、重启或停止它。旧 `{ home, endpoint, ... }` 保留兼容，但不能与 `execution` 同时提供。
 
-两种模式均向插件提供 `context.execution`。停止观察不取消已接纳工作，显式取消及 Extra 关闭才会取消。direct 与宿主共享故障域，只有有界观察窗口，不承诺 IPC 重连或持久回放。direct 描述调用 Core 的方式，不决定 Provider 的进程生命周期；Codex app-server 常驻与恢复问题 [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313) 单独暂缓。
+两种模式均向插件提供 `context.execution`。停止观察不取消已接纳工作，显式取消及 Extra 关闭才会取消。direct 与宿主共享故障域，只有有界观察窗口，不承诺 IPC 重连或持久回放。两条路径都使用 Core 注册的 Adapter 作用域，兼容的 Codex 调用复用常驻 app-server。Extra 关闭只释放自己的调用；Core/Kernel owner 关闭服务并检查清理结果。生命周期和容量见 [Codex Adapter](../../../packages/octo-runtime-adapter-codex/README.zh.md)。
 
 POSIX Kernel 地址为 `<home>/executor-kernel.sock`；Windows 管道名和 Extra 控制地址保持。这是破坏性地址变更：停止旧进程，同步更新 Kernel、客户端与 Extra 后重启。
 

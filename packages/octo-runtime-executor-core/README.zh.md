@@ -83,6 +83,8 @@ canonical 模式下只有 `run.completed` 算成功。最终消息发出不算�
 
 `shutdown()` 返回一份不可变快照。`state: "closed"` 只说明不再接纳新 Run；只有 `cleanup: "complete"` 才代表它拥有的资源都真的释放了。结果是 `incomplete` 时，`unresolvedInvocationIds` 和 `failedCleanupInvocationIds` 会指出还挂着谁。
 
+每次注册 Adapter 可创建独立执行作用域。Core 将调用和交互绑定到该 scope；shutdown 同步停止其恢复和接纳，再等待服务清理。`unresolvedServiceIds`、`failedCleanupServiceIds` 单独报告服务所有权，即使已无 invocation 也不能忽略。`processes()` 只读经过校验的常驻服务快照，不启动 Provider 或 probe。Codex 在轮次间保留健康服务，只由 owner 关闭。
+
 接纳一旦关闭就不再打开，失败的 finalizer 也不会重试——再调一次 `shutdown()` 只会重新等待，不会复活上一次尝试。`next()` 被拒、`return()` 返回 `done: false`、或者生成器没有可用的 finalizer，都不等于资源已释放。
 
 Provider 终态排空和迭代器关闭共用一个单调的 `cancelGraceMs` 预算，从第一次终态、abort 或清理请求开始计时；`shutdown` 的超时只约束调用方这次等待。

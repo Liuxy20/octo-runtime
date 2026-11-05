@@ -5,7 +5,7 @@ import { PassThrough, Writable } from "node:stream";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import {
   buildClaudeCommand,
   createClaudeCodeAdapter
@@ -53,6 +53,8 @@ function codexFixture({ fallback = false } = {}) {
   child.stdin = new Writable({
     write(chunk, _encoding, callback) {
       const frame = JSON.parse(chunk.toString());
+      if (frame.method === "thread/unsubscribe")
+        send({ id: frame.id, result: { status: "unsubscribed" } });
       frames.push(frame);
       if (["initialize", "thread/name/set"].includes(frame.method))
         send({ id: frame.id, result: {} });

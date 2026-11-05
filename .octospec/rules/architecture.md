@@ -23,7 +23,9 @@ supersedes: []
 
 三个内置 Extra 使用 `context.execution`。每 Extra 仅拥有自己的调用、交互和插件资源；direct 按 executor 对象身份/name 去重，IPC 按 endpoint/name 去重。direct 复用 HostRunService 的独立消费与有界窗口，停止观察不取消执行；Core 按原 receipt 提供首次清理结果，终态不能代替 complete。共享 Core 仅由宿主关闭；IPC Extra 不创建或停止 Kernel。
 
-direct 不承诺 Provider 常驻、IPC 重连、持久回放或宿主故障隔离。用户明确暂缓 [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313)，该 app-server 生命周期问题不纳入本专项。实现与验证见 [#312](../tasks/312-extra-execution-modes/brief.md)。
+direct 本身不承诺 IPC 重连、持久回放或宿主故障隔离。[#312](../tasks/312-extra-execution-modes/brief.md) 当时暂缓的 Provider 常驻问题由 [#313](../tasks/313-codex-service-lifecycle/brief.md) 实现：Core 每次注册可创建独立 Adapter execution scope，Codex scope 拥有兼容配置下的常驻 app-server；两种执行路径共享此所有权合同。turn/Extra 仅释放所属调用，Core owner shutdown 同步关闭恢复接纳并等待服务清理；服务清理 ID 与 invocation 清理 ID 独立报告。
+
+常驻进程诊断只读 scope/Core 快照，经 KernelStatus 的可选 `service_processes` 和共享 Schema 到 CLI doctor；无 Provider 首次调用时不启动进程。doctor 文本/JSON 同源，同 PID 合并角色；树表达实际所有权，不推断 OS PPID，不展示 turn/thread/Run、调用计数、临时工具或 argv/env/凭据。读取不触发 Provider probe 或启动。
 
 ## SDK 原生装配与统一 RPC
 

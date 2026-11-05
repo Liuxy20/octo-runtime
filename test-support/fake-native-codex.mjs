@@ -13,6 +13,10 @@ const finish = () =>
   });
 for await (const line of createInterface({ input: process.stdin })) {
   const message = JSON.parse(line);
+  if (message.method === "thread/unsubscribe") {
+    send({ id: message.id, result: { status: "unsubscribed" } });
+    continue;
+  }
   if (message.method === "initialize")
     send({ id: message.id, result: { privateInit: "excluded" } });
   else if (message.method === "thread/name/set") send({ id: message.id, result: {} });

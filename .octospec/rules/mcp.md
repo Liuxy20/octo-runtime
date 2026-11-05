@@ -107,7 +107,7 @@ defaults 和请求按 server 名称合并；同名 server 整项替换，不深�
 
 | Adapter | 原生入口 | 处理 |
 | --- | --- | --- |
-| Codex | app-server 的 thread/start、thread/resume `config.mcp_servers` | 仅传本轮新增 server 和本地 stdio 必要的 env_vars 覆盖；HTTP headers 通过本轮私有环境变量引用；不改用户文件 |
+| Codex | app-server 的 thread/start、thread/resume `config.mcp_servers` | 仅传本轮新增 server 和本地 stdio 必要的 env_vars 覆盖；HTTP headers 通过所选服务的私有环境变量引用；先按解析后的语义选择服务，再一次生成环境映射，不改用户文件 |
 | Claude Code | `--mcp-config` 私有临时 JSON | 映射 `type: http`，保留本地 MCP 配置入口；结束时删除临时文件 |
 | Kimi / MCode 等 ACP adapter | session/new、session/load `mcpServers` | 转成数组，HTTP 类型为 `http`，headers/env 转为 name/value 数组；先检查原生 HTTP 能力声明 |
 | OpenCode V2 CLI | `OPENCODE_CONFIG_CONTENT.mcp.servers` | stdio 转 local，HTTP 转 remote，disabled=false，工具超时为 timeout.execution，保留本地原生配置加载；ask 使用标准 ACP mcpServers |

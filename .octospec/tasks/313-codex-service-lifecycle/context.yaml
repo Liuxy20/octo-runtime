@@ -1,0 +1,137 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/313
+issue_updated_at: '2026-11-04T12:08:20Z'
+phase: reviewed_for_pr
+baseline: de3ff37a86ee3cb8f6ab66148ceca817f6ae5240
+baseline_source: successful git fetch origin main
+branch: feat/codex-service-lifecycle
+planning_branch: plan/issue-313-codex-service
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-313
+authorization:
+  - Fetch latest octo-runtime main and create an independent worktree.
+  - Start OctoSpec planning for issue 313 with executability above 95 points.
+  - Explain background, scenarios, benefits and risks.
+  - Add doctor diagnostics for resident processes only; exclude turns and transient tool processes.
+  - Start implementation, then verify using code-review and verified-review.
+  - Commit, push and create a pull request targeting main after completing implementation and review.
+boundaries:
+  - Implementation, commit, push and PR creation are authorized; merge and publication are not authorized.
+  - Preserve original checkout and user changes.
+  - No GitHub CI expansion, including selectors, scripts, required checks or gates.
+  - Mininglamp-OSS issue, PR and commit text must be English if subsequently authorized.
+  - Preserve configured Git author and add the required Codex trailer for authorized commits.
+skills_applied:
+  - .claude/skills/octospec-workflow/SKILL.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.codex/skills/.system/openai-docs/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-schema.md
+context_read:
+  - AGENTS.md
+  - .octospec/rules/_index.yaml
+  - .octospec/index.md
+  - .octospec/log.md
+  - .octospec/tasks/_brief.template.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/312-extra-execution-modes/brief.md
+  - .octospec/tasks/312-extra-execution-modes/context.yaml
+  - .octospec/scripts/lint.py
+  - package.json
+source_sections_read:
+  - packages/octo-runtime-adapter-codex/src/index.ts
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - packages/octo-runtime-adapter-codex/src/mcp.ts
+  - packages/octo-runtime-adapter-codex/src/stdin-writer.ts
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/output.ts
+  - packages/octo-runtime-protocol/schema/protocol.schema.json KernelStatus declaration
+  - packages/octo-runtime-protocol/schema/kernel-ipc.schema.json status reference
+  - test/codex-finalization-live.test.js
+  - .github/workflows/ci.yml
+  - .github/workflows directory trigger and job declarations
+  - packages/octo-runtime-adapter-codex/src/service.ts
+  - packages/octo-runtime-adapter-sdk/src/execution-scope.ts
+  - packages/octo-runtime-protocol/src/service-processes.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/invocation-manifest.ts
+  - packages/octo-runtime-adapter-sdk/src/process-cleanup.ts
+related_issues_read:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/307
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/313#issuecomment-6630194405
+official_sources:
+  - https://developers.openai.com/codex/app-server/
+local_provider_evidence:
+  version: codex-cli 0.164.0
+  help: codex app-server --help
+  schema_command: codex app-server generate-json-schema --out /tmp/octo-313-codex-schema.RYLyXC
+  model_turns: 'passed: direct and IPC, five calls each including interrupted call; real MCP elicitation completed'
+  process_recovery: 'passed: macOS owned idle and active SIGKILL, new incarnation and subsequent explicit turn; no business replay'
+global_rules: .octospec/_global/ is absent; no synchronization or framework upgrade performed
+assessment:
+  score: 96
+  meaning: planning executability self-assessment, not implementation verification
+  remaining_gap: 4
+planning_verification:
+  baseline_knowledge_lint: 'pass: 649 OKF units, 20 rules, 3942 local links'
+  final_knowledge_lint: 'pass: 656 OKF units, 20 rules, 3967 local links after resident-process doctor planning; six initial source-link errors fixed'
+  changed_metadata: 'pass: 7 new knowledge Markdown files and parsed context YAML'
+  diff_check: 'pass: tracked diff and new knowledge Markdown whitespace'
+  ci_scope_diff: 'pass: workflow, package.json, scripts, tests and production code diff is empty'
+  implementation_acceptance: not run
+implementation_verification:
+  revision: baseline plus current uncommitted worktree; no implementation commit exists
+  environment: macOS arm64; Node 24.22.2; Codex CLI 0.164.0
+  typecheck: pass
+  lint: pass
+  lint_names: pass
+  format_check: pass
+  knowledge_lint: 'pass: 658 OKF units, 20 rules, 3991 local links'
+  changed_metadata: 'pass: 12 changed knowledge Markdown frontmatters and context YAML'
+  diff_check: pass
+  docs_check: 'pass: type/link checks and four runtime examples'
+  default_suites: 'pass: 2400 total, 2334 passed, 66 skipped, zero failed'
+  manual_service_suites: 'pass: 26 explicit local tests, zero skipped, including four review regressions'
+  native_generation_check: pass
+  native_go: 'pass: 43 tests including 434 authoritative fixtures'
+  native_python: 'pass: 43 tests after uv sync --project native/python'
+  release_verifier: 'pass: offline main tgz install, strict public types and existing integration'
+  codex_package_consumer: 'pass: main tgz only, strict types, three direct and three IPC turns, PID reuse and cleanup'
+  linux_windows_electron: not run
+  im_test_delivery: not run; no test account/channel configured for this scenario
+  review: 'pass: code-review Standards and Spec have no open findings; six distinct issues fixed and serial verified-review completed; see review.md'
+  complete_acceptance: false; detailed partial statuses are in acceptance.md
+delivery:
+  target_branch: main
+  latest_main_check: 'pass: successful fetch still resolves to de3ff37a86ee3cb8f6ab66148ceca817f6ae5240; no rebase required'
+  messages: English Conventional Commit and PR title/body; preserve configured author and append Codex trailer once
+  ci_scope: workflows, package.json, scripts and lockfile unchanged; inspect actual PR checks after creation
+  status_source: GitHub pull request associated with feat/codex-service-lifecycle; hosted checks are reported separately from local evidence
+external_review_followup:
+  pull_request: https://github.com/Mininglamp-OSS/octo-runtime/pull/317
+  baseline: 2515e7be6c82c3c6c6562bc868d8ea7f33d6c3e4
+  observed: 'relative cwd plus path-qualified command misses executable file identity; absolute cwd already passed'
+  fix: 'resolve path-qualified commands from cwd once; preserve bare PATH search and service lifecycle'
+  manual_regressions: '30 passed on macOS; four new real POSIX executable cases, including replacement and scope cleanup'
+  typecheck_lint_format: pass
+  default_suites: '2400 total; 2334 passed, 66 skipped, zero failed'
+  local_review: 'code-review Standards and Spec have zero open findings; verified-review reproduced before/after'
+  hosted_review: consult GitHub; local fix does not dismiss a changes-requested review
+  native_windows_linux_and_models: not rerun for this follow-up

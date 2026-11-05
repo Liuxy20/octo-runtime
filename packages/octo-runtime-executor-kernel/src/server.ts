@@ -161,7 +161,8 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     ipc_version: 1,
     kernel_instance_id: instance,
     pid: process.pid,
-    execution_ready: !closing && ready
+    execution_ready: !closing && ready,
+    service_processes: [...executor.processes()]
   });
   const snapshot = (key: LookupKey, expected?: string): RunSnapshot => {
     if (expected !== undefined && expected !== instance)

@@ -17,9 +17,11 @@ The default is `native`, but some Adapters support only `canonical`. For most in
 
 For canonical output, check the final event: `run.completed` means success, `run.failed` means failure, and `run.cancelled` means cancellation. Execution failures may arrive as events without throwing, so handle events as well as errors thrown while reading. [invokeOnce](../../examples/invoke.mts) demonstrates both.
 
-For HostFrame output, use public `isHostTerminal` to identify Runtime's final status. States are `running`, `completed`, `failed`, `cancelled`, and `lost`. Runtime reports its final status after execution cleanup; a Provider's end message alone does not mean Runtime has finished processing.
+For HostFrame output, use public `isHostTerminal` to identify Runtime's final status. States are `running`, `completed`, `failed`, `cancelled`, and `lost`. A terminal cannot replace resource cleanup confirmation; direct Extra closure also waits for Core's first cleanup result for the accepted receipt.
 
-`lost` means the execution outcome cannot be determined; KernelClient reports `RUN_OUTCOME_UNKNOWN`. Do not treat a missing final status, missing output, or cleanup failure as success. Your application separately confirms whether results were saved, messages delivered, or the UI updated.
+`lost` means the execution outcome cannot be determined; KernelClient reports `RUN_OUTCOME_UNKNOWN`. Missing final status, output loss and cleanup failure alone never prove success. Your application separately confirms whether results were saved, messages delivered, or the UI updated.
+
+Codex can confirm `completed` through a 15-second finalization fallback after a nonempty completed `final_answer`, provided no work or synchronous interaction remains. New work, cancellation or a known error invalidates eligibility. An accepted completed result survives later interrupt/unsubscribe failure; cleanup remains independently failed/incomplete. Other Adapters retain their existing completion rules. A turn's release does not close the resident app-server.
 
 ## HostFrame Structure
 

@@ -43,6 +43,8 @@ import {
   describeError,
   formatErrorDetails,
   formatStatus,
+  residentProcesses,
+  formatResidentProcesses,
   recordStartupFailure,
   readStartupFailure,
   type ComponentSnapshot
@@ -308,15 +310,16 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       const status = await snapshots(componentNames);
       const checks = Object.entries(status).map(([component, value]) => ({ component, ...value }));
       const recovery = await inspectOrphanCleanup(kernelInvocationManifest);
+      const processes = residentProcesses(status);
       publish(
-        { manager, checks, recovery },
+        { manager, checks, recovery, processes },
         `Manager: ${manager.manager} (${manager.supported ? "available" : "unavailable"})\n\n${Object.entries(
           status
         )
           .map(([name, value]) => formatStatus(name, value))
           .join(
             "\n\n"
-          )}\n\nOrphan cleanup: ${recovery.state}\nManifest: ${recovery.manifestPath}${recovery.state === "cleanup_incomplete" ? "\nStop all orphan tools, then run executor-kernel recover --acknowledge-orphan-cleanup with the same --home." : ""}`
+          )}\n\n${formatResidentProcesses(processes)}\n\nOrphan cleanup: ${recovery.state}\nManifest: ${recovery.manifestPath}${recovery.state === "cleanup_incomplete" ? "\nStop all orphan tools, then run executor-kernel recover --acknowledge-orphan-cleanup with the same --home." : ""}`
       );
       return 0;
     }

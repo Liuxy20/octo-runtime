@@ -41,7 +41,7 @@ export async function shutdown() {
 
 For an independently hosted Kernel, use `createExtraService({ home, execution: { kind: "ipc", endpoint }, module, config, dependencies })`. The Kernel owner constructs the service as shown below. Extra connects to that existing endpoint; it does not launch, restart, or stop Kernel. Legacy `{ home, endpoint, ... }` remains supported, but combining `endpoint` with `execution` is rejected.
 
-Both modes expose `context.execution`. Stopping observation does not cancel admitted work; explicit cancellation and Extra shutdown do. Direct execution shares the host's failure domain and has bounded observation history, without IPC reconnection or durable replay guarantees. It describes the call to Core, not the Provider's process lifetime: the Codex app-server lifecycle issue [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313) remains separate and unresolved.
+Both modes expose `context.execution`. Stopping observation does not cancel admitted work; explicit cancellation and Extra shutdown do. Direct execution shares the host's failure domain and has bounded observation history, without IPC reconnection or durable replay guarantees. Both paths use Core's registered Adapter scope: compatible Codex calls reuse a resident app-server. Extra closure releases its own calls; the Core/Kernel owner closes the service and checks cleanup. See the [Codex lifecycle and limits](../../../packages/octo-runtime-adapter-codex/README.md).
 
 ## 1. Quick Start: KernelService
 

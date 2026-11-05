@@ -1,6 +1,18 @@
 # 工程知识变更记录
 
+## 2026-11-05
+
+- [PR 317 路径审查整改](tasks/313-codex-service-lifecycle/review.md#pr-317-外部路径审查整改)：复现相对 cwd 下 executableIdentity 重复解析导致升级后误复用；绝对 cwd 原本正确。单行修复并补四个仅手动执行的真实可执行夹具，30 项专项及默认 2400 项通过，双轴复审无未关闭项；保留既有服务和升级策略，无 CI 扩围，远端重新审查状态另看 PR。
+
+- [Issue 313 PR 交付](tasks/313-codex-service-lifecycle/validation.md#后续-pr-交付授权)：用户在实施及双重审查完成后授权提交 PR 到 main；再次 fetch 确认基线未变，分支更名为 feat/codex-service-lifecycle，沿用作者、英文提交及 Codex trailer。无 CI 扩围，托管检查以远端 PR 为准，未授权合并或发布。
+
+- [Issue 313 实施](tasks/313-codex-service-lifecycle/validation.md)：按用户授权实现 Core 注册 scope、Codex 常驻服务和 idle/active 恢复、逐轮路由/取消、#307 成功与清理分离、doctor 常驻 PID。macOS 真实直连/IPC、MCP、26 项手动专项、既有全量、Go/Python 和包外验证通过；code-review/verified-review 确认的六个独立问题已修复，[复审](tasks/313-codex-service-lifecycle/review.md)无未关闭 finding。跨平台/实际 IM 等保留未验；不扩 CI，未提交。
+
+- [Issue 313 doctor 范围](tasks/313-codex-service-lifecycle/design.md#doctor-的常驻进程视图)：按用户确认，仅展示所选实例的常驻 Host/Kernel、独立 Extra 与受管 app-server；不列 turn、调用计数和临时工具，增加同源快照与 A21。只修订规划，未实现、未提交、不扩大 CI。
+
 ## 2026-11-04
+
+- [Issue 313 需求规划](journal/shared/2026-11-04-313-codex-service-plan.md)：从最新 main@de3ff37a 创建独立 worktree，规划 Core scope 所有权、owned stdio 服务复用、配置隔离、双向路由、单飞有界恢复及 #307 成功/清理分离；20 组验收，执行性自评 96/100，剩余 4 分和阻塞条件公开。仅规划，不扩大 CI。
 
 - [Issue 312 实施](journal/shared/2026-11-04-312-extra-execution-implementation.md)：按追加授权完成 direct/ipc/legacy 与内置 Extra 迁移；Core 首次清理凭据、共享有界窗口、包外公共产物与真实 Codex 验证，#313 暂缓。原规划评分已撤回，实际结果见任务 validation。
 

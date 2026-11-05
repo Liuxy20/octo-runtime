@@ -24,6 +24,8 @@ supersedes: []
 
 ## 1. 已实现的合同
 
+Codex 的合格非空 final_answer 在无活动工作、同步交互、取消或已知错误时，15 秒 finalization fallback 可确认 completed。AdapterInvocationContext 的本地 `reportExecutionResult` 回调传递固定 basis；Core 不解析 Codex 私有事件，也不增加公共 HostControl/AdapterOutput 联合。成功确认与清理分离：晚到中断不能改写成功，首次 iterator/turn 清理失败仍导致 waitForInvocationCleanup 和 owner shutdown incomplete。普通完成与其他 Adapter 保持原规则。证据范围见 [313 验证](../tasks/313-codex-service-lifecycle/validation.md)。
+
 显式 actmode 的执行事实通过 canonical `execution.update` 或 native control `{type:"evidence",name:"execution",payload}` 返回。`payload.actmode` 包含 requested、effective、status 和可选 nativeMode/reason：applied 必须与请求一致；fallback 仅用于已确认的不支持且 effective 为 default；unknown 的 effective 为 null、reason 为 provider_unconfirmed。认证、超时和执行错误不能伪装成不支持。省略 actmode 不制造执行事实或模式设置，也不建立产品模式记忆。首批接线及验证范围见[交付记录](../journal/shared/2026-10-16-actmode-first-three-delivery.md)。
 
 | 合同                        | 内容与运行时入口                                                                                                               |

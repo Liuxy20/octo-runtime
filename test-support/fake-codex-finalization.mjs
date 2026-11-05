@@ -7,6 +7,8 @@ const finish = (status) => emit("turn/completed", { turn: { id: "turn-final", st
 let mode;
 reader.on("line", (line) => {
   const message = JSON.parse(line);
+  if (message.method === "thread/unsubscribe")
+    return send({ id: message.id, result: { status: "unsubscribed" } });
   if (["initialize", "thread/name/set"].includes(message.method))
     send({ id: message.id, result: {} });
   if (["thread/start", "thread/resume"].includes(message.method))

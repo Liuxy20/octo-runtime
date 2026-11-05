@@ -22,9 +22,9 @@ import { qoderCliCnAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli
 import {
   buildCodexCommand,
   CodexEventNormalizer,
-  createCodexAdapter,
   normalizeCodexEvent
 } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import {
   buildClaudeCommand,
   ClaudeEventNormalizer,

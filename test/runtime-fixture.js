@@ -76,6 +76,8 @@ export function codexAppServerFixture({
       const message = JSON.parse(chunk.toString());
       writes.push(message);
       if (message.method === "initialize") send({ id: message.id, result: {} });
+      if (message.method === "thread/unsubscribe")
+        send({ id: message.id, result: { status: "unsubscribed" } });
       if (message.method === "config/read") send({ id: message.id, result: { config } });
       if (message.method === "thread/resume" && resumeError)
         send({ id: message.id, error: { code: -32000, message: resumeError } });
