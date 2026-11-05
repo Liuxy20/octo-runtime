@@ -63,6 +63,16 @@ Home 表示本地设备实例的状态边界，machine_id 是安装分组，不�
 | 执行完成 | 原 Run 的源终态 |
 | 清理完成 | ServiceCleanupResult.complete，实际资源均已回收 |
 
+## 启动失败诊断与执行域
+
+启动失败可以早于 Run、Session、Task 或 IPC，就地返回共享启动诊断，不创建 synthetic failed Run，不新增生命周期状态机。复用既有 ServicePhase、execution_ready 和 ServiceCleanupResult；进程存活、Kernel 可接纳执行、Extra 业务连通性分别描述。
+
+共享 catalog 与安全投影由 Kernel 包维护，Host SDK 和 CLI 使用同一定义。保留既有公共码、原 cause 与 cleanup；新增 typed context 仅记录责任边界已确认的 path/resource/operation/configKey/endpoint/executable/module/systemCode 等事实。已知路径必须进入可读及结构化结果，不从异常正文猜路径或将权限拒绝改写为不存在。spawn ENOENT 也可能来自 cwd；不能仅凭 errno 宣称 executable 缺失。
+
+wrapper、聚合与持久化回读须保留主根因和清理/pending 事实；cause 遍历及读取有界，异常 getter、循环或坏记录不能覆盖原失败。未知原因明确未知并给受控排查动作。动态值同源安全格式化，禁止输出原始异常、配置、环境、stderr 或凭据；回读记录的解释/动作必须从 catalog 重建。恢复建议遵守入口所有权，不能自动执行修复或建议不存在的参数；SDK Home 由宿主选择准备，CLI 只准备自己选择的根。
+
+公共 shape、兼容字段和 English-first 目录见[启动诊断](../../docs/en/guides/startup-diagnostics.md)及[中文目录](../../docs/zh-CN/guides/startup-diagnostics.md)。额外专项在 test/manual 显式运行，不扩大 CI 或默认测试选择器。
+
 ## 服务清理
 
 close 关闭接纳并立即取消所属调用；初始化进入可清理状态后，并发等待源调用排空和插件 dispose。插件 disposer 须先等待自己的消费者、保存与投递任务，再清理自己的资源。取消通知不立即封锁注入依赖；插件清理结束或共享截止到期后撤销调用权限，再等待全部实际依赖。单项失败仍尝试独立资源。重复调用等待同一清理操作。失败记录保留所有权；同 endpoint/name 的 Extra 或同 endpoint 的 Kernel 替换必须确认旧实例完整关闭。不同 Home/endpoint 的同名 Extra 独立。

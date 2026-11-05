@@ -1,3 +1,4 @@
+import { assertStartupLogging } from "./startup-logging.js";
 import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { chmod, rm } from "node:fs/promises";
@@ -6,7 +7,6 @@ import { assertIpcEndpoint, runtimePathFailure } from "./runtime-home.js";
 import {
   readBoundedLines,
   RuntimeLogging,
-  assertRuntimeLogging,
   type RuntimeLoggingOptions,
   type AdapterProbeOptions
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -23,6 +23,7 @@ import {
 import { HostRunService } from "./host-run-service.js";
 import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
 import { beforeDeadline } from "./lifecycle.js";
+import { withStartupContext, type StartupContext } from "./startup-diagnostics.js";
 import { probeOptions, type ExecutionSource } from "./execution-source.js";
 import { acquireEndpoint } from "./endpoint.js";
 import { InvocationManifest } from "./invocation-manifest.js";
@@ -118,7 +119,7 @@ function validateParams(method: string, params: Record<string, unknown>): void {
  */
 export async function startKernelServer(options: KernelServerOptions, signal?: AbortSignal) {
   assertIpcEndpoint(options.endpoint);
-  assertRuntimeLogging(options.logging);
+  assertStartupLogging(options.logging, { component: "executor-kernel", phase: "initializing" });
   const instance = randomUUID();
   const logging = new RuntimeLogging(options.logging);
   let manifest: InvocationManifest | undefined;
@@ -455,12 +456,18 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       throw new AggregateError(errors, "KERNEL_CLEANUP_INCOMPLETE");
     }
   };
+  let startupContext: StartupContext = { operation: "register-adapters", configKey: "adapters" };
   try {
     signal?.throwIfAborted();
     for (const adapter of options.adapters) {
       executor.register(adapter);
       logging.kernel("info", "adapter.registered", { adapter_type: adapter.metadata.type });
     }
+    startupContext = {
+      resource: "ipc-endpoint",
+      endpoint: options.endpoint,
+      operation: "acquire-endpoint"
+    };
     signal?.throwIfAborted();
     releaseEndpoint = await acquireEndpoint(options.endpoint);
     signal?.throwIfAborted();
@@ -470,10 +477,12 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
         ? `${options.endpoint}.runs`
         : undefined;
     if (statePath) {
+      startupContext = { resource: "kernel-state", path: statePath, operation: "open-manifest" };
       manifest = (await InvocationManifest.open(statePath)).manifest;
       await manifest.markNativeOwner();
     }
     signal?.throwIfAborted();
+    startupContext = { resource: "ipc-endpoint", endpoint: options.endpoint, operation: "listen" };
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(options.endpoint, () => {
@@ -488,16 +497,23 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
     logging.kernel("info", "kernel.ready", { pid: process.pid });
   } catch (cause) {
     const io = cause as NodeJS.ErrnoException;
-    const error = ["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"].includes(
-      io?.code ?? ""
-    )
-      ? runtimePathFailure(
-          cause,
-          typeof io.path === "string" ? io.path : options.endpoint,
-          typeof io.path === "string" ? "kernel-state" : "ipc-endpoint",
-          typeof io.syscall === "string" ? io.syscall : "listen"
-        )
-      : cause;
+    const error =
+      startupContext.resource &&
+      ["ipc-endpoint", "kernel-state"].includes(startupContext.resource) &&
+      ["ENOENT", "ENOTDIR", "EACCES", "EPERM", "EROFS", "ENAMETOOLONG"].includes(io?.code ?? "")
+        ? runtimePathFailure(
+            cause,
+            typeof io.path === "string" ? io.path : (startupContext.path ?? options.endpoint),
+            startupContext.resource,
+            typeof io.syscall === "string" ? io.syscall : "listen"
+          )
+        : cause;
+    // 附加已确认的启动步骤，不改变原错误类型、公共码或底层 cause。
+    withStartupContext(error, {
+      component: "executor-kernel",
+      phase: "initializing",
+      context: startupContext
+    });
     logging.kernel("error", "kernel.start_failed", { code: safeCode(error) });
     try {
       await teardown();

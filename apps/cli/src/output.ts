@@ -1,12 +1,19 @@
 import { ServiceError } from "@mininglamp-oss/octo-runtime-cross-service";
 import type { ServiceStatus } from "@mininglamp-oss/octo-runtime-cross-service";
 import { RuntimeLogging } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import { open, readdir } from "node:fs/promises";
-import { join } from "node:path";
 import {
-  RuntimeHomeError,
-  ServiceInitializationError
+  describeStartupError,
+  formatStartupDiagnostic,
+  restoreStartupDiagnostic,
+  safeStartupValue,
+  startupPathDiagnostic,
+  STARTUP_CATALOG,
+  type StartupLocation
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { constants } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { open, readdir, mkdir, rename, rm, lstat } from "node:fs/promises";
+import { join } from "node:path";
 
 export interface ComponentSnapshot {
   service: ServiceStatus;
@@ -21,6 +28,8 @@ const text = (value: unknown) =>
   String(value)
     .replace(/\p{Cc}/gu, " ")
     .slice(0, 200);
+const stableCode = (value: unknown): string | undefined =>
+  typeof value === "string" && /^[A-Z][A-Z0-9_]{1,100}$/.test(value) ? value : undefined;
 
 /** 展示公开状态的摘要，不为输出克隆完整 session/delivery 集合。JSON 模式保留原结果。 */
 export function formatStatus(name: string, snapshot: ComponentSnapshot): string {
@@ -100,52 +109,44 @@ export function formatStatus(name: string, snapshot: ComponentSnapshot): string 
 }
 
 /** 只保留受控错误码和管理器元信息；异常正文及任意 stderr 可能含凭据，不能直出。 */
-export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
-  const stableCode = (value: unknown): string | undefined =>
-    typeof value === "string" && /^[A-Z][A-Z0-9_]{1,100}$/.test(value) ? value : undefined;
-  const value = record(error);
+export function describeError(
+  error: unknown,
+  fallback = "COMMAND_FAILED",
+  startup?: StartupLocation
+) {
+  const field = (value: unknown, key: string): unknown => {
+    try {
+      return value !== null && typeof value === "object"
+        ? Object.getOwnPropertyDescriptor(value, key)?.value
+        : undefined;
+    } catch {
+      return undefined;
+    }
+  };
   const code =
-    stableCode(value.code) ??
-    (error instanceof Error ? stableCode(error.message) : undefined) ??
+    stableCode(field(error, "code")) ??
+    (error instanceof Error ? stableCode(field(error, "message")) : undefined) ??
     fallback;
-  const cause = record(value.cause);
-  const causeCode = stableCode(cause.code) ?? stableCode(cause.message);
-  // Home 的具体失败沿已有 cause 链投影；不读取任意对象声称的 diagnostic 或异常正文。
-  const pending: unknown[] = [error];
-  const seen = new Set<unknown>();
-  let homeFailure: RuntimeHomeError | undefined;
-  for (let checked = 0; pending.length && checked < 16; checked++) {
-    const current = pending.shift();
-    if (!(current instanceof Error) || seen.has(current)) continue;
-    seen.add(current);
-    if (current instanceof RuntimeHomeError) {
-      homeFailure = current;
-      break;
-    }
-    if (current instanceof AggregateError) {
-      const nested: readonly unknown[] = current.errors;
-      pending.push(...nested.slice(0, 8));
-    }
-    pending.push(current.cause);
-  }
+  const cause = field(error, "cause");
+  const causeCode = stableCode(field(cause, "code")) ?? stableCode(field(cause, "message"));
+  const projection = describeStartupError(error, startup);
+  const pathDiagnostic = startupPathDiagnostic(projection);
+  const diagnostic =
+    startup ||
+    pathDiagnostic ||
+    field(field(error, "diagnostic"), "domain") === "startup" ||
+    projection.causes.some((cause) => cause.component && cause.phase)
+      ? projection
+      : undefined;
   const hints: Record<string, string> = {
     COMMAND_FAILED: "The command failed. Check the native manager, configuration and service logs.",
-    ENOENT:
-      "The component endpoint or required file does not exist. Check installation and service status.",
-    ECONNREFUSED: "The component is not accepting IPC connections. Check its process and logs.",
     KERNEL_UNAVAILABLE:
       "Kernel is unavailable. Check executor-kernel status; Extras can remain running.",
     INVALID_ARGUMENTS: "Use --help to see the available commands and flags.",
-    SETUP_IN_PROGRESS:
-      "Another component lifecycle operation is in progress. Wait for it to finish, then retry.",
-    ORPHAN_CLEANUP_INCOMPLETE:
-      "Run doctor with the same --home to inspect the manifest. After stopping all orphan tools, run executor-kernel recover --acknowledge-orphan-cleanup, then start again.",
     ORPHAN_CLEANUP_OWNER_ALIVE:
       "The original Kernel or worker is still alive or its identity cannot be verified. Stop it safely before acknowledging cleanup.",
     ORPHAN_CLEANUP_NOT_PENDING:
       "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home.",
-    SERVICE_NOT_INSTALLED: "Run this component's install command, then start it.",
-    NOT_INSTALLED: "Run this component's install command, then start it.",
     EXTRA_COMMAND_FAILED:
       "The Extra command failed. No private backend error is printed; check its input and configuration, then retry.",
     EXTRA_CONFIG_CONFLICT:
@@ -164,41 +165,36 @@ export function describeError(error: unknown, fallback = "COMMAND_FAILED") {
       "The command was cancelled. Any save that already completed remains persisted.",
     EXTRA_COMMAND_STDIN_REQUIRED:
       "Pipe the required input through stdin; do not put credentials in command arguments.",
-    EXTRA_NOT_REGISTERED:
-      "Save the service configuration using its configure or extraset subcommand before starting it.",
     EXTRA_MANIFEST_DECLARATION_REQUIRED:
       "Install this Extra alongside the global Runtime, or add its name and module to the selected Home manifest.json (extras array), then retry.",
-    EXTRA_NAME_MISMATCH:
-      "The selected Extra must export the same name as its catalog entry. Check the reported package origin.",
-    EXTRA_MODULE_LOAD_FAILED:
-      "Check the selected catalog declaration, discovery diagnostics, installation and ESM exports; reinstall it or select a valid Home manifest entry, then retry.",
     EXTRA_MODULE_MIGRATION_REQUIRED:
-      "The saved module differs from manifest.json. Review both declarations, then save matching module text or omit module from the Extra configuration.",
-    MANIFEST_INVALID:
-      "Check manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys.",
-    MANAGER_UNAVAILABLE: "Run doctor and check the current user's native service manager.",
-    COMPONENT_UNAVAILABLE:
-      "Check component status and the service logs; the IPC endpoint or execution service is not ready.",
-    SERVICE_PROCESS_EXITED: "The service exited unexpectedly. Check its logs and configuration.",
-    SERVICE_INITIALIZATION_FAILED: "Check the component configuration, manifest and service logs.",
-    SERVICE_DISABLED: "Enable this component with install --autostart=true, then start it."
+      "The saved module differs from manifest.json. Review both declarations, then save matching module text or omit module from the Extra configuration."
   };
   return {
     code,
-    message: homeFailure
-      ? `${homeFailure.diagnostic.action} ${JSON.stringify(homeFailure.diagnostic)}`
-      : (hints[code] ?? "Check --help, component status and service logs for this operation."),
+    message:
+      diagnostic?.explanation ??
+      STARTUP_CATALOG[code]?.action ??
+      hints[code] ??
+      "Check --help, component status and service logs for this operation.",
     ...(causeCode ? { cause_code: causeCode } : {}),
-    ...(homeFailure
-      ? {
-          startup: homeFailure.diagnostic,
-          ...(error instanceof ServiceInitializationError ? { cleanup: error.cleanup } : {})
-        }
+    ...(diagnostic ? { diagnostic } : {}),
+    ...(pathDiagnostic
+      ? { startup: pathDiagnostic, ...(diagnostic?.cleanup ? { cleanup: diagnostic.cleanup } : {}) }
       : {}),
     ...(error instanceof ServiceError
-      ? { backend: error.backend, command: error.command, exit_code: error.exitCode }
+      ? {
+          backend: error.backend,
+          command: typeof error.command === "string" ? safeStartupValue(error.command) : undefined,
+          exit_code: error.exitCode
+        }
       : {})
   };
+}
+
+/** 保留兼容 code/cause_code；共享启动结构决定动态解释与下一步。 */
+export function formatErrorDetails(failure: ReturnType<typeof describeError>): string {
+  return failure.diagnostic ? formatStartupDiagnostic(failure.diagnostic) : failure.message;
 }
 
 /** 前台启动失败沿既有白名单和小时轮转落盘；不捕获任意进程 stdout/stderr。 */
@@ -207,12 +203,41 @@ export async function recordStartupFailure(
   component: string,
   error: unknown
 ): Promise<void> {
-  // 无效 Home 不能被诊断日志的递归 mkdir 再次创建；完整诊断由当前 CLI 输出和 SDK cause 返回。
-  if (describeError(error).startup) return;
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(component)) return;
+  // Home 校验失败不得由诊断日志递归补建根目录（#306）。
+  if (startupPathDiagnostic(describeStartupError(error))) return;
   const logging = new RuntimeLogging({ directory });
   try {
-    const log = component === "executor-kernel" ? logging.kernel : logging.extra(component);
+    // 单份最近失败记录拥有独立有界文件；不放宽通用日志的配置/异常白名单。
+    const diagnostic = describeStartupError(error, { component, phase: "initializing" });
     const failure = describeError(error, "SERVICE_INITIALIZATION_FAILED");
+    const file = join(directory, `startup-${component}.json`);
+    const temporary = `${file}.${randomUUID()}.tmp`;
+    try {
+      const line = JSON.stringify({
+        schema_version: 1,
+        time: new Date().toISOString(),
+        component,
+        code: failure.code,
+        ...(failure.cause_code ? { cause_code: failure.cause_code } : {}),
+        diagnostic
+      });
+      if (Buffer.byteLength(line) <= 262144) {
+        await mkdir(directory, { recursive: true, mode: 0o700 });
+        const handle = await open(temporary, "wx", 0o600);
+        try {
+          await handle.writeFile(line);
+        } finally {
+          await handle.close();
+        }
+        await rename(temporary, file);
+      }
+    } catch {
+      // 诊断落盘失败不能覆盖原始启动/清理错误，调用方仍持有完整安全投影。
+    } finally {
+      await rm(temporary, { force: true }).catch(() => undefined);
+    }
+    const log = component === "executor-kernel" ? logging.kernel : logging.extra(component);
     if (failure.cause_code) log("error", "cli.initialization_cause", { code: failure.cause_code });
     log("error", "cli.initialization_failed", { code: failure.code });
   } finally {
@@ -226,6 +251,50 @@ export async function readStartupFailure(
   component: string,
   since: number
 ): Promise<Error | undefined> {
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(component)) return undefined;
+  try {
+    const file = await open(
+      join(directory, `startup-${component}.json`),
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    );
+    try {
+      const stat = await file.stat();
+      if (!constants.O_NOFOLLOW) {
+        const entry = await lstat(join(directory, `startup-${component}.json`));
+        if (!entry.isFile() || entry.dev !== stat.dev || entry.ino !== stat.ino) return undefined;
+      }
+      if (stat.isFile() && stat.size <= 262144) {
+        const bytes = Buffer.alloc(262145);
+        let length = 0;
+        while (length < bytes.length) {
+          const { bytesRead } = await file.read(bytes, length, bytes.length - length, null);
+          if (!bytesRead) break;
+          length += bytesRead;
+        }
+        if (length > 262144) return undefined;
+        const row = record(JSON.parse(bytes.subarray(0, length).toString("utf8")));
+        if (
+          row.schema_version === 1 &&
+          row.component === component &&
+          typeof row.time === "string" &&
+          Date.parse(row.time) >= since
+        ) {
+          const diagnostic = restoreStartupDiagnostic(row.diagnostic);
+          const code = stableCode(row.code),
+            causeCode = stableCode(row.cause_code);
+          if (diagnostic && code)
+            return Object.assign(
+              new Error(code, causeCode ? { cause: new Error(causeCode) } : undefined),
+              { diagnostic }
+            );
+        }
+      }
+    } finally {
+      await file.close();
+    }
+  } catch {
+    // 缺失、损坏或旧版本记录继续走既有白名单日志，不影响真实就绪等待。
+  }
   const root = component === "executor-kernel" ? directory : join(directory, "extras");
   const prefix = component === "executor-kernel" ? "kernel-" : `${component}-`;
   try {

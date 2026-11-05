@@ -3,6 +3,7 @@ import {
   type AdapterModuleEntry
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { dirname, join } from "node:path";
 
@@ -15,24 +16,34 @@ export async function loadCliAdapters(
   }
 ): Promise<HostedAdapter[]> {
   const adapters: HostedAdapter[] = [];
+  // 解析也在诊断边界内；仍先解析整个所选集合，再导入/构造，保持 CLI 原顺序。
+  const selected = entries.map((entry) => {
+    try {
+      return { entry, specifier: resolveModuleSpecifier(entry.module, entry.sourceManifest) };
+    } catch (error) {
+      throw adapterStartupFailure(error, entry);
+    }
+  });
+  for (const { entry, specifier } of selected) {
+    try {
+      const loaded: unknown = await import(specifier);
+      const exports = asRecord(loaded, `adapter module ${entry.module}`);
+      const exported = exports[entry.export];
+      if (exported === undefined)
+        throw new Error(`missing export ${entry.export} from ${entry.module}`);
 
-  for (const entry of entries) {
-    const specifier = resolveModuleSpecifier(entry.module, entry.sourceManifest);
-    const loaded: unknown = await import(specifier);
-    const exports = asRecord(loaded, `adapter module ${entry.module}`);
-    const exported = exports[entry.export];
-    if (exported === undefined)
-      throw new Error(`missing export ${entry.export} from ${entry.module}`);
-
-    // 动态模块先校验工厂与 Adapter 形状，再交给唯一 Core 注册；不提前探测未选模块。
-    const instance: unknown = entry.factory ? callFactory(exported, entry) : exported;
-    if (!isHostedAdapter(instance))
-      throw new TypeError(`${entry.module}#${entry.export} is not an Octo Runtime adapter`);
-    if (entry.type && instance.metadata.type !== entry.type)
-      throw new Error(
-        `manifest type ${entry.type} does not match adapter ${instance.metadata.type}`
-      );
-    adapters.push(instance);
+      // 动态模块先校验工厂与 Adapter 形状，再交给唯一 Core 注册；不提前探测未选模块。
+      const instance: unknown = entry.factory ? callFactory(exported, entry) : exported;
+      if (!isHostedAdapter(instance))
+        throw new TypeError(`${entry.module}#${entry.export} is not an Octo Runtime adapter`);
+      if (entry.type && instance.metadata.type !== entry.type)
+        throw new Error(
+          `manifest type ${entry.type} does not match adapter ${instance.metadata.type}`
+        );
+      adapters.push(instance);
+    } catch (error) {
+      throw adapterStartupFailure(error, entry);
+    }
   }
   if (options && adapters.some((adapter) => adapter.metadata.type === "openclaw")) {
     const { initializeCliOpenClaw, syncCliOpenClawToolEnvironment } = await import("./openclaw.js");
@@ -44,6 +55,19 @@ export async function loadCliAdapters(
       );
   }
   return adapters;
+}
+
+function adapterStartupFailure(error: unknown, entry: AdapterModuleEntry): unknown {
+  return withStartupContext(error, {
+    component: "cli",
+    phase: "created",
+    context: {
+      module: entry.module,
+      resource: "adapter-module",
+      operation: "assemble-adapter",
+      configKey: "adapters"
+    }
+  });
 }
 
 function callFactory(value: unknown, entry: AdapterModuleEntry): unknown {

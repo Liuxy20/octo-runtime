@@ -9,6 +9,7 @@ import {
   runtimePathFailure,
   validateRuntimeHome
 } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 const PROFILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const RESERVED_PROFILE_NAMES = new Set([
@@ -266,8 +267,20 @@ export async function readJsonFile<T>(path: string): Promise<T | undefined> {
   } catch (error) {
     if (isNodeError(error, "ENOENT")) return undefined;
     if (error instanceof SyntaxError)
-      throw new Error(`invalid JSON file: ${path}`, { cause: error });
-    throw error;
+      throw withStartupContext(
+        new Error(`invalid JSON file: ${path}`, { cause: error }),
+        {
+          component: "cli",
+          phase: "created",
+          context: { path, resource: "configuration", operation: "read-json" }
+        },
+        "LOCAL_STATE_INVALID"
+      );
+    throw withStartupContext(error, {
+      component: "cli",
+      phase: "created",
+      context: { path, resource: "configuration", operation: "read" }
+    });
   }
 }
 

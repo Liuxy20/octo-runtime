@@ -142,3 +142,7 @@ Initialization failure also requires closing created services; `ServiceInitializ
 ## 4. Optional: Use AgentRun
 
 After integration, read [invocation, events, and control](../guides/agent-runs.md) when business code needs to invoke AgentRun. Invocation, event consumption, interaction, and cancellation are not required integration steps; Gateway invokes in response to incoming messages.
+
+## Startup failures
+
+See the [startup diagnostic contract and catalog](../guides/startup-diagnostics.md) for stable code branching, safe resource context, cleanup and CLI JSON compatibility.

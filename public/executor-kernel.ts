@@ -7,6 +7,20 @@ export {
   ServiceInitializationError
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 export type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
+export {
+  STARTUP_CATALOG,
+  describeStartupError,
+  formatStartupDiagnostic,
+  restoreStartupDiagnostic,
+  StartupError
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+export type {
+  StartupCatalogEntry,
+  StartupDiagnostic,
+  StartupContext,
+  StartupCause,
+  StartupLocation
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 export type {
   KernelClient,
   AsyncQuestionReplyResult,

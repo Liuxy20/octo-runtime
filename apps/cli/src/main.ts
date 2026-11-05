@@ -10,6 +10,7 @@ import {
   acknowledgeOrphanCleanup,
   inspectOrphanCleanup,
   createKernelService,
+  safeStartupValue,
   type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
@@ -37,10 +38,10 @@ import {
 import { resolveServiceControl, type ServiceControlOptions } from "./service-control.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { readCliAdapterConfigurations } from "./adapter-configurations.js";
-import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   describeError,
+  formatErrorDetails,
   formatStatus,
   recordStartupFailure,
   readStartupFailure,
@@ -71,6 +72,13 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     (arg) => arg === "--json" || arg.startsWith("--json=")
   );
   let context: { component?: string; action?: string; logs?: string } = {};
+  // 实际日志 IO 仍使用原路径；失败输出的附带元信息与 diagnostic 使用同一净化。
+  const failureContext = (): typeof context => ({
+    component:
+      context.component === undefined ? undefined : safeStartupValue(context.component, 128),
+    action: context.action === undefined ? undefined : safeStartupValue(context.action, 128),
+    logs: context.logs === undefined ? undefined : safeStartupValue(context.logs)
+  });
   let runningComponent: string | undefined;
   let statusOutput: StatusOutput | undefined;
   try {
@@ -80,6 +88,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     const { flags, positional } = parsed;
+    context = { component: positional[0], action: positional[1] };
     json = Boolean(flags.json);
     if (parsed.extra) return await runExtraCommand(parsed, dependencies);
     if (
@@ -350,7 +359,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           logging: { directory: join(home, "logs") },
           endpoint: kernelEndpoint(),
           stateDirectory: kernelStateDirectory,
-          adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
+          adapters: await loadCliAdapters(manifest.adapters, {
             profileRoot: paths.profileRoot,
             syncOpenClawTools: true
           }),
@@ -394,13 +403,16 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
             await recordStartupFailure(join(home, "logs"), component, error);
           } finally {
             const failure = {
-              ...describeError(error, "SERVICE_INITIALIZATION_FAILED"),
-              ...context
+              ...describeError(error, "SERVICE_INITIALIZATION_FAILED", {
+                component,
+                phase: "initializing"
+              }),
+              ...failureContext()
             };
             if (json) publish({ error: failure });
             else
               (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
-                `${component}: ${failure.code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${failure.message}\nLogs: ${context.logs}`
+                `${component}: ${failure.code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${formatErrorDetails(failure)}\nLogs: ${failure.logs}`
               );
           }
         }
@@ -476,13 +488,26 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
   } catch (error) {
     if (runningComponent && context.logs)
       await recordStartupFailure(context.logs, runningComponent, error);
-    const failure = { ...(commandError(error) ?? describeError(error)), ...context };
+    const failure = {
+      ...(commandError(error) ??
+        describeError(
+          error,
+          "COMMAND_FAILED",
+          ["run", "start", "restart", "install"].includes(context.action ?? "")
+            ? {
+                component: context.component ?? "cli",
+                phase: runningComponent ? "initializing" : "created"
+              }
+            : undefined
+        )),
+      ...failureContext()
+    };
     const code = failure.code;
     if (json)
       output(JSON.stringify({ error: failure }, null, context.action === "logs" ? undefined : 2));
     else
       (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
-        `${[context.component, context.action].filter(Boolean).join(" ") || "octo-runtime"}: ${code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${failure.message}${context.logs ? `\nLogs: ${context.logs}` : ""}`
+        `${[failure.component, failure.action].filter(Boolean).join(" ") || "octo-runtime"}: ${code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${formatErrorDetails(failure)}${failure.logs ? `\nLogs: ${failure.logs}` : ""}`
       );
     return code === "EXTRA_COMMAND_CANCELLED"
       ? 130

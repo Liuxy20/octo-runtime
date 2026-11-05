@@ -2,6 +2,8 @@
 
 [English](../en/maintenance.md) | [文档目录](README.md)
 
+[启动诊断目录](guides/startup-diagnostics.md)从共享 catalog 生成。修改定义或恢复建议后，显式运行 `node test/manual/generate-startup-catalog.mjs`，构建后运行 `node --test test/manual/startup-diagnostics.test.js`。这些手动检查不加入默认测试或 CI。
+
 ## 范围与基线
 
 本页供文档维护者查阅，记录源码版本、旧文档的用途和验证方法。本库首次核对的源码为 `d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e`，日期为 2026-10-21。这是首次验证的基线，不代表后续所有页面都只核对到该版本；后续局部更新及其验证范围记录在下方。架构参考根目录的架构和接入文档，接口字段按源码和 Schema 核对。

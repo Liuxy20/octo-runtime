@@ -12,49 +12,35 @@ import {
 } from "node:fs";
 import { posix, win32 } from "node:path";
 
-export interface StartupPathDiagnostic {
-  domain: "startup";
-  code: string;
-  path?: string;
-  resource: string;
-  operation: string;
-  action: string;
-  systemCode?: string;
-  endpoint?: string;
-  measured?: number;
-  limit?: number;
-  unit?: "utf8-bytes" | "utf16-units";
-}
+import {
+  describeStartupError,
+  startupPathDiagnostic,
+  type StartupDiagnostic,
+  type StartupPathDiagnostic
+} from "./startup-diagnostics.js";
+export type { StartupPathDiagnostic } from "./startup-diagnostics.js";
 
-/** 启动域的受控路径失败；只公开必要路径/errno，不复制原始配置或异常正文。 */
+/** 启动域的受控路径失败；保留公共码、cause 和 #306 的平铺属性读取。 */
 export class RuntimeHomeError extends Error {
   readonly code: string;
-  readonly diagnostic: Readonly<StartupPathDiagnostic>;
-  constructor(diagnostic: Omit<StartupPathDiagnostic, "domain">, cause?: unknown) {
+  readonly diagnostic: Readonly<StartupDiagnostic & StartupPathDiagnostic>;
+  constructor(
+    diagnostic: Omit<StartupPathDiagnostic, "domain" | "action"> & { action?: string },
+    cause?: unknown
+  ) {
     super(diagnostic.code, { cause });
     this.name = "RuntimeHomeError";
     this.code = diagnostic.code;
-    // 明确投影字段，避免 JS 调用方附带的配置等额外属性进入公开启动诊断。
-    this.diagnostic = Object.freeze({
-      domain: "startup",
-      code: diagnostic.code,
-      resource: diagnostic.resource,
-      operation: diagnostic.operation,
-      action: diagnostic.action,
-      ...(diagnostic.path !== undefined ? { path: diagnostic.path } : {}),
-      ...(diagnostic.systemCode !== undefined ? { systemCode: diagnostic.systemCode } : {}),
-      ...(diagnostic.endpoint !== undefined ? { endpoint: diagnostic.endpoint } : {}),
-      ...(diagnostic.measured !== undefined ? { measured: diagnostic.measured } : {}),
-      ...(diagnostic.limit !== undefined ? { limit: diagnostic.limit } : {}),
-      ...(diagnostic.unit !== undefined ? { unit: diagnostic.unit } : {})
-    });
+    Object.defineProperty(this, "startupContext", { value: diagnostic });
+    const shared = describeStartupError(this);
+    const legacy = startupPathDiagnostic(shared);
+    // 兼容读取的别名不进入 JSON；序列化只有一个标准诊断结构，文案不能由输入 action 覆盖。
+    for (const [key, value] of Object.entries(legacy ?? {})) {
+      if (!(key in shared)) Object.defineProperty(shared, key, { value });
+    }
+    this.diagnostic = Object.freeze(shared) as Readonly<StartupDiagnostic & StartupPathDiagnostic>;
   }
 }
-
-const action =
-  "The host must select and prepare an existing, accessible absolute Runtime Home, then retry with that directory. No replacement Home is selected.";
-const lengthAction =
-  "The host must choose a directory/address within the reported filesystem and IPC limits, prepare it, and retry. Existing data is not moved automatically.";
 
 /** 先检查原始输入，再规范化；这是纯路径计算，不代表目录已存在或启动已验证。 */
 export function normalizeRuntimeHome(
@@ -67,8 +53,7 @@ export function normalizeRuntimeHome(
       code,
       ...(typeof input === "string" ? { path: input } : {}),
       resource,
-      operation: "validate-input",
-      action
+      operation: "validate-input"
     });
   };
   if (
@@ -115,8 +100,7 @@ function platformLimits(platform: NodeJS.Platform): PathLimits {
   throw new RuntimeHomeError({
     code: "HOME_UNSUPPORTED",
     resource: "home",
-    operation: "path-budget",
-    action
+    operation: "path-budget"
   });
 }
 
@@ -137,7 +121,6 @@ export function assertRuntimePath(
       path,
       resource,
       operation,
-      action: lengthAction,
       measured,
       limit,
       unit
@@ -161,7 +144,6 @@ export function assertIpcEndpoint(
       ...(typeof endpoint === "string" ? { path: endpoint, endpoint } : {}),
       resource: "ipc-endpoint",
       operation: "ipc-address",
-      action: lengthAction,
       ...extra
     });
   };
@@ -214,8 +196,7 @@ export function validateRuntimeHome(input: string, paths: readonly RuntimePath[]
         code: "HOME_NOT_DIRECTORY",
         path: home,
         resource: "home",
-        operation,
-        action
+        operation
       });
     operation = "filesystem-limits";
     const cache = new Map<string, PathLimits>();
@@ -345,12 +326,6 @@ export function runtimePathFailure(
       path,
       resource,
       operation,
-      action:
-        code === "HOME_PATH_TOO_LONG"
-          ? lengthAction
-          : code === "HOME_LIMIT_UNAVAILABLE"
-            ? "Make the operating system /usr/bin/getconf utility available to query PATH_MAX/NAME_MAX, then retry with the same prepared directory."
-            : action,
       ...(systemCode ? { systemCode } : {})
     },
     error

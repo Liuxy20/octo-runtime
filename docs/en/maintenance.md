@@ -2,6 +2,8 @@
 
 [简体中文](../zh-CN/maintenance.md) | [Documentation](README.md)
 
+The [startup diagnostic catalog](guides/startup-diagnostics.md) is generated from the shared catalog. After changing its definitions or recovery guidance, explicitly run `node test/manual/generate-startup-catalog.mjs` and `node --test test/manual/startup-diagnostics.test.js` after the build. These manual checks do not extend default tests or CI.
+
 ## Scope and Baseline
 
 This page is for documentation maintainers. It records the roles of existing documents and validation methods. The initial library was reviewed against revision `d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e` on 2026-10-21. That is the initial validation baseline, not a claim that all later pages describe only that revision. Architecture explanations use the root architecture and integration documents; API fields are checked against source and schemas.

@@ -2,6 +2,8 @@
 
 [English](../../en/guides/troubleshooting.md) | [文档目录](../README.md)
 
+构造或初始化失败时，先查阅[启动诊断合同与目录](startup-diagnostics.md)。这类失败可早于任何 Run 或 IPC 端点，直接检查失败调用的 diagnostic 即可。下文执行排障适用于已提交 Run 的情况。
+
 先记录错误码和相关 `runId`、`invocationId`，再按下表定位问题。提交后的连接失败不一定意味着任务没有执行，重试前应查询原执行。日志中只记录必要元数据，避免输出输入正文、密钥或替换后的 MCP 认证 header。
 
 ## 服务无法连接

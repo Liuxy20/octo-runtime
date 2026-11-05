@@ -1,3 +1,9 @@
+import {
+  describeStartupError,
+  type StartupDiagnostic,
+  type StartupLocation
+} from "./startup-diagnostics.js";
+
 export type ServicePhase = "created" | "initializing" | "ready" | "closing" | "closed" | "failed";
 
 export interface ServiceCleanupResult {
@@ -14,12 +20,15 @@ export interface ServiceLifecycle<S> {
 }
 
 export class ServiceInitializationError extends Error {
+  readonly diagnostic: StartupDiagnostic;
   constructor(
     cause: unknown,
-    readonly cleanup: ServiceCleanupResult
+    readonly cleanup: ServiceCleanupResult,
+    location: StartupLocation = { component: "host", phase: "initializing" }
   ) {
     super("SERVICE_INITIALIZATION_FAILED", { cause });
     this.name = "ServiceInitializationError";
+    this.diagnostic = describeStartupError(this, location);
   }
 }
 

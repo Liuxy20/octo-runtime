@@ -16,6 +16,20 @@ export type {
   ExtraStatusRecord
 } from "@mininglamp-oss/octo-runtime-host-sdk";
 export { createKernelService, ServiceInitializationError } from "./executor-kernel.js";
+export {
+  STARTUP_CATALOG,
+  describeStartupError,
+  formatStartupDiagnostic,
+  restoreStartupDiagnostic,
+  StartupError
+} from "./executor-kernel.js";
+export type {
+  StartupCatalogEntry,
+  StartupDiagnostic,
+  StartupContext,
+  StartupCause,
+  StartupLocation
+} from "./executor-kernel.js";
 export type {
   KernelService,
   KernelServiceOptions,

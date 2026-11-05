@@ -22,3 +22,14 @@ export {
   runtimePathFailure,
   type StartupPathDiagnostic
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
+export { HostRuntimeError } from "./errors.js";
+export {
+  STARTUP_CATALOG,
+  describeStartupError,
+  formatStartupDiagnostic,
+  StartupError,
+  type StartupDiagnostic,
+  type StartupContext,
+  type StartupLocation,
+  type StartupCause
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
