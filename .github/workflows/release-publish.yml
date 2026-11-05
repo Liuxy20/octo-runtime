@@ -58,12 +58,29 @@ jobs:
         run: |
           set -euo pipefail
           ARCHIVE="release/mininglamp-oss-octo-runtime-$VERSION.tgz"
+          CLIENT_ARCHIVE="release/mininglamp-oss-octo-runtime-client-$VERSION.tgz"
           test -f "$ARCHIVE"
+          test -f "$CLIENT_ARCHIVE"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$ARCHIVE" --clobber --repo "$GITHUB_REPOSITORY"
+            ASSETS=$(gh release view "$TAG" --json assets --jq '.assets[].name' --repo "$GITHUB_REPOSITORY")
+            VERIFY_DIR=$(mktemp -d)
+            trap 'rm -rf "$VERIFY_DIR"' EXIT
+            MISSING=()
+            for FILE in "$ARCHIVE" "$CLIENT_ARCHIVE"; do
+              NAME=$(basename "$FILE")
+              if printf '%s\n' "$ASSETS" | grep -Fxq "$NAME"; then
+                gh release download "$TAG" --pattern "$NAME" --dir "$VERIFY_DIR" --repo "$GITHUB_REPOSITORY"
+                cmp "$FILE" "$VERIFY_DIR/$NAME"
+              else
+                MISSING+=("$FILE")
+              fi
+            done
+            if [ "${#MISSING[@]}" != 0 ]; then
+              gh release upload "$TAG" "${MISSING[@]}" --repo "$GITHUB_REPOSITORY"
+            fi
             gh release edit "$TAG" --draft=false --repo "$GITHUB_REPOSITORY"
           else
-            gh release create "$TAG" "$ARCHIVE" \
+            gh release create "$TAG" "$ARCHIVE" "$CLIENT_ARCHIVE" \
               --verify-tag \
               --generate-notes \
               --title "$TAG" \
@@ -106,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ "$DRY_RUN" = true ]; then
-            node scripts/reconcile-release-latest.mjs --dry-run --candidate "$VERSION"
+            node scripts/reconcile-release-latest.mjs --paired --dry-run --candidate "$VERSION"
           else
-            node scripts/reconcile-release-latest.mjs
+            node scripts/reconcile-release-latest.mjs --paired
           fi

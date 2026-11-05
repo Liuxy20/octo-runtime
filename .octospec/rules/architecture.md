@@ -17,6 +17,14 @@ supersedes: []
 
 # Octo Runtime 基础架构
 
+## 独立客户端与自包含双包发行（Issue 309）
+
+业务只消费已有 Kernel 时使用 `@mininglamp-oss/octo-runtime-client`；服务原生构造、直接 Core、Adapter 注册和 Extra 装配保留在完整 Runtime。KernelService.client、CLI 与 Extra IPC 复用 client 的唯一源码实现，Extra direct 保持 #312。client 的运行及声明依赖只允许共享 protocol 和 Node 标准库，不反向依赖 Core/服务/Adapter/Host/Extra。
+
+用户确认同 tag 同版本发布 runtime/client 两个公开包。runtime 必须把 client/protocol 物化到包内 node_modules，独立 client 只内置 protocol；任一 tgz 可单独离线安装，不发布第三个 protocol 包。本地开发使用 workspace 链接。每个发行物内部保证客户端、错误与协议模块单实例；跨发行物不承诺 ===、instanceof 或 WeakSet 证据互认，按结构类型和实际 wire 合同兼容。禁止为身份去重引入全局注册表或维护第二份客户端逻辑。
+
+npm 版本、IPC/Run/Context 版本与 schema 来源分别记录。支持组合以实际验证表为准，不引入协商/降级，不重放未知执行或控制动作。两包部分发布、构建时间恢复、双附件完整性与 latest 收敛必须可恢复；专项只显式本地执行，不扩大 CI。实施范围和证据见 [#309](../tasks/309-runtime-client/brief.md)。
+
 ## Extra 双模式装配（Issue 312）
 
 #312 明确增加独立的 `execution: { kind: "direct", executor }` 装配：宿主直接构造并注册 Core，Extra 借用同一对象，不创建 Kernel、执行 socket、Home 或 worker。`execution: { kind: "ipc", endpoint }` 及旧 endpoint 使用已有 Kernel；二者互斥。下文 #294 的“统一 RPC”约束适用于 Kernel 托管路径，不禁止这一明确选择的 direct Extra 模式，也不允许 KernelService 内部绕过其 RPC。

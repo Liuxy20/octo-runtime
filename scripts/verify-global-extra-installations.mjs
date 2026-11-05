@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { parseNpmPackResult } from "./parse-npm-pack-result.mjs";
 
 const archive = process.argv[2] && resolve(process.argv[2]);
 const pnpmPath = process.argv[3] ?? process.env.npm_execpath;
@@ -82,10 +83,11 @@ export default function extra(ctx, config) { return () => {
   }
 }] };`
   );
-  const packed = JSON.parse(
-    command(npmCli, ["pack", "--json", "--ignore-scripts"], { cwd: directory })
+  const packed = parseNpmPackResult(
+    command(npmCli, ["pack", "--json", "--ignore-scripts"], { cwd: directory }),
+    name
   );
-  return join(directory, packed[0].filename);
+  return join(directory, packed.filename);
 }
 async function exercise(entry, label, name, launcher) {
   const home = join(root, `${label}-home`),

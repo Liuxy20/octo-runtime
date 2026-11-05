@@ -4,12 +4,13 @@
 
 Octo Runtime 是一套与 Provider 无关的执行实现，SDK 应用、内置 CLI 和可选业务接入共用它。宿主决定 Adapter、配置和 Extra。Executor Core 里的 `AgentExecutor` 干活；Executor Kernel 在同一宿主进程内负责本地 RPC、Run 接纳、观察、控制和有界回放；Host SDK 负责把可选 Extra 装配在周围。
 
-这个目录放的是 private workspace 包。每个包的 README 说明用途、接入入口和边界；Core 与 Kernel 提供执行示例，Adapter 页面展示注册与输入准备。
+这个目录包含独立发布的 client 和其余 private workspace 包。每个包的 README 说明用途、接入入口和边界；Core 与 Kernel 提供执行示例，Adapter 页面展示注册与输入准备。
 
 ## 从哪里开始
 
 | 你想…                  | 从这里看                                                                                                                   |
 | ---------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| 连接已有 Kernel，不安装完整 SDK | [独立 Client](octo-runtime-client/README.md) |
 | 在 Electron 或 Node 应用中原生接入 Runtime | [Executor Kernel](octo-runtime-executor-kernel/README.zh.md)                                                                   |
 | 显式使用低层执行原语 | [Executor Core](octo-runtime-executor-core/README.zh.md)                                                               |
 | 接某个 Provider 的 CLI | 下面的 Provider 表                                                                                                         |
@@ -93,7 +94,9 @@ Host SDK 依赖 Kernel；Core 和 Kernel 不依赖 Host SDK。本地执行不需
 
 ## private 包与公开入口
 
-这个目录下的都是 private `@mininglamp-oss/octo-runtime-*` workspace 包。源码和子模块宿主通过 workspace 依赖它们。npm 使用者安装 `@mininglamp-oss/octo-runtime`，然后用它的公开子路径：
+`@mininglamp-oss/octo-runtime-client` 独立发布，供已有 Kernel 的消费者使用。其余包仍为 private workspace 包，源码和子模块宿主通过 workspace 依赖它们。完整 SDK 使用者安装 `@mininglamp-oss/octo-runtime`。两种发行物各自内置必要的 client/protocol 实现；安装完整 SDK 不需要另行安装独立 client。
+
+完整 SDK 的公开子路径：
 
 | 源码包                               | 公开入口                                                                                                     |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |

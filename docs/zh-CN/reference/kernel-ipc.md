@@ -177,4 +177,4 @@ Kernel 实例变化、执行标识不匹配、序号非法、输出缺失或过�
 
 Kernel 宿主重启后，不会恢复旧输出或重跑旧执行。结果为 `lost` 或未知时，应由应用决定后续处理。详见[输出与控制](output-and-control.md)。
 
-来源：[IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json)、[fixture](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json)、[client 类型](../../../packages/octo-runtime-executor-kernel/src/types.ts)、[client](../../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../../packages/octo-runtime-executor-kernel/src/server.ts)。
+来源：[IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json)、[fixture](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json)、[client 类型](../../../packages/octo-runtime-client/src/types.ts)、[client](../../../packages/octo-runtime-client/src/client.ts)、[server](../../../packages/octo-runtime-executor-kernel/src/server.ts)。

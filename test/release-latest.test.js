@@ -199,10 +199,15 @@ test("dry-run 使用同一决策并保持 npm 与 GitHub 零写入", async () =>
       target: "1.2.0",
       relation: "newer",
       attempts: 1,
-      actions: [
+      targetVerified: false,
+      candidate: { version: "1.2.0", verified: false },
+      actions: [],
+      conditionalActions: [
         ["npm", "1.2.0"],
         ["github", "1.2.0"]
-      ]
+      ],
+      warning:
+        "Candidate release completeness is not verified. This is a simulation, not release readiness; conditional actions require successful publication and integrity verification."
     }
   );
   assert.deepEqual(release.actions, []);
@@ -332,7 +337,7 @@ test("workflow 将不可变发布、Release 修复和共享 promotion 分离", a
   assert.match(npmWorkflow, /--tag "release-\$VERSION"/);
   assert.doesNotMatch(npmWorkflow, /npm publish[^\n]+--tag latest/);
   assert.match(npmWorkflow, /node scripts\/check-release-registry\.mjs/);
-  assert.match(npmWorkflow, /"\$REGISTRY" --wait/);
+  assert.match(npmWorkflow, /--package "@mininglamp-oss\/octo-runtime\$SUFFIX" --wait/);
   assert.match(npmWorkflow, /node scripts\/resolve-release-build-time\.mjs "\$VERSION" "\$SHA"/);
   assert.match(npmWorkflow, /build_time: \$\{\{ needs\.validate\.outputs\.build_time \}\}/);
   const ciWorkflow = await readFile(resolve(root, ".github/workflows/ci.yml"), "utf8");

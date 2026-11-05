@@ -1,0 +1,29 @@
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/runtime-lifecycle.md
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/309
+baseline: de3ff37a
+synced_main: b5396834
+second_main_sync: "2026-11-05：用户授权 PR #316 同步最新 main、处理冲突并提交；将 b5396834（#317）合入功能分支，保留 client 唯一实现与 dry-run 修复，接入共享 status/service_processes 校验。只提交推送原 PR，不合并 PR 或发布。"
+review_followup: "2026-11-05：用户授权修复 yujiawei 指出的 dry-run 输出歧义并英文回复改动与 P1 定级意见；提交推送当前 PR 后评论请求复审，不修改 reviewer 状态，不扩大 CI。"
+conflict_resolution: "2026-11-05：用户授权解决 PR #316 冲突并重新英文提交、推送；将 main 合入功能分支，保留 #314 统一启动诊断，纯诊断与 catalog 由 client 提供唯一实现。验证见 validation.md 末节。不合并 PR、不打 tag、不正式发布。"
+phase: verified
+user_direction: "2026-11-05：先将 runtime 内置 client、client 独立发布的约束写入 spec 再实施；完成 code-review 后，用户追加授权英文提交、推送并向 main 创建 PR。未授权合并或正式发布。"
+workflow_read:
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/tasks/_brief.template.md
+skills_read:
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+related_issues_read:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/293
+existing_code_draft: "已按用户确认设计完成迁移与修正，实际结果见 validation.md。"
+review: "用户显式调用 code-review；Standards/Spec 两轴独立审查并复核，剩余问题均为 0。"
+delivery: "本地实现与验证完成，按追加授权准备英文提交及目标 main 的 PR；不执行合并、打 tag 或正式发布。"

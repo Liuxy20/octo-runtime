@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+export type { HostedAdapterMetadata } from "./adapter-metadata.js";
 import { assertAsyncQuestions, assertQuestionRequest } from "./questions.js";
 export {
   assertAsyncQuestions,

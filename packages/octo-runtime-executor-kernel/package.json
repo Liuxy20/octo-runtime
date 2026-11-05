@@ -10,6 +10,7 @@
     }
   },
   "dependencies": {
+    "@mininglamp-oss/octo-runtime-client": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-core": "workspace:*",
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*"

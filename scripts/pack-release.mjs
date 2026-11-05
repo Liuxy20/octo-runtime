@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { bundleDshClient, dshAdapterName, dshClientName } from "./bundle-dsh-client.mjs";
 import { parseNpmPackResult } from "./parse-npm-pack-result.mjs";
+import { packClientRelease, clientPackageName } from "./pack-client-release.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const readManifest = async (directory) =>
@@ -78,6 +79,12 @@ try {
     await mkdir(target, { recursive: true });
     if (workspaces.has(source.name)) {
       await cp(join(path, "dist"), join(target, "dist"), { recursive: true });
+      if (source.name === clientPackageName) {
+        await cp(join(root, "packages/octo-runtime-protocol/schema"), join(target, "schema"), {
+          recursive: true
+        });
+        await cp(join(root, "apps/cli/dist/build-info.json"), join(target, "build-info.json"));
+      }
       if (source.name === dshAdapterName) await bundleDshClient(path, target);
       if (source.exports?.["./config-schema.json"]) {
         await cp(join(path, "config-schema.json"), join(target, "config-schema.json"));
@@ -186,7 +193,9 @@ try {
     manifest.name
   );
   if (result.bundled.length !== packages.size) throw new Error("npm 未完整打包生产依赖，禁止发布");
+  const clientArchive = await packClientRelease({ root, releaseVersion, output, npm });
   console.log(join(output, result.filename));
+  console.log(clientArchive);
 } finally {
   await rm(temporary, { recursive: true, force: true });
 }

@@ -121,7 +121,7 @@ test("Kernel client decodes a UTF-8 character split across native IPC writes", a
     await tick();
     socket.end(bytes.subarray(offset));
   });
-  // 合成响应仅验证接收解码；业务协议与终态由上面的真实 Kernel/worker 测试验证。
+  // 合成响应仅验证接收解码；业务协议与终态由上面的真实 Kernel 测试验证。
   assert.equal((await client.status()).kernel_instance_id, text);
 });
 

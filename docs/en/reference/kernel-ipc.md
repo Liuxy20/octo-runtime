@@ -177,4 +177,4 @@ Byte limits count serialized data, rather than total process memory. Trusted Ada
 
 Kernel host restart does not restore old output or rerun old executions. Applications decide how to proceed when a result is `lost` or unknown. See [Output and Control](output-and-control.md).
 
-Sources: [IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json), [fixtures](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json), [client types](../../../packages/octo-runtime-executor-kernel/src/types.ts), [client](../../../packages/octo-runtime-executor-kernel/src/client.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts).
+Sources: [IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json), [fixtures](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json), [client types](../../../packages/octo-runtime-client/src/types.ts), [client](../../../packages/octo-runtime-client/src/client.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts).

@@ -1,5 +1,36 @@
 # SDK 接入
 
+## 选择 npm 包
+
+| 需求 | 安装 | 入口 |
+| --- | --- | --- |
+| 消费已有的本地 Kernel | `@mininglamp-oss/octo-runtime-client` | `attachKernel({ endpoint })` |
+| 拥有 Kernel/Extra 服务，或显式直接调用 Core | `@mininglamp-oss/octo-runtime` | 原生服务工厂，初始化后使用 kernel.client；直接 Core 仍是显式选择 |
+
+client 可以独立安装，提供协议类型、辅助函数和 schema，不包含 CLI、Core、Adapter 或 Extra，也不启动 Kernel。公开入口、取消与所有权见 [client 包参考](../../../packages/octo-runtime-client/README.md)。
+
+```ts
+import { attachKernel } from "@mininglamp-oss/octo-runtime-client";
+import type { InvokeInput } from "@mininglamp-oss/octo-runtime-client/protocol";
+
+// 应用拥有连接；endpoint 对应服务由宿主持有，须已启动。
+export async function execute(endpoint: string, input: InvokeInput) {
+  const client = attachKernel({ endpoint });
+  try {
+    for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) {
+      console.log(event);
+    }
+  } finally {
+    // 业务先完成持久化/投递；关闭连接不取消已受理的 Run。
+    client.close();
+  }
+}
+```
+
+两个包从同一 tag 同版本发布。runtime 内置自己的 client/protocol，任一 tgz 均可单独离线安装；完整 SDK 原有 `/executor-kernel`、`/protocol` 路径保持。应用同时安装两种发行物时可能有两个模块副本：错误判断使用产生错误的 API 对应的类，或公开 code，不依赖跨发行物的函数 ===、instanceof 或内部拒绝证据互认。
+
+npm 版本与 IPC v1、Run 7、Context v3 分别管理。同次发行组合属于支持范围；其他组合需要按相同 wire 合同明确验证。status 在提交前拒绝不支持的 IPC 版本，不增加协商、降级或自动重放。原始 schema 位于 `/protocol/schema.json`、`/protocol/ipc-schema.json`、`/protocol/ipc-fixtures.json`、`/protocol/behavior.json`。传输仍限定本地 Unix socket/Windows named pipe 和现有系统账号信任边界。
+
 ## 选择 Extra 执行方式
 
 已有 Core 的嵌入宿主可以直接组合 Extra，无需 Kernel 监听或 Runtime Home：

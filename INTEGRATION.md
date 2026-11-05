@@ -4,6 +4,8 @@
 
 按使用场景选择指南，具体操作和示例只在对应指南维护。
 
+只连接已有 Kernel 的应用安装 `@mininglamp-oss/octo-runtime-client`，从根入口调用 `attachKernel({ endpoint })`，从 `/protocol` 取得协议。拥有 Kernel/Extra 或直接 Core 的宿主继续使用完整 `@mininglamp-oss/octo-runtime`。两包同 tag 同版本发布；完整包内置 client/protocol，保留单 tgz 离线安装。[client 包参考](packages/octo-runtime-client/README.md)说明跨发行物的类型兼容与对象身份边界。
+
 | 场景                                        | 文档                                                     | 责任                                        |
 | ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------- |
 | 云端设备的定制接入、部署和运维              | [CLI 安装与运维](docs/zh-CN/getting-started/cli.md)      | 使用完整 CLI 发行物及系统管理、自启服务     |

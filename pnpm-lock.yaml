@@ -56,6 +56,9 @@ importers:
       '@mininglamp-oss/octo-runtime-adapter-qoderclicn':
         specifier: workspace:*
         version: link:packages/octo-runtime-adapter-qoderclicn
+      '@mininglamp-oss/octo-runtime-client':
+        specifier: workspace:*
+        version: link:packages/octo-runtime-client
       '@mininglamp-oss/octo-runtime-cross-service':
         specifier: workspace:*
         version: link:packages/octo-runtime-cross-service
@@ -357,6 +360,12 @@ importers:
         specifier: 4.2.0
         version: 4.2.0
 
+  packages/octo-runtime-client:
+    dependencies:
+      '@mininglamp-oss/octo-runtime-protocol':
+        specifier: workspace:*
+        version: link:../octo-runtime-protocol
+
   packages/octo-runtime-cross-service:
     dependencies:
       iconv-lite:
@@ -377,6 +386,9 @@ importers:
       '@mininglamp-oss/octo-runtime-adapter-sdk':
         specifier: workspace:*
         version: link:../octo-runtime-adapter-sdk
+      '@mininglamp-oss/octo-runtime-client':
+        specifier: workspace:*
+        version: link:../octo-runtime-client
       '@mininglamp-oss/octo-runtime-executor-core':
         specifier: workspace:*
         version: link:../octo-runtime-executor-core

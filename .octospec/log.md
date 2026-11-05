@@ -2,6 +2,8 @@
 
 ## 2026-11-05
 
+- [Issue 309 本地实施](journal/shared/2026-11-05-309-runtime-client.md)：确认 runtime 内置 client/protocol、client 同 tag 独立发布，两份自包含归档。完成唯一实现迁移、双包恢复与三 latest；现有完整回归、手动 25 项、原基线互操作、离线/global 安装通过。Standards 三项修复后剩余 0，Spec 0；CI 不扩围，按追加授权准备英文提交及 main PR，未合并或正式发布。
+
 - [PR 317 路径审查整改](tasks/313-codex-service-lifecycle/review.md#pr-317-外部路径审查整改)：复现相对 cwd 下 executableIdentity 重复解析导致升级后误复用；绝对 cwd 原本正确。单行修复并补四个仅手动执行的真实可执行夹具，30 项专项及默认 2400 项通过，双轴复审无未关闭项；保留既有服务和升级策略，无 CI 扩围，远端重新审查状态另看 PR。
 
 - [Issue 313 PR 交付](tasks/313-codex-service-lifecycle/validation.md#后续-pr-交付授权)：用户在实施及双重审查完成后授权提交 PR 到 main；再次 fetch 确认基线未变，分支更名为 feat/codex-service-lifecycle，沿用作者、英文提交及 Codex trailer。无 CI 扩围，托管检查以远端 PR 为准，未授权合并或发布。

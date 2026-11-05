@@ -80,7 +80,7 @@ jobs:
       - name: Test
         # Run the same suites as pnpm test, reusing the preceding build.
         run: pnpm test:suites
-      - name: Pack single distribution
+      - name: Pack runtime and client distributions
         id: pack
         shell: bash
         env:
@@ -95,6 +95,7 @@ jobs:
             VERSION=$(node -p "JSON.parse(require('node:fs').readFileSync('package.json', 'utf8')).version")
           fi
           echo "archive=dist/release/mininglamp-oss-octo-runtime-$VERSION.tgz" >> "$GITHUB_OUTPUT"
+          echo "client_archive=dist/release/mininglamp-oss-octo-runtime-client-$VERSION.tgz" >> "$GITHUB_OUTPUT"
       - name: Verify isolated npm and pnpm global Extra installations
         env:
           ARCHIVE: ${{ steps.pack.outputs.archive }}
@@ -115,7 +116,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: octo-runtime-release
-          path: ${{ steps.pack.outputs.archive }}
+          path: |
+            ${{ steps.pack.outputs.archive }}
+            ${{ steps.pack.outputs.client_archive }}
           if-no-files-found: error
           retention-days: 7
 
@@ -185,7 +188,7 @@ jobs:
           test/cross-service-windows-native.test.js
       - name: Verify Host logging on Windows
         run: node --test --test-name-pattern="F31 Host logging|F31 unavailable" test/runtime-debug.test.js
-      - name: Pack single distribution
+      - name: Pack runtime and client distributions
         id: pack
         shell: bash
         env:

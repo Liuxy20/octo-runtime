@@ -10,7 +10,7 @@ const execute = promisify(execFile);
 const root = resolve(import.meta.dirname, "..");
 const readManifest = async (path) => JSON.parse(await readFile(path, "utf8"));
 
-test("发行源码清单保持非发行占位版本，内部 workspace 全部禁止独立发布", async () => {
+test("发行源码清单保持非发行占位版本，除 client 外内部 workspace 禁止独立发布", async () => {
   const rootManifest = await readManifest(join(root, "package.json"));
   assert.equal(rootManifest.version, "0.0.0");
   assert.notEqual(rootManifest.private, true);
@@ -20,7 +20,11 @@ test("发行源码清单保持非发行占位版本，内部 workspace 全部禁
       if (!entry.isDirectory()) continue;
       const manifest = await readManifest(join(root, parent, entry.name, "package.json"));
       assert.equal(manifest.version, "0.0.0", manifest.name);
-      assert.equal(manifest.private, true, manifest.name);
+      assert.equal(
+        manifest.private,
+        manifest.name !== "@mininglamp-oss/octo-runtime-client",
+        manifest.name
+      );
     }
   }
 });
@@ -112,7 +116,10 @@ test("发行校验在 checkout 压平本地 ref 后恢复远端 annotated tag �
       workflow,
       /git fetch --force --no-tags origin "refs\/tags\/\$TAG:refs\/tags\/\$TAG"/
     );
-    assert.match(workflow, /ARCHIVE="\.\/release\/mininglamp-oss-octo-runtime-\$VERSION\.tgz"/);
+    assert.match(
+      workflow,
+      /ARCHIVE="\.\/release\/mininglamp-oss-octo-runtime\$SUFFIX-\$VERSION\.tgz"/
+    );
     assert.match(workflow, /NPM_TOKEN is required for a production npm publish/);
   } finally {
     await rm(directory, { recursive: true, force: true });

@@ -1,5 +1,36 @@
 # SDK Integration
 
+## Choose The npm Package
+
+| Need | Install | Entry |
+| --- | --- | --- |
+| Consume an existing local Kernel | `@mininglamp-oss/octo-runtime-client` | `attachKernel({ endpoint })` |
+| Own Kernel/Extra services or use Core directly | `@mininglamp-oss/octo-runtime` | Native service factories, then `kernel.client`; direct Core remains explicit |
+
+The client is independently installable and includes shared protocol types, helpers and schemas, without the CLI, Core, Adapters or Extras. It never starts a Kernel. [Client package reference](../../../packages/octo-runtime-client/README.md) describes exports, cancellation and ownership.
+
+```ts
+import { attachKernel } from "@mininglamp-oss/octo-runtime-client";
+import type { InvokeInput } from "@mininglamp-oss/octo-runtime-client/protocol";
+
+// 应用拥有连接；endpoint 对应服务由宿主持有，须已启动。
+export async function execute(endpoint: string, input: InvokeInput) {
+  const client = attachKernel({ endpoint });
+  try {
+    for await (const event of client.invoke({ ...input, protocol_mode: "canonical" })) {
+      console.log(event);
+    }
+  } finally {
+    // 业务先完成持久化/投递；关闭连接不取消已受理的 Run。
+    client.close();
+  }
+}
+```
+
+Both packages are published at matching versions from the same tag. Runtime bundles its own client/protocol; each tgz remains independently installable offline. Existing Runtime `/executor-kernel` and `/protocol` imports remain supported. Two installed distributions can contain separate module instances: use the error class from the API that produced the error, or its public `code`; cross-distribution function identity and `instanceof` are not guaranteed.
+
+Package versions are separate from IPC v1, Run 7 and Context v3. Matching release pairs are supported; other combinations need explicit verification against the same wire contracts. Status rejects unsupported IPC versions before submission; there is no new negotiation, downgrade or automatic execution replay. Schema exports are `/protocol/schema.json`, `/protocol/ipc-schema.json`, `/protocol/ipc-fixtures.json` and `/protocol/behavior.json`. Transport remains local Unix sockets / Windows named pipes under the existing OS-account trust boundary.
+
 The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names and Extra control addresses are unchanged. This is a breaking address change: stop old processes, update Kernel and all clients/Extras together, then restart.
 
 [简体中文](../../zh-CN/getting-started/sdk.md) | [Documentation](../README.md)

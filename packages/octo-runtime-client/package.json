@@ -1,0 +1,58 @@
+{
+  "name": "@mininglamp-oss/octo-runtime-client",
+  "version": "0.0.0",
+  "private": false,
+  "description": "Standalone Node.js client and shared protocol for an existing Octo Runtime Kernel",
+  "license": "Apache-2.0",
+  "type": "module",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./protocol": {
+      "types": "./dist/protocol.d.ts",
+      "import": "./dist/protocol.js"
+    },
+    "./protocol/browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
+    },
+    "./protocol/notification": {
+      "types": "./dist/notification.d.ts",
+      "import": "./dist/notification.js"
+    },
+    "./protocol/schema.json": "./schema/protocol.schema.json",
+    "./protocol/ipc-schema.json": "./schema/kernel-ipc.schema.json",
+    "./protocol/ipc-fixtures.json": "./schema/kernel-ipc-fixtures.json",
+    "./protocol/behavior.json": "./schema/kernel-client.behavior.json",
+    "./internal": {
+      "types": "./dist/internal.d.ts",
+      "import": "./dist/internal.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schema",
+    "build-info.json"
+  ],
+  "engines": {
+    "node": "^24.0.0 || ^26.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mininglamp-OSS/octo-runtime.git",
+    "directory": "packages/octo-runtime-client"
+  },
+  "dependencies": {
+    "@mininglamp-oss/octo-runtime-protocol": "workspace:*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "node ../../scripts/require-release-pack.mjs"
+  }
+}

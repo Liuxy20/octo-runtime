@@ -59,4 +59,4 @@ Core shutdown 的完整/未确认清理语义保持 [Core 合同](../../packages
 
 ## 核对位置
 
-[client](../../packages/octo-runtime-executor-kernel/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[原生执行源](../../packages/octo-runtime-executor-kernel/src/execution-source.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[调用登记](../../packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts)、[原生 Extra 服务](../../packages/octo-runtime-host-sdk/src/extra-service.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。
+[client](../../packages/octo-runtime-client/src/client.ts)、[server](../../packages/octo-runtime-executor-kernel/src/server.ts)、[原生执行源](../../packages/octo-runtime-executor-kernel/src/execution-source.ts)、[源窗口](../../packages/octo-runtime-executor-kernel/src/host-run-service.ts)、[调用登记](../../packages/octo-runtime-client/src/invocation-lifecycle.ts)、[原生 Extra 服务](../../packages/octo-runtime-host-sdk/src/extra-service.ts)。仓库外类型和运行验证使用 [发行验收脚本](../../scripts/verify-release.mjs)。其他语言的生产 client、外部 Go Loop 和真实线上业务不由本地 fixture 证明。

@@ -5,13 +5,13 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { readReleaseBuildInfo } from "./read-release-build-info.mjs";
 
-export async function resolveReleaseBuildTime(version, commit, request = fetch) {
+async function publishedBuildTime(version, commit, request, name) {
   const registry = "https://registry.npmjs.org";
-  const response = await request(`${registry}/@mininglamp-oss%2focto-runtime/${version}`);
-  if (response.status === 404) return new Date().toISOString();
+  const response = await request(`${registry}/${name.replace("/", "%2f")}/${version}`);
+  if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Registry lookup failed: ${response.status}`);
   const metadata = await response.json();
-  if (metadata.version !== version || metadata.name !== "@mininglamp-oss/octo-runtime") {
+  if (metadata.version !== version || metadata.name !== name) {
     throw new Error("Registry package identity does not match the release");
   }
   const archiveUrl = new URL(metadata.dist.tarball);
@@ -28,7 +28,7 @@ export async function resolveReleaseBuildTime(version, commit, request = fetch) 
   try {
     const filename = join(directory, "release.tgz");
     await writeFile(filename, archive);
-    const build = readReleaseBuildInfo(filename);
+    const build = readReleaseBuildInfo(filename, name);
     if (build.commit !== commit || build.dirty !== false) {
       throw new Error("Published build source does not match the clean release commit");
     }
@@ -47,7 +47,29 @@ export async function resolveReleaseBuildTime(version, commit, request = fetch) 
   }
 }
 
+/** 部分发布时复用任一已发布归档的时间；双包均存在时必须同源同时间。 */
+export async function resolveReleaseBuildTime(
+  version,
+  commit,
+  request = fetch,
+  { paired = false } = {}
+) {
+  const names = [
+    "@mininglamp-oss/octo-runtime",
+    ...(paired ? ["@mininglamp-oss/octo-runtime-client"] : [])
+  ];
+  const timestamps = [];
+  for (const name of names) {
+    const timestamp = await publishedBuildTime(version, commit, request, name);
+    if (timestamp !== null) timestamps.push(timestamp);
+  }
+  if (new Set(timestamps).size > 1) throw new Error("Published package build timestamps differ");
+  return timestamps[0] ?? new Date().toISOString();
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  const buildTime = await resolveReleaseBuildTime(process.argv[2], process.argv[3]);
+  const buildTime = await resolveReleaseBuildTime(process.argv[2], process.argv[3], fetch, {
+    paired: process.argv.includes("--paired")
+  });
   await appendFile(process.env.GITHUB_OUTPUT, `build_time=${buildTime}\n`);
 }

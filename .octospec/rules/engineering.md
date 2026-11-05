@@ -82,14 +82,15 @@ supersedes: []
 
 ## 稳定版单 registry 交付
 
-- 源码保持 `0.0.0`；稳定 annotated tag `vX.Y.Z` 注入发行版本。完整 CI 验证的同一份 tgz
-  只发布到 npm 官方仓库 `https://registry.npmjs.org`，并作为 GitHub Release 附件，不走 stage/审批转正。
+- 源码保持 `0.0.0`；稳定 annotated tag `vX.Y.Z` 注入发行版本。现有发行构建产出 runtime 和 client
+  两份同版本、自包含 tgz；分别将验证过的同一份字节发布到 npm 官方仓库 `https://registry.npmjs.org`，
+  并作为 GitHub Release 附件，不走 stage/审批转正。完整 runtime 内置 client/protocol，protocol 不独立发布。
 - npm 使用 `NPM_TOKEN` 与 provenance；不发布、查询或回退到 GitHub Packages，不请求
   `packages` 权限。GitHub Release 是附件交付，不是另一个 npm registry。
 - npm 已有版本必须匹配完整 SHA-512；恢复时只从 npm 验证并复用已发布归档的源码
   commit、clean 标记和构建时间。鉴权或网络错误不得当作缺包，上传后的可读性检查必须有界。
 - 版本专属 dist-tag 不等于预发布流程。npm 与 Release 资产字节一致的最高完整稳定版自动
-  推进 latest；两端已有稳定版 latest 都是不可回退的下界。RC 等预发布不进入候选集，不改 latest。
+  推进两个 npm 包与 GitHub Release 的 latest；三者已有稳定版 latest 都是不可回退的下界。RC 等预发布不进入候选集，不改 latest。
   dry-run 零远端写入。
 
 

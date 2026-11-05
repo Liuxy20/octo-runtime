@@ -66,21 +66,8 @@ export type {
   RuntimeLog
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
-/** 宿主注册及执行时使用的完整元数据；编写时的可选默认值须由 Adapter 工厂先补齐。 */
-export interface HostedAdapterMetadata {
-  /** False skips Runtime workspace preparation for this Provider. */
-  workspace?: boolean;
-  /** 注册输入必须完整；不得因编写阶段可省略而将此字段改成可选或在注册时猜测支持范围。 */
-  protocolSupport: AdapterProtocolSupport;
-  type: string;
-  agentSources: ("preset" | "provisioned")[];
-  processModel?: string;
-  transport?: string;
-  providerVersion?: string | null;
-  providerPath?: string | null;
-  available?: boolean;
-  unavailableReason?: string | null;
-}
+import type { HostedAdapterMetadata } from "@mininglamp-oss/octo-runtime-protocol";
+export type { HostedAdapterMetadata } from "@mininglamp-oss/octo-runtime-protocol";
 
 /**
  * Adapter 的最小注册合同；必须声明实际支持的输出模式。

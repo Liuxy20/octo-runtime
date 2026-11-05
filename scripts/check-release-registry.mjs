@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { appendFile, readFile } from "node:fs/promises";
-import { promisify } from "node:util";
+import { parseArgs, promisify } from "node:util";
 import { pathToFileURL } from "node:url";
 
 const execute = promisify(execFile);
@@ -63,7 +63,7 @@ export async function readRegistryIntegrity(
 }
 
 export async function checkRegistryVersion(
-  { version, registry, integrity, wait = false, timeoutMs = 20 * 60_000 },
+  { version, registry, integrity, name = packageName, wait = false, timeoutMs = 20 * 60_000 },
   {
     runCommand = run,
     sleep = (duration) => new Promise((resolve) => setTimeout(resolve, duration)),
@@ -82,12 +82,13 @@ export async function checkRegistryVersion(
   for (;;) {
     const remote = await readRegistryIntegrity(version, registry, {
       runCommand,
+      name,
       timeout: Math.max(1, Math.min(30_000, deadline - now()))
     });
     if (remote !== null) {
       if (remote !== integrity) {
         throw new Error(
-          `${packageName}@${version} exists with different tarball integrity on ${registry}`
+          `${name}@${version} exists with different tarball integrity on ${registry}`
         );
       }
       return { exists: true, version, registry, integrity };
@@ -95,7 +96,7 @@ export async function checkRegistryVersion(
     if (!wait) return { exists: false, version, registry };
     if (now() >= deadline) {
       throw new Error(
-        `Upload was submitted, but ${packageName}@${version} is still unavailable on ${registry}. ` +
+        `Upload was submitted, but ${name}@${version} is still unavailable on ${registry}. ` +
           "Registry processing or staged-version conflicts require investigation; do not blindly republish."
       );
     }
@@ -104,15 +105,25 @@ export async function checkRegistryVersion(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [archive, version, registry, mode, ...extra] = process.argv.slice(2);
+  const { positionals, values } = parseArgs({
+    allowPositionals: true,
+    options: {
+      wait: { type: "boolean", default: false },
+      package: { type: "string", default: packageName },
+      "output-key": { type: "string", default: "exists" }
+    }
+  });
+  const [archive, version, registry] = positionals;
   if (
     !archive ||
     !version ||
     !registry ||
-    (mode !== undefined && mode !== "--wait") ||
-    extra.length
+    positionals.length !== 3 ||
+    !/^[a-z_]+$/.test(values["output-key"])
   ) {
-    throw new Error("Usage: check-release-registry.mjs ARCHIVE VERSION REGISTRY [--wait]");
+    throw new Error(
+      "Usage: check-release-registry.mjs ARCHIVE VERSION REGISTRY [--wait] [--package NAME] [--output-key KEY]"
+    );
   }
   const integrity = `sha512-${createHash("sha512")
     .update(await readFile(archive))
@@ -121,10 +132,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     version,
     registry,
     integrity,
-    wait: mode === "--wait"
+    wait: values.wait,
+    name: values.package
   });
   if (process.env.GITHUB_OUTPUT) {
-    await appendFile(process.env.GITHUB_OUTPUT, `exists=${result.exists}\n`);
+    await appendFile(process.env.GITHUB_OUTPUT, `${values["output-key"]}=${result.exists}\n`);
   }
   console.log(JSON.stringify(result));
 }

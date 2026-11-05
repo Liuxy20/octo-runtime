@@ -1,5 +1,7 @@
 # Executor Kernel
 
+只消费已有 Kernel 的应用可独立安装 [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md)，调用 `attachKernel({ endpoint })`。本包保留兼容客户端导出，并复用同一实现；完整 Runtime 发行物内置 client/protocol，原生构造 Kernel/Extra 仍使用完整 SDK。不同发行物可能有独立模块副本，不承诺跨副本类/函数身份相同。
+
 [English](README.md) | [包导航](../README.zh.md)
 
 宿主须先选择并准备已存在的绝对 `home`，再显式传给服务；SDK 不创建根或选择平台默认。详见 [Runtime Home 合同](../../docs/zh-CN/reference/runtime-home.md)。

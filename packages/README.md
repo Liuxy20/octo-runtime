@@ -4,12 +4,13 @@
 
 Octo Runtime is one Provider-neutral execution implementation shared by SDK applications, the bundled CLI, and optional business integrations. The host picks Adapters, configuration, and Extras. `AgentExecutor` in Executor Core performs the work; Executor Kernel owns local RPC, Run admission, observation, control, and bounded replay in the same host process; Host SDK composes optional Extras around it.
 
-This directory holds the private workspace packages. Each README explains its purpose, integration entry, and boundaries; execution examples live with Core and Kernel, while Adapter pages show registration and input preparation.
+This directory holds the public client and private workspace packages. Each README explains its purpose, integration entry, and boundaries; execution examples live with Core and Kernel, while Adapter pages show registration and input preparation.
 
 ## Where to start
 
 | You want to…                                 | Start with                                                                                                           |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Connect to an existing Kernel without installing the full SDK | [Standalone Client](octo-runtime-client/README.md) |
 | Embed Runtime in an Electron or Node application | [Executor Kernel](octo-runtime-executor-kernel/README.md)                                                                |
 | Use explicit low-level execution primitives | [Executor Core](octo-runtime-executor-core/README.md)                                                            |
 | Talk to a Provider CLI                       | the Provider table below                                                                                             |
@@ -93,7 +94,9 @@ Host SDK depends on Kernel; Core and Kernel do not depend on Host SDK. Local exe
 
 ## Private packages and public entries
 
-Everything in this directory is a private `@mininglamp-oss/octo-runtime-*` workspace package. Source and submodule hosts depend on them through the workspace. npm consumers install `@mininglamp-oss/octo-runtime` and use its public subpaths:
+`@mininglamp-oss/octo-runtime-client` is published independently for existing-Kernel consumers. Other packages in this directory remain private workspace packages. Source and submodule hosts depend on them through the workspace. Full SDK consumers install `@mininglamp-oss/octo-runtime` and use its public subpaths. Both distributions bundle their own required client/protocol implementation; installing the full SDK does not require separately installing the standalone client.
+
+The full SDK entries are:
 
 | Source package                       | Public entry                                                                                                 |
 | ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |

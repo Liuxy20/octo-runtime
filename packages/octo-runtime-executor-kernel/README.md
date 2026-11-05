@@ -1,5 +1,7 @@
 # Executor Kernel
 
+Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package retains compatible client exports and uses that same implementation. The full published Runtime bundles client/protocol internally; constructing Kernel/Extra services still requires the full SDK. Separate installed distributions may have different error/function identities even at matching versions.
+
 [简体中文](README.zh.md) | [Package index](../README.md)
 
 The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).

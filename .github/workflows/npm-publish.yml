@@ -84,7 +84,7 @@ jobs:
         env:
           VERSION: ${{ steps.release.outputs.version }}
           SHA: ${{ steps.release.outputs.sha }}
-        run: node scripts/resolve-release-build-time.mjs "$VERSION" "$SHA"
+        run: node scripts/resolve-release-build-time.mjs "$VERSION" "$SHA" --paired
 
   verify:
     needs: validate
@@ -127,29 +127,54 @@ jobs:
         id: registry
         run: |
           set -euo pipefail
-          node scripts/check-release-registry.mjs \
-            "./release/mininglamp-oss-octo-runtime-$VERSION.tgz" "$VERSION" "$REGISTRY"
+          # Preflight both immutable versions before publishing either missing archive.
+          for PACKAGE in runtime client; do
+            SUFFIX=""
+            if [ "$PACKAGE" = client ]; then SUFFIX="-client"; fi
+            node scripts/check-release-registry.mjs \
+              "./release/mininglamp-oss-octo-runtime$SUFFIX-$VERSION.tgz" "$VERSION" "$REGISTRY" \
+              --package "@mininglamp-oss/octo-runtime$SUFFIX" --output-key "${PACKAGE}_exists"
+          done
       - name: Publish verified archive
-        if: steps.registry.outputs.exists != 'true'
+        if: steps.registry.outputs.runtime_exists != 'true' || steps.registry.outputs.client_exists != 'true'
         env:
           DRY_RUN: ${{ inputs.dry_run }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RUNTIME_EXISTS: ${{ steps.registry.outputs.runtime_exists }}
+          CLIENT_EXISTS: ${{ steps.registry.outputs.client_exists }}
         run: |
           set -euo pipefail
-          ARCHIVE="./release/mininglamp-oss-octo-runtime-$VERSION.tgz"
-          test -f "$ARCHIVE"
-          if [ "$DRY_RUN" = true ]; then
-            npm publish "$ARCHIVE" --registry "$REGISTRY" --access public --tag "release-$VERSION" --ignore-scripts --provenance --dry-run
-          else
-            if [ -z "$NPM_TOKEN" ]; then
-              echo "::error::NPM_TOKEN is required for a production npm publish"
-              exit 1
+          # Client first; runtime still bundles its own client and remains self-contained.
+          for PACKAGE in client runtime; do
+            SUFFIX=""
+            EXISTS="$RUNTIME_EXISTS"
+            if [ "$PACKAGE" = client ]; then SUFFIX="-client"; EXISTS="$CLIENT_EXISTS"; fi
+            if [ "$EXISTS" = true ]; then continue; fi
+            ARCHIVE="./release/mininglamp-oss-octo-runtime$SUFFIX-$VERSION.tgz"
+            test -f "$ARCHIVE"
+            if [ "$DRY_RUN" = true ]; then
+              npm publish "$ARCHIVE" --registry "$REGISTRY" --access public --tag "release-$VERSION" --ignore-scripts --provenance --dry-run
+            else
+              if [ -z "$NPM_TOKEN" ]; then
+                echo "::error::NPM_TOKEN is required for a production npm publish"
+                exit 1
+              fi
+              PUBLISH_STATUS=0
+              npm publish "$ARCHIVE" --registry "$REGISTRY" --access public --tag "release-$VERSION" --ignore-scripts --provenance || PUBLISH_STATUS=$?
+              # A lost acknowledgement can follow a successful upload. Confirm before recovery.
+              node scripts/check-release-registry.mjs "$ARCHIVE" "$VERSION" "$REGISTRY" \
+                --package "@mininglamp-oss/octo-runtime$SUFFIX" --wait
+              if [ "$PUBLISH_STATUS" != 0 ]; then
+                echo "::notice::Publish returned $PUBLISH_STATUS; matching registry archive confirmed"
+              fi
             fi
-            npm publish "$ARCHIVE" --registry "$REGISTRY" --access public --tag "release-$VERSION" --ignore-scripts --provenance
-          fi
+          done
       - name: Verify published registry version
         if: inputs.dry_run == false
         run: |
           set -euo pipefail
-          node scripts/check-release-registry.mjs \
-            "./release/mininglamp-oss-octo-runtime-$VERSION.tgz" "$VERSION" "$REGISTRY" --wait
+          for SUFFIX in "" "-client"; do
+            node scripts/check-release-registry.mjs \
+              "./release/mininglamp-oss-octo-runtime$SUFFIX-$VERSION.tgz" "$VERSION" "$REGISTRY" \
+              --package "@mininglamp-oss/octo-runtime$SUFFIX" --wait
+          done
