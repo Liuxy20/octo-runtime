@@ -32,7 +32,7 @@ test("Codex treats ripgrep no-match as a completed check without hiding command 
       exitCode: 1,
       aggregatedOutput: ""
     }).status,
-    "completed"
+    "failed"
   );
   assert.equal(
     completed({

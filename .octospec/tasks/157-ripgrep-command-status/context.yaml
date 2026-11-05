@@ -1,0 +1,64 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/157
+baseline: 780cd7cd5e67e4868df895a2e74a826097f349fd
+baseline_source: successful independent clone and git fetch upstream main
+branch: fix/157-ripgrep-command-status
+phase: authorized_for_pr_with_full_suite_failures
+authorization: local implementation, commit, push and create a PR linked to issue 157
+delivery:
+  base: Mininglamp-OSS/octo-runtime:main
+  head: Liuxy20:fix/157-ripgrep-command-status
+  reason_for_fork: authenticated user has no upstream push permission; existing personal fork confirmed
+  messages: English Conventional Commit and public PR; repository records remain Chinese
+context_read:
+  - AGENTS.md
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - .octospec/index.md
+  - .octospec/manifest.yaml
+  - .octospec/rules/_index.yaml
+  - package.json
+  - .github/workflows/ci.yml
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+global_rules: absent; no synchronization or framework upgrade performed
+files_expected:
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - test/codex-ripgrep.test.js
+  - test/manual/codex-ripgrep-command-status.test.mjs
+  - .octospec/rules/output-protocol.md
+  - .octospec/index.md
+  - .octospec/tasks/157-ripgrep-command-status/
+  - .octospec/journal/shared/2026-11-05-157-ripgrep-command-status.md
+official_sources:
+  - https://learn.chatgpt.com/docs/app-server
+  - https://github.com/nodejs/node/blob/v24.22.2/doc/api/child_process.md
+duplicate_check: issue OPEN without comments; timeline has no linked fix; recent PRs including 316 and 317 do not cover this failure
+limits:
+  - no merge, publication or direct issue closure
+  - no CI or default test selector expansion
+  - no other checkout dependencies or runtime state
+  - shell and deterministic normalizer evidence is not a real Provider run
+verification:
+  typecheck_node24: pass
+  typecheck_node26: pass
+  manual_node24: 26 pass, 0 fail, 0 skip
+  manual_node26: 26 pass, 0 fail, 0 skip
+  related_node26: 70 pass, 0 fail, 1 platform skip
+  related_node24_final: 70 pass, 0 fail, 1 platform skip
+  baseline_suites_node24: 2314 pass, 8 fail, 79 skip
+  fixed_suites_node24: 2316 pass, 6 fail, 79 skip
+  lint: initial out of memory; serial rerun passed
+  names: pass
+  format: pass
+  docs: 4 pass plus type and documentation checks
+  real_provider: not run
+  cross_platform_native: not run

@@ -2487,17 +2487,20 @@ function toolStatus(item: JsonRecord): string {
   return status || "completed";
 }
 
-/** ripgrep uses exit 1 for a successful search with no matches, not an execution error. */
+/** 仅明确的独立 rg 无匹配可完成；整条 shell 的 exit 1 不证明某个子命令已执行。 */
 function isRipgrepNoMatch(item: JsonRecord): boolean {
   if (stringValue(item.type) !== "commandExecution" || item.exitCode !== 1) return false;
-  if (stringValue(item.aggregatedOutput).trim() !== "") return false;
+  if (item.aggregatedOutput !== "") return false;
 
-  let command = stringValue(item.command).trim();
-  const wrapped = command.match(/^(?:\S+\/)?(?:sh|bash|zsh)\s+-\S*c\s+(["'])([\s\S]*)\1$/);
-  if (wrapped) command = wrapped[2].trim();
+  const command = stringValue(item.command);
+  // commandActions 是展示分类，不能提供逐命令退出码。只识别字面参数子集，
+  // 不拆链、不解 shell 包装；引号内的运算符也拒绝，避免猜测具体 shell 的转义规则。
+  if (command.includes("\0") || /[\\\r\n&|;<>(){}$`^%!#]/.test(command)) return false;
 
-  const finalCommand = command.split("&&").at(-1)?.trim() ?? "";
-  return /^(?:command\s+)?(?:[^\s"'`]+\/)?rg(?:\s|$)/.test(finalCommand);
+  // 支持裸 rg/rg.exe、正斜杠路径及完整的单/双引号字面参数；其余形态保留原失败。
+  return /^(?:[^\s"'\\]+\/)?rg(?:\.exe)?(?:[ \t]+(?:[^\s"'\\]+|"[^"'\\]*"|'[^"'\\]*'))*[ \t]*$/.test(
+    command.trim()
+  );
 }
 
 /** Extract compact output for common tools; other tools keep the full item as a forward-compatible fallback. */
