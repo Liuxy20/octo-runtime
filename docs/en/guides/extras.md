@@ -6,12 +6,12 @@ For CLI setup, use `<extra> configure` or `<extra> extraset` for a complete JSON
 
 [简体中文](../../zh-CN/guides/extras.md) | [Documentation](../README.md)
 
-An Extra connects a business system to Kernel. For example, an IM Extra receives chat messages, prepares invocation parameters, calls Kernel, and sends Agent replies back to chat. Direct SDK calls to Kernel do not need an Extra.
+An Extra connects a business system to execution. It can borrow a host-owned Core directly or connect to an existing Kernel over IPC. An application can also call Core or Kernel itself without an Extra.
 
 Import `createExtraService` from `@mininglamp-oss/octo-runtime/host` and supply:
 
-- `home`: an existing absolute Runtime Home directory prepared by the host.
-- `endpoint`: the existing Kernel address. Extra connects to it without starting Kernel.
+- `execution`: exactly `{ kind: "direct", executor }` or `{ kind: "ipc", endpoint }`.
+- `home`: required for IPC, optional for direct; when supplied, it must be an existing absolute directory prepared by the host.
 - `module`: the Extra module, such as Channel Gateway, WeCom, or WebUI.
 - `config`: the JSON configuration required by that module.
 - `dependencies`: application functions, such as loading Context or creating session storage.
@@ -68,7 +68,7 @@ flowchart TB
   SDK --> Plugin[Initialize Extra plugin]
   Plugin --> Load[Call loadContexts for each new task]
   Load --> Snapshot[Obtain this turn's Context]
-  Snapshot --> Invoke[ctx.kernel.invoke]
+  Snapshot --> Invoke[ctx.execution.invoke]
   Invoke --> Delivery[Extra consumes and delivers results]
 ```
 
@@ -122,7 +122,11 @@ Your application chooses the storage implementation. Runtime does not depend on 
 
 The plugin entry point has the form `extra(context, jsonConfig)(dependencies)`. Put configuration values in `jsonConfig` and application functions in `dependencies`. The plugin and those functions run in the same process.
 
-Use `ctx.kernel.invoke` to call the shared Kernel, `ctx.onDispose` to register cleanup, `ctx.onStatus` to report business status, and `ctx.log` for diagnostics. Applications manage the plugin through these public APIs without accessing its internals or adding another execution forwarding interface.
+Use `ctx.execution.invoke`, `cancelInvocation`, `respondInteraction`, `respondNativeInteraction`, and `list` in both modes. `ctx.onDispose` registers cleanup, `ctx.onStatus` reports business status, and `ctx.log` provides diagnostics. A scope can control only its own calls. Observer closure does not cancel work; Extra close stops admission, cancels owned calls and checks cleanup under the shared four-second deadline.
+
+Legacy top-level `endpoint` selects IPC and cannot be combined with `execution`. Only IPC provides the real optional `ctx.kernel`; existing Kernel-specific plugins must check its presence and remain in IPC mode when using `submit/get/subscribe`. Built-in Gateway, WeCom and WebUI use `ctx.execution`. Strict TypeScript consumers should enable `exactOptionalPropertyTypes`: runtime validation rejects mixed fields even when their value is `undefined`.
+
+Direct identity is executor object plus Extra name; IPC identity is endpoint plus name. An incomplete close retains ownership and blocks replacement. `status().execution` reports kind and actual availability; `kernel_available` exists only for IPC. Direct `list()` probes registered Adapters, and unfinished probes remain part of that Extra's cleanup. An optional direct control endpoint uses a host-prepared directory; omitting Home never creates a default one. See [both SDK patterns](../getting-started/sdk.md).
 
 ## Use Providers or External Services Through Host Dependencies
 
@@ -167,6 +171,6 @@ During cleanup, the plugin can still call application dependency functions to fi
 
 Inspect `complete`, `errors`, and `pendingResources` in the result. `complete=false` means some work or resources remain unresolved, so do not treat shutdown as complete. The database remains application-managed; the SDK does not close it automatically.
 
-Closing one Extra does not close the shared Kernel or stop other Extras' invocations. In status results, `phase` is the Extra service's lifecycle stage, `kernel_available` reports whether Kernel can currently execute, and `plugin` contains the plugin's business status. Check the corresponding status and connection results to confirm whether a Bot or Provider is online.
+Closing one Extra does not close the borrowed Core/Kernel or stop other Extras' invocations. In status results, `phase` is the Extra service's lifecycle stage, `execution.available` reports whether execution is available, and `plugin` contains the plugin's business status. IPC also retains `kernel_available`. Check the corresponding status and connection results to confirm whether a Bot or Provider is online.
 
 Sources: [Extra API](../../../packages/octo-runtime-host-sdk/src/extras.ts), [service](../../../packages/octo-runtime-host-sdk/src/extra-service.ts), [Gateway entry](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts), [instruction composition](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts), [mention rules and conversion](../../../packages/octo-runtime-extra-channel-gateway/src/transport/mentions.ts), [message admission](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts).

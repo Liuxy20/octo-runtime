@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-A local browser workbench as the optional `webui` Extra. It serves the UI, calls an existing Kernel, and streams source events to the browser over SSE. It owns its HTTP listener, its bundled assets, and one explicitly configured session JSON file. It is a debugging surface, not a production application, and it never starts a second executor.
+A local browser workbench as the optional `webui` Extra. It serves the UI, invokes `context.execution`, and streams events over SSE. SDK hosts select direct Core or an existing Kernel over IPC; CLI continues using IPC. It owns its HTTP listener, bundled assets and explicitly configured session JSON file. See [SDK integration](../../docs/en/getting-started/sdk.md).
 
 ## When to use it
 

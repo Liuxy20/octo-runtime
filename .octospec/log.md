@@ -1,5 +1,11 @@
 # 工程知识变更记录
 
+## 2026-11-04
+
+- [Issue 312 实施](journal/shared/2026-11-04-312-extra-execution-implementation.md)：按追加授权完成 direct/ipc/legacy 与内置 Extra 迁移；Core 首次清理凭据、共享有界窗口、包外公共产物与真实 Codex 验证，#313 暂缓。原规划评分已撤回，实际结果见任务 validation。
+
+- [Issue 312 需求规划](journal/shared/2026-11-04-312-extra-execution-plan.md)：从最新 main@bd287f95 新建独立 worktree，产出背景/目标/收益、双模式接口和所有权设计、五阶段实施计划、16 组验收及 95/100 执行性评估。仅规划，未实施/提交/推送；不扩大 CI，真实 Provider、原生平台及外部宿主验收尚未执行。
+
 ## 2026-11-01
 
 - [Issue 289 实施](journal/shared/2026-11-01-289-approval-delivery-plan.md)：独立上游 worktree 基于 main@148d737d，按追加授权实现审批额度/投递队列/背压/错误归因并执行两轴审查。全量离线测试通过，真实 Codex shell 观察到 20/27 条待写回突发并成功完成；动态 MCP 两模式各完成 32 次调用。未扩大 CI。

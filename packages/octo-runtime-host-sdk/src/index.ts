@@ -7,6 +7,7 @@ export * from "./extras.js";
 export * from "./extra-config.js";
 export * from "./context-loader.js";
 export * from "./extra-service.js";
+export type { ExtraExecution, ExtraExecutionContext } from "./execution.js";
 export * from "./endpoint.js";
 export * from "./home.js";
 export * from "./identity.js";

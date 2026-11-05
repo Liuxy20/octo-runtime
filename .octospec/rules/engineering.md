@@ -17,6 +17,8 @@ supersedes: []
 
 # Runtime 开发与验证约定
 
+#312 允许 Extra 显式 direct 借用宿主 Core；本规则下文“同进程也走 RPC”限定 Kernel 托管路径，见[装配范围](architecture.md#extra-双模式装配issue-312)。本专项测试位于 test/manual，保持手动执行；不加入默认测试、打包检查或 CI gate。
+
 ## 需求与方案的强制范围检查
 
 每个新增或修改需求必须先执行[基础架构的产品意图归属检查](architecture.md)，在对应 brief 记录业务目标、决定权归属、显式输入、合同内动作、越界动作及对其他接入产品的影响。先由第一性原理判断是否属于 octo-runtime，再选择实现位置；不能从旧兜底或技术实现方便反推职责。

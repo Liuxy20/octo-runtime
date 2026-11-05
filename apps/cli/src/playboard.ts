@@ -7,7 +7,6 @@ import {
 } from "./state.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { readCliAdapterConfigurations } from "./adapter-configurations.js";
-import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import {
   createKernelService,
   type KernelService
@@ -125,7 +124,7 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
       home: temporary,
       endpoint:
         process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
-      adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
+      adapters: await loadCliAdapters(manifest.adapters, {
         profileRoot: paths.profileRoot,
         syncOpenClawTools: false
       }),

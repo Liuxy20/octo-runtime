@@ -16,3 +16,5 @@ source: self
 整合时不能把全部 ENOENT 都归为 Home，也不能让日志诊断递归补建无效 Home。旧路径属性从共享结构生成兼容别名，CLI flat startup 与规范 diagnostic 同源。两个必要分类映射在双语目录公开。
 
 Node24/26 已完成构建、相关回归、WebUI 与包外 SDK 消费；全量发现 4 项 Playboard 执行域误分类，修正后双 Node 各 133 项相关回归通过；2 项 OpenClaw 强制结束后重启失败在干净 main 复现，已记录限制。知识检查通过，详见 validation。Windows 实测与 POSIX 纯计算、fake Provider 与真实业务验收分别记录。没有扩大 CI/默认测试或访问线上 Bot。
+
+2026-11-05 复审：四类问题均经实际反例验证。诊断按完整 URI 标量过滤 userinfo，内联 data 载荷整体隐藏，敏感赋值无可靠结束边界时不恢复余段；CLI 裸包解析归入已有装配注释边界，保留先解析后导入顺序。仅合并 main #315 已有执行模式，未扩展其业务行为。专项与本轮验证见原任务 review/validation。

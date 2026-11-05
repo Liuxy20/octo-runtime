@@ -38,7 +38,6 @@ import {
 import { resolveServiceControl, type ServiceControlOptions } from "./service-control.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { readCliAdapterConfigurations } from "./adapter-configurations.js";
-import { resolveAdapterModules } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   describeError,
@@ -360,7 +359,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           logging: { directory: join(home, "logs") },
           endpoint: kernelEndpoint(),
           stateDirectory: kernelStateDirectory,
-          adapters: await loadCliAdapters(resolveAdapterModules(manifest), {
+          adapters: await loadCliAdapters(manifest.adapters, {
             profileRoot: paths.profileRoot,
             syncOpenClawTools: true
           }),

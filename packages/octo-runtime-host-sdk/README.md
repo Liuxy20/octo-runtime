@@ -4,7 +4,9 @@ The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names an
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-The host must select and prepare an existing absolute `home`, then pass it explicitly to the service. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).
+IPC requires a host-prepared absolute `home`; direct Extras can omit it. SDK does not create the root or choose platform defaults. See [Runtime Home](../../docs/en/reference/runtime-home.md).
+
+Choose `execution: { kind: "direct", executor }` to borrow a host-owned `AgentExecutor`, or `execution: { kind: "ipc", endpoint }` to connect to an existing Kernel. Legacy top-level `endpoint` remains IPC-only and cannot be combined with `execution`. Plugins use `context.execution`; optional `context.kernel` is available only in IPC. See [both SDK patterns](../../docs/en/getting-started/sdk.md#choose-extra-execution).
 
 Composes Runtime components inside your own application: turns an Extra module plus JSON configuration into a service in the calling process, injects business functions, reports status, and coordinates bounded shutdown. It also carries the shared Home, identity, and endpoint conventions so hosts stop re-inventing them. Execution stays in Core and Kernel; a host may load no Extras at all.
 
@@ -63,7 +65,7 @@ Core and Kernel never depend on Host SDK.
 ## Lifecycle
 
 - Construction performs no I/O. `initialize()` starts the plugin; `status()` reports the service and plugin state. A failed `initialize()` throws `ServiceInitializationError` with the original cause and its rollback `cleanup`.
-- Each Extra gets its own `KernelClient`. `close()` stops new invocations, cancels the calls it owns, and waits for them plus plugin disposers inside a shared four-second monotonic budget — shortened if an earlier deadline is inherited.
+- Each Extra gets its own execution scope. IPC uses its own `KernelClient`; direct reuses Core through a shared bounded event source. `close()` stops new invocations, cancels only owned calls, and waits for their cleanup plus plugin disposers inside a shared four-second monotonic budget — shortened if an earlier deadline is inherited.
 - `onDispose` must wait for consumers, persistence, and delivery. An execution terminal alone does not prove that work is done.
 - Until plugin cleanup finishes, bounded host-function calls are still allowed for final persistence or delivery; after that, new dependency calls are rejected and pending operations are awaited. A timeout cannot force-kill arbitrary host JavaScript.
 - `complete: false` preserves the failed ownership and blocks replacing the same endpoint and name. Calling `close()` again returns the same result.

@@ -10,6 +10,7 @@ export type {
   ExtraServiceOptions,
   ExtraServiceStatus
 } from "@mininglamp-oss/octo-runtime-host-sdk";
+export type { ExtraExecution, ExtraExecutionContext } from "@mininglamp-oss/octo-runtime-host-sdk";
 export type {
   RuntimeLoggingOptions,
   ExtraStatusRecord

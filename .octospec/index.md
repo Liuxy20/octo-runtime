@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 312：Extra direct / IPC 执行规划](tasks/312-extra-execution-modes/brief.md)：按用户要求进入实现与验证，#313 的 Codex app-server 生命周期改造单独暂缓；[A01-A16 验收](tasks/312-extra-execution-modes/acceptance.md)记录专项范围。
+
 - [Issue 303：直接 Kernel 端点](tasks/303-direct-kernel-endpoint/brief.md)：直接修改 POSIX 地址，保留现有 Home 和生命周期合同；[验证](tasks/303-direct-kernel-endpoint/validation.md)记录精简版本的结果与限制。
 
 - [Issue 294：原生 Adapter 装配与统一 RPC](tasks/294-native-kernel-sdk/brief.md)：工作树已实现宿主注入 Adapter、Kernel 原生托管与统一 RPC，CLI 装配同步迁移；流程和职责案例见[计划](tasks/294-native-kernel-sdk/plan.md)。提交与合并按用户授权推进，验证边界见任务记录。

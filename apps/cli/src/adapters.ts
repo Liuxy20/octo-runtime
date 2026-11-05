@@ -16,10 +16,16 @@ export async function loadCliAdapters(
   }
 ): Promise<HostedAdapter[]> {
   const adapters: HostedAdapter[] = [];
-
-  for (const entry of entries) {
+  // 解析也在诊断边界内；仍先解析整个所选集合，再导入/构造，保持 CLI 原顺序。
+  const selected = entries.map((entry) => {
     try {
-      const specifier = resolveModuleSpecifier(entry.module, entry.sourceManifest);
+      return { entry, specifier: resolveModuleSpecifier(entry.module, entry.sourceManifest) };
+    } catch (error) {
+      throw adapterStartupFailure(error, entry);
+    }
+  });
+  for (const { entry, specifier } of selected) {
+    try {
       const loaded: unknown = await import(specifier);
       const exports = asRecord(loaded, `adapter module ${entry.module}`);
       const exported = exports[entry.export];
@@ -36,16 +42,7 @@ export async function loadCliAdapters(
         );
       adapters.push(instance);
     } catch (error) {
-      throw withStartupContext(error, {
-        component: "cli",
-        phase: "created",
-        context: {
-          module: entry.module,
-          resource: "adapter-module",
-          operation: "assemble-adapter",
-          configKey: "adapters"
-        }
-      });
+      throw adapterStartupFailure(error, entry);
     }
   }
   if (options && adapters.some((adapter) => adapter.metadata.type === "openclaw")) {
@@ -58,6 +55,19 @@ export async function loadCliAdapters(
       );
   }
   return adapters;
+}
+
+function adapterStartupFailure(error: unknown, entry: AdapterModuleEntry): unknown {
+  return withStartupContext(error, {
+    component: "cli",
+    phase: "created",
+    context: {
+      module: entry.module,
+      resource: "adapter-module",
+      operation: "assemble-adapter",
+      configKey: "adapters"
+    }
+  });
 }
 
 function callFactory(value: unknown, entry: AdapterModuleEntry): unknown {

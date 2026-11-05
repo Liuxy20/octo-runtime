@@ -18,6 +18,8 @@ supersedes: []
 
 # 本地执行与传输
 
+#312 的 direct Extra 是显式独立装配，见[架构范围](architecture.md#extra-双模式装配issue-312)。本文件 KernelClient/RPC/ACK 恢复合同限定 IPC；direct 使用同一 Core 与有界源，观察退出不取消，按完整 receipt 等待所属调用首次清理，不模拟 Kernel 身份或重连。
+
 服务构造遵循 [#294 原生装配与统一 RPC](architecture.md#sdk-原生装配与统一-rpc)：CLI 服务进程与 Electron 主进程原生构造服务并持有 endpoint，注入实际 Adapter；同进程业务也必须通过 KernelClient/RPC。Kernel 不读模块 manifest、不启动执行 worker。本任务工作树已切换为原生对象装配。RPC、接纳、观察和清理合同继续有效，目标签名见[架构声明](architecture.md#createkernelservice-目标签名)。直接 Core 是显式低层能力，不替代标准宿主的 Kernel 路径。
 
 ```mermaid

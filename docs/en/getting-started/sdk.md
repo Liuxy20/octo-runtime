@@ -6,7 +6,42 @@ The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows pipe names an
 
 Electron/Node.js hosts import their selected modules natively. Choose your own loading approach; **pnpm workspace + Git submodule** is one option for source integration. Examples use source workspace package names; published equivalents include `/executor-kernel`, `/host`, and `/extras/channel-gateway`.
 
-Home ownership, validation and migration are described in [Runtime Home](../reference/runtime-home.md). SDK has no default Home.
+Home ownership, validation and migration are described in [Runtime Home](../reference/runtime-home.md). SDK has no default Home. Kernel and IPC Extra services require a prepared Home; direct Extras can omit it.
+
+## Choose Extra execution
+
+An embedded host can borrow its existing Core without a Kernel listener or Runtime Home:
+
+```ts
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
+import { createCodexAdapter } from "@mininglamp-oss/octo-runtime/adapters/codex";
+import { createExtraService } from "@mininglamp-oss/octo-runtime/host";
+import * as channelGateway from "@mininglamp-oss/octo-runtime/extras/channel-gateway";
+import { config, dependencies } from "./host-config.js";
+
+// 宿主持有 Core；注册不执行模型调用，也不证明 Provider 已就绪。
+const executor = new AgentExecutor();
+executor.register(createCodexAdapter());
+const extra = createExtraService({
+  execution: { kind: "direct", executor },
+  module: channelGateway, config, dependencies
+});
+await extra.initialize();
+
+export async function shutdown() {
+  // 宿主先停止新业务，并在共享 Core 的所有使用方结束后关闭 Core。
+  const extraCleanup = await extra.close();
+  if (!extraCleanup.complete) throw new Error("EXTRA_CLEANUP_INCOMPLETE");
+  const cleanup = await executor.shutdown();
+  if (cleanup.cleanup !== "complete") throw new Error("EXECUTOR_CLEANUP_INCOMPLETE");
+}
+```
+
+`config` and `dependencies` keep the existing Channel Gateway contracts below. Several Extras may share this executor; each controls only its own calls. Different executor objects may host Extras with the same name. Closing an Extra never shuts down the borrowed Core.
+
+For an independently hosted Kernel, use `createExtraService({ home, execution: { kind: "ipc", endpoint }, module, config, dependencies })`. The Kernel owner constructs the service as shown below. Extra connects to that existing endpoint; it does not launch, restart, or stop Kernel. Legacy `{ home, endpoint, ... }` remains supported, but combining `endpoint` with `execution` is rejected.
+
+Both modes expose `context.execution`. Stopping observation does not cancel admitted work; explicit cancellation and Extra shutdown do. Direct execution shares the host's failure domain and has bounded observation history, without IPC reconnection or durable replay guarantees. It describes the call to Core, not the Provider's process lifetime: the Codex app-server lifecycle issue [#313](https://github.com/Mininglamp-OSS/octo-runtime/issues/313) remains separate and unresolved.
 
 ## 1. Quick Start: KernelService
 
@@ -71,7 +106,7 @@ function required(name: string): string {
 // 使用上一章已初始化的 Kernel endpoint；配置/凭据来源由宿主决定。
 const gateway = createExtraService({
   home,
-  endpoint,
+  execution: { kind: "ipc", endpoint },
   module: channelGateway,
   config: {
     bots: [{

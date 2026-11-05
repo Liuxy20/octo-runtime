@@ -6,17 +6,23 @@ CLI 首选 `<extra> configure` 配置核心参数，或 `<extra> extraset` 导�
 
 [English](../../en/guides/extras.md) | [文档目录](../README.md)
 
-Extra 用于把业务系统接到 Kernel。例如，IM Extra 接收聊天消息、准备调用参数、调用 Kernel，再把 Agent 回复发回聊天。直接使用 SDK 调用 Kernel 时，不需要 Extra。
+Extra 将业务系统接入执行层，可直接借用宿主持有的 Core，也可通过 IPC 连接已有 Kernel。应用也可以自行调用 Core 或 Kernel，无需引入 Extra。
 
 从 `@mininglamp-oss/octo-runtime/host` 导入 `createExtraService`，传入以下参数：
 
-- `home`：宿主已准备的绝对 Runtime Home 目录。
-- `endpoint`：已有 Kernel 的地址。Extra 连接这个服务，不会替应用启动 Kernel。
+- `execution`：精确选择 `{ kind: "direct", executor }` 或 `{ kind: "ipc", endpoint }`。
+- `home`：IPC 必填，direct 可省略；显式提供时须是宿主已准备的绝对目录。
 - `module`：Extra 模块，例如 Channel Gateway、企业微信或 WebUI。
 - `config`：该模块需要的 JSON 配置。
 - `dependencies`：应用提供给模块的函数，例如读取 Context 或创建会话存储。
 
 然后调用服务的 `initialize()` 启动，使用 `status()` 查看状态，退出时调用 `close()`。内置模块的导入路径为 `/extras/channel-gateway`、`/extras/channel-wecom` 和 `/extras/webui`，均位于主包下；各模块的 `/config-schema.json` 子路径提供配置 Schema。
+
+两种模式使用 `ctx.execution.invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list`，只控制本 Extra 的调用。停止观察不取消执行；close 停止准入、取消所属调用，并在同一 4 秒期限内核对清理。direct 以 executor 对象与名称去重，IPC 以 endpoint 与名称去重；失败关闭保留所有权并阻止替换。
+
+旧顶层 `endpoint` 等价于 IPC，不能与 `execution` 混用。`ctx.kernel` 改为可选，只有 IPC 提供真实 client；使用 `submit/get/subscribe` 的外部插件须检查存在性并继续选择 IPC。三个内置 Extra 均使用通用接口。严格 TypeScript 建议开启 `exactOptionalPropertyTypes`；运行期会拒绝值为 `undefined` 的混用字段。
+
+`status().execution` 报告种类和实际可用性，只有 IPC 返回 `kernel_available`。direct 的 `list()` 实际探测 Adapter，展示超时后未完成的探测仍计入清理。可选控制端点的父目录由宿主准备；省略 Home 不创建默认目录。两种装配示例见 [SDK 接入](../getting-started/sdk.md)。
 
 ## 连接 Channel Gateway
 
@@ -68,7 +74,7 @@ flowchart TB
   SDK --> Plugin[初始化 Extra 插件]
   Plugin --> Load[每个新任务调用 loadContexts]
   Load --> Snapshot[取得本轮 Context]
-  Snapshot --> Invoke[ctx.kernel.invoke]
+  Snapshot --> Invoke[ctx.execution.invoke]
   Invoke --> Delivery[Extra 消费并投递结果]
 ```
 
@@ -122,7 +128,7 @@ Gateway 将已确认的用户/Bot 名称与身份类型缓存在内存中，按 
 
 插件入口的形式为 `extra(context, jsonConfig)(dependencies)`。配置值放在 `jsonConfig`，应用函数放在 `dependencies`。插件与这些函数运行在同一进程中。
 
-插件通过 `ctx.kernel.invoke` 调用共享 Kernel，通过 `ctx.onDispose` 注册清理函数，通过 `ctx.onStatus` 提供业务状态，通过 `ctx.log` 记录诊断信息。应用通过这些公开接口管理插件，不需要访问插件内部对象或另外建立执行转发接口。
+插件通过 `ctx.execution.invoke` 调用所选执行器，通过 `ctx.onDispose` 注册清理函数，通过 `ctx.onStatus` 提供业务状态，通过 `ctx.log` 记录诊断信息。应用通过这些公开接口管理插件，无需访问插件内部对象。
 
 ## 通过宿主依赖使用 Provider 或外部服务
 
@@ -167,6 +173,6 @@ sequenceDiagram
 
 检查 `close()` 返回的 `complete`、`errors` 和 `pendingResources`。`complete=false` 表示还有未完成或未确认释放的资源，不能直接按“全部已关闭”处理。数据库仍由应用管理，SDK 不会自动关闭它。
 
-关闭一个 Extra 不会关闭共享 Kernel，也不会停止其他 Extra 的调用。查看状态时，`phase` 表示 Extra 服务的生命周期阶段，`kernel_available` 表示 Kernel 当前是否可执行，`plugin` 则是插件报告的业务状态。确认 Bot 或 Provider 是否在线，需要查看对应状态和连接结果。
+关闭一个 Extra 不会关闭借用的 Core/Kernel，也不会停止其他 Extra 的调用。`phase` 表示服务生命周期，`execution.available` 表示执行是否可用，`plugin` 是插件业务状态；IPC 另保留 `kernel_available`。Bot 和 Provider 是否在线仍须查看各自状态。
 
 来源：[Extra API](../../../packages/octo-runtime-host-sdk/src/extras.ts)、[service](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)、[Gateway 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[指令组合](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[mention 规则与转换](../../../packages/octo-runtime-extra-channel-gateway/src/transport/mentions.ts)、[消息准入](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts)。

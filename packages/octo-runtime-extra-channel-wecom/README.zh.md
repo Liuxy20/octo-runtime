@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-可选的 `channel-wecom` Extra：通过企业微信自己的 WebSocket 连接 Bot，做消息准入，生成本轮输入，用 `ctx.kernel` 调已有 Kernel，再以企业微信流式消息回复。认证、心跳、ACK 顺序、投递都收在这里——不依赖 Core，也不依赖 Octo Gateway 的实现。
+可选的 `channel-wecom` Extra 通过企业微信 WebSocket 连接 Bot，做消息准入、生成输入，用 `ctx.execution` 执行并流式回复。SDK 可选择 direct Core 或已有 Kernel 的 IPC，见[接入说明](../../docs/zh-CN/getting-started/sdk.md)。认证、心跳、ACK 顺序和投递仍由企业微信模块负责。
 
 ## 什么时候用它
 

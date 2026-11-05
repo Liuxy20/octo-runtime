@@ -37,6 +37,7 @@ interface Run {
   source: AsyncGenerator<HostFrame>;
   first: HostFrame;
   streamLimits: Readonly<StreamLimitPolicy>;
+  settled?: Promise<void>;
 }
 const TTL = 120_000;
 
@@ -203,12 +204,21 @@ export class HostRunService implements ExecutionSource {
   /** 返回接纳凭据后仍在后台驱动源流；调用方无需保持原请求连接才能让执行继续。 */
   async submit(input: InvokeInput, environment: InvokeEnvironment = {}): Promise<HostRunReceipt> {
     const run = await this.#begin(identifyInvokeInput(input), environment);
-    const task = (async (): Promise<void> => {
+    const execution = (async (): Promise<void> => {
       for await (const event of this.#execute(run)) void event;
-    })().catch(() => undefined);
+    })();
+    run.settled = execution;
+    const task = execution.catch(() => undefined);
     this.#tasks.add(task);
     void task.finally(() => this.#tasks.delete(task));
     return { ...run.receipt };
+  }
+  /** 观察指定后台消费的实际结束；终态进入窗口时 finally 可能仍在执行。 */
+  settled(receipt: HostRunReceipt): Promise<void> {
+    const run = this.#get(receipt.run_id);
+    if (run.streamId !== receipt.stream_id) throw new Error("STREAM_EXPIRED");
+    if (!run.settled) throw new Error("RUN_NOT_SUBMITTED");
+    return run.settled;
   }
   #append(run: Run, event: HostFrame): void {
     if (run.terminal) throw new Error("HOST_FRAME_AFTER_TERMINAL");

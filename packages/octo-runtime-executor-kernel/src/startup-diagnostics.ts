@@ -139,16 +139,26 @@ const errorCode = (value: unknown): string | undefined =>
 
 /** 文本与 JSON 同用确定性规范化：去控制字符，去 URL 认证/query/hash 和显式敏感赋值。 */
 export function safeStartupValue(value: string, maximum = 32768): string {
+  const truncated = value.length > maximum;
   return (
     value
       .slice(0, maximum)
       .replace(/[\p{Cc}\p{Cf}]/gu, " ")
-      // 前缀锚点避免在长而不完整的 scheme 每个连字符后重复回溯。
+      // 完整标量交给 URL parser，不能在 userinfo 的空格/引号处切开并泄漏后缀。
+      // 截断过的 URL 不再猜 authority；内联模块载荷整体隐藏。前缀锚点限制回溯。
       .replace(
-        /(^|[^a-z0-9+.-])([a-z][a-z0-9+.-]*:\/\/[^\s"<>]+)/gi,
+        /(^|[^a-z0-9+.-])((?:data:|[a-z][a-z0-9+.-]*:\/\/)[\s\S]*)/gi,
         (match: string, prefix: string) => {
+          const selected = match.slice(prefix.length);
+          if (/^data:/i.test(selected)) return prefix + "[redacted-inline-module]";
+          if (
+            truncated ||
+            /[\s"<>]/u.test(selected) ||
+            selected.indexOf("://", selected.indexOf("://") + 3) !== -1
+          )
+            return prefix + "[redacted-url]";
           try {
-            const url = new URL(match.slice(prefix.length));
+            const url = new URL(selected);
             url.username = "";
             url.password = "";
             url.search = "";
@@ -162,7 +172,8 @@ export function safeStartupValue(value: string, maximum = 32768): string {
       .replace(/\bBearer\s+[^\s,;]+/gi, "Bearer [redacted]")
       .replace(/\b(?:sk-|bf_)[A-Za-z0-9_-]{8,}/g, "[redacted]")
       .replace(
-        /\b(?:token|secret|password|authorization|api[_-]?key)\s*[:=]\s*[^\s,;]+/gi,
+        // 资源标量没有可靠的凭据结束语法，带引号或含标点的值也保守隐藏余段。
+        /\b(?:token|secret|password|authorization|api[_-]?key)\s*[:=][\s\S]*/gi,
         "[redacted]"
       )
   );

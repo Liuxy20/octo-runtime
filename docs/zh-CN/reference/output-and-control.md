@@ -15,7 +15,7 @@
 
 使用 canonical 输出时，检查最终事件：`run.completed` 表示成功，`run.failed` 表示失败，`run.cancelled` 表示取消。执行失败可能通过事件返回，而不抛出异常，因此既要处理事件，也要捕获读取过程中的错误。[invokeOnce](../../examples/invoke.mts) 演示了这两种处理。
 
-使用 HostFrame 时，通过公开的 `isHostTerminal` 判断 Runtime 最终状态。状态包括 `running`、`completed`、`failed`、`cancelled` 和 `lost`。Runtime 在执行清理后才报告最终状态；仅收到 Provider 的结束消息，还不能认定 Runtime 已完成处理。
+使用 HostFrame 时，通过公开的 `isHostTerminal` 判断 Runtime 最终状态。状态包括 `running`、`completed`、`failed`、`cancelled` 和 `lost`。终态不能替代资源清理确认；direct Extra 还会按完整调用凭据等待 Core 的首次清理结果，再汇总 close.complete。
 
 `lost` 表示无法确定执行结果，KernelClient 会报告 `RUN_OUTCOME_UNKNOWN`。没有收到最终状态，或发生输出缺失、清理失败时，都不能按成功处理。应用是否已保存结果、投递消息或更新 UI，需要应用另外确认。
 
@@ -35,6 +35,8 @@ HostFrame 带有执行和会话标识：`run_id`、`invocation_id`、`stream_id`
 如果请求尚未发送，取消可阻止提交。如果已经发送，客户端会找到原执行并请求取消，同时继续接收剩余输出。使用已取消的 signal 时，读取正常结束后会抛出原始取消原因；若读取期间发生更具体的输出或控制错误，则优先返回该错误。
 
 取消接口返回的 `{accepted}` 表示是否接受取消请求。还需要继续读取输出，才能知道执行最终是否取消。对于 KernelClient，循环 `break`、迭代器 `return()`、客户端 `close()` 或取消订阅都只停止接收输出，不会取消执行。直接使用 AgentExecutor 时，提前关闭执行迭代器则会请求取消。
+
+Extra 的 `context.execution` 在 direct 和 IPC 下都采用观察语义：结束迭代不取消已接纳工作。只有显式 signal/cancel 或 Extra 关闭请求取消所属调用；该语义与裸 Core iterator 不同。
 
 ## 回复审批和用户问题
 

@@ -18,6 +18,8 @@ supersedes: []
 
 # 本地身份与组件生命周期
 
+#312 增加 direct Extra：显式借用宿主 Core，不要求 Runtime Home；显式提供 Home 时仍校验，独立控制端点的父目录由宿主准备。下文 Extra 必填 Home、Kernel client 与 RPC 恢复的表述限定 IPC/legacy。direct 的身份是 executor 对象/name，关闭仅取消并核对所属调用，Core 由宿主最后关闭；完整合同见[架构](architecture.md#extra-双模式装配issue-312)。
+
 ## 当前实施
 
 2026-11-02 的 [#294 原生装配合同](architecture.md#sdk-原生装配与统一-rpc)已在工作树实施：Kernel 在宿主进程使用注入的 Adapter，普通调用统一 RPC，不再持有执行 worker。

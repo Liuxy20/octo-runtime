@@ -73,3 +73,21 @@ Provider 相关回归使用仓库 fake fixtures；未调用真实模型、登录
 最终包外 SDK 两版本通过；原生服务四组 fixture 完整通过，结束后检查无本任务残留计划任务。
 
 早期旧基线全量运行受机器并发负载影响，出现 native service 超时和 Playboard worker 被局部终止；旧原型串行长测曾被宿主会话中断。这些运行不计作最终通过依据。仅清理已核对属于本任务的临时测试树/计划任务，没有把清理当作产品修复。
+
+## 2026-11-05：复审修正与冲突验收
+
+源码为 `de708b05` + 合并 main `de3ff37a` + 复审修正；环境、工具版本和 checkout 外隔离沿用上文。先在未重建的 `de708b05` 产物上运行新增专项：9 项中 8 fail / 1 pass，确认四类问题真实存在。所有敏感 canary 在运行期生成，仅输出是否泄漏，不保存凭据正文到公开记录。
+
+修正共享 sanitizer 和 CLI Adapter 解析边界，保留选中集合解析先于任何 import/factory 的顺序；ExtraService 仅解决两处与已合并 direct/IPC 装配的冲突。相对 main 没有 CI、默认测试选择器、package.json 或锁文件改动。
+
+| 检查 | 本轮结果 |
+| --- | --- |
+| Node24 `pnpm typecheck`（完整构建） / Node26 root tsc --noEmit | 通过 |
+| 修复后新增专项 + 原启动专项 | Node24/26 各 31 pass / 0 fail；包含末轮复合/截断 URI 边界补充后复验 |
+| 启动复审、原诊断、Home、端点、Extra 执行模式及相关生命周期/Playboard 共 16 文件 | Node24/26 各 170 项：163 pass、7 平台 skip、0 fail/cancelled |
+| lint / format:check / lint:names / docs:check | 通过；names 无 findings，docs 4 pass |
+| OKF lint / 最终 diff | 通过；相对 main 仅本任务文件，无未处理冲突或无关配置改动 |
+
+新增文件为 `test/manual/startup-diagnostics-review.test.mjs`，显式运行，不加入默认 selector。覆盖 URL 四种 delimiter、两种 data URL 编码、带引号/多词/标点赋值、缺失裸包、真实 CLI 文本/JSON、最近记录与回读、普通路径保留、截断 URL、复杂度以及先解析后导入顺序。
+
+本轮仅重跑有代码变更和冲突的相关测试；未重复初次全量根测试、原生计划任务矩阵或真实 Provider/IM。既有 Windows OpenClaw 重启失败的历史对照仍见上节，不将旧结果作为新 head 的全量通过声明。

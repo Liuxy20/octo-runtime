@@ -1,0 +1,96 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/312
+issue_updated_at: '2026-11-04T11:03:01Z'
+phase: verified
+baseline: 6fe5b5fc72084a0c2de91844a3606a9bc81e17d3
+baseline_source: GitHub commits/main API confirmed the existing local commit; fast-forward preserved task changes. A new HTTPS fetch timed out.
+branch: codex/312-extra-execution-plan
+worktree: /Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-312
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+rule_excerpts_read:
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/output-protocol.md
+context_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/log.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/tasks/294-native-kernel-sdk/context.yaml
+  - .octospec/scripts/lint.py
+  - package.json
+  - packages/octo-runtime-host-sdk/package.json
+  - public/host.ts
+  - public/extra.ts
+source_sections_read:
+  - packages/octo-runtime-host-sdk/src/extra-service.ts
+  - packages/octo-runtime-host-sdk/src/extras.ts
+  - packages/octo-runtime-host-sdk/src/shutdown.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/client.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts
+  - packages/octo-runtime-executor-kernel/src/host-run-service.ts
+  - packages/octo-runtime-executor-kernel/src/execution-source.ts
+  - packages/octo-runtime-protocol/src/stream-limits.ts
+  - packages/octo-runtime-extra-channel-gateway/src/extra.ts
+  - packages/octo-runtime-extra-channel-gateway/src/ports.ts
+  - packages/octo-runtime-extra-channel-gateway/src/execution/task.ts
+  - packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts
+  - packages/octo-runtime-extra-channel-wecom/src/extra.ts
+  - packages/octo-runtime-extra-channel-wecom/src/ports.ts
+  - packages/octo-runtime-extra-channel-wecom/src/application/im-channel.ts
+  - packages/octo-runtime-extra-webui/src/index.ts
+  - packages/octo-runtime-adapter-codex/src/index.ts
+  - test-support/public-extra/executor.mts
+  - scripts/verify-release.mjs
+related_issues_read:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/296
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/309
+global_rules: .octospec/_global/ absent in new checkout; no synchronization or framework upgrade performed
+skills_applied:
+  - repository octospec-workflow
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+authorization:
+  - Implement and verify issue 312; defer issue 313 without changing Codex app-server lifecycle.
+  - Run the explicitly requested code-review skill, then commit and open a PR targeting main after findings are resolved.
+  - Fetch latest main and create a new independent worktree.
+  - Start OctoSpec planning for issue 312, explaining background, goals and benefits.
+  - Assess plan executability against a 95/100 target with explicit gaps.
+boundaries:
+  - No merge, publication or deployment authorization; commit/push/PR are authorized after review.
+  - Do not expand GitHub CI, including through default test selectors or packaging gates.
+  - Mininglamp-OSS issue, PR and commit content must be English if subsequently authorized.
+  - Preserve configured author and append the required Codex trailer if commits are subsequently authorized.
+contract_reconciliation:
+  - Issue 312 direct is an explicit composition option, not a KernelService internal RPC bypass.
+  - IPC and legacy retain the baseline's required prepared Runtime Home.
+  - Direct does not require Runtime Home; optional explicit resources retain path protection.
+  - Extra shutdown inherits the existing 4000 ms monotonic deadline, not Kernel's 5000 ms.
+  - Core now exposes receipt-scoped observation of the original invocation cleanup.
+  - Added the minimal public /adapters/codex export for external host composition.
+  - Reused the baseline IPC client and shared HostRunService execution source.
+verification:
+  baseline_knowledge_lint: 'pass: 637 OKF units, 20 rules, 3900 local file links'
+  initial_python_attempt: 'python3 missing PyYAML; resolved by uv run --with pyyaml'
+  final_knowledge_lint: 'pass: 649 OKF units, 20 rules, 3942 local file links'
+  changed_metadata: 'pass: task metadata, whitespace and context YAML'
+  diff_check: pass
+  ci_scope_diff: 'no workflow/scripts/default-test changes; package.json only adds the Codex public export'
+  hosted_checks: 'pending PR creation; local verification is recorded separately'
+  implementation_tests: 'pass: 28 manual, 2334 existing Node and 35 WebUI tests; 66 environment skips'
+  real_provider: 'pass: Codex CLI 0.164.0 direct/ipc normal native turn and complete cleanup'
+  native_platforms: 'macOS arm64 pass; Windows/Linux native not run'
+  external_hosts: 'isolated tgz consumer and independent Kernel process pass; Electron/business app not run'
+  code_review: 'Standards 0 / Spec 0 actionable findings; independent static reviews'

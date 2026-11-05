@@ -85,7 +85,9 @@ GatewayDependencies 由 `/extras/channel-gateway` 定义，扩展既有 loadCont
 
 **新建或修改 Extra 的交互消费者，必须显式处理 async 协议兼容性。** 不能将所有 interaction.requested 当作阻塞交互或复用旧字符串回答命令。按 delivery 分流：未接入异步表单的 Extra 在交互登记/展示/等待投影前成对过滤 async requested/resolved，保留正文、连续游标和原同步问答/审批；接入的 Extra 必须实现结构化整批回答及完整生命周期。三个内置 Extra 当前均忽略 async 控制。协议细节与验收边界见[输出协议强制要求](output-protocol.md)及[公共 Extra 合同](../../docs/zh-CN/reference/output-and-control.md#extra-必须明确选择处理方式)。
 
-ctx.kernel 注入实际 KernelClient，invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list 与普通 App 使用同一合同；按 [#294](architecture.md#sdk-原生装配与统一-rpc)，Extra 与 Kernel 同进程时仍经本地 RPC，不因宿主持有 Adapter 对象而直接调用 Adapter；身份关联和恢复在 Kernel 包维护。旧 ctx.adapterHost、ExtraAdapterHost 和 extra-port 已删除，不保留兼容接口。
+按 [#312](architecture.md#extra-双模式装配issue-312)，ctx.execution 提供 invoke/cancelInvocation/respondInteraction/respondNativeInteraction/list。direct 借用宿主 Core，IPC 复用现有 KernelClient。只有 IPC 的可选 ctx.kernel 是真实 client；第三方 Kernel 专属插件先收窄存在性并继续选择 IPC。旧 ctx.adapterHost、ExtraAdapterHost 和 extra-port 不恢复。
+
+direct 可省略 Home；显式控制目录仍由宿主准备。配置字段按存在性严格互斥，exactOptionalPropertyTypes 关闭时 TS 对 undefined 的宽松不改变运行期拒绝。direct 以 executor 对象/name 去重，总共最多 64 个 Extra；每 scope 最多 128 个调用，未确认清理继续占额。共享 source 使用中央流预算，不按 Extra 倍增窗口。observer.return 不取消，scope.close 才定向取消并等待源消费、Core 首次清理事实与实际 probe。status.execution 报告真实准入，kernel_available 仅 IPC。下段 client/get/恢复合同仅适用于 IPC。
 
 每个 Extra 获得自己的 client，最多 128 个高层 invoke 登记（含在途/未知），只保留元数据。invoke 自动登记，原生 Extra 服务 close 自动关闭接纳、取消并核对原终态，在 4 秒共享单调期限内等待业务 onDispose 后才关闭 client；普通插件和宿主不必手动操作 invocations。已关闭或暂停的 iterator 通过 get 核对，不额外创建订阅。单纯 client.close/iterator.return 不取消；服务 close 是显式策略。未知/lost/未确认返回 incomplete，不清空登记冒充成功。执行终态不代表 delivery 或业务资源已完成，业务清理失败同样阻止替换。低层 submit 的 RunRef 仍由明确选择该原语的高级调用方自行管理。
 
