@@ -5,3 +5,4 @@ export * from "./model-context.js";
 export * from "./execution-plan.js";
 export * from "./context-configuration.js";
 export * from "./context-catalog.js";
+export * from "./image-input.js";
