@@ -1,16 +1,8 @@
 import { createHash } from "node:crypto";
 import type { InvokeRequestWire, ModelInputPart } from "./generated/protocol-types.js";
 
-export const IMAGE_INPUT_LIMITS = Object.freeze({
-  maxCount: 4,
-  maxBytes: 2 * 1024 * 1024,
-  maxTotalBytes: 8 * 1024 * 1024
-});
-export const IMAGE_INPUT_MIME_TYPES = Object.freeze([
-  "image/png",
-  "image/jpeg",
-  "image/webp"
-] as const);
+import { IMAGE_INPUT_LIMITS, IMAGE_INPUT_MIME_TYPES, hasImageInputHeader } from "./image-input.js";
+export { IMAGE_INPUT_LIMITS, IMAGE_INPUT_MIME_TYPES } from "./image-input.js";
 
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -64,14 +56,8 @@ export function assertModelInputParts(value: unknown): asserts value is ModelInp
       createHash("sha256").update(bytes).digest("hex") !== part.sha256
     )
       throw new TypeError("ARTIFACT_INTEGRITY_MISMATCH");
-    const validHeader =
-      part.mimeType === "image/png"
-        ? bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
-        : part.mimeType === "image/jpeg"
-          ? bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-          : bytes.subarray(0, 4).toString("ascii") === "RIFF" &&
-            bytes.subarray(8, 12).toString("ascii") === "WEBP";
-    if (!validHeader) throw new TypeError("ARTIFACT_INTEGRITY_MISMATCH");
+    if (!hasImageInputHeader(bytes, String(part.mimeType)))
+      throw new TypeError("ARTIFACT_INTEGRITY_MISMATCH");
     count += 1;
     total += bytes.length;
     if (count > IMAGE_INPUT_LIMITS.maxCount || total > IMAGE_INPUT_LIMITS.maxTotalBytes)

@@ -3,7 +3,7 @@ type: Rule
 title: 统一 InvokeInput 合同
 description: 所有公共入口共用的输入、默认值和多模态字段。
 tags: ["invoke","protocol","multimodal"]
-timestamp: 2026-10-15T00:00:00Z
+timestamp: 2026-11-05T10:45:00Z
 implementation_baseline: df63c8f
 id: runtime-invoke-input
 tier: repo
@@ -73,6 +73,8 @@ Playboard 是宿主默认值例外：顶层 approvalMode 与 Context approval_po
 | sha256 | image 必填：原字节 SHA-256，64 位小写十六进制，必须一致。 |
 
 每组最多 4 张图片，单图最多 2 MiB，图片总字节最多 8 MiB。所有执行入口整体请求上限 32 MiB，按实际 UTF-8 JSON 计量，包含 Context、base64、显式恢复输入、可信执行环境和各跳包装；换行分隔符不计。等于上限接纳，超限在发送或 Provider 启动前以 INVOKE_REQUEST_TOO_LARGE 拒绝，不截断、不杀共享 Host。接收器有界丢弃异常超长行，未终止的故障传输有有限关闭期限。请求预算不扩大输出事件或源流窗口。Provider 不支持图片时明确报错。主输入和恢复输入显式提交相同图片属于业务选择，框架不自动去重，实际传输字节分别计费。实现与验证见[请求容量专项](../tasks/invoke-request-size-budget/brief.md)。
+
+浏览器消费者从 `protocol/browser` 复用 [图片合同](../../packages/octo-runtime-protocol/src/image-input.ts)，不将依赖 `node:crypto` / `Buffer` 的完整 Node 校验器打包到页面。WebUI 在选择、粘贴及发送快照上检查整组预算，异步读取的结果只属于原草稿。WebUI HTTP 200 SSE 是该 HTTP 层的受理边界，不等于 Kernel/Provider 已成功执行；明确 HTTP 拒绝前保留草稿，受理后只记录原执行错误、不自动重放。fetch 异常也不能证明远端未执行。验证与页面内草稿所有权见 [Issue 155](../tasks/155-webui-image-draft/brief.md)。
 
 ## Context
 

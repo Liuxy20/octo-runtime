@@ -33,6 +33,8 @@ import { Modal } from "./components/Modal";
 import { api, bootstrap, invoke, type Session } from "./lib/api";
 import { bindInteractions, images } from "./lib/bridge";
 import { providerName } from "./lib/provider-names";
+import { IMAGE_INPUT_MIME_TYPES } from "@mininglamp-oss/octo-runtime-protocol/browser";
+import { checkImageLimits, checkImages, readImage, type Attachment } from "./lib/image-input";
 
 const owner = { type: "local", id: "webui" };
 const projectKey = "octo-runtime-webui.projects.v1";
@@ -41,11 +43,13 @@ interface Directory {
   parent: string;
   directories: Array<{ name: string; path: string }>;
 }
-interface Attachment {
-  id: string;
-  name: string;
-  url: string;
-  part: ModelInputPart;
+interface ComposerDraft {
+  key: string;
+  text: string;
+  attachments: Attachment[];
+  textRevision: number;
+  pending: number;
+  reads: Promise<void>;
 }
 export function App() {
   const [projects, setProjects] = useState<string[]>([]),
@@ -65,7 +69,12 @@ export function App() {
     [stopping, setStopping] = useState(false);
   const [work, setWork] = useState<WorkbenchState>(initialWorkbenchState),
     [historyCount, setHistoryCount] = useState(0),
-    [attachments, setAttachments] = useState<Attachment[]>([]);
+    [attachments, setAttachments] = useState<Attachment[]>([]),
+    [reading, setReading] = useState(false);
+  const composers = useRef(new Map<string, ComposerDraft>()),
+    composer = useRef<ComposerDraft | undefined>(undefined),
+    view = useRef(0),
+    sending = useRef(false);
   const [directory, setDirectory] = useState<Directory>(),
     [directoryPath, setDirectoryPath] = useState(""),
     [settings, setSettings] = useState(false),
@@ -154,14 +163,28 @@ export function App() {
     return `octo-runtime-webui.draft:${id ?? path}`;
   }
   function editDraft(value: string) {
-    setDraft(value);
+    if (composer.current) updateComposer(composer.current, value);
+  }
+  // 同步 ref 是异步事件的所有权依据；React state 只负责显示当前草稿。
+  function updateComposer(entry: ComposerDraft, text = entry.text, next = entry.attachments) {
+    if (entry.text !== text) entry.textRevision++;
+    entry.text = text;
+    entry.attachments = next;
+    if (composer.current === entry) {
+      setDraft(text);
+      setAttachments(next);
+      setReading(entry.pending > 0);
+      for (const image of next) images.set(image.id, image.url);
+    }
     try {
-      sessionStorage.setItem(draftKey(selectedRef.current?.id), value);
+      sessionStorage.setItem(entry.key, text);
     } catch (cause) {
       report(cause);
     }
   }
   function choose(session: Session | undefined, nextProject = project, updateUrl = true) {
+    view.current++;
+    setError("");
     images.clear();
     for (const message of session?.messages ?? [])
       for (const part of message.parts ?? []) {
@@ -195,13 +218,17 @@ export function App() {
     );
     const path = session?.projectPath ?? nextProject;
     setProject(path);
-    setAttachments([]);
-    try {
-      sessionStorage.setItem("octo-runtime-webui.project", path);
-      setDraft(sessionStorage.getItem(draftKey(session?.id, path)) ?? "");
-    } catch (cause) {
-      report(cause);
+    const key = draftKey(session?.id, path);
+    let entry = composers.current.get(key);
+    if (!entry) {
+      let text = "";
+      try { text = sessionStorage.getItem(key) ?? ""; } catch (cause) { report(cause); }
+      entry = { key, text, attachments: [], textRevision: 0, pending: 0, reads: Promise.resolve() };
+      composers.current.set(key, entry);
     }
+    composer.current = entry;
+    updateComposer(entry);
+    try { sessionStorage.setItem("octo-runtime-webui.project", path); } catch (cause) { report(cause); }
     if (updateUrl) history.pushState(null, "", session ? `#/sessions/${session.id}` : "#/");
     if (session) {
       setProject(session.projectPath);
@@ -210,7 +237,6 @@ export function App() {
       setEffort(session.effort || "medium");
     }
     setSidebar(false);
-    setError("");
   }
   async function openSession(id: string) {
     await persistQueue.current;
@@ -254,74 +280,61 @@ export function App() {
     setDirectory(undefined);
   }
   async function addImages(files: File[]) {
-    try {
+    const entry = composer.current;
+    if (!entry || !files.length) return;
+    entry.pending++;
+    setReading(true);
+    // 同一草稿的读取串行化；每批原子添加，切换会话后结果仍只属于原草稿。
+    entry.reads = entry.reads.then(async () => {
+      checkImageLimits([...entry.attachments.map(image => image.part),
+        ...files.map(item => ({ mimeType: item.type, byteSize: item.size }))]);
       const result: Attachment[] = [];
-      if (files.length + attachments.length > 8) throw new Error("最多添加 8 张图片");
-      for (const item of files) {
-        if (
-          !["image/png", "image/jpeg", "image/webp"].includes(item.type) ||
-          item.size > 5 * 1024 * 1024
-        )
-          throw new Error("请选择 5 MB 以内的 PNG、JPEG 或 WebP 图片");
-        const bytes = new Uint8Array(await item.arrayBuffer());
-        const sha256 = [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
-          .map((value) => value.toString(16).padStart(2, "0"))
-          .join("");
-        const data = await new Promise<string>((accept, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => accept(String(reader.result));
-          reader.onerror = reject;
-          reader.readAsDataURL(item);
-        });
-        const id = crypto.randomUUID();
-        images.set(id, data);
-        result.push({
-          id,
-          name: item.name,
-          url: data,
-          part: {
-            id,
-            type: "image",
-            mimeType: item.type as "image/png",
-            data: data.split(",")[1],
-            byteSize: item.size,
-            sha256
-          }
-        });
-      }
-      setAttachments((current) => [...current, ...result]);
-    } catch (cause) {
-      report(cause);
-    }
+      for (const item of files) result.push(await readImage(item));
+      checkImageLimits([...entry.attachments, ...result].map(image => image.part));
+      if (alive.current) updateComposer(entry, entry.text, [...entry.attachments, ...result]);
+    }).catch(cause => {
+      if (alive.current && composer.current === entry) report(cause);
+    }).finally(() => {
+      entry.pending--;
+      if (alive.current && composer.current === entry) setReading(entry.pending > 0);
+    });
+    await entry.reads;
   }
   async function send() {
-    if (busy || run.current || (!draft.trim() && !attachments.length) || !adapter) return;
+    const entry = composer.current;
+    if (sending.current || busy || run.current || !entry || entry.pending ||
+      (!entry.text.trim() && !entry.attachments.length) || !adapter || !project) return;
+    sending.current = true;
+    const snapshot = { text: entry.text, attachments: [...entry.attachments], textRevision: entry.textRevision,
+      session: selectedRef.current, project, adapter, model, effort, approval, view: view.current };
     setBusy(true);
     setError("");
     let session: Session | undefined,
-      state: WorkbenchState = work;
+      state: WorkbenchState = work,
+      accepted = false;
     try {
+      await checkImages(snapshot.attachments);
       await persistQueue.current;
-      const wasNew = !selectedRef.current;
+      const wasNew = !snapshot.session;
       session =
-        selectedRef.current ?? (await api<Session>("/sessions", "POST", { projectPath: project }));
+        snapshot.session
+          ? await api<Session>(`/sessions/${snapshot.session.id}`)
+          : await api<Session>("/sessions", "POST", { projectPath: snapshot.project });
       session = {
         ...session,
-        title: session.messages.length ? session.title : draft.trim().slice(0, 80) || "图片",
-        adapter,
-        model,
-        effort
+        title: session.messages.length ? session.title : snapshot.text.trim().slice(0, 80) || "图片",
+        adapter: snapshot.adapter,
+        model: snapshot.model,
+        effort: snapshot.effort
       };
-      selectedRef.current = session;
-      setSelected(session);
       const id = crypto.randomUUID(),
         clientMessageId = crypto.randomUUID(),
         controller = new AbortController();
       const inputs: ModelInputPart[] = [
-        ...(draft.trim() ? [{ type: "text" as const, text: draft }] : []),
-        ...attachments.map((image) => image.part)
+        ...(snapshot.text.trim() ? [{ type: "text" as const, text: snapshot.text }] : []),
+        ...snapshot.attachments.map((image) => image.part)
       ];
-      const parts = attachments.map((image) => ({
+      const parts = snapshot.attachments.map((image) => ({
         id: image.id,
         type: "image" as const,
         artifact: {
@@ -333,12 +346,45 @@ export function App() {
         name: image.name,
         dataUrl: image.url
       }));
+      run.current = { id, sessionId: session.id, controller, state };
+      const response = await invoke(
+        {
+          inputs,
+          contexts: {
+            schema: "octo.context-envelope/v3",
+            items: [{ namespace: "octo.execution", name: "adapter", payload: { type: snapshot.adapter } }]
+          },
+          sessionId: session.id,
+          runId: id,
+          invocationId: id,
+          protocol_mode: "canonical",
+          workdir: session.projectPath,
+          approvalMode: snapshot.approval,
+          agentConfig: { ...(snapshot.model ? { model: snapshot.model } : {}), effort: snapshot.effort },
+          ...(session.providerSession ? { providerSession: session.providerSession } : {}),
+          continuityMode: session.providerSession ? "continue" : "fresh"
+        },
+        controller.signal
+      );
+      if (!response.ok) throw new Error((await response.json()).error ?? `HTTP ${response.status}`);
+      // HTTP 200 是 WebUI 受理边界，后续 SSE 错误可能已执行，禁止恢复为未发送或自动重放。
+      accepted = true;
+      const sentIds = new Set(snapshot.attachments.map(image => image.id));
+      updateComposer(entry, entry.textRevision === snapshot.textRevision ? "" : entry.text,
+        entry.attachments.filter(image => !sentIds.has(image.id)));
+      if (wasNew && view.current === snapshot.view) {
+        composers.current.delete(entry.key);
+        try { sessionStorage.removeItem(entry.key); } catch (cause) { report(cause); }
+        entry.key = draftKey(session.id, session.projectPath);
+        composers.current.set(entry.key, entry);
+        updateComposer(entry);
+      }
       state = workbenchReducer(state, {
         type: "sending",
         clientMessageId,
-        prompt: draft,
+        prompt: snapshot.text,
         parts,
-        agentName: providerName(adapter)
+        agentName: providerName(snapshot.adapter)
       });
       state = workbenchReducer(state, {
         type: "acknowledged",
@@ -351,36 +397,16 @@ export function App() {
           conversationId: session.id
         }
       });
-      setWork(state);
-      editDraft("");
-      if (wasNew) sessionStorage.removeItem(draftKey(undefined, session.projectPath));
-      setAttachments([]);
-      run.current = { id, sessionId: session.id, controller, state };
-      history.replaceState(null, "", `#/sessions/${session.id}`);
+      run.current.state = state;
+      if (view.current === snapshot.view || selectedRef.current?.id === session.id) {
+        selectedRef.current = session;
+        setSelected(session);
+        setWork(state);
+        history.replaceState(null, "", `#/sessions/${session.id}`);
+      }
       setRunning(id);
-      // Persist the optimistic turn before opening the stream; never reconstruct provider binding.
+      // 只持久化已受理的轮次，明确拒绝不会留下乐观消息或虚构 ACK。
       checkpoint(session, state);
-      await persistQueue.current;
-      const response = await invoke(
-        {
-          inputs,
-          contexts: {
-            schema: "octo.context-envelope/v3",
-            items: [{ namespace: "octo.execution", name: "adapter", payload: { type: adapter } }]
-          },
-          sessionId: session.id,
-          runId: id,
-          invocationId: id,
-          protocol_mode: "canonical",
-          workdir: session.projectPath,
-          approvalMode: approval,
-          agentConfig: { ...(model ? { model } : {}), effort },
-          ...(session.providerSession ? { providerSession: session.providerSession } : {}),
-          continuityMode: session.providerSession ? "continue" : "fresh"
-        },
-        controller.signal
-      );
-      if (!response.ok) throw new Error((await response.json()).error ?? `HTTP ${response.status}`);
       if (!response.body) throw new Error("SSE_STREAM_UNAVAILABLE");
       const presentation = new RawRunPresentation(id);
       presentation.run.startedAt = state.messages.at(-1)?.createdAt;
@@ -451,7 +477,7 @@ export function App() {
       }
       if (!terminal) throw new Error("执行连接已断开，未收到终态。");
     } catch (cause) {
-      if (!session || selectedRef.current?.id === session.id) report(cause);
+      if (view.current === snapshot.view || (session && selectedRef.current?.id === session.id)) report(cause);
       state = {
         ...state,
         messages: state.messages.map((message) =>
@@ -464,15 +490,16 @@ export function App() {
             : message
         )
       };
-      if (session && selectedRef.current?.id === session.id) setWork(state);
+      if (accepted && session && selectedRef.current?.id === session.id) setWork(state);
     } finally {
       run.current = undefined;
+      sending.current = false;
       setRunning("");
       setBusy(false);
       setStopping(false);
       bindInteractions("", []);
-      if (session) checkpoint(session, state);
-      editor.current?.focus();
+      if (accepted && session) checkpoint(session, state);
+      if (view.current === snapshot.view) editor.current?.focus();
     }
   }
   async function stop() {
@@ -716,13 +743,14 @@ export function App() {
                     type="file"
                     ref={file}
                     className="composer-image-file"
-                    accept="image/png,image/jpeg,image/webp"
+                    accept={IMAGE_INPUT_MIME_TYPES.join(",")}
                     multiple
                     onChange={(event) => {
                       void addImages([...(event.target.files ?? [])]);
                       event.target.value = "";
                     }}
                   />
+                  {reading && <span role="status">正在读取图片…</span>}
                   {attachments.length > 0 && (
                     <div className="composer-images">
                       {attachments.map((image) => (
@@ -733,9 +761,8 @@ export function App() {
                             aria-label={`移除 ${image.name}`}
                             title="移除图片"
                             onClick={() =>
-                              setAttachments((current) =>
-                                current.filter((value) => value.id !== image.id)
-                              )
+                              composer.current && updateComposer(composer.current, composer.current.text,
+                                composer.current.attachments.filter(value => value.id !== image.id))
                             }
                           >
                             <X size={14} />
@@ -750,7 +777,6 @@ export function App() {
                     placeholder="发消息"
                     aria-label="发消息"
                     rows={3}
-                    disabled={busy}
                     value={draft}
                     onChange={(event) => editDraft(event.target.value)}
                     onKeyDown={(event) => {
@@ -805,7 +831,7 @@ export function App() {
                 />
               }
               sendLabel="发送消息"
-              sendDisabled={!project || !adapter || (!draft.trim() && !attachments.length)}
+              sendDisabled={reading || !project || !adapter || (!draft.trim() && !attachments.length)}
               sending={busy && !running}
               onSend={() => void send()}
               running={!!currentRunning}

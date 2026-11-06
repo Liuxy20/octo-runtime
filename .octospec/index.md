@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 155：WebUI 图片限制与草稿保留](tasks/155-webui-image-draft/brief.md)：共享浏览器安全图片合同，按 HTTP 受理边界清空发送快照，隔离读图/编辑/切换竞态。[验证](tasks/155-webui-image-draft/validation.md)和[自审](tasks/155-webui-image-draft/review.md)记录 Windows 本地结果；用户追加授权提交、SSH 推送与关联 PR，范围外失败由其他 Issue/PR 处理，不扩大 CI。
+
 - [Issue 157：rg 退出码归因](tasks/157-ripgrep-command-status/brief.md)：独立 Windows clone 修复复合命令失败被改为 completed；Node 24/26 手动专项各 26 通过，完整门禁与未验范围见 [验证](tasks/157-ripgrep-command-status/validation.md)。用户追加授权提交及创建关联 PR，全量仍有六项失败；未授权合并或发布。
 
 - [Issue 309：独立客户端与双包发行](tasks/309-runtime-client/brief.md)：确认完整 runtime 内置 client/protocol、client 独立发布。[设计](tasks/309-runtime-client/design.md)、[计划](tasks/309-runtime-client/plan.md)、[验收](tasks/309-runtime-client/acceptance.md)及[95 分规划自评](tasks/309-runtime-client/assessment.md)完整；本地实现、双包/离线/global/恢复与基线互操作结果见[验证](tasks/309-runtime-client/validation.md)，两轴[Review](tasks/309-runtime-client/review.md)问题已关闭。未扩大 CI；用户追加授权英文提交及目标 main 的 PR，未执行合并或正式发布。

@@ -1,0 +1,27 @@
+brief: .octospec/tasks/155-webui-image-draft/brief.md
+baseline: 81506f6a5d0c13ad3f7c1d03cf24ef1ed433e027
+injected:
+  - { id: runtime-architecture, source: repo, reason: "产品意图、模块归属、禁止扩大 CI" }
+  - { id: runtime-protocol-design, source: repo, reason: "单次调用与不重放" }
+  - { id: runtime-invoke-input, source: repo, reason: "图片数量/大小/完整性" }
+  - { id: runtime-local-execution, source: repo, reason: "接纳与终态" }
+  - { id: runtime-extras, source: repo, reason: "WebUI HTTP 与会话" }
+  - { id: runtime-context-input, source: repo, reason: "保留显式本轮输入" }
+  - { id: runtime-context-extensions, source: repo, reason: "浏览器协议出口" }
+  - { id: runtime-protocol-schema, source: repo, reason: "不修改 wire schema" }
+  - { id: runtime-environment, source: repo, reason: "protocol 路径复核，不修改 envs" }
+  - { id: runtime-mcp, source: repo, reason: "protocol 路径复核，不修改 MCP" }
+  - { id: runtime-session-reset, source: repo, reason: "protocol 路径复核，保留 binding" }
+  - { id: runtime-output-protocol, source: repo, reason: "受理与终态区分，不改事件消费协议" }
+  - { id: runtime-engineering, source: repo, reason: "中文合同注释、独立手动验证" }
+  - { id: commit, source: repo, reason: "中文内部记录；公开交付按 CONTRIBUTING" }
+files_expected:
+  - packages/octo-runtime-protocol/src/image-input.ts
+  - packages/octo-runtime-protocol/src/browser.ts
+  - packages/octo-runtime-protocol/src/multimodal.ts
+  - packages/octo-runtime-extra-webui/web/src/App.tsx
+  - packages/octo-runtime-extra-webui/web/src/lib/image-input.ts
+  - packages/octo-runtime-extra-webui/web/manual/155-webui-image-draft.ui.tsx
+  - packages/octo-runtime-extra-webui/web/manual/155-webui-image-draft.config.ts
+  - test/manual/155-webui-image-draft.test.mjs
+updated_at: 2026-11-05T10:20:00Z
