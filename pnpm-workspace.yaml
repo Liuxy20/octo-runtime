@@ -14,7 +14,7 @@ allowBuilds:
   # Reviewed native watcher install hook; retain strict checks for other packages.
   "@parcel/watcher@2.6.0": true
   # Runtime uses the installed Desktop, not npm Provider native helpers.
-  "@deepseek-ai/dsh-subprocess-local@0.2.1-rc.4": false
+  "@deepseek-ai/dsh-subprocess-local@0.2.1-rc.5": false
   "@google/genai@2.21.0": false
   "koffi@3.1.1": false
   "node-pty@1.2.0-beta.15": false
