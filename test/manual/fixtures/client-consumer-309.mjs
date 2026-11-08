@@ -1,3 +1,9 @@
+const args = ({ inputs: parts, sessionId, providerSession, agentEnv, ...content }) => [
+  { ...content, parts },
+  sessionId,
+  providerSession,
+  agentEnv
+];
 import assert from "node:assert/strict";
 import { readFile, mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -34,9 +40,9 @@ assert.throws(
 );
 const client = attachKernel({ endpoint });
 try {
-  assert.equal((await client.status()).ipc_version, 1);
+  assert.equal((await client.status()).ipc_version, 2);
   assert.ok((await client.list()).length > 0);
-  const events = await Array.fromAsync(client.invoke(input));
+  const events = await Array.fromAsync(client.invoke(...args(input)));
   assert.equal(events.at(-1).type, "run.completed");
 } finally {
   client.close();
@@ -89,7 +95,7 @@ if (process.argv.includes("--paired")) {
     assert.equal((await service.client.status()).pid, process.pid);
     const runInput = { ...input, runId: "native-run", invocationId: "native-invocation" };
     assert.equal(
-      (await Array.fromAsync(service.client.invoke(runInput))).at(-1).type,
+      (await Array.fromAsync(service.client.invoke(...args(runInput)))).at(-1).type,
       "run.completed"
     );
     attached = attachKernel({ endpoint: nativeEndpoint });

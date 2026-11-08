@@ -1,8 +1,7 @@
 /** Optional metadata logging; bounded queues isolate filesystem writes in a dedicated worker. */
 import { isAbsolute } from "node:path";
 import { Worker } from "node:worker_threads";
-import { extraStatusRecord, kernelStatusRecord, type ExtraStatusRecord } from "./service-status.js";
-import { sanitizeDiagnosticBody } from "./public-display.js";
+import { kernelStatusRecord } from "./service-status.js";
 
 export type RuntimeLogLevel = "info" | "warn" | "error";
 export type RuntimeLog = (
@@ -12,8 +11,6 @@ export type RuntimeLog = (
 ) => void;
 export interface RuntimeLoggingOptions {
   directory: string;
-  /** In-process status sink; SDK defaults to silence. Never placed in JSON config or workerData. */
-  statusOutput?: (record: ExtraStatusRecord) => void;
 }
 export const noopRuntimeLog: RuntimeLog = () => {};
 
@@ -57,8 +54,6 @@ export function assertRuntimeLogging(options?: RuntimeLoggingOptions): void {
     (!options || typeof options.directory !== "string" || !isAbsolute(options.directory))
   )
     throw new TypeError("LOG_DIRECTORY_MUST_BE_ABSOLUTE");
-  if (options?.statusOutput !== undefined && typeof options.statusOutput !== "function")
-    throw new TypeError("LOG_STATUS_OUTPUT_INVALID");
 }
 
 /** F31：.octospec/tasks/gateway-august-feature-assessment/assessment.md */
@@ -66,14 +61,12 @@ export class RuntimeLogging {
   #worker?: Worker;
   #pending = 0;
   #statusPending = 0;
-  readonly #statusOutput?: RuntimeLoggingOptions["statusOutput"];
   #closed = false;
   #closing?: Promise<void>;
   #done?: () => void;
   constructor(options?: RuntimeLoggingOptions) {
     assertRuntimeLogging(options);
     if (!options) return;
-    this.#statusOutput = options.statusOutput;
     try {
       this.#worker = new Worker(new URL("./runtime-log-worker.js", import.meta.url), {
         workerData: { directory: options.directory }
@@ -98,21 +91,10 @@ export class RuntimeLogging {
     });
     this.#worker.unref();
   }
-  readonly kernel: RuntimeLog = (level, event, data) =>
-    this.#write("kernel", undefined, level, event, data);
-  extra(name: string): RuntimeLog {
-    if (!/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new TypeError("EXTRA_NAME_INVALID");
-    return (level, event, data) => this.#write("extra", name, level, event, data);
-  }
-  #write(
-    source: "kernel" | "extra",
-    extra: string | undefined,
-    level: RuntimeLogLevel,
-    event: string,
-    data?: Readonly<Record<string, unknown>>
-  ): void {
+  readonly kernel: RuntimeLog = (level, event, data) => this.#write(level, event, data);
+  #write(level: RuntimeLogLevel, event: string, data?: Readonly<Record<string, unknown>>): void {
     if (this.#closed) return;
-    if (source === "kernel" && this.#worker && this.#statusPending < 128) {
+    if (this.#worker && this.#statusPending < 128) {
       try {
         const status = kernelStatusRecord(level, event, data);
         if (status) {
@@ -121,28 +103,6 @@ export class RuntimeLogging {
         }
       } catch {
         /* 状态镜像失败不影响执行或普通日志。 */
-      }
-    }
-    if (extra) {
-      try {
-        const status = extraStatusRecord(extra, level, event, data);
-        if (status) {
-          // Sink and mirror fail independently; neither failure may affect service recovery.
-          try {
-            const result: unknown = this.#statusOutput?.(status);
-            // TypeScript permits async functions in void sinks; observe rejection without waiting.
-            if (result && typeof (result as PromiseLike<unknown>).then === "function")
-              void Promise.resolve(result).catch(() => undefined);
-          } catch {
-            /* A host sink failure must not suppress the independent file mirror. */
-          }
-          if (this.#worker && this.#statusPending < 128) {
-            this.#worker.postMessage({ extra, status: true, line: `${JSON.stringify(status)}\n` });
-            this.#statusPending++;
-          }
-        }
-      } catch {
-        /* Untrusted diagnostic getters must not escape into service execution. */
       }
     }
     if (!this.#worker || this.#pending >= 128) return;
@@ -192,36 +152,14 @@ export class RuntimeLogging {
         new Date(occurredAt).toISOString() === occurredAt
       )
         safe.occurred_at = occurredAt;
-      // 仅放行 Gateway 卡片投递诊断；响应摘要不进入状态镜像，且不得携带请求或鉴权信息。
-      if (
-        source === "extra" &&
-        extra === "channel-gateway" &&
-        event === "channel.diagnostic" &&
-        typeof safe.code === "string" &&
-        /^IM_CARD_(?:SEND|EDIT)_\d{3}$/.test(safe.code)
-      ) {
-        const path = data?.path;
-        if (path === "/v1/bot/sendMessage" || path === "/v1/bot/message/edit") safe.path = path;
-        const status = data?.http_status;
-        if (
-          typeof status === "number" &&
-          Number.isInteger(status) &&
-          status >= 100 &&
-          status <= 599
-        )
-          safe.http_status = status;
-        const body = data?.response_body;
-        if (typeof body === "string") safe.response_body = sanitizeDiagnosticBody(body);
-      }
       const record = {
         time: new Date().toISOString(),
         level,
-        source,
+        source: "kernel",
         event,
-        ...(extra ? { extra_type: extra } : {}),
         data: safe
       };
-      this.#worker.postMessage({ extra, line: `${JSON.stringify(record)}\n` });
+      this.#worker.postMessage({ line: `${JSON.stringify(record)}\n` });
       this.#pending++;
     } catch {
       /* Diagnostics cannot interrupt execution, including getter errors or an exited worker. */

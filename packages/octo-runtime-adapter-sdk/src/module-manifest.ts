@@ -11,21 +11,9 @@ export interface AdapterModuleEntry {
   options: Record<string, unknown>;
   sourceManifest: string;
 }
-export interface ExtraModuleEntry {
-  /** CLI 目录的静态用途说明；根帮助读取此字段，不导入服务或命令模块。 */
-  description?: string;
-  /** 公开的业务配置示例，仅供 CLI 帮助展示；不得包含真实凭据，不参与运行时默认值。 */
-  configExample?: Record<string, unknown>;
-  /** 可选独立命令入口；与服务模块使用同一个清单来源解析。 */
-  commands?: string;
-  name: string;
-  module: string;
-  sourceManifest: string;
-}
 export interface ModuleManifest {
   version: 1;
   adapters: AdapterModuleEntry[];
-  extras: ExtraModuleEntry[];
 }
 
 /** CLI 清单边界：只校验声明、不导入模块；来源路径始终随条目保留，不能用合并位置替换。 */
@@ -37,8 +25,6 @@ export function parseModuleManifest(
   const manifest = record(value, "manifest");
   if (manifest.version !== 1) throw new TypeError("manifest.version must be 1");
   if (!Array.isArray(manifest.adapters)) throw new TypeError("manifest.adapters must be an array");
-  const extras = manifest.extras === undefined && legacy ? [] : manifest.extras;
-  if (!Array.isArray(extras)) throw new TypeError("manifest.extras must be an array");
   const sourceManifest = resolve(source);
   const adapters = manifest.adapters.map((value, index): AdapterModuleEntry => {
     const entry = record(value, `adapters[${index}]`);
@@ -54,26 +40,8 @@ export function parseModuleManifest(
       sourceManifest
     };
   });
-  const extraEntries = extras.map((value, index): ExtraModuleEntry => {
-    const entry = record(value, `extras[${index}]`);
-    const name = text(entry.name, "extra.name");
-    if (!/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new TypeError("extra.name is invalid");
-    return {
-      name,
-      ...(entry.description === undefined
-        ? {}
-        : { description: text(entry.description, "extra.description") }),
-      ...(entry.configExample === undefined
-        ? {}
-        : { configExample: record(entry.configExample, "extra.configExample") }),
-      module: text(entry.module, "extra.module"),
-      sourceManifest,
-      ...(entry.commands === undefined ? {} : { commands: text(entry.commands, "extra.commands") })
-    };
-  });
   unique(adapters, (entry) => entry.type, "adapter.type");
-  unique(extraEntries, (entry) => entry.name, "extra.name");
-  return { version: 1, adapters, extras: extraEntries };
+  return { version: 1, adapters };
 }
 
 /** 只有可选用户文件的 ENOENT 表示无扩展；权限、JSON 或格式错误必须保留失败。 */
@@ -86,7 +54,7 @@ export async function readModuleManifest(
     content = await readFile(file, "utf8");
   } catch (error) {
     if (optional && (error as NodeJS.ErrnoException).code === "ENOENT")
-      return { version: 1, adapters: [], extras: [] };
+      return { version: 1, adapters: [] };
     throw error;
   }
   try {
@@ -132,8 +100,7 @@ export function mergeModuleManifests(
   }
   return {
     version: 1,
-    adapters: merge(builtin.adapters, extension.adapters, (entry) => entry.type),
-    extras: merge(builtin.extras, extension.extras, (entry) => entry.name)
+    adapters: merge(builtin.adapters, extension.adapters, (entry) => entry.type)
   };
 }
 
@@ -145,7 +112,7 @@ export function resolveModuleSpecifier(module: string, sourceManifest: string): 
   return resolveEsm(module, pathToFileURL(resolve(sourceManifest)).href);
 }
 
-/** 仅解析选中 Adapter，生成可跨进程的启动快照；不提前解析或加载 Extra。 */
+/** 仅解析选中 Adapter，生成可跨进程的启动快照；不加载业务集成。 */
 export function resolveAdapterModules(manifest: ModuleManifest): AdapterModuleEntry[] {
   return manifest.adapters.map((entry) => ({
     ...entry,

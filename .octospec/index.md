@@ -1,5 +1,8 @@
 # Octo Runtime 工程知识目录
 
+- [agentEnv 与可定位中断](tasks/agent-env-invocation/brief.md)：[实际验证](tasks/agent-env-invocation/validation.md)、[独立双轴审查](tasks/agent-env-invocation/review.md)。IPC v2 / client 2.x 为当前调用合同。
+当前架构以 [Issue 328](tasks/328-remove-extra/brief.md) 和[架构规则](rules/architecture.md)为准：Runtime 只提供执行基础设施；Channel Gateway 已迁入独立仓库。下方早期任务是历史证据，不再定义 Extra 装配。
+
 - [Issue 155：WebUI 图片限制与草稿保留](tasks/155-webui-image-draft/brief.md)：共享浏览器安全图片合同，按 HTTP 受理边界清空发送快照，隔离读图/编辑/切换竞态。[验证](tasks/155-webui-image-draft/validation.md)和[自审](tasks/155-webui-image-draft/review.md)记录 Windows 本地结果；用户追加授权提交、SSH 推送与关联 PR，范围外失败由其他 Issue/PR 处理，不扩大 CI。
 
 - [Issue 157：rg 退出码归因](tasks/157-ripgrep-command-status/brief.md)：独立 Windows clone 修复复合命令失败被改为 completed；Node 24/26 手动专项各 26 通过，完整门禁与未验范围见 [验证](tasks/157-ripgrep-command-status/validation.md)。用户追加授权提交及创建关联 PR，全量仍有六项失败；未授权合并或发布。
@@ -29,7 +32,7 @@
 | 严禁提交凭据值；测试占位值仅运行期生成，真实认证由宿主从仓库外注入 | [凭据禁止入库](rules/architecture.md#凭据值严禁进入代码仓库) |
 | CLI 面向普通用户：start 自动安装、install 默认自启、独立启动、用途帮助与文本优先 | [CLI 产品默认值](rules/architecture.md#cli-面向普通用户的产品默认值) |
 | 产品默认推荐 KernelClient；与进程内 AgentExecutor 共用输入但生命周期不同 | [两种接入方式](rules/architecture.md#kernelclient-与-agentexecutor-的选型合同) |
-| 业务团队共同维护的 Go 工具 octo-cli、Octo API 能力与 IM 预置价值 | [octo-cli 定位](rules/architecture.md#octo-cli-的业务定位与产品价值) |
+| 业务团队共同维护的 Go 工具 octo-cli、Octo API 能力与 IM 预置价值 | [octo-cli 定位](rules/architecture.md#业务动作归-agent-tool-callcontext-约束行为) |
 | 总体协议、调用时序与审批／追问往返 | [协议与调用设计](rules/protocol-design.md) |
 | 身份、Home、profile、安装与生命周期 | [本地 Runtime](rules/runtime-lifecycle.md) |
 | 公共输入、默认值与多模态 | [InvokeInput](rules/invoke-input.md) |
@@ -44,8 +47,6 @@
 | 宿主管理支持范围、Adapter 适配转发与实际可用性 | [Adapter 责任边界](rules/adapter-metadata.md) |
 | OpenClaw profile 连接与目标 | [OpenClaw](rules/openclaw.md) |
 | 四挡 effort 与诚实回执 | [思考强度](rules/reasoning.md) |
-| 插件整体生命周期、最小公开接口、装配与资源清理 | [Extra](rules/extras.md) |
-| 渠道上下文、回执与投递 | [Channel](rules/channel-integration.md) |
 | 会话 binding、代次与 reset | [会话重置](rules/session-reset.md) |
 | 生成类型与运行时校验 | [协议 Schema](rules/protocol-schema.md) |
 | TypeScript、检查及线上联调 | [开发与验证](rules/engineering.md) |
@@ -64,9 +65,6 @@
 - [Adapter 开发](guides/adapter-authoring.md)：接口示例和验收。
 - [Provider 独立真实验收](guides/provider-live-acceptance.md)：全部 adapter 的离线门禁、显式真实入口、执行责任、重跑时机及证据格式。
 - [Provider 实现矩阵](guides/providers.md)：传输、模式及权限差异。
-- [Extra 配置与调用](guides/extra-configuration.md)：当前 CLI 路径、SDK 和本地 WebUI。
-- [Channel 逐轮加载宿主 Context](guides/channel-dynamic-contexts.md)：Agent 提示词与业务数据变化无需重载插件；说明函数注入、同 key 整项覆盖、内存边界及当前 SDK 装配缺口，对应 [SDK 指南第 7 节](../SDK_CHANNEL_GATEWAY_GUIDE.md#逐轮-context)。
-- [IM Agent 与通用 invoke 的责任边界](guides/im-agent-invocation-boundary.md)：长期 Agent 的业务策略与单次执行能力分层；固定 workdir 与 reset 是 IM 架构决策，不是每会话目录功能计划。
 - [IM 执行准备排查经验与架构视图](journal/shared/2026-10-16-im-invoke-preparation-lessons.md)：完整 Context 误入执行 resolver、Extra 重复准备、系统指令时机、在线状态与任务错误的区别；重复准备已修复，全面错误展示仍待实施，见[本轮交付](journal/shared/2026-10-17-extra-initializer-delivery.md)。
 - [本地运维](guides/operations.md)：真实状态、排障和日志。
 
@@ -182,7 +180,7 @@
 
 - [Issue 93：CLI/SDK 睡眠和网络恢复](tasks/93-sleep-wake-recovery/brief.md)：共享层恢复和有界Extra状态日志由[PR #96](https://github.com/Mininglamp-OSS/octo-runtime/pull/96)于2026-10-22合入main，含5/10/15/15秒重试和Windows测试选择。见[历史实施记录](tasks/93-sleep-wake-recovery/implementation.md)及[双模式验收](tasks/93-sleep-wake-recovery/acceptance.md)；原事故根因、reason12部署语义及真实矩阵仍待取证，后续以[93/42收敛规划](tasks/93-42-recovery-closure/brief.md)推进，不关闭P0。
 
-- [Issue 85：Adapter/Extra 解耦与双模式载入](tasks/85-provider-decoupling/brief.md)：起始基线 `origin/main@d064cfe`，交付时更新到 `main@318b0f2`，分支 `fix/85-provider-decoupling`。默认发行全量，SDK 原生 import、调用进程装配、无 manifest，CLI 内置与 Home 双清单按原始来源解析；FDE 自行复制及管理依赖。[17 项验收及边界](tasks/85-provider-decoupling/implementation.md)、[双语文档](../docs/zh-CN/concepts/module-loading.md)及[架构约束](rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)已同步。[本地审查](tasks/85-provider-decoupling/review.md)两项发现均修复复审通过；全量回归和实际 tgz 验证通过，按后续授权进入 PR 合并流程，未发布 npm。
+- [Issue 85：Adapter/Extra 解耦与双模式载入](tasks/85-provider-decoupling/brief.md)：起始基线 `origin/main@d064cfe`，交付时更新到 `main@318b0f2`，分支 `fix/85-provider-decoupling`。默认发行全量，SDK 原生 import、调用进程装配、无 manifest，CLI 内置与 Home 双清单按原始来源解析；FDE 自行复制及管理依赖。[17 项验收及边界](tasks/85-provider-decoupling/implementation.md)、[双语文档](../docs/zh-CN/concepts/module-loading.md)及[架构约束](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/.octospec/rules/architecture.md#cli-与-sdk-的-adapterextra-装配约束)已同步。[本地审查](tasks/85-provider-decoupling/review.md)两项发现均修复复审通过；全量回归和实际 tgz 验证通过，按后续授权进入 PR 合并流程，未发布 npm。
 
 - [Issue 87：Context 固定英文格式](tasks/87-english-context-framing/brief.md)：基于最新 `main@d064cfe` 独立 worktree，规划可执行性 [98 分](tasks/87-english-context-framing/assessment.md) 后实施。共享边界及标签英文，业务多语言内容和执行语义保持；Node 1439 通过/10 跳过、UI 35 通过，检查与基线 OKF 目录冲突见[交付记录](journal/shared/2026-10-21-87-english-context-framing.md)。
 
@@ -271,7 +269,7 @@
 
 - [Channel 六项决策实施与测试环境验收](journal/shared/2026-10-16-channel-features-delivery.md)：当前分支分批实现 Codex 独立图片、新会话一次历史、原生 Mention 与固定目录校验；全仓回归及 im-test 群/话题、真实 Codex 识图和客户端高亮通过，限制逐项记录。
 
-- [Channel Gateway Bot 连接状态机与断线恢复](tasks/channel-connection-state-machine/brief.md)：首次暂态失败与后续暂态断线均按 5/10/15/15… 秒等待恢复，完整上线后清错误并重置计数；缺凭据或明确终端错误停止。当前合同见 [Channel 规则](rules/channel-integration.md#容量拒收与连接恢复)；[2026-10-16 交付记录](journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)仅代表当时的实现及 im-test/CDP 验证，首次失败、退避与断开分类以当前合同为准。
+- [Channel Gateway Bot 连接状态机与断线恢复](tasks/channel-connection-state-machine/brief.md)：首次暂态失败与后续暂态断线均按 5/10/15/15… 秒等待恢复，完整上线后清错误并重置计数；缺凭据或明确终端错误停止。该版本合同见 [历史 Channel 规则](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/.octospec/rules/channel-integration.md#容量拒收与连接恢复)；[2026-10-16 交付记录](journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)仅代表当时的实现及 im-test/CDP 验证，现行渠道合同由独立 Gateway 仓库维护。
 
 - [协议责任与拒绝跨模块猜测兜底](journal/shared/2026-10-16-contract-responsibility-decision.md)：从业务与合同定位问题，在责任模块修复；发送端漏填 mention 不由接收端正文匹配补救，旧实现的兼容动机不是复制设计的理由。
 

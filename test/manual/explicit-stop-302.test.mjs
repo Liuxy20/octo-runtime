@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式手动专项：真实 Kernel/本地 IPC + fake Adapter，不加入默认测试选择器或 CI。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -155,26 +156,23 @@ for (const drop of ["request", "ack"])
         }
       });
       const input = kernelInput("wait-for-cancel");
-      const iterator = relay.client.invoke(input);
+      const iterator = invokeClient(relay.client, input);
       let accepted, observation;
       try {
         await iterator.next();
         await waitFor(() => starts === 1);
         accepted = relay.client.invocations.snapshot()[0].ref;
         let original;
-        await assert.rejects(
-          relay.client.cancelInvocation(input.invocationId, "first Stop"),
-          (error) => {
-            original = error;
-            return error.code === "OPERATION_OUTCOME_UNKNOWN";
-          }
-        );
+        await assert.rejects(relay.client.interrupt(input.invocationId, "first Stop"), (error) => {
+          original = error;
+          return error.code === "OPERATION_OUTCOME_UNKNOWN";
+        });
         assert.equal(relay.count("agent_run.cancel"), 1);
         if (drop === "request") assert.equal((await f.client.get(accepted)).terminal, undefined);
         // 第二组为新显式意图；组内并发调用只应发出一个原 RunRef 的控制请求。
         const retry = await Promise.all([
-          relay.client.cancelInvocation(input.invocationId, "second Stop"),
-          relay.client.cancelInvocation(input.invocationId, "same pending Stop")
+          relay.client.interrupt(input.invocationId, "second Stop"),
+          relay.client.interrupt(input.invocationId, "same pending Stop")
         ]);
         assert.equal(typeof retry[0].accepted, "boolean");
         if (drop === "request") assert.equal(retry[0].accepted, true);
@@ -242,16 +240,13 @@ test(
       }
     });
     const input = kernelInput("wait-for-cancel");
-    const iterator = relay.client.invoke(input);
+    const iterator = invokeClient(relay.client, input);
     let accepted, observation, draining;
     try {
       await iterator.next();
       await waitFor(() => started);
       accepted = relay.client.invocations.snapshot()[0].ref;
-      await assert.rejects(
-        relay.client.cancelInvocation(input.invocationId),
-        /OPERATION_OUTCOME_UNKNOWN/
-      );
+      await assert.rejects(relay.client.interrupt(input.invocationId), /OPERATION_OUTCOME_UNKNOWN/);
       await waitFor(() => cleaning);
       assert.equal((await f.client.get(accepted)).terminal, undefined);
       draining = relay.client.invocations.drain({
@@ -303,14 +298,14 @@ test(
       }
     });
     const input = kernelInput("complete after gate");
-    const iterator = relay.client.invoke(input);
+    const iterator = invokeClient(relay.client, input);
     let accepted, observation;
     try {
       await iterator.next();
       await waitFor(() => starts === 1);
       accepted = relay.client.invocations.snapshot()[0].ref;
       let original;
-      await assert.rejects(relay.client.cancelInvocation(input.invocationId), (error) => {
+      await assert.rejects(relay.client.interrupt(input.invocationId), (error) => {
         original = error;
         return error.code === "OPERATION_OUTCOME_UNKNOWN";
       });
@@ -318,7 +313,7 @@ test(
       await waitFor(
         async () => (await f.client.get(accepted)).terminal?.control.state === "completed"
       );
-      assert.deepEqual(await relay.client.cancelInvocation(input.invocationId), {
+      assert.deepEqual(await relay.client.interrupt(input.invocationId), {
         accepted: false
       });
       observation = observe(iterator);

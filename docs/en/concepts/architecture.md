@@ -1,124 +1,26 @@
 # Architecture
 
-[简体中文](../../zh-CN/concepts/architecture.md) | [Documentation](../README.md)
+[简体中文](../../zh-CN/concepts/architecture.md)
 
-Octo Runtime gives applications a common interface to Agent execution programs such as Codex and Claude Code. This guide calls those programs **Providers** and the integrating application the **host application**. Each Provider has an **Adapter** that translates inputs, outputs, and control messages.
-
-Applications normally invoke `KernelClient.invoke`. Kernel receives the request through local RPC, drives its in-process AgentExecutor, and returns output to the client. This guide calls one execution a Run. The application handles output and interactions, Kernel owns admission and execution lifecycle, and KernelClient handles output subscriptions and reconnection.
-
-The root [architecture document](../../../ARCHITECTURE.md) explains the motivation: IM integrations, desktop applications, and task systems can share execution capabilities instead of each implementing Provider integration.
-
-Kernel currently provides local inter-process communication (IPC). Optional Extras connect business entry points such as IM. Cloud device registration, remote addressing, and cross-device conversation routing in the root document remain design goals, outside the current public Kernel API.
+Runtime provides general execution; applications own business data and lifecycle.
 
 ```mermaid
 flowchart TB
-  Host[Host application or CLI] --> SDK[Host SDK]
-  SDK -->|construct in calling process| Kernel[Executor Kernel service]
-  SDK -->|construct independently| Extra[Optional Extra service]
-  Business[Business code] --> Client[KernelClient.invoke]
-  Extra --> Client
-  Client -->|local IPC| Kernel
-  Kernel --> Core[AgentExecutor in host process]
+  App[Application / Independent Gateway] --> Client[octo-runtime-client]
+  Client --> Kernel[Executor Kernel]
+  Kernel --> Core[AgentExecutor]
   Core --> Adapter[Provider Adapter]
-  Adapter --> Provider[Provider CLI / server]
 ```
 
-`createKernelService` creates the Kernel service and IPC endpoint in the calling process. AgentExecutor and host-injected Adapter objects share the Kernel host process. A native application can create Kernel in its main process without separately running the Runtime CLI and use `kernel.client`. An independent application in another process uses `attachKernel({ endpoint })` to connect to an existing Kernel.
+Gateway is an independent repository and owns configuration, authorization, contexts, sessions and delivery. Closing a registration leaves the shared Kernel running.
 
-The CLI stores a device instance's identity and configuration in its Home directory. The workdir is the Agent's working directory and has a different purpose. SDK applications choose their own configuration and state locations.
+Execution event envelopes retain their format. Gateway/applications prepare business inputs; agentEnv contains execution configuration only.
 
-## Responsibilities
 
-Adapter and Extra selection belongs to the integration entry point. SDK hosts use native imports and composition without a manifest; the CLI's unified manifests contain both adapters and extras, with a built-in catalog and a Runtime Home extension. The default distribution keeps the full catalog. See [Adapter and Extra Loading](module-loading.md) for constraints, resolution anchors, and verification scope.
+## Execution Configuration and Session Identity
 
-| Component        | Owns                                                                                                   | Does not own                                           |
-| ---------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| Host application | Install/authenticate Providers, supply configuration, history and databases, start and close services  | Translate Provider protocols                           |
-| Host SDK         | Create Kernel and Extra services, supply dependencies, report initialization and cleanup results       | Manage application database schemas or migrations      |
-| Executor Kernel  | Expose IPC, own Core execution and Run lifecycle, retain output for reading after a disconnect                            | Store business history or automatically rerun requests |
-| AgentExecutor    | Prepare input, drive an execution, handle interactions, cancellation and final status                  | Retrieve business background or install Providers      |
-| Provider Adapter | Convert Runtime settings to Provider configuration, handle native output, clean up execution resources | Decide business permissions or fill in chat history    |
-| Extra            | Receive business requests, load Context, invoke Kernel, deliver results to business systems            | Close a shared Kernel or another module's invocations  |
+agentEnv is snapshotted per invocation, not required to remain equal across a session. Runtime does not fingerprint it for cross-run equality. Applications may explicitly select new effort, environment variables, MCP settings, permissions or a workdir for the next run; execution validation and Provider configuration/resume limitations still apply.
 
-Local SDK invocation can use Kernel alone, without an Extra, cloud login, or IM connection. `octo-runtime` is the CLI for starting and managing Runtime. `octo-cli` is a separate business API tool; install and configure its credentials separately if the Agent needs to call it.
+An answer to an active async question targets the original run; new configuration cannot redirect it. After confirmed normal completion, Gateway/the host decides whether to continue and which agentEnv to use. Hosts choosing AsyncQuestionReply authorize that next run through the continuation callback; the SDK does not decide whether global “current configuration” is appropriate for an old question.
 
-Provider harness login, authorization, and credential preparation belong to the user, host application, and harness. Runtime passes the ordinary execution environment and performs required protocol handshakes, including ACP authentication using supported methods advertised by the harness. It does not inspect Provider-specific authentication environment variables or credential files, infer login state from a missing variable, or log in and refresh credentials on the user's behalf. The harness resolves its own credential sources and reports whether authentication succeeds; Runtime reports real failures. This does not change Runtime's own security or an Extra's explicit business credential contract.
-
-## Model Catalog and Selection Ownership
-
-The host can query and pass business data such as model catalogs directly, or let Extra call a function injected through `dependencies`. Neither path involves Kernel. Extra is optional, and the Provider does not need a dependency extension mechanism. See the [Extra guide](../guides/extras.md).
-
-The Provider and its actual backend define the model catalog. The integrating host chooses catalog sources and manages presentation. Runtime forwards explicit model selections under the execution contract, performs native adaptation, and returns actual results; it does not provide a unified model or effort catalog service.
-
-For example, the same Codex harness and Adapter may connect to an official service, a third-party proxy, or a custom endpoint. Backends and accounts may differ in model IDs, aliases, defaults, and reasoning options. Compatibility with an execution protocol does not guarantee a model enumeration API, and an official catalog does not describe every proxy. CLI identity, version, and Adapter availability cannot establish the model set.
-
-| Owner                               | Responsibility                                                                                                                                                  |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Provider / service or proxy backend | Native model identifiers, any query API and its semantics, actual acceptance or rejection during execution                                                      |
-| Integrating host                    | Endpoint and account configuration; choosing backend queries, administrator configuration, or user input as option sources; refresh, failures, and presentation |
-| Runtime / Adapter                   | Native mapping of explicit execution inputs, required protocol validation, and result reporting                                                                 |
-
-Without a reliable catalog, the host can allow manual entry, offer only the Provider default, or report that the catalog is unavailable. Runtime must not fill the gap with static lists, private credential scans, additional login, or discovery sessions. An unavailable catalog does not by itself prevent execution with an explicit model.
-
-Native protocol requirements still apply. For example, CodeBuddy requires selection and confirmation against the catalog advertised within an execution session; the Adapter must preserve those steps. Session validation does not establish a public catalog service. Omitting a model keeps existing default semantics, and effort follows existing mappings and actual application reporting. A catalog entry does not guarantee account access.
-
-[Issue 193](https://github.com/Mininglamp-OSS/octo-runtime/issues/193) illustrates the boundary: a client needs a model selector, but that does not make the execution infrastructure responsible for producing a model catalog. A new query API in one Provider does not automatically change this ownership. See the [Octospec architecture rule](../../../.octospec/rules/architecture.md) and the [Kernel IPC catalog boundary](../reference/kernel-ipc.md).
-
-## Channel Context and History
-
-Channel Gateway owns IM Context preparation: stable rules, current-message facts, and history retrieval. Host SDK, Kernel, Core, the renderer, and Provider Adapters consume the supplied input without choosing or deduplicating business history. This boundary is shared by OpenClaw, Codex, and Claude Code.
-
-Stable mention, artifact-format, and history-reading guidance is supplied on turn 1 and every N turns (`stable_context_refresh_interval_turns`, default 30). Reset/new restarts the count, and a new Provider session receives the full rules. The separate `message-trigger` describes each incoming message. Group/topic rules follow their scope and version; cleared rules explicitly say `NO RULES`. Periodic refresh does not guarantee retention between refreshes or monitor model compaction.
-
-Automatic history selects at most the latest **20 messages** before the trigger in the same conversation, presented oldest first. The **complete serialized `messages` array is limited to 8,000 Unicode code points**, including identity, timestamps, JSON structure, and escaping. This is a total array budget. Cold-start and gap preparation share one bounded read per turn; primary history and fresh-fallback supplements share the same window and budget.
-
-Own Bot messages remain in first-turn, reset, recovery, and uncertain-continuity history. During verified continuation, Gateway may omit specific successfully delivered outputs already covered by the same Provider session's assistant history, using completion, ownership, delivery-position, and content-fingerprint evidence. A fresh fallback restores those messages from the frozen window in the same invocation. There is no general UID/text/URL deduplication, removal inside quotes or forwards, or filtering of explicit host Context.
-
-See [session preparation](../guides/context-and-sessions.md) and the authoritative [architecture constraints](../../../.octospec/rules/architecture.md).
-
-## Invocation Sequence
-
-```mermaid
-sequenceDiagram
-  participant App as Business code
-  participant Client as KernelClient
-  participant Kernel
-  participant Core as AgentExecutor
-  participant Provider
-  App->>Client: consume invoke(input)
-  Client->>Kernel: submit once
-  Kernel->>Core: validate and start invocation
-  Core-->>Kernel: execution identifiers
-  Kernel-->>Client: submission receipt
-  Kernel->>Core: keep reading execution output
-  Core->>Provider: execute this turn
-  Client->>Kernel: subscribe using receipt
-  Provider-->>Core: output / interactions / outcome
-  Core-->>Kernel: output frames and final status
-  Kernel-->>Client: retained output in order
-  Client-->>App: events in selected format
-```
-
-A submission receipt confirms that the request was received; read the output stream for its result. A submitted execution continues if the client disconnects. On reconnection, the client queries that execution and reads output still retained by Kernel, without invoking again. Host loss reports an unknown outcome; rebuilding the service does not replay old requests.
-
-## Native Composition and Unified RPC
-
-Electron imports and constructs Adapter objects in its main process. CLI owns manifest reading, resolution, imports, and factory calls. Both pass actual objects to `createKernelService({ home, endpoint, adapters })`, await initialization, and execute through `kernel.client`. Kernel never loads product modules or accepts a module manifest, module path, or execution-worker entrypoint.
-
-`endpoint` is a local communication address; Home is a host-owned configuration directory. `componentEndpoint(home)` only derives an address. Even same-process calls follow `KernelClient -> RPC -> Kernel -> AgentExecutor -> Adapter`. Object injection is composition; RPC carries invocation data rather than methods or closures.
-
-Kernel preserves admission, identity checks, bounded replay, interactions, cancellation, and cleanup. Ending observation does not cancel execution. Lost ACKs are resolved by querying the original identity, never by repeating invocation. Direct Core is a low-level implementation/testing API, not an alternative standard Electron/CLI integration.
-
-## Failure Boundaries and Shutdown
-
-Kernel, Core, and Adapters share the host event loop. RPC does not isolate crashes. Execution-worker heartbeat, restart, and generation state have been removed. Adapters can still launch and reclaim Provider subprocesses. A crashed or OOM-killed host cannot continue serving; reconstruction creates a new `kernel_instance_id` without replaying old Runs.
-
-Await initialization before serving business calls. Stop admission, close owned Extras, and drain business delivery before closing Kernel. Kernel cancels Core, waits for Adapter cleanup, and releases its endpoint under one five-second deadline. `complete=false` preserves unconfirmed cleanup; terminal outcome, cancellation ACK, and resource release are separate facts. In-process blocking code cannot be forcibly killed; deadlines require a schedulable event loop.
-
-## Access Permissions
-
-Local IPC trusts clients under the same operating-system account. POSIX socket permissions are `0600`. Applications accepting remote business requests must authenticate users and check resource permissions. A workdir is only a working directory; it does not restrict the Provider's access to other files or the network.
-
-On Windows, some descendant processes may become untrackable after their parent exits or the application is forcibly terminated. Account for this platform limit when interpreting cleanup results.
-
-Implementation: [service](../../../packages/octo-runtime-executor-kernel/src/service.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts), [Core](../../../packages/octo-runtime-executor-core/src/index.ts), [Extra service](../../../packages/octo-runtime-host-sdk/src/extra-service.ts).
+providerEpoch is an optional application binding version, not an agentEnv edit counter. When used, increment it on binding replacement and save the original value with the question snapshot. Otherwise, the host must invalidate forms belonging to a replaced binding itself. Never pass an old providerSession to another Adapter, account or server that does not share that session identity. SDK checks cover explicit identities/generations, not hidden configuration changes. See [continuation configuration](../reference/output-and-control.md) and [identifiers](identifiers.md).

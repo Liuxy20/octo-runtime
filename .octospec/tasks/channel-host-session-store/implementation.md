@@ -17,7 +17,7 @@ tags: [extra, lifecycle, channel, session, storage, testing]
 
 ## 功能验收证据
 
-新增 [gateway-host-session-store.test.js](../../../test/gateway-host-session-store.test.js)，结合现有 Gateway/Kernel/Extra 回归。下表“库内通过”仅指相应合同的自动化/静态证据，不代替宿主真实存储或 Provider。
+新增 [gateway-host-session-store.test.js](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/gateway-host-session-store.test.js)，结合现有 Gateway/Kernel/Extra 回归。下表“库内通过”仅指相应合同的自动化/静态证据，不代替宿主真实存储或 Provider。
 
 | 验收项 | 结果与证据 |
 | --- | --- |
@@ -49,7 +49,7 @@ tags: [extra, lifecycle, channel, session, storage, testing]
 | D01 | 概念说明和两篇 SDK 指南已说明 binding/准备游标/occurrence/reset 去重、默认内存、持久恢复收益及 Provider/Run 限制。 |
 | D02 | 接口中文注释及 SDK 方法表覆盖所有必需/可选方法、未命中、同步/异步、原子性、代次、错误与关闭所有权。 |
 | D03 | 业务入口和泛型依赖边界有公共导入示例、加载链和包外编译证据，store 无需注册独立 Extra。 |
-| D04 | [完整存储样例](../../../test-support/public-extra/gateway-store.mts)与既有 host/worker 启动代码由实际发行 verifier 编译并运行，未引入 SQLite。 |
+| D04 | [完整存储样例](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/gateway-store.mts)与既有 host/worker 启动代码由实际发行 verifier 编译并运行，未引入 SQLite。 |
 | D05 | SQLite 明确归宿主实现，指南列出同步合同、可信 scope、事务、保留和共享连接责任；不提供 Runtime 数据库适配。 |
 | D06 | SDK 节选包含初始化错误后的 close、Bot errors 状态检查和完整关闭要求；库内测试验证尾写/展示/最终回复/句柄释放顺序及 incomplete。 |
 | D07 | 文档规定首次/已有 submodule 跟踪最新 main、记录 SHA/lockfile，并说明源码包名与发行入口。合入后实际 main 可用性和宿主升级由用户验收。 |

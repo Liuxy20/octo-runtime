@@ -1,6 +1,6 @@
 # Executor Kernel
 
-Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package retains compatible client exports and uses that same implementation. The full published Runtime bundles client/protocol internally; constructing Kernel/Extra services still requires the full SDK. Separate installed distributions may have different error/function identities even at matching versions.
+Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package retains compatible client exports and uses that same implementation. The full published Runtime bundles client/protocol internally; constructing Kernel services still requires the full SDK. Separate installed distributions may have different error/function identities even at matching versions.
 
 [简体中文](README.zh.md) | [Package index](../README.md)
 
@@ -29,7 +29,7 @@ const kernel = createKernelService({
   adapterConfigurations: { dsh: { providerOptions: { dshBin: "/absolute/dsh/lib/bin.js" } } }
 });
 await kernel.initialize();
-// 使用 kernel.client.invoke，消费到终态；退出先排空 Extra 和业务尾流，再关闭服务。
+// 使用 kernel.client.invoke，消费到终态；退出先排空 business consumer 和业务尾流，再关闭服务。
 const cleanup = await kernel.close();
 if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 ```
@@ -38,12 +38,12 @@ Construction performs no I/O. The selection array is copied while Adapter identi
 
 ## Responsibilities
 
-| Case | Host owns | Kernel owns |
-| --- | --- | --- |
-| Electron | Main-process imports/factories, endpoint, Extras, exit coordination | Registration, RPC, admission, execution lifecycle |
-| CLI | Manifest reading/merging, module resolution/imports/factories, OpenClaw preparation | The same service factory using actual objects |
-| Independent cross-process application (including CLI clients) | attachKernel, its client, and its own Runs; native SDK hosts use kernel.client | Shared service and original execution |
-| Provider subprocess | Adapter native launch/control/cleanup | Core invocation and truthful cleanup reporting |
+| Case                                                          | Host owns                                                                           | Kernel owns                                       |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Electron                                                      | Main-process imports/factories, endpoint, applications, exit coordination           | Registration, RPC, admission, execution lifecycle |
+| CLI                                                           | Manifest reading/merging, module resolution/imports/factories, OpenClaw preparation | The same service factory using actual objects     |
+| Independent cross-process application (including CLI clients) | attachKernel, its client, and its own Runs; native SDK hosts use kernel.client      | Shared service and original execution             |
+| Provider subprocess                                           | Adapter native launch/control/cleanup                                               | Core invocation and truthful cleanup reporting    |
 
 Kernel accepts no workerEntrypoint, adapterModules, manifest, or subprocess env. It launches no execution workers and provides no worker heartbeat/restart. Status contains ipc_version, kernel_instance_id, host pid, and execution_ready without worker state. Configure logs explicitly with logging.directory; SDK does not read CLI log environment variables.
 
@@ -59,7 +59,7 @@ The standard path is `KernelClient -> local RPC -> Kernel/HostRunService -> Agen
 
 ## Lifecycle and Failure Boundaries
 
-Await initialize before accessing client. close is idempotent; closed resolves to the same cleanup result. Close owned Extras and drain business delivery/storage before Kernel. Attached clients do not own the service.
+Await initialize before accessing client. close is idempotent; closed resolves to the same cleanup result. Close owned applications and drain business delivery/storage before Kernel. Attached clients do not own the service.
 
 Shutdown stops admission and closes connections, then cancels Core, awaits Adapter cleanup, and releases Run/log/endpoint resources under one five-second deadline. An Adapter next rejection may originate in finally, so it cannot prove cleanup. complete=false retains failure and endpoint ownership evidence. stateDirectory selects the recovery-record directory; POSIX defaults to endpoint + .runs. Windows needs an explicit directory to retain this record.
 

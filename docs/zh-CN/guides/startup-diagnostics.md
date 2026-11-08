@@ -41,11 +41,11 @@ typed context 只包含已观测事实：`path`、`resource`、`operation`、`co
 
 `HOME_UNAVAILABLE` 继续为旧消费方保留目录说明。#306 退役 SDK 隐式 Home 选择，不能要求 SDK 用户补 LOCALAPPDATA。SDK 宿主显式提供已经存在的有效绝对 Home；CLI 准备自己选择的根目录，默认 `~/.octo-runtime`，显式 `--home` 优先。已有数据不自动移动。已整合 #306（#310）与 #303（#311）；POSIX Kernel 使用 Home 下直接 socket，没有旧端点迁移或双所有者检测层。
 
-#306 的 RuntimeHomeError.diagnostic 平铺路径属性继续支持读取；标准 JSON 使用 context.path/resource/operation 和 actions。CLI error.startup 与可选 error.cleanup 继续从共享结构生成，新调用方使用 error.diagnostic。两项窄映射纠正资源归属：插件自身的文件错误保留实际 errno，不再误归 HOME_*；Kernel 日志选项先做纯配置校验，返回 LOG_DIRECTORY_MUST_BE_ABSOLUTE 或 LOG_STATUS_OUTPUT_INVALID（此前相对日志目录可能呈现 HOME_INVALID）。外层 SERVICE_INITIALIZATION_FAILED 与 CLI 退出码选择保持不变。
+#306 的 RuntimeHomeError.diagnostic 平铺路径属性继续支持读取；标准 JSON 使用 context.path/resource/operation 和 actions。CLI error.startup 与可选 error.cleanup 继续作为兼容投影，新调用方使用 error.diagnostic。Kernel 日志目录非法时，在 Home 路径预算校验前返回 LOG_DIRECTORY_MUST_BE_ABSOLUTE；外层 SERVICE_INITIALIZATION_FAILED 与 CLI 退出码选择保持不变。
 
 ## 就绪与安全排障
 
-进程存活、服务 phase、Kernel `execution_ready`、Extra 自身业务连通性分别描述。Extra 可以 ready，同时报告 Kernel 不可用或业务未连通；诊断不改变这种行为。Provider probe 通过不证明登录或模型可用。本地诊断不增加云端登录、LLM 或网络前置条件。
+进程存活、服务 phase、Kernel `execution_ready` 和应用业务连通性是不同事实。应用须分别检查 Kernel 就绪与自身业务连接。Provider probe 通过不证明登录或模型可用；本地诊断不增加云端登录、LLM 或网络前置条件。
 
 cause 遍历最多 16 个对象、六层，支持聚合与循环；主失败优先，清理错误和 pending 资源继续保留。禁止投影原始异常正文/stack、全量环境、配置、stderr、凭据或任意属性。动态值经同一确定性安全格式化进入文本和 JSON，去除控制字符、URL 认证/query/fragment 及可识别敏感赋值。对不可信序列化结构先调用 `restoreStartupDiagnostic`，文案/建议从共享 catalog 重建，不信任记录里的解释。
 
@@ -61,7 +61,6 @@ CLI 在 `<home>/logs/startup-<component>.json` 保存每组件一份有界安全
 | --- | --- | --- | --- |
 | `STARTUP_UNKNOWN` | 启动根因未知 | Inspect the component configuration and controlled lifecycle logs in the host. Capture the diagnostic codes and safe resource context before retrying; the cause is not yet known. | 先由用户处理 |
 | `LOG_DIRECTORY_MUST_BE_ABSOLUTE` | logging.directory 必须是绝对路径 | Pass an absolute directory in logging.directory, then retry startup through the host. | 先由用户处理 |
-| `LOG_STATUS_OUTPUT_INVALID` | logging.statusOutput 回调无效 | Provide a function in logging.statusOutput or omit that optional callback, then retry construction. | 先由用户处理 |
 | `SERVICE_INITIALIZATION_FAILED` | 组件初始化失败 | Inspect the component configuration and controlled lifecycle logs in the host. Capture the diagnostic codes and safe resource context before retrying; the cause is not yet known. | 先由用户处理 |
 | `KERNEL_START_CLEANUP_INCOMPLETE` | Kernel 启动回滚未完成 | Inspect the endpoint owner and component status. Stop the owning service through its host before retrying; do not remove an active endpoint or ownership record. | 先由用户处理 |
 | `KERNEL_CLEANUP_INCOMPLETE` | Kernel 资源尚未全部释放 | Inspect the endpoint owner and component status. Stop the owning service through its host before retrying; do not remove an active endpoint or ownership record. | 先由用户处理 |
@@ -86,7 +85,6 @@ CLI 在 `<home>/logs/startup-<component>.json` 保存每组件一份有界安全
 | `ENOENT` | 所需启动资源未找到；spawn 还需核对 cwd | Correct the reported resource selection or prepare the required dependency, then retry. | 先由用户处理 |
 | `ENOTDIR` | 所需目录的资源类型错误 | Correct the reported directory path to an existing directory, then retry. | 先由用户处理 |
 | `EISDIR` | 所需文件实际是目录 | Correct the selected file path to the intended regular file, then retry. | 先由用户处理 |
-| `IM_CONTEXT_LOADING_CONFIG_INVALID` | Extra 的 context_loading 配置无效 | Set context_loading.timeout_ms to an integer from 1 to 30000 and max_in_flight to an integer from 1 to 32; remove unsupported keys, then retry Extra initialization. | 先由用户处理 |
 | `EACCES` | 启动操作访问被拒绝 | Check the host account's permissions for the reported resource and operation, then retry. | 先由用户处理 |
 | `EPERM` | 操作系统拒绝启动操作 | Check the host account's permissions and the reported resource, then retry. | 先由用户处理 |
 | `EROFS` | 启动操作需要可写文件系统 | Use an accessible writable resource for the reported operation, then retry. | 先由用户处理 |
@@ -97,20 +95,10 @@ CLI 在 `<home>/logs/startup-<component>.json` 保存每组件一份有界安全
 | `KERNEL_CONFIGURATION_INVALID` | Kernel 构造输入无效 | Pass endpoint and an adapters array to createKernelService. Compose Adapter objects in the host; retired worker/manifest/env options are unsupported. | 先由用户处理 |
 | `ERR_MODULE_NOT_FOUND` | 所选模块或其依赖未找到 | Check the selected module and its installed dependency graph in the host; correct the declaration or install the required package, then retry. | 先由用户处理 |
 | `MODULE_NOT_FOUND` | 所选模块或其依赖未找到 | Check the selected module and its installed dependency graph in the host; correct the declaration or install the required package, then retry. | 先由用户处理 |
-| `EXTRA_MODULE_REQUIRED` | 缺少 Extra 模块选择 | Supply the module field in the host's Extra declaration before loading it. | 先由用户处理 |
-| `EXTRA_CONFIG_OBJECT_REQUIRED` | Extra config 必须是对象 | Provide a JSON object in the Extra config field, then retry initialization. | 先由用户处理 |
-| `EXTRA_CONFIG_JSON_REQUIRED` | Extra config 含非 JSON 值 | Pass only finite JSON values in config; supply functions separately through dependencies. | 先由用户处理 |
-| `EXTRA_CONFIG_PERMISSIONS_INVALID` | Extra 配置文件未通过文件/访问检查 | Inspect the reported configuration file's type, identity and permissions under the host account; use a protected regular file, then retry. | 先由用户处理 |
-| `MANIFEST_INVALID` | CLI 模块清单无效 | Check the selected manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys. | 先由用户处理 |
-| `EXTRA_NOT_REGISTERED` | Extra 缺少已保存的 CLI 声明 | Save this component's declaration with its configure or extraset command, then start it. | 先由用户处理 |
-| `EXTRA_MODULE_LOAD_FAILED` | 无法载入所选 Extra 模块 | Check the selected module, package installation and ESM exports; correct the declaration or reinstall the dependency, then retry. | 先由用户处理 |
-| `EXTRA_INITIALIZER_REQUIRED` | Extra 未返回初始化函数 | Provide an Extra factory that synchronously returns its initialization function. | 先由用户处理 |
-| `EXTRA_NAME_MISMATCH` | Extra 模块名与声明不一致 | Make the selected module's exported name match its catalog entry. | 先由用户处理 |
-| `EXTRA_ALREADY_LOADED` | Extra 已有活跃所有者 | Close the existing Extra through its host before constructing another instance. | 先由用户处理 |
-| `EXTRA_DISPOSE_FAILED` | 前一 Extra 仍有未确认资源 | Inspect the previous cleanup result and pending resources. Complete the owning host's cleanup before retrying. | 先由用户处理 |
+| `MANIFEST_INVALID` | CLI 模块清单无效 | Check the selected manifest.json: version must be 1 and adapters must be valid arrays without duplicate keys. | 先由用户处理 |
 | `LOCAL_STATE_INVALID` | 无法读取本地状态 | Inspect the reported file and system cause. Preserve existing identities and configuration; correct the file or access through the host. | 先由用户处理 |
 | `WRITE_FAILED` | 本地状态写入失败 | Inspect the reported path, operation and system cause; correct access before retrying the host operation. | 先由用户处理 |
-| `COMPONENT_UNAVAILABLE` | 组件未就绪 | Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness or Extra business connectivity. | 等待/重试可能有用 |
+| `COMPONENT_UNAVAILABLE` | 组件未就绪 | Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness or application connectivity. | 等待/重试可能有用 |
 | `SERVICE_PROCESS_EXITED` | 服务进程意外退出 | Inspect this startup attempt's controlled diagnostic and lifecycle logs before restarting. | 先由用户处理 |
 | `SERVICE_NOT_INSTALLED` | 组件服务未安装 | Run this component's install command, then start it. | 先由用户处理 |
 | `NOT_INSTALLED` | 组件服务未安装 | Run this component's install command, then start it. | 先由用户处理 |

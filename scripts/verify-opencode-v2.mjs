@@ -47,38 +47,41 @@ async function run(
       invocationId,
       protocol_mode: "canonical",
       workdir,
-      agentConfig: { model: selectedModel, ...(effort ? { effort } : {}) },
-      controlInstructions:
-        "This is a controlled Runtime verification. Follow the exact requested tool operation and output. Never inspect credentials or unrelated files.",
+
       ...(providerSession ? { providerSession } : {}),
       inputs: [{ type: "text", text }],
-      contexts: {
-        schema: "octo.context-envelope/v3",
-        items: [
-          { namespace: "octo.execution", name: "adapter", payload: { type: "opencode" } },
-          { namespace: "octo.security", name: "approval_policy", payload: { mode } },
-          ...(mcp
-            ? [{ namespace: "octo.execution", name: "mcp", payload: { mcpServers: mcp } }]
-            : []),
-          {
-            namespace: "octo.execution",
-            name: "envs",
-            payload: {
-              env_variables: [
-                { key: "OCTO_E2E_VALUE", value: "OPENCODE_ENV_OK" },
-                {
-                  key: "OPENCODE_CONFIG_CONTENT",
-                  value: invalidConfig
-                    ? "{"
-                    : JSON.stringify({
-                        permissions: [{ action: "*", resource: "*", effect: "ask" }],
-                        ...config
-                      })
-                }
-              ]
+      agentEnv: {
+        ...{
+          schema: "octo.context-envelope/v3",
+          items: [
+            { namespace: "octo.execution", name: "adapter", payload: { type: "opencode" } },
+            { namespace: "octo.security", name: "approval_policy", payload: { mode } },
+            ...(mcp
+              ? [{ namespace: "octo.execution", name: "mcp", payload: { mcpServers: mcp } }]
+              : []),
+            {
+              namespace: "octo.execution",
+              name: "envs",
+              payload: {
+                env_variables: [
+                  { key: "OCTO_E2E_VALUE", value: "OPENCODE_ENV_OK" },
+                  {
+                    key: "OPENCODE_CONFIG_CONTENT",
+                    value: invalidConfig
+                      ? "{"
+                      : JSON.stringify({
+                          permissions: [{ action: "*", resource: "*", effect: "ask" }],
+                          ...config
+                        })
+                  }
+                ]
+              }
             }
-          }
-        ]
+          ]
+        },
+        agentConfig: { model: selectedModel, ...(effort ? { effort } : {}) },
+        controlInstructions:
+          "This is a controlled Runtime verification. Follow the exact requested tool operation and output. Never inspect credentials or unrelated files."
       }
     })) {
       events.push(event);

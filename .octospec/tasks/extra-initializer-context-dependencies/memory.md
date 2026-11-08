@@ -100,6 +100,6 @@ load 操作上限需在复制配置和创建长 Promise 链之前判断。卸载
 
 堆验证在独立 Node 子进程用 `--expose-gc` 执行，预热前 1,000 轮，再比较第 10,000 轮清空测试采集器并 GC 后的 heapUsed。推荐沿用现有 session 调度测试的增量小于 8 MiB 门槛，并加入动态 Context 场景；此为自动化验收阈值，不是进程最大内存承诺。热重载做同类重复采样，记录 heapUsed、external、arrayBuffers 和 RSS。
 
-先以结构断言为准，堆增量超过阈值时取多轮采样和 heap snapshot 定位引用；不得通过无限放宽阈值掩盖线性增长。RSS 可能受 allocator、Provider 和原生库影响，不以单次 RSS 未下降证明 JS 泄漏。现有测试入口：[session 调度回归](../../../test/im-session-scheduling.test.js)、[Extra 生命周期](../../../test/extras.test.js)、[Channel 清理](../../../test/im-extra-disposal.test.js)。
+先以结构断言为准，堆增量超过阈值时取多轮采样和 heap snapshot 定位引用；不得通过无限放宽阈值掩盖线性增长。RSS 可能受 allocator、Provider 和原生库影响，不以单次 RSS 未下降证明 JS 泄漏。现有测试入口：[session 调度回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-session-scheduling.test.js)、[Extra 生命周期](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/extras.test.js)、[Channel 清理](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-extra-disposal.test.js)。
 
 自动化使用 fake Provider 与受控 IO。真实联调在 im-test 验证动态内容、超时展示、取消和重载，不在共享测试环境压入 10,000 次真实模型调用。最终记录实际堆数据、构建版本及未覆盖的外部回调类型，不能只写“函数式所以安全”。

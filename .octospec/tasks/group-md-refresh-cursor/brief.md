@@ -41,10 +41,10 @@ timestamp: 2026-10-20T00:00:00Z
 | 服务端 Bot 编辑 | `modules/bot_api/groups.go:211`、`:822` 使用同类保存和广播路径 | 修复不能只覆盖用户端编辑 |
 | 删除与版本 | `modules/group/api.go:4429`、`modules/group/db.go:932`、`:956` 删除时递增版本，广播 `group_md_deleted`；清空正文也属于一次更新 | 空内容或删除必须撤销旧规则 |
 | 话题通知 | `modules/thread/api.go:867`、`modules/bot_api/threads.go:375` 产生 `thread_md_updated/deleted`，使用同类文本及点名载体 | 同一事件分类需要覆盖话题规则 |
-| Gateway 接收 | [wukong.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 保留完整 payload，非自身消息进入普通 `onMessage` | `event` 未在 WS 解码时丢失；自身发出的更新通知存在不同接收路径 |
-| Gateway 准入 | [normalize.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 按文本类型、发送者、群范围和真实 mention 判断，未识别规则事件；[channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 随即调用任务入口 | 更新者满足发送者白名单时，广播具备普通任务准入条件；并非无条件触发所有 Bot |
-| 当前规则准备 | [contexts.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) 每轮读取并加入 `extra.im/group-rules`，话题还加入 `topic-rules`，携带 version | 不能把问题描述成“当前只在首轮读取规则”；目标是增加版本意识及选择性注入 |
-| 当前会话状态 | [session-store.ts](../../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 有 binding、generation、初始化标记和聊天 gap，无规则版本游标 | 现有聊天位置不能代替规则刷新进度 |
+| Gateway 接收 | [wukong.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 保留完整 payload，非自身消息进入普通 `onMessage` | `event` 未在 WS 解码时丢失；自身发出的更新通知存在不同接收路径 |
+| Gateway 准入 | [normalize.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 按文本类型、发送者、群范围和真实 mention 判断，未识别规则事件；[channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 随即调用任务入口 | 更新者满足发送者白名单时，广播具备普通任务准入条件；并非无条件触发所有 Bot |
+| 当前规则准备 | [contexts.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) 每轮读取并加入 `extra.im/group-rules`，话题还加入 `topic-rules`，携带 version | 不能把问题描述成“当前只在首轮读取规则”；目标是增加版本意识及选择性注入 |
+| 当前会话状态 | [session-store.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 有 binding、generation、初始化标记和聊天 gap，无规则版本游标 | 现有聊天位置不能代替规则刷新进度 |
 
 服务端来源为本地干净 checkout `Mininglamp-OSS/octo-server@5cf83f5725a6ce71f4944a9ce1a17038268375cf`，未在本次更新其分支。`common.Text = 1` 在本地 `octo-lib/common/msg.go:19` 核对。服务端版本、事件可信来源、实际广播覆盖及 Provider 续聊应用效果仍须后续联验。
 

@@ -57,7 +57,7 @@ try {
                 text: "This is an execution protocol test. Reply exactly MODE_PASS. Do not use any tools, create a plan file, change files, or run commands."
               }
             ],
-            contexts: {
+            agentEnv: {
               schema: "octo.context-envelope/v3",
               items: [
                 { namespace: "octo.execution", name: "adapter", payload: { type } },

@@ -18,39 +18,14 @@ For an international account, use `mcode login --region global`. Make sure the b
 mcode --version
 ```
 
-## Channel Gateway Configuration
+## Channel Integration
 
-Replace the API URL, Bot ID, token, and working directory, then run in Bash / Zsh. Retain existing Bots in the `bots` list: this command replaces the entire declaration. Channel Gateway defaults to `full_access`; no approval setting is needed.
-
-```bash
-octo-runtime channel-gateway extraset <<< '{
-  "module": "@mininglamp-oss/octo-runtime-extra-channel-gateway",
-  "enabled": true,
-  "config": {
-    "bots": [
-      {
-        "api_url": "https://im.example.com/api",
-        "bot_id": "<BOT_ID>",
-        "bot_name": "local-assistant",
-        "bf_token": "<BOT_TOKEN>",
-        "adapter": {
-          "adapter_type": "mcode",
-          "workdir": "/absolute/workspace"
-        }
-      }
-    ]
-  }
-}'
-```
-
-> **Optional parameters:** `bot_name` is the Bot display name. Configure the model in MiniMax Code. The current integration advertises no per-session model selection, so the example omits `model`. The Adapter does not apply explicit `effort`. Omit both to retain the Harness's own settings.
+[octo-channel-gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) provides channel configuration and registration in its independent repository.
 
 ## Startup and Proxies
 
-For a new installation, run `octo-runtime executor-kernel start`, then `octo-runtime channel-gateway start`. For an existing Gateway, run `octo-runtime channel-gateway restart` after saving. Pass the same `--home` when using a custom Home.
+Start Runtime with `octo-runtime executor-kernel start`, then use [SDK integration](../../getting-started/sdk.md) to invoke the `mcode` Adapter. MiniMax Code owns model selection; Runtime does not send a per-session model setter.
 
-For a Bot-specific proxy, use the [complete proxy Context example](channel-gateway.md), changing the adapter type to `mcode` and removing `adapter.model` and `adapter.effort` to match this page. Verify that the installed MiniMax Code version honors the proxy variables; no new live MiniMax Code acceptance was performed in this change.
-
-Send a short text request without tools and confirm an actual reply. Installation probes and Gateway connectivity do not prove a successful model request.
+For invocation-specific proxies, use `octo.execution/envs` in `agentEnv.items`; see [Invocation Environment](../context-and-sessions.md). Verify proxy support with the installed MiniMax Code version. Send a short request and confirm the answer and successful terminal event; installation probes alone do not establish model access. This documentation update performs no live MiniMax Code acceptance.
 
 [Adapter details](../../../../packages/octo-runtime-adapter-mcode/README.md) · [Support matrix](../../reference/providers.md)

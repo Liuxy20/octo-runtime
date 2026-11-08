@@ -63,7 +63,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     assert.equal(metadata.scripts, undefined);
     for (const [name, version] of Object.entries(metadata.dependencies)) {
       assert.doesNotMatch(version, /workspace:|link:|file:/);
-      assert.doesNotMatch(name, /runtime-daemon|runtime-adapter-host/);
+      assert.doesNotMatch(name, /runtime-daemon|runtime-adapter-host|runtime-extra-/);
       const dependency = JSON.parse(
         await readFile(join(installed, "node_modules", name, "package.json"), "utf8")
       );
@@ -76,8 +76,17 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     }
     const source = JSON.parse(await readFile(join(root, "package.json"), "utf8"));
     assert.deepEqual(metadata.exports, source.exports);
+    assert.ok(Object.keys(metadata.exports).every((name) => !name.startsWith("./extra")));
+    for (const path of [
+      "native",
+      "dist/public/extra.js",
+      "packages/octo-runtime-extra-channel-gateway",
+      "packages/octo-runtime-extra-channel-wecom",
+      "packages/octo-runtime-extra-webui"
+    ])
+      await assert.rejects(access(join(installed, path)), { code: "ENOENT" });
     assert.deepEqual(metadata.engines, { node: source.engines.node });
-    for (const file of ["host", "executor-kernel", "extra"]) {
+    for (const file of ["host", "executor-kernel"]) {
       const declaration = await readFile(join(installed, `dist/public/${file}.d.ts`), "utf8");
       assert.doesNotMatch(
         declaration,
@@ -236,10 +245,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     );
     assert.equal(grokModule[grokEntry.export].metadata.type, "grok-build");
     assert.deepEqual(grokModule[grokEntry.export].metadata.protocolSupport.modes, ["canonical"]);
-    assert.deepEqual(
-      moduleManifest.extras.map((entry) => entry.name),
-      ["channel-gateway", "channel-wecom", "webui"]
-    );
+    assert.equal(moduleManifest.extras, undefined);
     await assert.rejects(access(join(installed, "apps/cli/dist/default_adapters.json")), {
       code: "ENOENT"
     });
@@ -262,16 +268,13 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         )
       );
       assert.match(help, /Examples:\n  octo-runtime executor-kernel start/);
-      assert.match(
-        help,
-        /Available Commands:\n  executor-kernel[^\n]*\n  channel-gateway[^\n]*\n  channel-wecom[^\n]*\n  webui/
-      );
+      assert.match(help, /Available Commands:\n  executor-kernel/);
     }
     await assert.rejects(
       run(["daemon"]),
       (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stderr)
     );
-    for (const component of ["executor-kernel", "channel-gateway"]) {
+    for (const component of ["executor-kernel"]) {
       assert.match((await run([component])).stdout, /Usage:\s+octo-runtime .+\[command\]/);
       await assert.rejects(
         run([component, "restart", "--json"]),
@@ -287,7 +290,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     assert.match(
       (await execute(command, ["--help"], { cwd: consumer, shell: process.platform === "win32" }))
         .stdout,
-      /Manage the local Octo Agent runtime and independent services/
+      /Manage the local Octo Agent execution runtime/
     );
     await assert.rejects(
       access(
@@ -332,7 +335,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         adapters: [testAdapter]
       }, {
         inputs: [{type: "text", text: "documentation package example"}],
-        contexts: {schema: "octo.context-envelope/v3", items: [
+        agentEnv: {schema: "octo.context-envelope/v3", items: [
           {namespace: "octo.execution", name: "adapter", payload: {type: "test"}}
         ]}
       }, event => { if (event.type === "run.completed") completed = true; });
@@ -341,29 +344,18 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       ],
       { cwd: consumer, timeout: runtimeCheckTimeout, label: "Run documentation service example" }
     );
-    for (const name of [
-      "plugin",
-      "executor",
-      "worker",
-      "host",
-      "kernel-invoke",
-      "builtin-extras",
-      "gateway-store"
-    ])
-      await cp(join(root, `test-support/public-extra/${name}.mts`), join(consumer, `${name}.mts`));
+    for (const name of ["executor", "host", "kernel-invoke", "worker"])
+      await cp(join(root, `test-support/public-sdk/${name}.mts`), join(consumer, `${name}.mts`));
     for (const name of ["recovery-kernel-probe", "recovery-native-host"])
       await cp(join(root, `test-support/${name}.mts`), join(consumer, `${name}.mts`));
     await execute(
       process.execPath,
       [
         join(root, "node_modules/typescript/bin/tsc"),
-        "plugin.mts",
         "executor.mts",
-        "worker.mts",
         "host.mts",
+        "worker.mts",
         "kernel-invoke.mts",
-        "builtin-extras.mts",
-        "gateway-store.mts",
         "recovery-kernel-probe.mts",
         "recovery-native-host.mts",
         "--module",
@@ -422,7 +414,6 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       const status = JSON.parse((await run(["status", "--json"])).stdout);
       assert.equal(status["executor-kernel"].runtime.execution_ready, true);
       assert.equal(status["executor-kernel"].runtime.pid, child.pid);
-      assert.equal(status["channel-gateway"].runtime.available, false);
       const adapters = JSON.parse((await run(["adapter", "list", "--json"])).stdout);
       assert.deepEqual(
         adapters.map((adapter) => adapter.type).sort(),
@@ -452,12 +443,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       JSON.stringify({
         offlineInstall: true,
         publicTypes: true,
-        builtinExtras: true,
-        webuiAssets: true,
         nativeKernel: true,
-        independentExtra: true,
-        gatewayHostStore: true,
-        extraStatusSink: true,
         sdkRecoveryProbe: true,
         cliKernel: true,
         uninstallPreservedHome: true,

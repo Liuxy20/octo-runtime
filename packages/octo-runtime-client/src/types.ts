@@ -5,7 +5,12 @@ import type {
   KernelStatus,
   InvokeInput,
   InvokeEnvironment,
-  InputInvoke,
+  AgentEnv,
+  InvocationInputs,
+  InvocationContent,
+  ModelInputPart,
+  ProviderSession,
+  CanonicalEvent,
   HostFrame,
   InteractionResponse,
   NativeInteractionResponse
@@ -42,14 +47,41 @@ export interface KernelInvocationLifecycle {
  * 常规接入使用 invoke；owner 退出时先 stopAdmission，再并行 drain 与业务收尾，最后 close。
  * submit/subscribe 是低层入口，调用方自行保存 RunRef、管理取消与尾流，不自动登记为 invoke。
  */
+/** 单次调用句柄。身份在调用 invoke 时确定，首次消费才发送执行请求。 */
+export interface KernelInvocation<T> extends AsyncGenerator<T> {
+  readonly invocationId: string;
+  readonly runId: string;
+  readonly sessionId: string;
+}
+export interface KernelInvoke {
+  (
+    inputs: ModelInputPart[] | (InvocationContent & { protocol_mode?: "native" }),
+    sessionId: string | undefined,
+    providerSession: ProviderSession | undefined,
+    agentEnv: AgentEnv
+  ): KernelInvocation<HostFrame>;
+  (
+    inputs: InvocationContent & { protocol_mode: "canonical" },
+    sessionId: string | undefined,
+    providerSession: ProviderSession | undefined,
+    agentEnv: AgentEnv
+  ): KernelInvocation<CanonicalEvent>;
+  (
+    inputs: InvocationInputs,
+    sessionId: string | undefined,
+    providerSession: ProviderSession | undefined,
+    agentEnv: AgentEnv
+  ): KernelInvocation<HostFrame | CanonicalEvent>;
+}
+
 export interface KernelClient {
   readonly topology: "kernel-ipc";
   readonly ownership: "attached";
-  /** 开始消费才提交；signal 请求取消但保留尾流，提前结束迭代则仅停止观察。 */
-  readonly invoke: InputInvoke;
+  /** 开始消费才提交；interrupt 请求取消但保留尾流，提前结束迭代则仅停止观察。 */
+  readonly invoke: KernelInvoke;
   readonly invocations: KernelInvocationLifecycle;
   /** 仅操作当前 client 的 invoke 登记；accepted 是取消受理，不是终态或清理完成。 */
-  cancelInvocation(invocationId: string, reason?: string): Promise<{ accepted: boolean }>;
+  interrupt(invocationId: string, reason?: string): Promise<{ accepted: boolean }>;
   respondInteraction(invocationId: string, response: InteractionResponse): Promise<void>;
   respondNativeInteraction(
     invocationId: string,

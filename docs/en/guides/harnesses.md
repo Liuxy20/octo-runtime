@@ -8,7 +8,7 @@ Running the installed Runtime CLI or SDK requires Node.js **24.x or 26.x** (`^24
 
 ## Harness Topics
 
-Each bundled Harness has a topic covering installation, authentication, a Channel Gateway example, and proxy scope. Start with [complete Gateway declarations and proxy isolation](harnesses/channel-gateway.md), then choose a Harness. Antigravity acceptance does not establish acceptance for another Harness.
+Each bundled Harness has a topic covering installation, authentication, and invocation environment. Start with [SDK integration](../getting-started/sdk.md) and [invocation environment](context-and-sessions.md). Channel configuration and operations belong to the [independent Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway). Verify each Harness separately.
 
 - [Codex](harnesses/codex.md)
 - [Claude Code](harnesses/claude-code.md)

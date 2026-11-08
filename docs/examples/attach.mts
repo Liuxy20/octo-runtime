@@ -8,7 +8,7 @@ if (!endpoint) throw new Error("Usage: node attach.mts <endpoint> [adapter-type]
 const input = InvokeInput.check({
   invocationId: randomUUID(),
   inputs: [{ type: "text", text: "Reply with a short greeting." }],
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [
       {

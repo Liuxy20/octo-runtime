@@ -47,7 +47,7 @@ turn/completed { turn: { status: "completed" } }
 
 这证明当前消费链路存在可触发的收尾缺口，不证明真实 Codex 必然会产生上述矛盾组合。真实发生频率、线上错误形状和实际 IM 展示仍须在测试环境验收。
 
-源码入口：[Codex 转换与终态](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[任务恢复](../../../packages/octo-runtime-extra-channel-gateway/src/execution/task.ts)、[回复投影](../../../packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts)、[IM 最终投递](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。
+源码入口：[Codex 转换与终态](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[任务恢复](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/task.ts)、[回复投影](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts)、[IM 最终投递](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。
 
 ## 需求范围与责任检查
 

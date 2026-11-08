@@ -46,7 +46,7 @@ PR 复审的两项缺陷已修复：Python Unix 关闭会中止未发送缓冲�
 
 Go、Rust、Python 三套原生客户端和 playboard demo 均位于当前 worktree 的 `native/`，按用户最后的要求不使用外部 demo 仓库。统一支持 status/list、输入 JSON 或 prompt、native/canonical 流、原回执、get/subscribe、取消、两类回复、等待人工回答和显式回答文件。
 
-代码入口：[Go](../../../native/go/examples/demo_playboard.go)、[Python](../../../native/python/demo_playboard.py)（Rust 示例已移除）。统一操作见 [demo README](../../../native/examples/README.md)；生成和 SDK 所有权见 [native README](../../../native/README.md)。
+代码入口：[Go](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/go/examples/demo_playboard.go)、[Python](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/python/demo_playboard.py)（Rust 示例已移除）。统一操作见 [demo README](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/examples/README.md)；生成和 SDK 所有权见 [native README](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/README.md)。
 
 工作树 `codex/51-native-rpc-clients`，基线 `445d2bb24f6ffc27bb4414c835e6a0b365f9f25b`。未 commit、push、创建 PR、发包或关闭 issue。规划 96 分仅指可执行准备度，不是实施完成比例。
 

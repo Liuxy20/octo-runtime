@@ -1,15 +1,8 @@
-import { adapters } from "./fixtures/codebuddy-model-worker.mjs";
-import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { resolve, join } from "node:path";
-import test from "node:test";
-import { ImRuntime } from "@mininglamp-oss/octo-runtime-extra-channel-gateway";
 import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
-import { MemoryImSessionStore } from "../packages/octo-runtime-extra-channel-gateway/dist/application/session-store.js";
-import { GatewayTransport } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/channel.js";
+import assert from "node:assert/strict";
+import test from "node:test";
 import { codeBuddyModelFixture } from "./fixtures/codebuddy-model-fixture.js";
-import { invokeRequest, waitFor } from "./runtime-fixture.js";
-import { kernelFixture } from "./kernel-fixture.js";
+import { invokeRequest } from "./runtime-fixture.js";
 
 async function collect(source) {
   return await Array.fromAsync(source);
@@ -172,110 +165,3 @@ test("CodeBuddy cancellation while selecting a model closes transport without pr
   assert.equal(prompts, 0);
   assert.equal(closes, 1);
 });
-
-test(
-  "Gateway -> native Kernel RPC -> CodeBuddy model selection -> delivered result",
-  { timeout: 30000 },
-  async (t) => {
-    const fixture = await kernelFixture(t, {
-      adapters: adapters,
-      expectedCleanupComplete: false
-    });
-    let onMessage;
-    t.mock.method(GatewayTransport.prototype, "start", async function () {
-      onMessage = this.callbacks.onMessage;
-    });
-    t.mock.method(GatewayTransport.prototype, "close", async () => {});
-    const backend = new MemoryImSessionStore();
-    t.after(() => backend.close());
-    const traces = [],
-      replies = [];
-    const subscribe = fixture.client.subscribe.bind(fixture.client);
-    t.mock.method(fixture.client, "subscribe", async function* (...args) {
-      for await (const frame of subscribe(...args)) {
-        if (frame.kind === "control") traces.at(-1).host.push(frame.control);
-        yield frame;
-      }
-    });
-    const kernel = {
-      async *invoke(input, environment) {
-        const trace = { input, events: [], host: [] };
-        traces.push(trace);
-        // 使用产品的 KernelClient.invoke；上方仅旁观原订阅以核对 Host 终态。
-        for await (const event of fixture.client.invoke(input, environment)) {
-          trace.events.push(event);
-          yield event;
-        }
-      },
-      cancelInvocation: (...args) => fixture.client.cancelInvocation(...args),
-      respondInteraction: (...args) => fixture.client.respondInteraction(...args)
-    };
-    let runtime;
-    t.after(async () => {
-      if (runtime) await runtime.close();
-    });
-    const audit = async () =>
-      (await readFile(join(fixture.directory, "codebuddy-model-audit.ndjson"), "utf8"))
-        .trim()
-        .split("\n")
-        .map((line) => JSON.parse(line));
-    async function turn(model, expected, content) {
-      if (runtime) await runtime.close();
-      runtime = new ImRuntime(
-        {
-          bot_id: "codebuddy-test",
-          api_url: "https://im-test.deepminer.com.cn/api",
-          cards: false,
-          typing: false,
-          adapter: { adapter_type: "codebuddy", model, workdir: fixture.directory },
-          approval_mode: "full_access"
-        },
-        {
-          kernel,
-          // 后端属于测试宿主，重载 Gateway 后仍保留同一 binding。
-          sessions: backend
-        }
-      );
-      await runtime.start();
-      const count = replies.length;
-      onMessage({
-        messageId: `message-${traces.length}`,
-        senderId: "sender",
-        conversationId: "chat",
-        conversationKind: "direct",
-        text: "hello",
-        buildContext: async () => ({ schema: "octo.context-envelope/v3", items: [] }),
-        reply: async (text) => {
-          replies.push(text);
-        }
-      });
-      await waitFor(() => replies.length > count && runtime.status.sessions.length === 0, 10000);
-      const trace = traces.at(-1);
-      assert.equal(trace.host.at(-1).state, expected);
-      assert.deepEqual(
-        trace.events
-          .filter((e) => /^run\.(completed|failed|cancelled)$/.test(e.type))
-          .map((e) => e.type),
-        [`run.${expected}`]
-      );
-      assert.match(replies.at(-1), content);
-      return trace;
-    }
-    await turn("unknown-fresh", "failed", /unknown-fresh/);
-    const first = await turn("model-b", "completed", /Provider used model-b/);
-    const second = await turn("model-a", "completed", /Provider used model-a/);
-    assert.equal(receipt(second.events).sessionId, receipt(first.events).sessionId);
-    assert.equal(second.input.providerSession.sessionId, receipt(first.events).sessionId);
-    await turn("unknown-resumed", "failed", /unknown-resumed/);
-    await turn("denied", "failed", /Native selection rejected/);
-    await turn("subscription", "failed", /企业订阅已到期/);
-    const recovered = await turn("model-b", "completed", /Provider used model-b/);
-    assert.equal(receipt(recovered.events).sessionId, receipt(first.events).sessionId);
-    const records = await audit();
-    assert.deepEqual(
-      records.filter((v) => v.method === "session/prompt").map((v) => v.model),
-      ["model-b", "model-a", "subscription", "model-b"]
-    );
-    assert.equal(records.filter((v) => v.method === "close").length, 7);
-  }
-);

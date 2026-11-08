@@ -343,7 +343,7 @@ for (const [index, scenario] of statusCases.entries()) {
         ? `\\\\.\\pipe\\oc309-${process.pid}-${index}`
         : join(path, "k.sock");
     const status = {
-      ipc_version: 1,
+      ipc_version: 2,
       kernel_instance_id: "fixture",
       pid: process.pid,
       execution_ready: true,

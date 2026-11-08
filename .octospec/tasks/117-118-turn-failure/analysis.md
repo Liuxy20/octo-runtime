@@ -33,10 +33,10 @@ tags: [channel, delivery, session, invocation, stream]
 
 | 位置 | 已核对的事实 |
 | --- | --- |
-| [Gateway im-channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)，#receive 约 397–478，#session 约 480–492 | 先写 seen，再读取 store；catch 删除 seen 并记 `IM_SESSION_STORE_FAILED`，没有回复。本轮还未进入执行 |
-| [WeCom im-channel.ts](../../../packages/octo-runtime-extra-channel-wecom/src/application/im-channel.ts)，约 255–318 | 同样存在 read 失败只记诊断的出口，故 #117 不能仅修 Gateway |
+| [Gateway im-channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)，#receive 约 397–478，#session 约 480–492 | 先写 seen，再读取 store；catch 删除 seen 并记 `IM_SESSION_STORE_FAILED`，没有回复。本轮还未进入执行 |
+| [WeCom im-channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-wecom/src/application/im-channel.ts)，约 255–318 | 同样存在 read 失败只记诊断的出口，故 #117 不能仅修 Gateway |
 | Gateway im-channel.ts，约 995–1117 | beginPresentation 和首次 update 早于消费 task.events，却与消费共用 try；catch 在没有终态时一律 cancel、记 unknown |
-| [ImTask](../../../packages/octo-runtime-extra-channel-gateway/src/execution/task.ts)，约 217–267 | onAttempt 和 running 记录在 kernel.invoke 消费之前，异常统一把 attempt 标 unknown；只是改 Channel 文本会留下不一致状态 |
+| [ImTask](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/task.ts)，约 217–267 | onAttempt 和 running 记录在 kernel.invoke 消费之前，异常统一把 attempt 标 unknown；只是改 Channel 文本会留下不一致状态 |
 | WeCom im-channel.ts，约 520–527、578–586、608–614 | 展示初始化与首次 update 位于执行 try 外，抛错直接进入队列 catch；执行 try 内的异常又统一落到 unknown。两渠道的展示故障结果不同 |
 | [KernelClient](../../../packages/octo-runtime-executor-kernel/src/client.ts)，约 171–189 | registry.begin 先于 submit；不是进入 invoke 就已经发 IPC 请求 |
 | [InvocationRegistry](../../../packages/octo-runtime-executor-kernel/src/invocation-lifecycle.ts)，约 59–82 | begin 首先检查接纳开关；stopAdmission 下的 `CLIENT_INVOCATION_ADMISSION_CLOSED` 在登记及提交前产生 |

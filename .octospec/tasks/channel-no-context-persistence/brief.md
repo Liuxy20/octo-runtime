@@ -24,7 +24,7 @@ timestamp: 2026-10-15T00:00:00Z
 
 ## 决策依据与代价评估
 
-采用此方案可避免维护两套业务历史与恢复账本，并保持 Channel 采集、Host 执行、Provider 管理原生会话的边界。现有[内存 Store](../../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 已按数量、字节和期限约束，是延续基础，不是必须重建的新抽象。
+采用此方案可避免维护两套业务历史与恢复账本，并保持 Channel 采集、Host 执行、Provider 管理原生会话的边界。现有[内存 Store](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 已按数量、字节和期限约束，是延续基础，不是必须重建的新抽象。
 
 代价是重启或淘汰后无法保证原 Provider thread 续接，也不提供跨重启的消息恰好一次执行、投递恢复或 reset 边界保存。频道最近 15 条只能恢复可见聊天背景，不能代替隐藏工具轨迹或外部副作用核查。这些是方案的实际边界，不据此重新引入持久库。
 

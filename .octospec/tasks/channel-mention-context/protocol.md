@@ -81,7 +81,7 @@ Channel 的发送消息体（示例 ID 均为占位数据）：
 | octo-web | `packages/dmworkbase/src/features/chat-composer/ui/ChatComposer.tsx` 的 formatMentionTextV2 和发送前调用：编辑器标记先转成 content/mention；`adapters/tiptap/mentionSendParse.ts` 解析标记并校验当前成员，计算 entity 位置 |
 | octo-work-app | `packages/im-kit/src/core/mention.ts` 的 serializeMention、toWireMention、isMentionMe、splitMentionParts：点名、广播及高亮的客户端语义；布尔视图转换为线上数字 1 |
 | codex-channel-octo | `src/agent-bridge.ts` 注入标记指引；`src/mention-utils.ts` 转换；`src/stream-relay.ts` 发送前生成 mention 参数。旧实现另有普通昵称匹配及 all 回退，本次不采用 |
-| Runtime Gateway | [MentionEntity](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/types.ts) 明确 UTF-16；[sendMessage](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/messages.ts) 与 [WS sendText](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 均支持 payload.mention；成功 final 由 Channel 转换并沿 WS 发送 |
+| Runtime Gateway | [MentionEntity](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/types.ts) 明确 UTF-16；[sendMessage](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/messages.ts) 与 [WS sendText](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 均支持 payload.mention；成功 final 由 Channel 转换并沿 WS 发送 |
 | 本机 octo-cli，只读 schema/help | `schema group.members` 与 `group members --help` 确认查询命令及 uid/name/robot；`schema message.send` 确认 payload 对象和发送地址，但该 schema 没有展开 mention 子字段，不能用它单独证明全部内部约束 |
 
 协议核查不等于发送验收。本次只读源码与 CLI schema，无外部消息发送、无凭据读取，无 IM Server 单端实现证明。

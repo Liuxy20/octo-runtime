@@ -20,20 +20,26 @@ try {
           text: `Reply exactly ${marker}. Do not call tools, modify files, or send messages.`
         }
       ],
-      contexts: {
-        schema: "octo.context-envelope/v3",
-        items: [
-          { namespace: "octo.execution", name: "adapter", payload: { type } },
-          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
-          {
-            namespace: "octo.execution",
-            name: "limits",
-            payload: { run_timeout_ms: 120000, cancel_grace_ms: 1000 }
-          }
-        ]
+      agentEnv: {
+        ...{
+          schema: "octo.context-envelope/v3",
+          items: [
+            { namespace: "octo.execution", name: "adapter", payload: { type } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            },
+            {
+              namespace: "octo.execution",
+              name: "limits",
+              payload: { run_timeout_ms: 120000, cancel_grace_ms: 1000 }
+            }
+          ]
+        },
+        workdir: directory
       },
-      protocol_mode: "canonical",
-      workdir: directory
+      protocol_mode: "canonical"
     };
     const child = spawn(
       process.execPath,

@@ -29,40 +29,9 @@
       "types": "./dist/public/executor-core.d.ts",
       "import": "./dist/public/executor-core.js"
     },
-    "./extras/channel-gateway": {
-      "types": "./dist/public/channel-gateway.d.ts",
-      "import": "./dist/public/channel-gateway.js"
-    },
-    "./extras/channel-wecom": {
-      "types": "./dist/public/channel-wecom.d.ts",
-      "import": "./dist/public/channel-wecom.js"
-    },
-    "./extras/webui": {
-      "types": "./dist/public/webui.d.ts",
-      "import": "./dist/public/webui.js"
-    },
-    "./extras/channel-gateway/config-schema.json": "./packages/octo-runtime-extra-channel-gateway/config-schema.json",
-    "./extras/channel-wecom/config-schema.json": "./packages/octo-runtime-extra-channel-wecom/config-schema.json",
-    "./extras/webui/config-schema.json": "./packages/octo-runtime-extra-webui/config-schema.json",
-    "./extra": {
-      "types": "./dist/public/extra.d.ts",
-      "import": "./dist/public/extra.js"
-    },
     "./protocol": {
       "types": "./dist/public/protocol.d.ts",
       "import": "./dist/public/protocol.js"
-    },
-    "./extras/channel-gateway/commands": {
-      "types": "./dist/public/channel-gateway-commands.d.ts",
-      "import": "./dist/public/channel-gateway-commands.js"
-    },
-    "./extras/channel-wecom/commands": {
-      "types": "./dist/public/channel-wecom-commands.d.ts",
-      "import": "./dist/public/channel-wecom-commands.js"
-    },
-    "./extras/webui/commands": {
-      "types": "./dist/public/webui-commands.d.ts",
-      "import": "./dist/public/webui-commands.js"
     }
   },
   "bin": {
@@ -70,7 +39,6 @@
   },
   "files": [
     "packages/octo-runtime-protocol/schema/*.json",
-    "packages/*/config-schema.json",
     "dist/public",
     "apps/cli/dist/**/*.js",
     "apps/cli/dist/build-info.json",
@@ -88,17 +56,12 @@
     "url": "https://github.com/Mininglamp-OSS/octo-runtime/issues"
   },
   "scripts": {
-    "native:gen": "node native/codegen/generate.mjs",
-    "native:check": "node native/codegen/generate.mjs --check",
-    "native:test": "node native/tests/run.mjs",
-    "native:demo:test": "node native/tests/run.mjs --suite playboard-demo",
     "pack:release": "pnpm build && node scripts/pack-release.mjs",
     "prepack": "node scripts/require-release-pack.mjs",
     "clean": "node scripts/clean-dist.mjs",
     "prebuild": "pnpm run clean",
     "test": "pnpm build && pnpm test:suites",
-    "test:global-extras": "node scripts/verify-global-extra-installations.mjs",
-    "test:suites": "pnpm --filter @mininglamp-oss/octo-runtime-extra-webui test:ui && node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
+    "test:suites": "node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
     "docs:check": "tsc -p docs/examples/tsconfig.json && node scripts/check-developer-docs.mjs && node --test docs/checks/*.test.mjs",
     "cli": "pnpm build && node apps/cli/dist/index.js",
     "host": "pnpm build && node apps/cli/dist/index.js executor-kernel run",
@@ -114,7 +77,6 @@
     "@mininglamp-oss/octo-runtime-client": "workspace:*",
     "commander": "^15.0.0",
     "@mininglamp-oss/octo-runtime-adapter-dsh": "workspace:*",
-    "@mininglamp-oss/octo-runtime-extra-webui": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-acp": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-antigravity": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-claude-code": "workspace:*",
@@ -129,13 +91,11 @@
     "@mininglamp-oss/octo-runtime-adapter-opencode": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-qodercli": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-qoderclicn": "workspace:*",
-    "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*",
     "@mininglamp-oss/octo-runtime-executor-core": "workspace:*",
     "@mininglamp-oss/octo-runtime-cross-service": "workspace:*",
     "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-protocol": "workspace:*",
-    "ws": "^8.22.0",
-    "@mininglamp-oss/octo-runtime-extra-channel-wecom": "workspace:*"
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "ajv": "^8.17.1",

@@ -1,6 +1,6 @@
 # Executor Kernel
 
-只消费已有 Kernel 的应用可独立安装 [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md)，调用 `attachKernel({ endpoint })`。本包保留兼容客户端导出，并复用同一实现；完整 Runtime 发行物内置 client/protocol，原生构造 Kernel/Extra 仍使用完整 SDK。不同发行物可能有独立模块副本，不承诺跨副本类/函数身份相同。
+只消费已有 Kernel 的应用可独立安装 [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md)，调用 `attachKernel({ endpoint })`。本包保留兼容客户端导出，并复用同一实现；完整 Runtime 发行物内置 client/protocol，原生构造 Kernel 仍使用完整 SDK。不同发行物可能有独立模块副本，不承诺跨副本类/函数身份相同。
 
 [English](README.md) | [包导航](../README.zh.md)
 
@@ -29,7 +29,7 @@ const kernel = createKernelService({
   adapterConfigurations: { dsh: { providerOptions: { dshBin: "/absolute/dsh/lib/bin.js" } } }
 });
 await kernel.initialize();
-// 使用 kernel.client.invoke，消费到终态；退出先排空 Extra 和业务尾流，再关闭服务。
+// 使用 kernel.client.invoke，消费到终态；退出先排空 business consumer 和业务尾流，再关闭服务。
 const cleanup = await kernel.close();
 if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 ```
@@ -38,12 +38,12 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 ## 职责与流程
 
-| 场景 | 宿主负责 | Kernel 负责 |
-| --- | --- | --- |
-| Electron | 主进程 import/构造对象、选择 endpoint、创建 Extra、退出协调 | 注册对象、RPC、Run 接纳与执行管理 |
-| CLI | 读取/合并 manifest、解析模块、动态 import/工厂、OpenClaw 产品准备 | 接收实例，与 Electron 使用同一服务工厂 |
-| 跨进程独立应用（包括 CLI 客户端） | attachKernel、发起和取消自己拥有的 Run、关闭 client；原生 SDK 使用 kernel.client | 维持共享服务和原执行 |
-| Provider 子进程 | Adapter 按原生协议创建、控制和确认清理 | 调用 Core 并如实汇总清理事实 |
+| 场景                              | 宿主负责                                                                         | Kernel 负责                            |
+| --------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------- |
+| Electron                          | 主进程 import/构造对象、选择 endpoint、创建 business consumer、退出协调          | 注册对象、RPC、Run 接纳与执行管理      |
+| CLI                               | 读取/合并 manifest、解析模块、动态 import/工厂、OpenClaw 产品准备                | 接收实例，与 Electron 使用同一服务工厂 |
+| 跨进程独立应用（包括 CLI 客户端） | attachKernel、发起和取消自己拥有的 Run、关闭 client；原生 SDK 使用 kernel.client | 维持共享服务和原执行                   |
+| Provider 子进程                   | Adapter 按原生协议创建、控制和确认清理                                           | 调用 Core 并如实汇总清理事实           |
 
 模块路径、workerEntrypoint、adapterModules、manifest、子进程 env 均不属于 Kernel 装配输入。Kernel 不启动执行 worker，不提供 worker 心跳或自动重启；status 返回 ipc_version、kernel_instance_id、宿主 pid 和 execution_ready，没有虚构 worker 状态。日志通过 logging.directory 显式配置，SDK 不读取 CLI 日志环境变量。
 
@@ -59,7 +59,7 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 ## 生命周期与故障边界
 
-owner 等待 initialize 后使用 client。close 幂等，closed 返回同一个清理结果。先关自己拥有的 Extra、业务投递与存储，再关 Kernel；attached client 不拥有服务。
+owner 等待 initialize 后使用 client。close 幂等，closed 返回同一个清理结果。先关自己拥有的 business consumer、业务投递与存储，再关 Kernel；attached client 不拥有服务。
 
 关闭先停止接纳、关闭连接，再取消 Core、等待 Adapter 清理和回收 Run/日志/端点。共用 5 秒截止时间，不为每步重启预算。Adapter next 异常可能来自 finally，不能据此证明清理完成；complete=false 保留失败事实和端点所有权证据。stateDirectory 可显式指定恢复记录目录；POSIX 缺省使用 endpoint + .runs，Windows 需显式配置才能保留该记录。
 

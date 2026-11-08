@@ -11,7 +11,7 @@ tags: [architecture, extra, lifecycle, channel, session, storage]
 
 根目录两篇 SDK 指南已补充业务类型入口、依赖装配、方法合同和 submodule 操作。工厂已接通真实消费路径，实际验证记录见[实施记录](implementation.md)；消费方不依赖功能分支或私有 Runtime 补丁。submodule 首次接入及主动升级跟踪最新远端 main，宿主记录验收后的实际 commit 供 CI 复现。
 
-以下为公共接口节选；endpoint、配置及工厂由宿主提供，完整可运行版本见[样例](../../../test-support/public-extra/gateway-store.mts)：
+以下为公共接口节选；endpoint、配置及工厂由宿主提供，完整可运行版本见[样例](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/gateway-store.mts)：
 
 ```ts
 import { createExtraService } from "@mininglamp-oss/octo-runtime/host";

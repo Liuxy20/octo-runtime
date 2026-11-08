@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式 non-gating：真实 Codex Default，原 Run 结束后由同一表单补答。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +33,7 @@ for (const custom of [false, true])
         "codex"
       );
       let question, ref, providerSession, terminal;
-      for await (const event of f.client.invoke(input)) {
+      for await (const event of invokeClient(f.client, input)) {
         if (event.type === "session.update") providerSession = event.payload.providerSession;
         if (event.type === "interaction.requested" && event.payload.delivery === "async") {
           question = event.payload;

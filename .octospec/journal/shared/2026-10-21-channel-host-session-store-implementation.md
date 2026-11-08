@@ -9,11 +9,11 @@ tags: [extra, lifecycle, channel, session, storage, testing]
 
 基于 `main@0c1d1c9`、分支 `feat/channel-host-session-store`，用户在完成规划评估后明确授权实施并 merge 到 main，再由用户执行真实测试。工作目录 `/Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-channel-host-session-store`。保留 Git 配置作者，GitHub PR/提交使用英文，提交附 Codex trailer。
 
-实现 [Gateway 专属依赖](../../../packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[真实工厂接线](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[endpoint 所有权](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts)和[句柄包装](../../../packages/octo-runtime-extra-channel-gateway/src/application/host-session-store.ts)。初始化前登记、配置双向隔离、必需/可选方法及 this 转发、尾写后撤权、可异步 close 一次、失败阻止替换与迟到回收均有回归。默认 Memory、借用 sessions、兄弟 Extra/Kernel 及统一 invoke 合同保留。
+实现 [Gateway 专属依赖](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[真实工厂接线](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[endpoint 所有权](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts)和[句柄包装](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/host-session-store.ts)。初始化前登记、配置双向隔离、必需/可选方法及 this 转发、尾写后撤权、可异步 close 一次、失败阻止替换与迟到回收均有回归。默认 Memory、借用 sessions、兄弟 Extra/Kernel 及统一 invoke 合同保留。
 
 公共类型仅进入 `/extras/channel-gateway`，没有新增通用 `/extra` 字段或特化 loader。没有增加 SQLite 包依赖或 Runtime 适配实现；新增测试/样例使用宿主内存替身。SQLite 的驱动、建表/迁移、事务、持久落盘和真实 Electron 集成都归宿主。
 
-两篇根 SDK 指南、Gateway README、Extra 指南及规则同步概念、全部方法语义、装配/关闭/错误、scope、数据保留及最新 main submodule 接入。[可运行样例](../../../test-support/public-extra/gateway-store.mts)由包外 verifier 编译运行；SQLite 片段明确为宿主示意，不用缺失 helper 冒充完整项目。逐项证据见 [实施验收](../../tasks/channel-host-session-store/implementation.md)。
+两篇根 SDK 指南、Gateway README、Extra 指南及规则同步概念、全部方法语义、装配/关闭/错误、scope、数据保留及最新 main submodule 接入。[可运行样例](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/gateway-store.mts)由包外 verifier 编译运行；SQLite 片段明确为宿主示意，不用缺失 helper 冒充完整项目。逐项证据见 [实施验收](../../tasks/channel-host-session-store/implementation.md)。
 
 ## 验证结果
 

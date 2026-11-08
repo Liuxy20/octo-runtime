@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import { adapters } from "./fixtures/codebuddy-worker.mjs";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -85,7 +86,7 @@ for (const [name, updates] of Object.entries(scenarios)) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "who are you" }],
-          contexts: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
           protocol_mode: "canonical"
         })
       );
@@ -203,7 +204,7 @@ for (const stopReason of [42, {}, null]) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "hello" }],
-          contexts: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
           protocol_mode: "canonical"
         })
       );
@@ -248,7 +249,7 @@ test("CodeBuddy Core keeps raw metadata strings and unknown fields byte-for-byte
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          contexts: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
           protocol_mode: "canonical"
         })
       );
@@ -357,7 +358,7 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
       ...kernelInput(`fixture:${scenario}`),
       inputs: [{ type: "text", text: `fixture:${scenario}` }],
       modelInput: `fixture:${scenario}`,
-      contexts: { schema: "octo.context-envelope/v3", items: selection }
+      agentEnv: { schema: "octo.context-envelope/v3", items: selection }
     });
     const { ref } = await client.submit(makeInput());
     const source = await frames(client, ref);
@@ -368,7 +369,7 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
       [`run.${expected}`]
     );
     assert.equal((await client.get(ref)).terminal.control.state, expected);
-    const canonical = await collect(client.invoke(makeInput()));
+    const canonical = await collect(invokeClient(client, makeInput()));
     assert.deepEqual(
       terminals(canonical).map((e) => e.type),
       [`run.${expected}`]
@@ -416,9 +417,8 @@ test("CodeBuddy public default/empty/explicit model requests reach the prompt", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          contexts: { schema: "octo.context-envelope/v3", items: selection },
-          protocol_mode: "canonical",
-          ...config
+          agentEnv: { schema: "octo.context-envelope/v3", items: selection, ...config },
+          protocol_mode: "canonical"
         })
       );
       assert.equal(events.at(-1).type, "run.completed");
@@ -451,7 +451,7 @@ test("CodeBuddy 429 and quota metadata use the same explicit ACP failure code", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          contexts: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
           protocol_mode: "canonical"
         })
       );

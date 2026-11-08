@@ -10,7 +10,7 @@ tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-executor-core/**","packages/octo-runtime-host-sdk/**","packages/octo-runtime-executor-kernel/**","packages/octo-runtime-extra-channel-*/**","test/stateless-*"]
+  paths: ["packages/octo-runtime-executor-core/**","packages/octo-runtime-host-sdk/**","packages/octo-runtime-executor-kernel/**","test/stateless-*"]
   touches: ["storage","stream","stateless"]
 source: self
 supersedes: []
@@ -49,23 +49,11 @@ ACP 的每个 session 更新队列使用 DriverQueue：默认单项不超过 20 
 
 超限是本次调用的真实失败，清理队列、reader、pending 和受管进程。正常结束时已接纳的终态仍须交给消费者；不能把正常退出等同于容量溢出。当前回归见 [Provider 缓冲测试](../../test/provider-buffer-limits.test.js)。
 
-## 插件状态
+## 业务状态归消费者
 
-Issue #246：Octo Gateway 的单轮卡片投影只保留最近五条明细，非 final 正文只保留 180 码点预览；模型步骤关联与在途工具保留必要元数据，累计次数独立计数。不因展示累计超过 512 条或 256 KiB 取消执行，不保存工具原始输出。final 独立保留并沿原发送合同投递；卡片排空与最终投递收尾后清空投影，卡片控制关联不得继续持有投影回调。此约束只针对 Gateway 展示缓存，不改变下文回执窗口、Provider/Kernel 源流预算或单次最终报文限制。专项与未验范围见 [任务](../tasks/246-gateway-projection-window/brief.md)。
-
-展示内容淘汰与身份去重分别管理：尚未结束的模型步骤只保留消息/工具 ID、分类和计数标记，步骤完成即释放其身份；仍执行的工具保留到自身终态。无步骤事件沿用隐式单步、在 invocation 结束时释放。身份内存随尚未完成步骤的身份数变化，不承诺单个无限长步骤的恒定内存，也不得用全轮 ID 集合或有误判的概率去重掩盖此边界。近期 256 个退役 ID 只是辅助缓存，不能作为旧进度进入 final 的依据。终态工具可以没有 create，须保留可用元数据并只计数一次。
-
-消息发布必须有可确认的通道：显式 channel、已知消息分类或同一非空稳定消息 ID 的 final 连续帧。未知/匿名省略 channel 的正文不默认 final。已有步骤结束后，未知非 create 消息及未知工具终态若没有自身 stepId，不借 currentStep 补造归属。OpenCode 原生 text 在归一化边界显式标记 final，保持正文不变；不通过永久保留已结束步骤的 ID 修补分类缺失。
-
-Gateway 的 cardDeliveries、Gateway/WeCom 的 deliveries 仅输出当前保留回执的总数，直接读取 Map.size，不复制或公开 effectKey/messageId 明细；不是累计发送量。原有投递重试与每个投递器最多 512 条的防重回执缓存保持不变。512 是当前容量选择而非协议常量；此上限不等同于整个进程 RSS 上限或重启后恰好一次投递。用户于 2026-10-21 明确本项只调整状态展示，不借此改造投递机制。
-
-Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 reset 见 [会话合同](session-reset.md)。Octo Gateway 可显式消费宿主 createSessionStore 返回的句柄，数据仍属于宿主；整个 Runtime 不依赖 SQLite、不提供适配、表结构或迁移。这些业务映射不属于通用 Host 的持久历史。默认映射失效后创建新会话；宿主持久 binding 也不等于 Provider 会话必定恢复或旧 Run 可继续执行。
-
-2026-10-15 用户对 Channel Gateway 再次确认：不新增 Context、聊天正文、输入图片、业务 Provider binding 或投递账本的本地持久化，不在 Adapter 建业务状态库；在途与连接状态保持有界内存。需要新会话背景时由 Channel 调用 API 获取当前频道此前 20 条并显式提交 extra Context；此策略于 2026-10-16 实施，一次资格保存在现有有界 binding 中。Provider 原生存储、现有身份和配置不因本决策删除或重置。依据、代价与验收见[不持久化决策](../tasks/channel-no-context-persistence/brief.md)及[历史 Context 专项](../tasks/channel-new-session-history/brief.md)。
+渠道卡片、投递回执、会话 binding 和上下文历史预算归独立 Gateway 或应用，不属于 Runtime。Runtime 不增加业务数据库，不将宿主业务存储解释为 Kernel durable ACK 或旧 Run 恢复。
 
 ## 保留的文件
-
-群/话题续聊缺口仅在现有binding内保存有界位置元数据及最多32个自身输出的位置/内容指纹，不保存聊天正文或新建文件。观察不创建binding或延长TTL；模型前通过API取得的最多20条消息，完整序列化messages数组最多8000 Unicode码点，身份、时间、结构及转义均计入。材料只进入本轮Context及现有有界occurrence快照，主历史与fresh fallback恢复补充共用原窗口和总预算，重试不重取，不扩为长期transcript。API成功、材料交接和模型实际阅读是不同事实，不新增Host工具输出拦截或跨进程已读游标，见[Issue #32实施](../tasks/channel-context-gap/implementation.md)与[保守历史设计](../tasks/234-context-lifecycle/conservative-history-plan.md)。
 
 配置、受保护凭据、machine/Runtime 身份、PID/socket、监督状态和 `invocations.json` 可以保留。后者用于孤儿进程清理，不保存 Run 输入或事件历史。Provider 自身的数据库及原生会话文件仍由 Provider 管理。
 
@@ -73,7 +61,7 @@ Octo 和 WeCom 默认各自使用有界内存会话映射，具体容量及 rese
 
 ## 受管日志
 
-F31 已实施统一内核与 Extra 元数据日志。SDK Kernel/Extra 显式指定 logging.directory；当前 CLI 使用 home/logs，不提供 --logs-dir。未配置的 SDK 实例不创建日志资源。Extra 经加载器绑定来源的 ctx.log 输出事件，内核只记生命周期、身份、稳定错误码和本轮输入/非 Adapter Context 项数，Adapter 只记安全执行选择。正文、原始错误、完整配置、凭据、预览及内容哈希均不记录。SDK/launcher 不重复落盘原始进程输出。
+SDK Kernel 显式指定 logging.directory；CLI 使用 home/logs，不提供 --logs-dir。未配置的 SDK 实例不创建日志资源。日志只记录生命周期、身份、稳定错误码和输入/Context 项数及安全执行选择；不记录正文、原始错误、完整配置、凭据、预览或内容哈希，不重复落盘原始进程输出。
 
 F31 已确认并实施：按 UTC 小时命名，每序列保留最近 3 个实际文件（包含当前文件），单文件 100 MiB；不按最近 3 小时年龄删除，跨天停机后仍保留最后文件。新小时实际写入第四个文件时淘汰最旧归档，不创建无日志小时的空文件。专用 Worker 隔离磁盘写入，每进程最多 128 条在途和 128 个序列，满额、锁竞争或写入失败可丢诊断，不保证审计完整性；关闭最多等待 1 秒，不影响 Agent 执行。轮转沿用非等待互斥和普通文件校验，不删除身份、Provider 文件、用户文件或旧固定日志。详情与原生服务定义更新见[运维](../guides/operations.md)及[实施记录](../tasks/gateway-august-feature-assessment/implementation.md#f31-核心改造已实施)。
 

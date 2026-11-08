@@ -19,29 +19,29 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
 });
 ```
 
-`check` throws on a malformed shape or an oversized payload and returns the same object. It calls nothing and generates nothing: Core and Kernel fill in `invocationId`, `runId`, and `sessionId` when you omit them, so keep the returned IDs if you want to cancel or correlate the run later.
+`check` throws on a malformed shape or an oversized payload and returns the same object. It calls nothing and generates nothing: KernelClient, Core, and Kernel fill in `invocationId`, `runId`, and `sessionId` when you omit them, so keep the returned IDs if you want to cancel or correlate the run later.
 
 ## The fields that matter
 
 | Field                                | Required | What it does                                                                                      |
 | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
 | `inputs`                             | yes      | This turn's text and image parts, in order. Image bytes go here once.                             |
-| `contexts`                           | yes      | Context v3 envelope. Its `octo.execution` / `adapter` item selects the Adapter; empty is legal.   |
-| `workdir`                            | no       | Provider working directory. Defaults to the host workspace; it is not a sandbox.                  |
+| `agentEnv`                           | yes      | Context v3 envelope. Its `octo.execution` / `adapter` item selects the Adapter; empty is legal.   |
+| `agentEnv.workdir`                   | no       | Provider working directory. Defaults to the host workspace; it is not a sandbox.                  |
 | `protocol_mode`                      | no       | `native` (default) or `canonical`.                                                                |
 | `providerSession`                    | no       | Explicit Provider session to resume. Never rebuilt from `sessionId`.                              |
-| `agentConfig`                        | no       | Full Provider configuration, including `providerOptions`. Must agree with the Context selections. |
-| `runtimeLimits`                      | no       | Timeouts and enforcement for this turn; execution defaults apply when omitted.                    |
+| `agentEnv.agentConfig`               | no       | Full Provider configuration, including `providerOptions`. Must agree with the Context selections. |
+| `agentEnv.runtimeLimits`             | no       | Timeouts and enforcement for this turn; execution defaults apply when omitted.                    |
 | `sessionId`, `invocationId`, `runId` | no       | Correlation IDs, generated when omitted. Not Provider history.                                    |
 
-`inputs` and `contexts` are the only required fields, but a request without the `octo.execution` / `adapter` item fails before any Provider starts.
+`inputs` and `agentEnv` are the only required fields, but a request without the `octo.execution` / `adapter` item fails before any Provider starts.
 
 ## Reading the output
 

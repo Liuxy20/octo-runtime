@@ -1,170 +1,23 @@
-# Context 类型参考
+# 执行信封配置
 
-[English](../../en/reference/contexts.md) | [文档目录](../README.md)
+[English](../../en/reference/contexts.md) | [Documentation](../README.md)
 
-每项 Context 由 `namespace`、`name` 和 `payload` 组成。本页使用 `namespace/name` 简写类型，例如 `octo.execution/adapter`。完整输入说明见 [Inputs 与 Contexts](../concepts/inputs-and-contexts.md)。
+agentEnv 沿用 `octo.context-envelope/v3` 的 schema/items 结构。每项使用 namespace、name、payload；顺序、唯一键、JSON 大小和已知 payload 约束保持不变。应用可复用配置；client 和 Core 冻结每次调用，不修改原配置。
 
-## contexts 对象
+| item | 用途 |
+| --- | --- |
+| `octo.execution/adapter` | 已注册 Adapter 类型；OpenClaw 还提供 provider_agent_id |
+| `octo.execution/workspace` | cwd 和工作区策略 |
+| `octo.execution/model` | 模型及 reasoning.effort |
+| `octo.execution/actmode` | 执行模式 |
+| `octo.execution/envs` | 子进程环境变量 |
+| `octo.execution/mcp` | 本次 MCP 连接 |
+| `octo.execution/limits` | 执行预算 |
+| `octo.security/approval_policy` | 工具审批策略 |
+| `octo.control/instructions` | 来自应用授权来源的受信会话指令 |
 
-将下面的对象放在调用参数的 `contexts` 字段中：
+Runtime 不接受业务材料进入 agentEnv，不负责 extra.*、历史、资料引用的渲染。通用 ContextEnvelope 类型仍能表示可选条目，以保持信封定义不变；能够构造通用信封不意味着它可作为执行环境提交。Gateway 自己决定业务数据和格式，格式不构成 Runtime 执行要求。
 
-```json
-{
-  "schema": "octo.context-envelope/v3",
-  "items": [{ "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } }]
-}
-```
+输入示例见 [Inputs 与 agentEnv](../concepts/inputs-and-contexts.md)，高级字段见 [Invoke API](invoke-input.md)。环境变量和 MCP 配置不能进入模型正文或日志。
 
-`items` 最多包含 32 项，也可以为空。整个 `contexts` 对象序列化后不得超过 65,536 UTF-8 字节。每项的 `payload` 必须是对象，`guidance` 是可选的说明文本。
-
-`namespace` 和 `name` 各自最多 96 个字符，须匹配 `^[a-z0-9][a-z0-9._-]*$`。同一数组中，这两个字段的组合不能重复。执行、路由、安全和控制类 namespace（`octo.execution`、`octo.runtime`、`octo.security`、`octo.control`）不接受 `guidance`。
-
-不要添加接口未定义的字段。Context v3 的 item 没有通用 `required` 字段，也没有独立的 schema 版本；`required: true` 会校验失败。已删除的 `octo.resources` namespace 也不再接受。自定义类型的处理方式见本页“业务扩展”。
-
-## 内置类型
-
-以下 12 类是 Runtime 内置类型。[contexts.json](../../examples/contexts.json) 包含全部示例，供查阅字段结构。使用时只选择需要的项，并替换示例路径、地址和其他配置值。
-
-### 选择 Provider：`octo.execution/adapter`
-
-`payload` 示例：`{"type":"codex"}`。`type` 选择已注册的 Adapter。
-
-使用 OpenClaw 时还必须提供 `provider_agent_id`，例如 `main`，指定 Gateway 中已有的 Agent。其他 Adapter 不允许这个字段。
-
-### 选择模型和推理强度：`octo.execution/model`
-
-`payload` 示例：`{"selection":{"use_provider_default":true},"reasoning":{"effort":"medium"}}`。
-
-至少提供 `selection` 或 `reasoning` 中的一项。选择模型时，使用 `selection: {id}` 或 `{use_provider_default:true}`；选择推理强度时，使用 `reasoning: {effort}` 或 `{use_provider_default:true}`。同一项不能既指定值又要求使用 Provider 默认值。
-
-### 选择工作模式：`octo.execution/actmode`
-
-`payload` 为 `{"mode":"default"}` 或 `{"mode":"plan"}`，由 Adapter 转换成 Provider 的工作模式。各 Provider 的支持情况不同；省略该项不会主动重置 Provider 已有模式。
-
-### 设置工作目录：`octo.execution/workspace`
-
-三种 `payload`：`{"mode":"fixed","path":"/example/project"}` 指定目录，`{"mode":"random"}` 创建随机目录，`{"mode":"none"}` 由预设 Agent 管理目录。
-
-随机目录不能替代应用的持久化会话存储。工作目录也不是文件访问沙箱，不会限制 Provider 访问其他路径。
-
-### 设置环境变量：`octo.execution/envs`
-
-`payload` 示例：`{"env_variables":[{"key":"PROJECT_ID","value":"example-project"}]}`。
-
-最多 128 个不重复的变量名，值为不含 NUL 的字符串。这里不会读取 dotenv 文件、执行 shell 或替换 `${NAME}`。OpenClaw 不支持非空的本轮环境变量。完整用法见 [Context 与会话](../guides/context-and-sessions.md)。
-
-### 配置工具连接：`octo.execution/mcp`
-
-`payload` 示例：`{"mcpServers":{"project-docs":{"type":"streamable_http","url":"https://example.com/mcp"}}}`。
-
-最多配置 32 个服务。Runtime 根据连接方式校验字段，再交给 Adapter 转换为 Provider 配置。配置步骤和支持表见 [MCP 指南](../guides/mcp.md)。
-
-### 设置执行超时：`octo.execution/limits`
-
-`payload` 示例：`{"run_timeout_ms":120000}`，表示整轮执行超时设置为 120 秒。所有时间字段使用毫秒整数，详细范围见下表。该项不控制输出缓存的字节数或保留时间。
-
-整轮默认 24 小时（`86400000`ms），最大七天（`604800000`ms）。72 小时任务须显式提交 `{"run_timeout_ms":259200000}`。首帧、模型空闲和工具空闲检测保持独立；进度不会延长总期限。
-
-### 指定 Runtime：`octo.runtime/selection`
-
-`payload` 示例：`{"mode":"explicit","runtime_id":"example-runtime"}`，供应用的上游路由逻辑选择 Runtime。也可以提供候选 Runtime 列表。
-
-本地 Kernel 不实现远程设备发现或切换。即使输入包含此项，调用仍发给客户端已经连接的 endpoint。字段组合见本页“Runtime 选择”。
-
-### 设置审批策略：`octo.security/approval_policy`
-
-`payload` 示例：`{"mode":"ask"}`。支持的模式为 `ask`、`assisted` 和 `full_access`。Adapter 无法实现指定模式时会报错；普通背景文本不能改变此策略。交互处理见[输出与控制](output-and-control.md)。
-
-### 提供正文：`octo.content/inline`
-
-`payload` 示例：`{"entries":[{"text":"Selected source text","resource_ref":"doc:example"}]}`。Runtime 将正文作为背景资料发给模型。
-
-`entries` 不能为空，每项需要非空 `text`。可选字段为 `resource_ref`、`source`（字符串或对象）、`summary`（字符串）。`source` 描述材料来源，不代表已验证读取权限。
-
-### 提供资源引用：`octo.content/references`
-
-`payload` 示例：`{"entries":[{"resource_ref":"doc:example","resolver":"mcp","locator":{"server_ref":"project-docs","tool":"read_document"}}]}`。
-
-`entries` 不能为空，`resource_ref` 不能重复。还可包含对象 `params` 和字符串 `authorization_ref`、`revision`。模型会收到引用描述，但 Runtime 不会自动调用工具或读取正文。
-
-### 设置会话指令：`octo.control/instructions`
-
-`payload` 示例：`{"entries":[{"text":"Answer concisely."}]}`。Runtime 将文本以单个换行符连接，作为 Provider 会话指令单独传入，而非普通背景资料。
-
-`entries` 可以为空，只接受文本条目，不接受 `source` 字段。应用必须验证指令来源的权限，不能直接使用未经授权的用户输入。指令在新建 Provider 会话时设置，续聊行为见 [Inputs 与 Contexts](../concepts/inputs-and-contexts.md)。
-
-上述类型中，只有 `inline` 和 `references` 会作为普通背景文本发给模型。会话指令单独传入，其余类型用于执行配置。业务扩展 `extra.<domain>/*` 也会作为背景文本发送。
-
-## 模型可见格式
-
-普通背景项按顺序放在 `<contexts>` 和 `<context-item namespace="..." name="...">` 中，首尾使用标准 XML 注释：
-
-```text
-<!-- Context information begins: the following is the current context -->
-<contexts>
-  <context-item namespace="extra.project" name="selection">
-    <guidence>Use the selected source.
-
-- Preserve relevant details.</guidence>
-    <data><![CDATA[{"text":"Selected source"}]]></data>
-  </context-item>
-</contexts>
-<!-- Context information ends -->
-```
-
-模型可见标签有意拼写为 `guidence`，API 字段仍为 `guidance`。指引使用原始 Markdown，保留实际换行、空行、缩进和特殊字符，不做 XML/HTML 转义，也不包 CDATA。guidance 缺省或空字符串时省略元素。
-
-数据沿用对象 payload 的 JSON 序列化：递归排序对象键，保留数组顺序。CDATA 仅包裹序列化文本，不解析或重新解释其中的 JSON、XML、YAML 等材料。文本中的 `]]>` 拆成相邻 CDATA 区段，连接各区段正文后可还原原序列化文本。
-
-`extra.*` 项可显式设置 `data_format: "text"`，此时 payload 必须且只能包含 `{ "text": "原文" }`。CDATA 直接放入原文，保留换行和缩进；额外 payload 字段会校验失败，避免渲染时静默丢失字段。省略 `data_format` 仍完整输出 JSON，即使 payload 含有 `text` 也不会自动解包。
-
-Octo Gateway 自动读取的群规则、话题规则使用文本格式。群聊只带群规则；子区同时带父群规则和子区规则。群规则英文指引明确注明 `Octo IM Group's GROUP.md`；话题指引使用 `Octo IM Group Topic Rules`。版本游标、来源标识及自动加载标记只在 Gateway 内部使用。文档不存在或正文 trim 后为空时，正文统一为 `NO RULES`，英文指引明确撤销此前规则；在周期刷新、规则变化及恢复输入中仍保留对应项。非空正文保留原文。
-
-存在模型可见 Context 时，Core 在 Context 块与调用输入之间加入 `<!-- Query Input -->`，标记前后各空一行；原文本和图片部分的顺序不变。没有模型可见 Context 时不改写输入。
-
-主输入、multipart text 输入及显式提供的 fresh fallback 输入使用同一格式。这是面向模型的文本，原始 Markdown 可能含 XML 语法，不保证是严格 XML 交换格式；注释和 CDATA 不授予权限，也不强制执行指令边界。
-
-## 超时字段
-
-| 字段                     | 含义         | 范围（毫秒）   |
-| ------------------------ | ------------ | -------------- |
-| `first_frame_timeout_ms` | 等待首帧     | 100–1,800,000  |
-| `model_idle_timeout_ms`  | 模型空闲超时 | 100–3,600,000  |
-| `model_idle_warning_ms`  | 模型空闲告警 | 100–3,600,000  |
-| `tool_timeout_ms`        | 工具空闲超时 | 100–86,400,000 |
-| `tool_wall_timeout_ms`   | 工具总时长   | 100–86,400,000 |
-| `run_timeout_ms`         | 整轮执行     | 100–604,800,000 |
-| `cancel_grace_ms`        | 取消宽限     | 100–60,000     |
-
-`model_idle_policy` 和 `enforcement` 接受 `observe` 或 `enforce`。旧写法 `enforcement: "observe"` 不能与 `model_idle_policy`、`model_idle_warning_ms`、`tool_wall_timeout_ms` 同时提供。超时后的停止和清理还取决于 Provider，不能假设达到阈值时所有进程都已退出。
-
-## Runtime 选择
-
-供上游路由逻辑使用的两种写法：
-
-- 指定单个 Runtime：`mode: "explicit"` 和 `runtime_id`，可选 `failover` 只能为 `none`。
-- 指定候选列表：`mode: "candidates"`、1–64 个不重复的 `runtime_ids` 和 `strategy: "preferred_failover"`。可选 `failover` 为 `candidates` 或 `none`。
-
-两者都接受 `offline_behavior: "wait" | "fail"`。协议会校验这些字段，但实际路由需要上游实现，本地 Kernel 不会据此连接另一台设备。
-
-## 配置与可信指令
-
-需要为多次调用复用配置时，应用可以使用 `ContextConfiguration`，其中 `defaults` 提供默认值，`mandatory` 提供不能被普通请求覆盖的设置。应用需要显式使用配置解析函数；KernelClient 不会自动加载这两层配置。
-
-合并默认值和本轮输入时，环境变量按变量名合并，MCP 按服务名整项替换，model 和 limits 按 `payload` 成员合并。`mandatory` 中的 MCP 配置替换请求中的同名服务；环境变量与 mandatory 值冲突时则报错。其他类型的冲突规则见下方链接的配置实现。
-
-内置类型中，除 inline 和 references 外，其余十类在类型目录中标记为 `persistent`，表示可用于应用保存的配置。该标记不会让 Runtime 自动保存、缓存或重发这些项，也不会恢复聊天历史。
-
-会话指令只能来自应用信任的配置。配置解析要求将指令放在 `mandatory`，拒绝 `defaults` 中的指令和不可信请求提交的控制指令。本地 SDK/IPC 假定应用已完成来源授权；JSON 校验只检查结构，不能验证作者身份。
-
-Octo Gateway 在调用 Kernel 前，单独将宿主本轮有效指令与渠道默认指令组合：宿主 entries 在前、Gateway entries 在后，只生成一个 `octo.control/instructions` item。这里的渠道默认不是 `ContextConfiguration.defaults`，该配置层仍禁止 instructions。这一局部组合不改变公共合并和来源授权规则。顺序、预算及续聊提醒见[接入 Extra](../guides/extras.md)。
-
-## 业务扩展
-
-应用自己的背景数据可以使用 `extra.<domain>/<name>`，例如 `extra.project/selection`。提供对象 `payload`，并按需添加 `guidance`；无需为每种业务数据注册类型。
-
-其他未知但结构合法的类型会保留在 Context 中，不过不支持该类型的组件不会使用它，也不会将它发给模型。已知执行类型仍按各自规则严格校验，业务数据不能替代权限配置。
-
-校验通过后，还需要确保所选 Provider、模型和工具可用。支持范围见 [Provider](providers.md)。
-
-来源：[schema](../../../packages/octo-runtime-protocol/schema/protocol.schema.json)、[校验器](../../../packages/octo-runtime-protocol/src/context.ts)、[目录](../../../packages/octo-runtime-protocol/src/context-catalog.ts)、[配置](../../../packages/octo-runtime-protocol/src/context-configuration.ts)、[renderer](../../../packages/octo-runtime-executor-core/src/model-input.ts)。
+通用 ContextEnvelope 类型另外保留 `octo.content/inline`、`octo.content/references` 和 `octo.runtime/selection` 的原信封定义；它们不属于 agentEnv。业务材料先变成 inputs；运行设备选择在连接 endpoint 之前由应用完成。

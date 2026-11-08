@@ -24,7 +24,7 @@ executor.register(qoderCliCnAdapter);
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "qoderclicn" } }]
   }

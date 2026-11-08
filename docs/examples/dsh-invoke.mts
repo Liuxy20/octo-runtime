@@ -23,7 +23,7 @@ export async function runDshExample(
     const input = InvokeInput.check({
       invocationId: randomUUID(),
       inputs: [{ type: "text", text: "Reply with a short greeting without using tools." }],
-      contexts: {
+      agentEnv: {
         schema: "octo.context-envelope/v3",
         items: [
           { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } },

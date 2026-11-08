@@ -15,7 +15,7 @@ const root = resolve(import.meta.dirname, "../..");
 const input = (text = "documentation example") =>
   InvokeInput.check({
     inputs: [{ type: "text", text }],
-    contexts: {
+    agentEnv: {
       schema: "octo.context-envelope/v3",
       items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "test" } }]
     }
@@ -62,7 +62,7 @@ test("interactive example routes a caller decision through the original invocati
   }
 });
 
-test("invoke helper preserves cancellation reason after consuming the tail", async (t) => {
+test("invoke helper explicitly interrupts and observes the cancelled terminal", async (t) => {
   const service = createKernelService(await options(t));
   const controller = new AbortController(),
     reason = new Error("example cancellation");
@@ -72,7 +72,7 @@ test("invoke helper preserves cancellation reason after consuming the tail", asy
     try {
       await assert.rejects(
         invokeOnce(service.client, input("wait-for-cancel"), () => {}, controller.signal),
-        (error) => error === reason
+        /run.cancelled/
       );
     } finally {
       clearTimeout(timer);

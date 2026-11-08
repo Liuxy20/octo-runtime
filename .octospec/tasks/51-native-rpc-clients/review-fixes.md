@@ -6,7 +6,7 @@ tags: [native, ipc, testing, lifecycle, schema]
 timestamp: 2026-10-24T00:00:00Z
 ---
 
-范围说明：以下是移除 Rust 前的历史评审与运行记录；当前仅交付 Go/Python，命令入口见 [native README](../../../native/README.md)。
+范围说明：以下是移除 Rust 前的历史评审与运行记录；当前仅交付 Go/Python，命令入口见 [native README](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/README.md)。
 
 # 范围与修复
 

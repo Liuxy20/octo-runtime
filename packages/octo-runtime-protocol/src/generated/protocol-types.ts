@@ -356,6 +356,42 @@ export type ContextReferenceEntry = {
  * via the `definition` "ModelInputParts".
  */
 export type ModelInputParts = [ModelInputPart, ...ModelInputPart[]];
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "AgentEnv".
+ */
+export type AgentEnv = {
+  agentConfig?: {
+    timeoutSeconds?: {
+      [k: string]: unknown;
+    };
+  };
+} & {
+  schema: "octo.context-envelope/v3";
+  /**
+   * @maxItems 32
+   */
+  items: (ContextItem &
+    (
+      | {
+          namespace?: "octo.execution";
+        }
+      | {
+          namespace?: "octo.security";
+          name?: "approval_policy";
+        }
+      | {
+          namespace?: "octo.control";
+          name?: "instructions";
+        }
+    ))[];
+  agentSource?: AgentSource;
+  workdir?: string;
+  controlInstructions?: string;
+  approvalMode?: ApprovalMode;
+  agentConfig?: AgentConfig;
+  runtimeLimits?: RuntimeLimits;
+};
 
 /**
  * Serializable data shapes for the Octo Runtime NDJSON protocol. Runtime behavior remains hand-written in src/index.ts, and this schema is the source of truth for generated TypeScript types. The x-octo-unicode-scalar-strings semantic keyword requires every JSON string value and object member name to contain Unicode scalar values only: unpaired UTF-16 surrogates are rejected, not repaired or normalized. Consumers must enforce this protocol-wide rule even when validating a definition directly.
@@ -690,7 +726,7 @@ export interface ServiceProcessSnapshot {
  * via the `definition` "KernelStatus".
  */
 export interface KernelStatus {
-  ipc_version: 1;
+  ipc_version: 2;
   kernel_instance_id: string;
   pid: number;
   execution_ready: boolean;
@@ -3076,15 +3112,8 @@ export interface InvokeInputWire {
   prompt?: string;
   modelInput?: string;
   freshFallbackModelInput?: string;
-  workdir?: string;
-  controlInstructions?: string;
   inputs: ModelInputParts;
-  contexts: ContextEnvelope;
   protocol_mode?: ProtocolMode;
-  agentSource?: AgentSource;
-  approvalMode?: ApprovalMode;
-  agentConfig?: AgentConfig;
-  runtimeLimits?: RuntimeLimits;
   providerSession?: ProviderSession;
   sessionGeneration?: number;
   providerEpoch?: number;
@@ -3094,6 +3123,7 @@ export interface InvokeInputWire {
   continuityMode?: "fresh" | "continue";
   freshFallbackModelInputParts?: ModelInputParts;
   freshFallbackImagesUnavailable?: boolean;
+  agentEnv: AgentEnv;
   [k: string]: unknown;
 }
 /**

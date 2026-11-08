@@ -49,7 +49,7 @@ timestamp: 2026-11-01T00:00:00+08:00
 | 17 | `packages/octo-runtime-extra-channel-wecom/README.md:17` | 旧段迁移；当前 Full field list 链接同包 `config-schema.json` |
 | 18 | `packages/octo-runtime-extra-webui/README.md:7` | 旧段迁移；当前 Full declaration 链接同包 `config-schema.json`，说明 CLI/SDK 字段差异 |
 
-目标：[Gateway Schema](../../../packages/octo-runtime-extra-channel-gateway/config-schema.json)、[WeCom Schema](../../../packages/octo-runtime-extra-channel-wecom/config-schema.json)、[WebUI Schema](../../../packages/octo-runtime-extra-webui/config-schema.json)。配置指南现有公共 Schema 子路径说明保留，无需重新添加已删除标题。
+目标：[Gateway Schema](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/config-schema.json)、[WeCom Schema](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-wecom/config-schema.json)、[WebUI Schema](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-webui/config-schema.json)。配置指南现有公共 Schema 子路径说明保留，无需重新添加已删除标题。
 
 ## SDK 指南改名标题：3 项
 

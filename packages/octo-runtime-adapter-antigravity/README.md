@@ -25,8 +25,8 @@ executor.register(antigravityAdapter);
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
-  approvalMode: "full_access",
-  contexts: {
+  agentEnv: {
+    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
   }

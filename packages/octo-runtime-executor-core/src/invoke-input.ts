@@ -34,14 +34,18 @@ function inputContext(value: unknown): ContextEnvelope {
       })
     };
   }
-  assertContextEnvelope(value);
-  return value;
+  const envelope = {
+    schema: (value as ContextEnvelope).schema,
+    items: (value as ContextEnvelope).items
+  };
+  assertContextEnvelope(envelope);
+  return envelope;
 }
 
 /**
  * 将调用方本轮 JSON 快照解析为执行计划与内部请求，不读取持久会话或创建 Provider。
  * sessionId 只标识业务会话；续接必须显式携带 providerSession，不能由同名会话推断。
- * 这里只解析执行设置，完整业务 Context 保留给后续共享渲染流程。
+ * 仅解析执行设置；inputs 由业务方准备，原样进入 Adapter。
  */
 export function prepareInvokeInput(value: unknown): {
   adapterType: string;
@@ -49,14 +53,18 @@ export function prepareInvokeInput(value: unknown): {
   request: InvokeRequest;
 } {
   if (!isRecord(value)) throw new TypeError("invoke input must be a JSON object");
-  const input = InvokeInput.check({ ...value, contexts: inputContext(value.contexts) });
-  const contexts = inputContext(value.contexts);
+  const input = InvokeInput.check({
+    ...value,
+    agentEnv: { ...(value.agentEnv as object), ...inputContext(value.agentEnv) }
+  });
+  const contexts = inputContext(value.agentEnv);
+  const env = input.agentEnv;
   const protocolMode = value.protocol_mode ?? "native";
   if (protocolMode !== "native" && protocolMode !== "canonical") {
     throw new TypeError("protocol_mode must be native or canonical");
   }
   const adapterType = contextItem(contexts, "octo.execution", "adapter")?.payload.type;
-  const agentSource = value.agentSource ?? (adapterType === "openclaw" ? "preset" : "provisioned");
+  const agentSource = env.agentSource ?? (adapterType === "openclaw" ? "preset" : "provisioned");
   assertAgentSource(agentSource);
   if (
     value.sessionId !== undefined &&
@@ -106,14 +114,14 @@ export function prepareInvokeInput(value: unknown): {
             {
               namespace: "octo.execution",
               name: "workspace",
-              payload: { mode: "fixed", path: input.workdir ?? process.cwd() }
+              payload: { mode: "fixed", path: env.workdir ?? process.cwd() }
             }
           ]
         : []),
       {
         namespace: "octo.security",
         name: "approval_policy",
-        payload: { mode: input.approvalMode ?? "ask" }
+        payload: { mode: env.approvalMode ?? "ask" }
       },
       {
         namespace: "octo.execution",
@@ -122,8 +130,7 @@ export function prepareInvokeInput(value: unknown): {
       }
     ]
   };
-  // Resolve only execution settings here. Business items and control instructions
-  // retain their complete current-turn snapshot for the Host's shared renderer.
+  // 解析固定执行配置；没有业务 Context 渲染阶段。
   const { resolvedExecutionPlan: plan } = resolveLocalContext(
     defaults,
     {
@@ -169,16 +176,16 @@ export function prepareInvokeInput(value: unknown): {
     modelInput: input.modelInput ?? prompt,
     modelInputParts: structuredClone(input.inputs),
     context,
-    controlInstructions: input.controlInstructions ?? contextControlInstructions(context),
-    workdir: input.workdir ?? plan.workdir,
-    approvalMode: input.approvalMode ?? plan.approval_mode,
-    runtimeLimits: input.runtimeLimits ?? localRuntimeLimits(plan),
+    controlInstructions: env.controlInstructions ?? contextControlInstructions(context),
+    workdir: env.workdir ?? plan.workdir,
+    approvalMode: env.approvalMode ?? plan.approval_mode,
+    runtimeLimits: env.runtimeLimits ?? localRuntimeLimits(plan),
     agentConfig: {
       workdir: plan.workdir,
       ...(plan.model ? { model: plan.model } : {}),
       ...(plan.effort ? { effort: plan.effort } : {}),
       ...(plan.provider_agent_id ? { providerAgentId: plan.provider_agent_id } : {}),
-      ...input.agentConfig
+      ...env.agentConfig
     }
   };
   assertInvokeRequest(request);

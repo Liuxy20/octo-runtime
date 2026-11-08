@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -165,7 +166,7 @@ test("real owner drain cancels abandoned iterator only, without replay subscript
   const relay = await kernelRelay(t, f);
   const other = await f.client.submit(kernelInput("wait-for-cancel"));
   const input = { ...kernelInput("wait-for-cancel"), protocol_mode: "native" };
-  const iterator = relay.client.invoke(input);
+  const iterator = invokeClient(relay.client, input);
   await iterator.next();
   await iterator.return();
   const own = relay.client.invocations.snapshot()[0].ref;
@@ -178,8 +179,8 @@ test("real owner drain cancels abandoned iterator only, without replay subscript
   assert.equal(relay.count("agent_run.subscribe"), before);
   assert.equal((await f.client.get(own)).terminal.control.state, "cancelled");
   assert.equal((await f.client.get(other.ref)).terminal, undefined);
-  await assert.rejects(
-    relay.client.invoke(kernelInput()).next(),
+  assert.throws(
+    () => invokeClient(relay.client, kernelInput()),
     /CLIENT_INVOCATION_ADMISSION_CLOSED/
   );
   await f.client.cancel(other.ref);
@@ -192,14 +193,14 @@ test("real owner drains sixteen paused subscriptions and a rejected seventeenth 
   const relay = await kernelRelay(t, f),
     iterators = [];
   for (let i = 0; i < 16; i++) {
-    const iterator = relay.client.invoke({
+    const iterator = invokeClient(relay.client, {
       ...kernelInput("wait-for-cancel"),
       protocol_mode: "native"
     });
     await iterator.next();
     iterators.push(iterator);
   }
-  const rejected = relay.client.invoke({
+  const rejected = invokeClient(relay.client, {
     ...kernelInput("wait-for-cancel"),
     protocol_mode: "native"
   });

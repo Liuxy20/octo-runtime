@@ -1,6 +1,6 @@
 # Contributing to Octo Runtime
 
-Octo Runtime provides a shared execution kernel for SDK hosts and Extra plugins.
+Octo Runtime provides a shared execution kernel for SDK hosts and independent applications.
 Read [ARCHITECTURE.md](ARCHITECTURE.md) and the
 [engineering rules](.octospec/rules/engineering.md) before changing execution contracts.
 
@@ -35,30 +35,28 @@ CI requires both Node.js majors to pass installation, build, type checking, test
 packed CLI/SDK verification. Keep `@types/node` on the Node.js 24 API baseline so
 new code remains compatible with both supported majors. Publishing workflows stay
 on Node.js 24 and consume the verified Ubuntu/24 archive. See the
-[support policy](README.md#get-started) and [CI guide](.github/CI.md).
+[support policy](README.md) and [CI guide](.github/CI.md).
 
 ## Project Structure and Responsibilities
 
-| Location                                      | Responsibility                                                      |
-| --------------------------------------------- | ------------------------------------------------------------------- |
-| `apps/cli`                                    | The bundled `octo-runtime` host, configuration and service commands |
-| `packages/octo-runtime-host-sdk`              | Independent component ownership and host lifecycle                  |
-| `packages/octo-runtime-executor-core`         | Single AgentExecutor implementation and explicit in-process API     |
-| `packages/octo-runtime-executor-kernel`       | Local IPC, source streams and isolated worker supervision           |
-| `packages/octo-runtime-adapter-*`             | Provider-specific protocol translation                              |
-| `packages/octo-runtime-protocol`              | Execution contracts, schemas and generated types                    |
-| `packages/octo-runtime-extra-channel-gateway` | Octo IM admission, sessions and replies                             |
-| `public`                                      | Published Core, Kernel, Host, Extra and protocol entry points       |
-| `test`, `test-support`                        | Cross-package tests, fixtures and fake Providers                    |
-| `.octospec`                                   | Current rules, task plans and verification records                  |
+| Location                                | Responsibility                                                      |
+| --------------------------------------- | ------------------------------------------------------------------- |
+| `apps/cli`                              | The bundled `octo-runtime` host, configuration and service commands |
+| `packages/octo-runtime-host-sdk`        | Independent component ownership and host lifecycle                  |
+| `packages/octo-runtime-executor-core`   | Single AgentExecutor implementation and explicit in-process API     |
+| `packages/octo-runtime-executor-kernel` | Local IPC, source streams and native service lifecycle              |
+| `packages/octo-runtime-adapter-*`       | Provider-specific protocol translation                              |
+| `packages/octo-runtime-protocol`        | Execution contracts, schemas and generated types                    |
+| `public`                                | Published Core, Kernel, Host and protocol entry points              |
+| `test`, `test-support`                  | Cross-package tests, fixtures and fake Providers                    |
+| `.octospec`                             | Current rules, task plans and verification records                  |
 
 SDK integration is the primary application entry point. The bundled Runtime CLI
 is one SDK host; it is distinct from the `octo-cli` business API tool.
 Host applications own configuration sources, credential storage and installation
-decisions. Extras own their business integrations and load/unload as whole plugins.
-Prioritize stability: recommend SDK access over IPC to an independent Executor
-Kernel, especially for Electron and other long-running hosts. The Kernel supervises
-its isolated worker over NDJSON; hosts independently own Kernel and Extra lifecycles.
+decisions. Independent business integrations use the public client.
+Prioritize stability: recommend the public KernelClient SDK over local IPC to an Executor
+Kernel, especially for Electron and other long-running hosts. The Kernel executes with injected Adapters in its host process and exposes local RPC.
 The legacy cloud-host packages, binary, API, and CLI commands have been removed. Explicit in-process
 Core embedding is allowed as a simpler SDK integration option. Its host owns the
 lifecycle and shares the execution process failure domain. Both paths reuse the
@@ -85,9 +83,7 @@ precedence over the older repository collaboration rule.
 ## Testing and CI
 
 `pnpm test:suites` is the shared local/CI test entry point. It includes root Node
-tests, protocol package tests and the existing local debugging WebUI plugin tests.
-The debugging plugin is not a production UI; this does not introduce a desktop or
-browser end-to-end acceptance requirement.
+tests and protocol package tests. Channel tests live in the independent Gateway repository.
 
 Add focused regression coverage for behavior changes. Protocol and shared lifecycle
 changes require cross-package verification. For every adapter, default tests and

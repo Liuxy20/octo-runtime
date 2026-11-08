@@ -235,8 +235,8 @@ Channel 根据本条报文提供的来源字段构造“引用来源”，保留
 | 需求必要性 | 5/100：评价新增工作。已有起始 typing、续期与卡片进度反馈，当前体验满足目标，无需复制旧 Gateway 的全程 typing |
 | 技术方案可执行性 | 98/100：保留现有 Channel 租约与卡片接线，无需修改 Context、Adapter 或任务时限 |
 | 目标应覆盖比例 | 100% 的“开始处理先显示 typing，卡片投递成功后由卡片接替”反馈目标，当前源码已接通此路径，标记删除线。全程持续 typing 不属于当前目标，原 70% 无明确分母，撤回 |
-| 实际启动与续期 | [beginPresentation](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 在处理阶段获取租约，typing=false 可关闭；[TypingController](../../../packages/octo-runtime-extra-channel-gateway/src/presentation/typing.ts) 立即发送并默认每 5 秒续期，按地址共享、按 Run 释放，避免同地址多租约互相误停 |
-| 实际交接 | [CardSession](../../../packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts) 在等待输入/审批或终态停止 typing；首次卡片投递返回 delivered 后也停止，由进度卡承载后续状态，并非必须等任务结束才停。投递成功不保证每个客户端实际渲染了卡片 |
+| 实际启动与续期 | [beginPresentation](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 在处理阶段获取租约，typing=false 可关闭；[TypingController](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/presentation/typing.ts) 立即发送并默认每 5 秒续期，按地址共享、按 Run 释放，避免同地址多租约互相误停 |
+| 实际交接 | [CardSession](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts) 在等待输入/审批或终态停止 typing；首次卡片投递返回 delivered 后也停止，由进度卡承载后续状态，并非必须等任务结束才停。投递成功不保证每个客户端实际渲染了卡片 |
 | 10 分钟的含义 | 默认 maxLifetimeMs=600000 是单个 typing 租约寿命，不是任务总时限；它可能因卡片或等待状态更早停止。没有卡片接替且任务仍运行时，超过该期限不再续发 typing。后续卡片更新或终态回复仍沿既有路径，不以任务允许一天推导 typing 必须显示一天 |
 | 失败与清理 | API 失败由租约发送链记录，不阻断执行；单地址发送不重叠。结束、取消收尾与关闭连接回收计时器及在途请求。等待后继续执行或卡片交接后，现有 CardSession 不重新获取 typing 租约，不能声称已经实现自动恢复 typing |
 | 结论与异常边界 | 保留现有起始 typing 与进度卡交接，无新增改动，不增加全天 typing 或无卡片客户端兼容需求。卡片投递可能失败与客户端不支持协议是两回事；失败沿现有诊断、投递和最终文本链处理，不据此扩大本项范围，也不声称投递永不失败 |
@@ -255,7 +255,7 @@ Channel 根据本条报文提供的来源字段构造“引用来源”，保留
 | 统一合同已存在 | [InteractionRequestedPayload](../../../packages/octo-runtime-protocol/src/generated/protocol-types.ts) 已定义 approval/question/elicitation、interactionId、executionInstanceId、expiresAt 与 request；对应 interaction.resolved 和 Host.respondInteraction 已存在，不需要新增业务卡片执行协议 |
 | Codex 原生映射已存在 | [Codex 映射](../../../packages/octo-runtime-adapter-codex/src/app-server.ts) 把 item/tool/requestUserInput 映射为 question，投影 questions[] 的题目/选项等；elicitation 投影 requestedSchema。回复转换回原 Provider 请求，不新开一轮。其他 Adapter 的实际支持分别核对，不从通用类型推导全部支持 |
 | 旧方案实际状态 | [工具入口](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/octo/octo-tools.ts:363) 支持动作按钮及 text/number/toggle/choice 字段；默认不暴露，只有环境开关启用且注入可信服务才可发送。[main.ts](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/main.ts:184) 也受开关与工厂注入约束，不能将旧代码存在当默认可用证据 |
-| 当前 IM 的真实缺口 | [IM 展示链](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 只取 operation.summary/question/message，未呈现 Codex questions[] 及 elicitation schema；回调仅接停止/重试。question 的 /respond 将答案作为字符串，Codex questionAnswers 则要求答案对象，现路径不匹配；不能把已有审批文本命令回归视为 ask-user 已闭环 |
+| 当前 IM 的真实缺口 | [IM 展示链](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 只取 operation.summary/question/message，未呈现 Codex questions[] 及 elicitation schema；回调仅接停止/重试。question 的 /respond 将答案作为字符串，Codex questionAnswers 则要求答案对象，现路径不匹配；不能把已有审批文本命令回归视为 ask-user 已闭环 |
 | 与 F07 的关系 | 当前单版本 SaaS 支持卡片协议，说明客户端可以展示卡片；F09 缺的是业务生成与回调处理链，不是旧客户端兼容或 typing。不能从 F07 已覆盖推导 F09 已覆盖 |
 | 已确定目标路径 | AskUser → interaction.requested → Channel 按实际问题/选项/schema 投影交互卡片，支持选项与自定义输入 → 用户回答 → 校验服务端操作人、原消息/会话、invocation/interaction 归属及有效期 → 以正确结构调用 Host.respondInteraction → Adapter 回应原请求，原模型继续同一次执行 → interaction.resolved 更新卡片。等待中的问答答案走独立交互通道，不通过新 Context/聊天 Event 替代原请求响应 |
 | 卡片协议参考 | 可参考旧 Gateway 的 v2 卡片发送、编辑及回调格式，第一版交互细节由后续实施按本设计确定；旧卡片业务生成、会话运行及解析体系不是目标基线 |
@@ -773,7 +773,7 @@ F18 结论已记录，F19/F20 已获用户确认，F21 的评分维度与后续�
 | 当前能力与覆盖口径 | 三类职责目标覆盖 100%，已具备准入、Bot 工具身份及统一执行权限链，标删除线；覆盖分母不是旧 tier/broker 实现全集。旧逐工具 allow/deny、统一禁网及 broker 凭据隔离不承诺等价实现。F24 等已记录的独立缺陷和 Provider 实测范围不被本项覆盖结论抹去 |
 | 已确认结论 | 保留当前架构，不迁入旧体系，不新增 Channel 混合权限管理或业务代理层。之前将多类职责混为一项实现缺口的表述撤销；真实合同缺陷在责任组件修复，本项无新增实施任务 |
 
-依据：旧 [capability.ts](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/guidance/capability.ts)、[MCP broker](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/octo/mcp-broker.ts)、[Codex Adapter](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/runtimes/codex-adapter.ts)；当前 [Channel 准入](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts)、[IM 执行配置](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[Adapter 责任](../../rules/adapter-metadata.md)和[业务工具边界](../../journal/shared/2026-10-16-agent-toolcall-channel-boundary.md)。仅静态核对与既有合同，不是本轮安全实测。本项后剩 F30–F32 共 3 项。
+依据：旧 [capability.ts](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/guidance/capability.ts)、[MCP broker](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/octo/mcp-broker.ts)、[Codex Adapter](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/runtimes/codex-adapter.ts)；当前 [Channel 准入](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts)、[IM 执行配置](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[Adapter 责任](../../rules/adapter-metadata.md)和[业务工具边界](../../journal/shared/2026-10-16-agent-toolcall-channel-boundary.md)。仅静态核对与既有合同，不是本轮安全实测。本项后剩 F30–F32 共 3 项。
 
 ## 逐项 Review：F30 本地文件保护与旧 Gateway 目录体系
 
@@ -802,7 +802,7 @@ SDK/Extra 仍负责输入约束校验，并按接入协议携带凭据完成实�
 | 修正前次评价 | 撤销原 70% 混合覆盖口径，以及把宿主链接路径/Windows ACL 核查项计入 Runtime 可执行性而扣至 90 分的评价；该类具体问题归实际存储宿主，不构成本项 Runtime 缺口 |
 | 本轮范围 | 仅记录已确认架构，不改代码，不声称已完成全 Home、Windows ACL 或任意桌面凭据存储的安全验收 |
 
-依据：[Extra JSON 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[凭据值消费](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts)、[CLI 配置保存](../../../apps/cli/src/extras.ts)、[CLI 文件保护](../../../apps/cli/src/state.ts)。旧 [secure-fs](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/secure-fs.ts) 与 [claim](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/claim.ts)仅作历史参考。决定补记到[配置来源与凭据保护记录](../../journal/shared/2026-10-16-host-config-source-boundary.md#f30-补充两类宿主与凭据保护归属仅文档)。下一项 F31，剩 F31/F32 共 2 项。
+依据：[Extra JSON 入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[凭据值消费](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts)、[CLI 配置保存](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/apps/cli/src/extras.ts)、[CLI 文件保护](../../../apps/cli/src/state.ts)。旧 [secure-fs](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/secure-fs.ts) 与 [claim](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/claim.ts)仅作历史参考。决定补记到[配置来源与凭据保护记录](../../journal/shared/2026-10-16-host-config-source-boundary.md#f30-补充两类宿主与凭据保护归属仅文档)。下一项 F31，剩 F31/F32 共 2 项。
 
 ## 逐项 Review：F31 日志归属与 Bot 诊断输出
 
@@ -905,7 +905,7 @@ SDK/Extra 仍负责输入约束校验，并按接入协议携带凭据完成实�
 | 当前完成状态 | 日志容量管理和内部诊断身份已具备，默认 Extra 诊断出口未接。不是完整覆盖，不标删除线；撤销原混合目标 70% 口径，不将不同层能力强行折算为当前完成率 |
 | 待用户决策 | 是否接受“宿主管存储，不做每 Bot 文件；仅补齐默认 Extra 的脱敏诊断输出”作为后续范围。当前没有实施授权 |
 
-依据：旧 [slice-log](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/slice-log.ts)；当前 [容量管理](../../../packages/octo-runtime-adapter-sdk/src/hourly-log.ts)、[统一日志](../../../packages/octo-runtime-adapter-sdk/src/runtime-log.ts)、[诊断产生](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[内部诊断依赖](../../../packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[默认 Extra 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[对象式入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts)及[受管日志规则](../../rules/stateless-execution.md#受管日志)。本轮未做真实日志验收。本项后只剩 F32 一项。
+依据：旧 [slice-log](/Users/lvsijia/codex.mlamp.cn/dmwork/octo-agent-gateway/src/deploy/slice-log.ts)；当前 [容量管理](../../../packages/octo-runtime-adapter-sdk/src/hourly-log.ts)、[统一日志](../../../packages/octo-runtime-adapter-sdk/src/runtime-log.ts)、[诊断产生](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[内部诊断依赖](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/ports.ts)、[默认 Extra 入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[对象式入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-extra-channel-gateway/src/daemon-module.ts)及[受管日志规则](../../rules/stateless-execution.md#受管日志)。本轮未做真实日志验收。本项后只剩 F32 一项。
 
 ## 逐项 Review：F32 工程验证与操作说明
 
@@ -946,7 +946,7 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 | 当前状态 | 基础工程能力已有；各项新行为的回归、真实验收和说明更新随实施完成，不给混合完成百分比，不标整项删除线 |
 | 待用户评审 | 是否接受“沿现有工程体系，验收随各改造实施，不单独迁入旧 CI/runbook/Worker 测试模型”这一范围 |
 
-依据：[现有构建/测试入口](../../../package.json)、[CI](../../../.github/workflows/ci.yml)、[Extra 生命周期测试](../../../test/extras.test.js)、[SDK 清理测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[双渠道清理测试](../../../test/im-extra-disposal.test.js)、[连接状态回归](../../../test/im-connection-state-machine.test.js)、[部署说明](../../../DEPLOYMENTS.md)与[工程验证规则](../../rules/engineering.md)。本轮仅静态核对及文档更新，未执行功能测试、构建或线上调试。
+依据：[现有构建/测试入口](../../../package.json)、[CI](../../../.github/workflows/ci.yml)、[Extra 生命周期测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/extras.test.js)、[SDK 清理测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[双渠道清理测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-extra-disposal.test.js)、[连接状态回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-connection-state-machine.test.js)、[部署说明](../../../DEPLOYMENTS.md)与[工程验证规则](../../rules/engineering.md)。本轮仅静态核对及文档更新，未执行功能测试、构建或线上调试。
 
 ## 关键传递边界
 
@@ -987,24 +987,24 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 
 | 编号 | Runtime 源码/现行合同 |
 | --- | --- |
-| R01 | [Channel 实际接收与回发](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) |
-| R02 | [本轮 Context 构造](../../../packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) |
-| R03 | [身份、类型、群范围及 mention 准入](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) |
-| R04 | [图片下载与校验](../../../packages/octo-runtime-extra-channel-gateway/src/transport/image-input.ts)、[已决图片范围](../channel-image-input/brief.md) |
-| R05 | [底层消息/媒体/已读/心跳 helper](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/messages.ts) |
-| R06 | [WS 传输](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[连接状态机](../channel-connection-state-machine/brief.md) |
-| R07 | [typing 租约](../../../packages/octo-runtime-extra-channel-gateway/src/presentation/typing.ts) |
-| R08 | [IM 接纳、调度、交互及执行终态](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) |
-| R09 | [canonical 投影](../../../packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts)、[卡片](../../../packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts) |
-| R10 | [卡片动作解析](../../../packages/octo-runtime-extra-channel-gateway/src/transport/card-action.ts)；执行处理仍以 R01/R08 实际调用为准 |
-| R11 | [final 真人 mention](../../../packages/octo-runtime-extra-channel-gateway/src/transport/mentions.ts)、[mention 决策](../channel-mention-context/brief.md) |
-| R12 | [工具环境](../../../packages/octo-runtime-extra-channel-gateway/src/execution/tool-environment.ts)、[CLI 环境专项](../channel-octo-cli-environment/brief.md)、[环境合同](../../rules/environment.md) |
+| R01 | [Channel 实际接收与回发](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) |
+| R02 | [本轮 Context 构造](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) |
+| R03 | [身份、类型、群范围及 mention 准入](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) |
+| R04 | [图片下载与校验](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/image-input.ts)、[已决图片范围](../channel-image-input/brief.md) |
+| R05 | [底层消息/媒体/已读/心跳 helper](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/messages.ts) |
+| R06 | [WS 传输](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[连接状态机](../channel-connection-state-machine/brief.md) |
+| R07 | [typing 租约](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/presentation/typing.ts) |
+| R08 | [IM 接纳、调度、交互及执行终态](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) |
+| R09 | [canonical 投影](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/presentation/run-projector.ts)、[卡片](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts) |
+| R10 | [卡片动作解析](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/card-action.ts)；执行处理仍以 R01/R08 实际调用为准 |
+| R11 | [final 真人 mention](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/mentions.ts)、[mention 决策](../channel-mention-context/brief.md) |
+| R12 | [工具环境](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/tool-environment.ts)、[CLI 环境专项](../channel-octo-cli-environment/brief.md)、[环境合同](../../rules/environment.md) |
 | R13 | [InvokeInput 与支持的材料类型](../../rules/invoke-input.md)、[Context 合同](../../rules/context-input.md) |
-| R14 | [内存 store](../../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)、[不持久化决定](../channel-no-context-persistence/brief.md)、[会话合同](../../rules/session-reset.md) |
-| R15 | [执行请求构造](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[固定目录决定](../channel-fixed-workdir-decision/brief.md) |
-| R16 | [内部连接 manager](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts)、[Extra 装配](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[配置校验](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts) |
+| R14 | [内存 store](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)、[不持久化决定](../channel-no-context-persistence/brief.md)、[会话合同](../../rules/session-reset.md) |
+| R15 | [执行请求构造](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[固定目录决定](../channel-fixed-workdir-decision/brief.md) |
+| R16 | [内部连接 manager](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/lifecycle/manager.ts)、[Extra 装配](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/extra.ts)、[配置校验](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts) |
 | R17 | [Extra 生命周期及宿主编排](../../rules/extras.md) |
-| R18 | [REST 重试](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/client.ts)、[投递重试](../../../packages/octo-runtime-extra-channel-gateway/src/delivery/dispatcher.ts)、[已有专项](../channel-rate-limit-retry/brief.md) |
+| R18 | [REST 重试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/client.ts)、[投递重试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/delivery/dispatcher.ts)、[已有专项](../channel-rate-limit-retry/brief.md) |
 | R19 | [CLI 默认 Adapter](../../../apps/cli/src/manifest.json)、[Hermes ACP Adapter](../../../packages/octo-runtime-adapter-hermes/src/index.ts) |
 | R20 | [架构与产品意图归属](../../rules/architecture.md)、[Channel 规则](../../rules/channel-integration.md) |
 | R21 | [有界状态及日志](../../rules/stateless-execution.md) |
@@ -1013,5 +1013,5 @@ F32 本质是落实既有工程规则的交付约束，不是独立产品功能�
 | R24 | 本机 octo-cli message send --help：POST /v1/bot/sendMessage，channel-id 与 channel-type 必填，1=DM、2=group、5=thread；并核对本机 octo-shared/octo-messaging 技能文档。仅命令合同与本地源码核对，未调用线上发送 |
 | R25 | 本机 octo-cli file upload --help、schema file.upload 与 schema message.send：上传返回 name/size/url，消息接受 payload。对照旧 cli-client.ts 的 uploadFile/sendFileMessage，确认显式文件交付沿 CLI 组合路径；未在本轮上传/发送 |
 | R26 | 本机 octo-cli api/thread/bot/message --help；旧 octo-tools.ts 的 octo_thread_delete、octo_resolve_targets、octo_voice_context_* 经 buildApiArgs 调用 CLI；本地 octo-server/modules/bot_api/bot_api.go 注册对应路由。仅静态核对，无线上业务调用 |
-| R27 | [Extra dispose 修复及既有验收](../../journal/shared/2026-10-15-extra-dispose-repair.md)、[双渠道清理回归](../../../test/im-extra-disposal.test.js)、[SDK 清理回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[loader](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/extras.ts)、[共享 Host 装配与 Extra RPC](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts)；本轮静态复核，不作为本轮重跑结果 |
-| R28 | [连接状态及既有真实验收](../../journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)、[SDK Home owner lock](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/home.ts)、[daemon PID 及启动回归](../../../test/cli.test.js)、[状态查询回归](../../../test/cli-status.test.js)；状态机合盖与外部故障的未验收范围仍按专项记录维护 |
+| R27 | [Extra dispose 修复及既有验收](../../journal/shared/2026-10-15-extra-dispose-repair.md)、[双渠道清理回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-extra-disposal.test.js)、[SDK 清理回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/extra-sdk-disposal.test.js)、[loader](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/extras.ts)、[共享 Host 装配与 Extra RPC](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/server.ts)；本轮静态复核，不作为本轮重跑结果 |
+| R28 | [连接状态及既有真实验收](../../journal/shared/2026-10-16-channel-connection-state-machine-delivery.md)、[SDK Home owner lock](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-daemon/src/runtime/home.ts)、[daemon PID 及启动回归](../../../test/cli.test.js)、[状态查询回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/cli-status.test.js)；状态机合盖与外部故障的未验收范围仍按专项记录维护 |

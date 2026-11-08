@@ -1,9 +1,5 @@
 import { loadCliAdapters } from "./adapters.js";
-import { runExtraCommand, commandError } from "./extra-commands.js";
-import net from "node:net";
-import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { lstat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import {
   attachKernel,
@@ -15,17 +11,13 @@ import {
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import {
   componentEndpoint,
-  createExtraService,
   validateRuntimeHome,
-  RuntimeHomeError,
-  type ExtraService
+  RuntimeHomeError
 } from "@mininglamp-oss/octo-runtime-host-sdk";
-import { getExtra, readExtra, setExtra } from "./extras.js";
 import { cliVersionInfo } from "./help.js";
 import { parseCliCommand } from "./command-tree.js";
 import { runForegroundService } from "./foreground.js";
-import { showExtraLogs } from "./logs.js";
-import { StatusOutput } from "./status-output.js";
+import { showKernelLogs } from "./logs.js";
 import {
   selectRuntimeHome,
   prepareRuntimeHome,
@@ -38,7 +30,6 @@ import {
 import { resolveServiceControl, type ServiceControlOptions } from "./service-control.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { readCliAdapterConfigurations } from "./adapter-configurations.js";
-import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   describeError,
   formatErrorDetails,
@@ -64,8 +55,8 @@ export interface CliDependencies extends ServiceControlOptions {
   /** 自有命令的取消；不启动或停止任何服务。 */
   commandSignal?: AbortSignal;
 }
-const components = ["executor-kernel", "channel-gateway"] as const;
-const builtinComponents: readonly string[] = [...components, "channel-wecom", "webui"];
+const components = ["executor-kernel"] as const;
+const builtinComponents: readonly string[] = components;
 export async function runCli(args: string[], dependencies: CliDependencies = {}): Promise<number> {
   const output = dependencies.output ?? ((line: string) => process.stdout.write(`${line}\n`));
   // 参数解析失败也按宿主布尔标记输出 JSON；-- 后的字面位置参数不选择输出格式。
@@ -82,7 +73,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     logs: context.logs === undefined ? undefined : safeStartupValue(context.logs)
   });
   let runningComponent: string | undefined;
-  let statusOutput: StatusOutput | undefined;
   try {
     const parsed = await parseCliCommand(args, dependencies);
     if (parsed.help !== undefined) {
@@ -92,7 +82,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     const { flags, positional } = parsed;
     context = { component: positional[0], action: positional[1] };
     json = Boolean(flags.json);
-    if (parsed.extra) return await runExtraCommand(parsed, dependencies);
     if (
       flags["acknowledge-orphan-cleanup"] !== undefined &&
       !(positional[0] === "executor-kernel" && positional[1] === "recover")
@@ -143,33 +132,24 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     }
     // Route logs before config/module/manager access so offline failures remain diagnosable.
     if (positional[1] === "logs") {
-      const extra = positional[0];
+      const component = positional[0];
       context = {
-        component: extra,
+        component: component,
         action: "logs",
-        logs: extra === "executor-kernel" ? join(home, "logs") : join(home, "logs", "extras")
+        logs: join(home, "logs")
       };
       if (
         positional.length !== 2 ||
-        !/^[a-z][a-z0-9-]{0,63}$/.test(extra) ||
+        !/^[a-z][a-z0-9-]{0,63}$/.test(component) ||
         flags.autostart !== undefined
       )
         throw new Error("INVALID_ARGUMENTS");
-      if (!builtinComponents.includes(extra)) {
-        const registration = await lstat(join(home, "extras", extra, "config.json")).catch(
-          (error: NodeJS.ErrnoException) => {
-            if (error.code === "ENOENT") return undefined;
-            throw error;
-          }
-        );
-        if (!registration?.isFile() || registration.isSymbolicLink())
-          throw new Error("EXTRA_NOT_FOUND");
-      }
+      if (!builtinComponents.includes(component)) throw new Error("INVALID_ARGUMENTS");
       if (flags.lines !== undefined && !/^[1-9][0-9]{0,4}$/.test(flags.lines))
         throw new Error("INVALID_ARGUMENTS");
-      await showExtraLogs({
+      await showKernelLogs({
         home,
-        extra,
+        component,
         lines: Number(flags.lines ?? 200),
         follow: Boolean(flags.follow),
         json,
@@ -195,13 +175,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     // 配置/恢复和 Playboard 不使用常驻端点；只在实际连接或托管常驻服务时派生并校验。
     const kernelEndpoint = () => componentEndpoint(home, "executor-kernel", dependencies.platform);
     context = { component: positional[0], action: positional[1], logs: join(home, "logs") };
-    const registrations = await readExtraDirectory(join(home, "extras"));
     // 部署、停止及配置修复命令不启动模块，也不因尚未可读的启动清单而无法操作。
-    const needsManifest =
-      positional[1] === "run" ||
-      (!builtinComponents.includes(positional[0]) &&
-        !registrations.some((entry) => entry.name === positional[0]) &&
-        ["install", "start", "restart", "stop", "uninstall", "status"].includes(positional[1]));
+    const needsManifest = positional[0] === "executor-kernel" && positional[1] === "run";
     const manifest = needsManifest
       ? await loadCliManifest(
           home,
@@ -209,13 +184,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           dependencies.errorOutput ?? ((message) => process.stderr.write(`${message}\n`))
         )
       : undefined;
-    const componentNames = [
-      ...new Set([...components, ...registrations.map((entry) => entry.name)])
-    ];
-    const isComponent = (name: string) =>
-      builtinComponents.includes(name) ||
-      registrations.some((entry) => entry.name === name) ||
-      manifest?.extras.some((entry) => entry.name === name) === true;
+    const componentNames = [...components];
+    const isComponent = (name: string) => builtinComponents.includes(name);
     const service = resolveServiceControl(dependencies);
     const input = dependencies.input ?? process.stdin;
     const publish = (value: unknown, human?: string) =>
@@ -233,7 +203,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         }
         return native;
       };
-      // 原生管理器和 IPC 是两条独立事实；管理器失效不能跳过 Extra 自身的 status。
+      // 原生管理器和 IPC 是两条独立事实；管理器失效不能跳过 Kernel 自身的 status。
       const [native, runtime] = await Promise.all([
         inspect().catch((error: unknown) => ({
           manager: service.backend.kind,
@@ -258,20 +228,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           ])
         )
       );
-    if (["extraset", "extraget"].includes(positional[0]) && flags.profile)
-      throw new Error("INVALID_ARGUMENTS");
-    if (positional[0] === "extraset" && positional.length === 2) {
-      publish(await setExtra(paths, positional[1], input));
-      return 0;
-    }
-    if (positional[0] === "extraget" && positional.length === 2) {
-      // 配置命令是数据接口，保持紧凑 JSON 与慢管道完整输出合同。
-      output(JSON.stringify(await getExtra(paths, positional[1])));
-      (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
-        `Config file: ${join(home, "extras", positional[1], "config.json")}`
-      );
-      return 0;
-    }
     if (positional[0] === "playboard" && positional.length === 1) {
       dependencies.onPlayboardRun?.();
       const { runPlayboard } = await import("./playboard.js");
@@ -354,8 +310,8 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       runningComponent = component;
       dependencies.onComponentRun?.();
       await prepareRuntimeHome(home);
-      let handle: KernelService | ExtraService;
-      if (component === "executor-kernel") {
+      let handle: KernelService;
+      {
         const config = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
         handle = createKernelService({
           home,
@@ -372,30 +328,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
             manifest,
             dependencies.env ?? process.env
           )
-        });
-      } else {
-        // CLI 的 Gateway 等 Extra 独立托管；ExtraService 内部 attach 已有 Kernel，不创建执行内核。
-        const registration = await readExtra(paths, component, manifest);
-        const module =
-          registration.enabled === false
-            ? { name: registration.name, default: () => () => {} }
-            : await registration.load();
-        if (module.name !== registration.name) throw new Error("EXTRA_NAME_MISMATCH");
-        if (!dependencies.output) statusOutput = new StatusOutput(process.stdout);
-        handle = createExtraService({
-          home,
-          logging: {
-            directory: join(home, "logs"),
-            statusOutput: dependencies.output
-              ? (record) => output(JSON.stringify(record))
-              : statusOutput!.write
-          },
-          module,
-          config: registration.config,
-          dependencies: {},
-          enabled: registration.enabled,
-          endpoint: kernelEndpoint(),
-          controlEndpoint: componentEndpoint(home, component, dependencies.platform)
         });
       }
       return await runForegroundService(
@@ -492,17 +424,16 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     if (runningComponent && context.logs)
       await recordStartupFailure(context.logs, runningComponent, error);
     const failure = {
-      ...(commandError(error) ??
-        describeError(
-          error,
-          "COMMAND_FAILED",
-          ["run", "start", "restart", "install"].includes(context.action ?? "")
-            ? {
-                component: context.component ?? "cli",
-                phase: runningComponent ? "initializing" : "created"
-              }
-            : undefined
-        )),
+      ...describeError(
+        error,
+        "COMMAND_FAILED",
+        ["run", "start", "restart", "install"].includes(context.action ?? "")
+          ? {
+              component: context.component ?? "cli",
+              phase: runningComponent ? "initializing" : "created"
+            }
+          : undefined
+      ),
       ...failureContext()
     };
     const code = failure.code;
@@ -512,19 +443,15 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       (dependencies.errorOutput ?? ((line: string) => process.stderr.write(`${line}\n`)))(
         `${[failure.component, failure.action].filter(Boolean).join(" ") || "octo-runtime"}: ${code}${failure.cause_code ? ` (${failure.cause_code})` : ""}\n${formatErrorDetails(failure)}${failure.logs ? `\nLogs: ${failure.logs}` : ""}`
       );
-    return code === "EXTRA_COMMAND_CANCELLED"
-      ? 130
-      : ["SERVICE_NOT_INSTALLED", "NOT_INSTALLED"].includes(code)
-        ? 3
-        : /INVALID|REQUIRED|COMMAND_NOT_FOUND/.test(code)
-          ? 2
-          : /INCOMPLETE/.test(code)
-            ? 5
-            : /UNAVAILABLE|SERVICE_PROCESS_EXITED/.test(code)
-              ? 4
-              : 1;
-  } finally {
-    statusOutput?.close();
+    return ["SERVICE_NOT_INSTALLED", "NOT_INSTALLED"].includes(code)
+      ? 3
+      : /INVALID|REQUIRED|COMMAND_NOT_FOUND/.test(code)
+        ? 2
+        : /INCOMPLETE/.test(code)
+          ? 5
+          : /UNAVAILABLE|SERVICE_PROCESS_EXITED/.test(code)
+            ? 4
+            : 1;
   }
 }
 async function componentStatus(
@@ -544,51 +471,6 @@ async function componentStatus(
       client.close();
     }
   }
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection(endpoint);
-    const id = randomUUID();
-    let bytes = "";
-    socket.setTimeout(1000, () => {
-      socket.destroy();
-      reject(new Error("COMPONENT_UNAVAILABLE"));
-    });
-    socket.once("error", reject);
-    socket.once("connect", () =>
-      socket.write(`${JSON.stringify({ jsonrpc: "2.0", id, method: "status" })}\n`)
-    );
-    socket.on("data", (chunk: Buffer) => {
-      bytes += chunk.toString("utf8");
-      if (bytes.length > 65536) {
-        socket.destroy();
-        reject(new Error("INVALID_RESPONSE"));
-        return;
-      }
-      if (bytes.includes("\n")) {
-        try {
-          const response = JSON.parse(bytes.slice(0, bytes.indexOf("\n"))) as {
-            jsonrpc?: unknown;
-            id?: unknown;
-            result?: { name?: unknown; pid?: unknown; status?: unknown };
-          };
-          if (
-            response.jsonrpc !== "2.0" ||
-            response.id !== id ||
-            response.result?.name !== component ||
-            typeof response.result.pid !== "number" ||
-            !response.result.status ||
-            typeof response.result.status !== "object"
-          )
-            throw new Error("INVALID_RESPONSE");
-          resolve(response.result);
-        } catch {
-          reject(new Error("INVALID_RESPONSE"));
-        }
-        socket.destroy();
-      }
-    });
-    socket.once("end", () => {
-      if (!bytes.includes("\n")) reject(new Error("COMPONENT_UNAVAILABLE"));
-    });
-  });
+  throw new Error("INVALID_ARGUMENTS");
 }
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));

@@ -25,14 +25,14 @@ import type { StreamLimitPolicy } from "./stream-limits.js";
 /**
  * Public JSON invocation contract shared by CLI, SDK and channels.
  * A plain JSON object satisfies this class structurally; `new` is not required.
- * Only inputs and contexts are required. Defaults are resolved by the execution
+ * Only inputs and agentEnv are required. Defaults are resolved by the execution
  * boundary, never by adding historical business context.
  */
 export class InvokeInput {
   /** Exact current-turn text/image parts, in caller order. Image bytes occur here once. */
   declare inputs: ModelInputPart[];
-  /** Caller-owned Context v3 snapshot; an empty items array is valid. */
-  declare contexts: ContextEnvelope;
+  /** Execution-only Context v3 snapshot; an empty items array is valid. */
+  declare agentEnv: AgentEnv;
   /** Business session identity; generated if omitted. Does not imply provider resume. */
   declare sessionId?: string;
   /** 调用方拥有的展示名称；省略时由 Core 提供 UUID，不参与会话恢复。 */
@@ -47,22 +47,10 @@ export class InvokeInput {
   declare sessionGeneration?: number;
   /** Caller-owned provider binding epoch; no inferred default. */
   declare providerEpoch?: number;
-  /** Agent ownership: preset for OpenClaw by default, provisioned otherwise. */
-  declare agentSource?: AgentSource;
   /** Display-safe description; defaults to the textual summary of inputs. */
   declare prompt?: string;
   /** Exact textual provider turn when distinct from the multipart inputs summary. */
   declare modelInput?: string;
-  /** Provider cwd; defaults to the resolved workspace (local cwd when omitted). */
-  declare workdir?: string;
-  /** Trusted instructions, separate from model business context; derived if omitted. */
-  declare controlInstructions?: string;
-  /** Execution approval policy, normally resolved from contexts; defaults to ask. */
-  declare approvalMode?: ApprovalMode;
-  /** Full provider configuration, including providerOptions; context selections must agree. */
-  declare agentConfig?: AgentConfig;
-  /** Complete timeout/enforcement settings; execution defaults apply when omitted. */
-  declare runtimeLimits?: RuntimeLimits;
   /** JSON metadata for tracing/business identity; not model text or authorization evidence. */
   declare runMetadata?: Record<string, unknown>;
   /** Opaque provider session, including provider extension fields; never rebuilt from sessionId. */
@@ -82,6 +70,31 @@ export class InvokeInput {
     return value;
   }
 }
+
+/** 可复用执行配置；信封格式保持 v3，业务材料必须由调用方放入 inputs。 */
+export interface AgentEnv extends ContextEnvelope {
+  /** Agent ownership: preset for OpenClaw by default, provisioned otherwise. */
+  agentSource?: AgentSource;
+  /** Provider cwd; defaults to the resolved workspace (local cwd when omitted). */
+  workdir?: string;
+  /** Trusted instructions, separate from model business context; derived if omitted. */
+  controlInstructions?: string;
+  /** Execution approval policy, normally resolved from contexts; defaults to ask. */
+  approvalMode?: ApprovalMode;
+  /** Full provider configuration, including providerOptions; context selections must agree. */
+  agentConfig?: AgentConfig;
+  /** Complete timeout/enforcement settings; execution defaults apply when omitted. */
+  runtimeLimits?: RuntimeLimits;
+}
+
+/** 高级调用的内容与追踪信息；不包含执行环境、会话参数或本地 signal。 */
+export type InvocationContent = Omit<
+  InvokeInput,
+  "inputs" | "agentEnv" | "sessionId" | "providerSession"
+> & {
+  parts: ModelInputPart[];
+};
+export type InvocationInputs = ModelInputPart[] | InvocationContent;
 
 /** Local ingress execution settings, outside caller-owned JSON and Context. */
 export interface InvokeEnvironment {
@@ -141,7 +154,19 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
     throw new TypeError("InvokeInput must be a JSON object");
   const input = value as Record<string, unknown>;
   if (
-    ["protocolMode", "adapterType", "request", "options"].some((key) => Object.hasOwn(input, key))
+    [
+      "protocolMode",
+      "adapterType",
+      "request",
+      "options",
+      "contexts",
+      "agentSource",
+      "workdir",
+      "controlInstructions",
+      "approvalMode",
+      "agentConfig",
+      "runtimeLimits"
+    ].some((key) => Object.hasOwn(input, key))
   )
     throw new TypeError(
       "InvokeInput requires the unified JSON contract, not a prepared request wrapper"
@@ -151,7 +176,7 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
   if (Object.hasOwn(input, "executionEnvOverrides"))
     throw new TypeError("executionEnvOverrides belongs to the local invoke environment");
   assertModelInputParts(input.inputs);
-  assertContextEnvelope(input.contexts);
+  assertAgentEnv(input.agentEnv);
   if (input.sessionName !== undefined) assertSessionName(input.sessionName);
   for (const key of [
     "sessionId",
@@ -163,9 +188,6 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
   ])
     if (input[key] !== undefined && (typeof input[key] !== "string" || !input[key]))
       throw new TypeError(`InvokeInput.${key} must be a non-empty string`);
-  for (const key of ["workdir", "controlInstructions"])
-    if (input[key] !== undefined && typeof input[key] !== "string")
-      throw new TypeError(`InvokeInput.${key} must be a string`);
   for (const key of ["sessionGeneration", "providerEpoch"])
     if (
       input[key] !== undefined &&
@@ -177,14 +199,11 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
     !["native", "canonical"].includes(input.protocol_mode as string)
   )
     throw new TypeError("protocol_mode must be native or canonical");
-  if (input.agentSource !== undefined) assertAgentSource(input.agentSource);
-  if (input.approvalMode !== undefined) assertApprovalMode(input.approvalMode);
   if (
     input.continuityMode !== undefined &&
     !["fresh", "continue"].includes(input.continuityMode as string)
   )
     throw new TypeError("continuityMode must be fresh or continue");
-  if (input.runtimeLimits !== undefined) assertRuntimeLimits(input.runtimeLimits);
   if (input.freshFallbackModelInputParts !== undefined)
     assertModelInputParts(input.freshFallbackModelInputParts);
   if (
@@ -192,38 +211,12 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
     typeof input.freshFallbackImagesUnavailable !== "boolean"
   )
     throw new TypeError("freshFallbackImagesUnavailable must be a boolean");
-  for (const key of ["agentConfig", "runMetadata", "providerSession"])
+  for (const key of ["runMetadata", "providerSession"])
     if (
       input[key] !== undefined &&
       (!input[key] || typeof input[key] !== "object" || Array.isArray(input[key]))
     )
       throw new TypeError(`InvokeInput.${key} must be a JSON object`);
-  if (input.agentConfig) {
-    const config = input.agentConfig as Record<string, unknown>;
-    for (const key of [
-      "workdir",
-      "model",
-      "sandbox",
-      "providerAgentId",
-      "effort",
-      "openclawConfigPath",
-      "openclawStateDir"
-    ])
-      if (config[key] !== undefined && typeof config[key] !== "string")
-        throw new TypeError(`agentConfig.${key} must be a string`);
-    if (
-      config.timeoutSeconds !== undefined &&
-      (typeof config.timeoutSeconds !== "number" || config.timeoutSeconds <= 0)
-    )
-      throw new TypeError("agentConfig.timeoutSeconds must be positive");
-    if (
-      config.providerOptions !== undefined &&
-      (!config.providerOptions ||
-        typeof config.providerOptions !== "object" ||
-        Array.isArray(config.providerOptions))
-    )
-      throw new TypeError("agentConfig.providerOptions must be a JSON object");
-  }
   if (input.providerSession) {
     const session = input.providerSession as Record<string, unknown>;
     if (typeof session.sessionId !== "string" || !session.sessionId.trim())
@@ -276,6 +269,12 @@ export function invocationInput(
     executionEnvOverrides: _executionEnvOverrides,
     agentSessionId,
     context,
+    agentSource,
+    workdir,
+    controlInstructions,
+    approvalMode,
+    agentConfig,
+    runtimeLimits,
     modelInputParts,
     ...fields
   } = request;
@@ -304,8 +303,86 @@ export function invocationInput(
   return InvokeInput.check({
     ...fields,
     sessionId: agentSessionId,
-    contexts,
+    agentEnv: Object.fromEntries(
+      Object.entries({
+        ...contexts,
+        agentSource,
+        workdir,
+        controlInstructions,
+        approvalMode,
+        agentConfig,
+        runtimeLimits
+      }).filter(([, value]) => value !== undefined)
+    ),
     protocol_mode,
     inputs: modelInputParts ?? [{ type: "text", text: request.modelInput }]
   });
+}
+
+/** 执行环境只接受执行/审批/受信指令，绝不解释业务命名空间或将其渲染成提示词。 */
+export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
+  assertJsonByteLimit(value, INVOKE_REQUEST_MAX_BYTES, "INVOKE_REQUEST_TOO_LARGE");
+  assertJsonValue(value);
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("agentEnv must be an execution envelope");
+  const env = value as AgentEnv;
+  assertContextEnvelope({ schema: env.schema, items: env.items });
+  const allowed = new Set([
+    "schema",
+    "items",
+    "agentSource",
+    "workdir",
+    "controlInstructions",
+    "approvalMode",
+    "agentConfig",
+    "runtimeLimits"
+  ]);
+  if (Object.keys(env).some((key) => !allowed.has(key)))
+    throw new TypeError("agentEnv contains an unknown execution setting");
+  for (const item of env.items)
+    if (!(
+      item.namespace === "octo.execution" ||
+      (item.namespace === "octo.security" && item.name === "approval_policy") ||
+      (item.namespace === "octo.control" && item.name === "instructions")
+    ))
+      throw new TypeError(
+        "agentEnv cannot contain business context; prepare inputs in the application"
+      );
+  for (const key of ["workdir", "controlInstructions"] as const)
+    if (env[key] !== undefined && typeof env[key] !== "string")
+      throw new TypeError(`agentEnv.${key} must be a string`);
+  if (env.agentSource !== undefined) assertAgentSource(env.agentSource);
+  if (env.approvalMode !== undefined) assertApprovalMode(env.approvalMode);
+  if (env.runtimeLimits !== undefined) assertRuntimeLimits(env.runtimeLimits);
+  if (
+    env.agentConfig !== undefined &&
+    (!env.agentConfig || typeof env.agentConfig !== "object" || Array.isArray(env.agentConfig))
+  )
+    throw new TypeError("agentEnv.agentConfig must be a JSON object");
+  if (env.agentConfig) {
+    const config = env.agentConfig as Record<string, unknown>;
+    for (const key of [
+      "workdir",
+      "model",
+      "sandbox",
+      "providerAgentId",
+      "effort",
+      "openclawConfigPath",
+      "openclawStateDir"
+    ])
+      if (config[key] !== undefined && typeof config[key] !== "string")
+        throw new TypeError(`agentConfig.${key} must be a string`);
+    if (
+      config.timeoutSeconds !== undefined &&
+      (typeof config.timeoutSeconds !== "number" || config.timeoutSeconds <= 0)
+    )
+      throw new TypeError("agentConfig.timeoutSeconds must be positive");
+    if (
+      config.providerOptions !== undefined &&
+      (!config.providerOptions ||
+        typeof config.providerOptions !== "object" ||
+        Array.isArray(config.providerOptions))
+    )
+      throw new TypeError("agentConfig.providerOptions must be a JSON object");
+  }
 }

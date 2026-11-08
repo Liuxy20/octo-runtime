@@ -2,6 +2,7 @@ import net from "node:net";
 import { assertIpcEndpoint } from "./runtime-path.js";
 import { randomUUID } from "node:crypto";
 import {
+  assertInvokeInput,
   assertHostFrame,
   assertHostFrameIdentity,
   assertHostRunReceipt,
@@ -18,6 +19,7 @@ import {
 import {
   KernelError,
   type KernelClient,
+  type KernelInvoke,
   type KernelStatus,
   type LookupKey,
   type RunRef,
@@ -29,7 +31,7 @@ import { markSubmissionRejected } from "./submission-error.js";
 /**
  * 连接本机 socket/Windows Pipe，返回不拥有 Kernel 进程的客户端。
  * 独立应用显式连接已有服务；原生 SDK 服务宿主使用 kernel.client。
- * Kernel/Extra 服务内部也复用本函数构造 RPC 客户端，不要求 SDK 调用方额外 attach。
+ * 宿主和独立业务消费者均通过本函数构造 RPC 客户端。
  * invoke 提供登记、取消和尾流观察；关闭连接或迭代器不会隐式取消已接纳 Run。
  */
 export function attachKernel(options: { endpoint: string }): KernelClient {
@@ -175,63 +177,91 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
     topology: "kernel-ipc",
     ownership: "attached",
     invocations: registry,
-    invoke: createInputInvoke(async function* (input, environment = {}) {
+    invoke: ((inputs, sessionId, providerSession, agentEnv) => {
       if (closed) throw new KernelError("CLIENT_CLOSED");
-      environment.signal?.throwIfAborted();
-      const request = identifyInvokeInput(input);
+      const content = Array.isArray(inputs) ? { parts: inputs } : inputs;
+      if (!content || typeof content !== "object" || !("parts" in content))
+        throw new TypeError("invoke requires inputs, sessionId, providerSession, agentEnv");
+      if (
+        ["inputs", "agentEnv", "sessionId", "providerSession"].some((key) =>
+          Object.hasOwn(content, key)
+        )
+      )
+        throw new TypeError("execution environment and sessions are separate invoke arguments");
+      const { parts, ...metadata } = content;
+      // 校验在复制前完成，旧请求对象和非 JSON 数据不会被兼容或隐式丢弃。
+      const supplied = { ...metadata, inputs: parts, sessionId, providerSession, agentEnv };
+      const wire = Object.fromEntries(
+        Object.entries(supplied).filter(([, value]) => value !== undefined)
+      );
+      assertInvokeInput(wire);
+      const request = identifyInvokeInput(structuredClone(wire));
       const record = registry.begin(lookupFor(request));
-      // signal 属于执行控制，不传给 subscribe：取消后仍须读到 Provider 会话更新与真实终态。
-      const abort = () => {
-        void registry.cancel(record, "caller_aborted").catch(() => undefined);
-      };
-      environment.signal?.addEventListener("abort", abort, { once: true });
-      try {
-        let ref: RunRef;
+      const environment: InvokeEnvironment = {};
+      const events = createInputInvoke(async function* () {
         try {
-          ref = (await submit(request, environment, record)).ref;
-          registry.accepted(record, ref);
-        } catch (error) {
-          registry.rejected(record, error);
-          throw error;
-        }
-        // 终态会释放登记，但 yield 后的业务持久化/投递仍由消费者负责，owner 不能据此提前 close。
-        let terminal = false;
-        for await (const frame of client.subscribe(ref)) {
-          terminal = isHostTerminal(frame);
-          if (
-            request.protocol_mode === "canonical" &&
-            frame.kind === "control" &&
-            frame.control.type === "error"
-          ) {
-            const snapshot = await query(ref, ref.kernel_instance_id).catch(() => undefined);
+          let ref: RunRef;
+          try {
+            ref = (await submit(request, environment, record)).ref;
+            registry.accepted(record, ref);
+          } catch (error) {
+            registry.rejected(record, error);
+            throw error;
+          }
+          // 终态会释放登记，但 yield 后的业务持久化/投递仍由消费者负责，owner 不能据此提前 close。
+          let terminal = false;
+          for await (const frame of client.subscribe(ref)) {
+            terminal = isHostTerminal(frame);
             if (
-              snapshot?.terminal?.kind === "control" &&
-              snapshot.terminal.control.type === "state" &&
-              snapshot.terminal.control.state === "lost"
+              request.protocol_mode === "canonical" &&
+              frame.kind === "control" &&
+              frame.control.type === "error"
+            ) {
+              const snapshot = await query(ref, ref.kernel_instance_id).catch(() => undefined);
+              if (
+                snapshot?.terminal?.kind === "control" &&
+                snapshot.terminal.control.type === "state" &&
+                snapshot.terminal.control.state === "lost"
+              )
+                throw new KernelError("RUN_OUTCOME_UNKNOWN");
+            }
+            yield frame;
+            if (
+              terminal &&
+              frame.kind === "control" &&
+              frame.control.type === "state" &&
+              frame.control.state === "lost"
             )
               throw new KernelError("RUN_OUTCOME_UNKNOWN");
           }
-          yield frame;
-          if (
-            terminal &&
-            frame.kind === "control" &&
-            frame.control.type === "state" &&
-            frame.control.state === "lost"
-          )
-            throw new KernelError("RUN_OUTCOME_UNKNOWN");
+          if (!terminal) throw new KernelError("HOST_ENDED_WITHOUT_TERMINAL");
+          // 调用观察绑定首次控制结果；后续显式 Stop 成功不能抹去原来的 ACK 未知或失败。
+          if (record.firstCancelTask) await record.firstCancelTask;
+        } catch (error) {
+          registry.interrupted(record, error);
+          throw error;
+        } finally {
+          registry.interrupted(record);
         }
-        if (!terminal) throw new KernelError("HOST_ENDED_WITHOUT_TERMINAL");
-        // 调用观察绑定首次控制结果；后续显式 Stop 成功不能抹去原来的 ACK 未知或失败。
-        if (record.firstCancelTask) await record.firstCancelTask;
-      } catch (error) {
-        registry.interrupted(record, error);
-        throw error;
-      } finally {
-        environment.signal?.removeEventListener("abort", abort);
-        registry.interrupted(record);
-      }
-    }),
-    cancelInvocation: async (id, reason) =>
+      })(request);
+      // 未启动 iterator 的 return 也释放接纳登记；已提交 return 仍只停止观察。
+      const originalThrow = events.throw.bind(events);
+      events.throw = async (error) => {
+        if (!record.submitted) await registry.cancel(record, "iterator_thrown");
+        return originalThrow(error);
+      };
+      const originalReturn = events.return.bind(events);
+      events.return = async (value) => {
+        if (!record.submitted) await registry.cancel(record, "iterator_closed");
+        return originalReturn(value);
+      };
+      return Object.assign(events, {
+        invocationId: request.invocationId,
+        runId: request.runId,
+        sessionId: request.sessionId
+      });
+    }) as KernelInvoke,
+    interrupt: async (id, reason) =>
       registry.cancel(registry.active(id), reason, { explicit: true }),
     respondInteraction: async (id, response) => client.respond(registry.ref(id), response),
     respondNativeInteraction: async (id, response) =>
@@ -241,7 +271,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       if (!value || typeof value !== "object" || typeof value.ipc_version !== "number")
         throw new KernelError("INVALID_RESPONSE");
       // 包版本不参与 wire 兼容判断；submit 复用此既有查询，拒绝后不会发起执行。
-      if (value.ipc_version !== 1) throw new KernelError("KERNEL_IPC_VERSION_UNSUPPORTED");
+      if (value.ipc_version !== 2) throw new KernelError("KERNEL_IPC_VERSION_UNSUPPORTED");
       try {
         // 与服务端/doctor 共用快照白名单；仍保持客户端的受控错误与版本拒绝顺序。
         assertKernelStatus(value);
@@ -370,6 +400,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
     record?: TrackedInvocation
   ): Promise<{ ref: RunRef }> {
     if (closed) throw new KernelError("CLIENT_CLOSED");
+    if (record?.admissionError) throw record.admissionError;
     environment.signal?.throwIfAborted();
     if (environment.streamLimits !== undefined)
       throw new KernelError("KERNEL_STREAM_LIMITS_UNSUPPORTED");
@@ -383,6 +414,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
     if (Buffer.byteLength(requestLine) + 1 > INVOKE_REQUEST_MAX_BYTES)
       throw new KernelError("INVOKE_REQUEST_TOO_LARGE");
     const instance = (await client.status()).kernel_instance_id;
+    if (record?.admissionError) throw record.admissionError;
     environment.signal?.throwIfAborted();
     if (record) record.instance = instance;
     let ref: RunRef;
@@ -400,6 +432,7 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
         undefined,
         () => {
           environment.signal?.throwIfAborted();
+          if (record?.admissionError) throw record.admissionError;
           if (record) registry.assertSubmission();
         },
         () => {

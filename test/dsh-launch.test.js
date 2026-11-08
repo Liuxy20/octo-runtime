@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import { adapters } from "./fixtures/dsh-worker.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -164,7 +165,8 @@ for (const [mode, reason] of [
     assert.equal(discovered.unavailableReason, reason);
     if (reason === null) assert.equal(discovered.providerVersion, "0.2.1-rc.4");
     const events = await Array.fromAsync(
-      client.invoke(
+      invokeClient(
+        client,
         invocationInput(
           invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
           "canonical",

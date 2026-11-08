@@ -35,7 +35,7 @@ timestamp: 2026-10-17T00:00:00Z
 | uploadFileToPresignedUrl | 未发现 | 未发现 | 未发现 | 已确认删除实现与公开导出；R02a/R02b 通过清理处理，已实施并验证 |
 | getGroupInfo | 未发现 | 未发现 | 未发现 | 已确认删除实现与公开导出，覆盖 R01；与群准入、群规则、成员查询分别处理，已实施并验证 |
 
-定义分别位于 [files.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/files.ts) 与 [conversations.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts)，导出链为 [API index](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/index.ts) → [包入口 imApi](../../../packages/octo-runtime-extra-channel-gateway/src/index.ts)。
+定义分别位于 [files.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/files.ts) 与 [conversations.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts)，导出链为 [API index](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/index.ts) → [包入口 imApi](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/index.ts)。
 
 未发现 execution/task、最终回复、工具进度或 CanonicalEvent 投影调用上述上传 helper；也未发现扫描工作目录、读取产物文件并上传、解析 artifact/mediaUrl 后代发业务消息、或工具漏调后补做上传的执行链。该结论限于审查的源码，不是未知宿主或线上运行的全量证明。
 
@@ -56,7 +56,7 @@ timestamp: 2026-10-17T00:00:00Z
 | WukongConnection.sendText | 当前消息的 reply / replyFinal；最终地址绑定原连接与频道 | 命令反馈、执行中交互、最终回复 | 当前会话结果投递，保留；没有据模型内容选择任意频道代发的链路 |
 | replyDeliveryUnknown | 在回复 ACK 状态未知时发送独立展示卡片 | 投递失败处理阶段 | 既有 F27 投递反馈，不重跑模型任务、不上传产物 |
 
-对应链路见 [transport/channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts)、[application/im-channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[contexts.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts)、[connector.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/connector.ts) 和 [card-session.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts)。
+对应链路见 [transport/channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts)、[application/im-channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[contexts.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts)、[connector.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/connector.ts) 和 [card-session.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/card-session.ts)。
 
 最终 @ 的精确行为是：模型 final 普通文本出现 `@[uid:displayName]` → 解析并排除代码、引用等区域 → 对群/话题查询当前群成员，私聊查询当前对方 → 仅转换经确认的真人身份 → 原频道发送最终回复。该查询用于验证已给出的 UID，并不按模型要求任意搜索业务资料；失败降级为普通文字，不阻断正文。这也解释了为什么它不能和自动产物上传一概而论。
 
@@ -73,7 +73,7 @@ timestamp: 2026-10-17T00:00:00Z
 | inferContentType、ensureTextCharset、parseImageDimensionsFromFile | 当前包内没有业务调用；仅后者内部调用 parseImageDimensions | 不属于本次三项 API 的已确认删除范围；后续如需清理，另行核对必要性 |
 | parseImageDimensions | image-input.ts 有真实调用 | 保留；不得整文件删除导致原生图片准备回归 |
 
-fetchBotGroups 的具体消费者为 [群准入脚本](../../../scripts/verify-channel-group-admission-live.mjs)、[SDK/CLI 入口脚本](../../../scripts/verify-channel-group-entrypoints-live.mjs)及 [Context 联调脚本](../../../scripts/verify-im-context-live.mjs)。本轮没有运行这些会操作真实 IM 的脚本。
+fetchBotGroups 的具体消费者为 [群准入脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-group-admission-live.mjs)、[SDK/CLI 入口脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-group-entrypoints-live.mjs)及 [Context 联调脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-im-context-live.mjs)。本轮没有运行这些会操作真实 IM 的脚本。
 
 ## 验证及后续建议
 

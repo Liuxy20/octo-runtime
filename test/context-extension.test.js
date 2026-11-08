@@ -6,7 +6,6 @@ import {
   mergeContext,
   resolveContextConfiguration
 } from "../packages/octo-runtime-protocol/dist/index.js";
-import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
 
 const empty = () => ({ schema: "octo.context-envelope/v3", items: [] });
 const external = () => ({
@@ -25,7 +24,6 @@ test("unknown items survive merge and hash but do not enter model or execution c
   assert.doesNotThrow(() => assertContextEnvelope(context));
   assert.deepEqual(mergeContext(empty(), context), context);
   assert.notEqual(contextHash(context), contextHash(empty()));
-  assert.equal(renderModelContexts(context), "");
   context.items[0].payload.project_id = "p2";
   assert.notEqual(contextHash(context), contextHash(external()));
 });
@@ -52,15 +50,4 @@ test("known invalid payloads and unknown public shape errors are not ignored", (
   const context = external();
   context.items[0].payload = [];
   assert.throws(() => assertContextEnvelope(context), /CONTEXT_SCHEMA_INVALID/);
-});
-
-test("extra payload is rendered completely without Worker projection or registration", () => {
-  const context = external();
-  context.items[0].namespace = "extra.project";
-  context.items[0].guidance = "本轮项目";
-  context.items[0].payload.additional = { complete: true };
-  const rendered = renderModelContexts(context);
-  assert.match(rendered, /本轮项目/);
-  assert.match(rendered, /project_id/);
-  assert.match(rendered, /"additional":\{"complete":true\}/);
 });

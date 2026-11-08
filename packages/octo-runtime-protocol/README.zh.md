@@ -19,7 +19,7 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -33,15 +33,15 @@ const input = InvokeInput.check({
 | 字段                                 | 必填 | 作用                                                                                    |
 | ------------------------------------ | ---- | --------------------------------------------------------------------------------------- |
 | `inputs`                             | 是   | 本轮按顺序排列的文本与图片分片，图片字节只放这里一次。                                  |
-| `contexts`                           | 是   | Context v3 envelope，其中 `octo.execution` / `adapter` 项决定用哪个 Adapter；为空合法。 |
-| `workdir`                            | 否   | Provider 工作目录，默认取宿主工作区；它不是沙箱。                                       |
+| `agentEnv`                           | 是   | Context v3 envelope，其中 `octo.execution` / `adapter` 项决定用哪个 Adapter；为空合法。 |
+| `agentEnv.workdir`                   | 否   | Provider 工作目录，默认取宿主工作区；它不是沙箱。                                       |
 | `protocol_mode`                      | 否   | `native`（默认）或 `canonical`。                                                        |
 | `providerSession`                    | 否   | 显式续接的 Provider 会话，绝不会从 `sessionId` 反推重建。                               |
-| `agentConfig`                        | 否   | 完整 Provider 配置，含 `providerOptions`，须与 Context 中的选择一致。                   |
-| `runtimeLimits`                      | 否   | 本轮的超时与执行约束；省略时套用执行默认值。                                            |
+| `agentEnv.agentConfig`               | 否   | 完整 Provider 配置，含 `providerOptions`，须与 Context 中的选择一致。                   |
+| `agentEnv.runtimeLimits`             | 否   | 本轮的超时与执行约束；省略时套用执行默认值。                                            |
 | `sessionId`、`invocationId`、`runId` | 否   | 关联标识，省略时自动生成。不是 Provider 历史。                                          |
 
-只有 `inputs` 和 `contexts` 是必填。但缺少 `octo.execution` / `adapter` 项的请求会在 Provider 启动前就失败。
+只有 `inputs` 和 `agentEnv` 是必填。但缺少 `octo.execution` / `adapter` 项的请求会在 Provider 启动前就失败。
 
 ## 怎么读输出
 

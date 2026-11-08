@@ -17,7 +17,7 @@ test("sessionName validators and wire schemas agree on bounded caller-owned disp
   ajv.addSchema(schema);
   const input = {
     inputs: [{ type: "text", text: "hello" }],
-    contexts: { schema: "octo.context-envelope/v3", items: [] }
+    agentEnv: { schema: "octo.context-envelope/v3", items: [] }
   };
   const cases = JSON.parse(
     readFileSync(

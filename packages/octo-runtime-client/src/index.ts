@@ -6,6 +6,11 @@ export { isInvocationNotSubmitted } from "./submission-error.js";
 export { RuntimeHomeError, assertIpcEndpoint } from "./runtime-path.js";
 export type {
   InvokeInput,
+  AgentEnv,
+  InvocationInputs,
+  InvocationContent,
+  ProviderSession,
+  ModelInputPart,
   InvokeEnvironment,
   HostFrame,
   CanonicalEvent,

@@ -1,20 +1,17 @@
-import { preparedFrames } from "./runtime-fixture.js";
-import test from "node:test";
-import assert from "node:assert/strict";
-import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { CodexEventNormalizer } from "@mininglamp-oss/octo-runtime-adapter-codex";
-import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import {
-  createClaudeCodeAdapter,
-  ClaudeEventNormalizer
+  ClaudeEventNormalizer,
+  createClaudeCodeAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
-import { sanitizePublicValue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { ImRunProjector } from "../packages/octo-runtime-extra-channel-gateway/dist/presentation/run-projector.js";
-import { buildReasoningFrame } from "../packages/octo-runtime-extra-channel-gateway/dist/transport/reasoning-frame.js";
-import { invokeRequest } from "./runtime-fixture.js";
+import { CodexEventNormalizer } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { classifyFailure, failureMessage } from "@mininglamp-oss/octo-runtime-protocol";
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { join } from "node:path";
+import test from "node:test";
+import { sanitizePublicValue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
+import { invokeRequest, preparedFrames } from "./runtime-fixture.js";
 
 test("Codex structured upstream failures survive canonical normalization and catalog classification", () => {
   for (const [codexErrorInfo, expected] of [
@@ -98,22 +95,6 @@ test("all Adapters preserve the same canonical failure detail and structured err
     });
     assert.equal(event.payload.message, detail);
     assert.deepEqual(event.payload.error, error);
-    const projector = new ImRunProjector("failed-run");
-    projector.accept(event);
-    const frame = buildReasoningFrame(projector.snapshot(), {
-      ref: { id: "ai.reasoning-process", version: "0.4.0" },
-      maxPayloadBytes: 16384
-    });
-    assert.equal(frame.errorTitle, "执行失败");
-    assert.ok(frame.errorMessage.startsWith(detail.slice(0, 40)));
-    assert.ok(frame.phases.at(-1).thought.startsWith(detail));
-    assert.match(frame.phases.at(-1).thought, /MODEL_ACCOUNT_RESTRICTION/);
-    assert.match(projector.snapshot().failureDetail, /"region": "test"/);
-    assert.ok(frame.phases.at(-1).actions[0].detail.includes(event.payload.failure.diagnosticId));
-    assert.match(frame.errorMessage, new RegExp(event.payload.failure.code));
-    assert.match(frame.errorMessage, new RegExp(event.payload.failure.diagnosticId));
-    assert.match(projector.finalReply.text, new RegExp(event.payload.failure.code));
-    assert.match(projector.finalReply.text, new RegExp(event.payload.failure.diagnosticId));
   }
 });
 

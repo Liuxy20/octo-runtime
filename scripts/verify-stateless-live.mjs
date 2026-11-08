@@ -52,11 +52,7 @@ try {
   assert.equal(status.execution_ready, true);
   assert.equal(status.storePath, undefined);
   const componentStatus = await readStatelessComponentStatus(home, runCli);
-  const channels = componentStatus["channel-gateway"]?.runtime?.status?.bots ?? [];
-  assert.ok(
-    channels.some((channel) => channel.state === "online"),
-    "Live IM registration and connection required"
-  );
+  assert.equal(componentStatus["executor-kernel"].runtime.execution_ready, true);
   const legacyFiles = (await readdir(home)).filter((name) =>
     /\.(?:db|sqlite)(?:-wal|-shm)?$/.test(name)
   );
@@ -113,7 +109,6 @@ try {
       server: environment.server,
       rendererDaemonPid: environment.daemonPid,
       daemonPid: status.pid,
-      liveImConnected: true,
       provider: "codex",
       runId: request.runId,
       terminal,

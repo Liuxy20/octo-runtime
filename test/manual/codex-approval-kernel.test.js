@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
@@ -22,17 +23,19 @@ for (const mode of ["native", "canonical"])
       });
       const run = async (scenario) => {
         const events = [];
-        for await (const event of f.client.invoke({
+        for await (const event of invokeClient(f.client, {
           invocationId: randomUUID(),
           runId: randomUUID(),
           inputs: [{ type: "text", text: scenario }],
-          contexts: {
-            schema: "octo.context-envelope/v3",
-            items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+          agentEnv: {
+            ...{
+              schema: "octo.context-envelope/v3",
+              items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+            },
+            approvalMode: "full_access",
+            workdir: process.cwd()
           },
-          protocol_mode: mode,
-          approvalMode: "full_access",
-          workdir: process.cwd()
+          protocol_mode: mode
         }))
           events.push(event);
         return events;

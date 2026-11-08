@@ -1,5 +1,17 @@
 # 工程知识变更记录
 
+## 2026-11-08
+
+- [Runtime PR 交付授权](journal/shared/2026-11-08-runtime-pr-delivery.md)：用户明确要求提交并合并 main；按既有 CI Gate 与一位批准要求交付，不修改保护规则、不发布。
+
+- [agentEnv 与可定位中断](tasks/agent-env-invocation/validation.md)：96 分规划后实施破坏性四参数 API、独立执行信封、Gateway 材料编译和 interrupt；双仓回归、包外 npm 消费及独立复审通过。真实 Provider/原生跨平台服务未验，2.0 候选未发布。
+
+## 2026-11-07
+
+- [Issue 328 文档追加清理](tasks/328-remove-extra/validation.md)：按用户要求同步 Runtime 双语入口、Harness 和执行参考，移除旧 Extra 接入说明与渠道共享 Home 指引；修复工程规则的旧装配约束和失效锚点。文档及 4 项执行示例、159 篇现存文档链接审计、octospec 检查通过；历史证据保留版本归属，未新增真实模型/IM 验收。
+
+- [Issue 328 拆分实施](journal/shared/2026-11-07-328-runtime-gateway-split.md)：两个新 worktree，先 octospec 和 95 分规划后实施。Runtime 移除 Extra/native/内置渠道；独立 Gateway 提供 npm SDK 和服务 CLI。离线全量、类型/文档/代码检查及实际包外安装通过；探针并发超时复验和真实平台缺口见[验收](tasks/328-remove-extra/validation.md)。未提交、推送或发布。
+
 ## 2026-11-05
 
 - [Issue 309 本地实施](journal/shared/2026-11-05-309-runtime-client.md)：确认 runtime 内置 client/protocol、client 同 tag 独立发布，两份自包含归档。完成唯一实现迁移、双包恢复与三 latest；现有完整回归、手动 25 项、原基线互操作、离线/global 安装通过。Standards 三项修复后剩余 0，Spec 0；CI 不扩围，按追加授权准备英文提交及 main PR，未合并或正式发布。

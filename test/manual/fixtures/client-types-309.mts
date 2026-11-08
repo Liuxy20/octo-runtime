@@ -16,13 +16,25 @@ export async function consume(endpoint: string, value: unknown): Promise<HostedA
   assertInvokeInput(value);
   const input: InvokeInput = value;
   const client: KernelClient = attachKernel({ endpoint });
+  const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
   try {
-    const native: AsyncGenerator<HostFrame> = client.invoke({ ...input, protocol_mode: "native" });
+    const native: AsyncGenerator<HostFrame> = client.invoke(
+      { ...content, parts, protocol_mode: "native" },
+      sessionId,
+      providerSession,
+      agentEnv
+    );
     await native.return(undefined);
-    const canonical: AsyncGenerator<CanonicalEvent> = client.invoke({
-      ...input,
-      protocol_mode: "canonical"
-    });
+    const canonical: AsyncGenerator<CanonicalEvent> = client.invoke(
+      {
+        ...content,
+        parts,
+        protocol_mode: "canonical"
+      },
+      sessionId,
+      providerSession,
+      agentEnv
+    );
     await canonical.return(undefined);
     void schema;
     return await client.list();

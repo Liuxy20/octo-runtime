@@ -3,13 +3,13 @@
   "valid": {
     "KernelStatus": [
       {
-        "ipc_version": 1,
+        "ipc_version": 2,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
         "execution_ready": true
       },
       {
-        "ipc_version": 1,
+        "ipc_version": 2,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
         "execution_ready": false
@@ -286,13 +286,13 @@
   "invalid": {
     "KernelStatus": [
       {
-        "ipc_version": 1,
+        "ipc_version": 2,
         "kernel_instance_id": "kernel-fixture",
         "pid": 1,
         "execution_ready": "ready"
       },
       {
-        "ipc_version": 1,
+        "ipc_version": 2,
         "kernel_instance_id": "kernel-fixture",
         "pid": 0,
         "execution_ready": false

@@ -27,7 +27,7 @@ SDK 合并两种装配位置的生命周期与自定义状态；名字及最多 
 # 验证
 
 - [SDK 自动化](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/sdk-host-extras.test.js)新增 13 项，覆盖函数同引用、同步/异步返回、配置快照、逐轮新值、Host PID 保持独立且不重建、环境覆盖、函数不落入 session JSON、状态合并、JSON/本地同名互斥及恢复、取消/交互归属、native 帧、卸载/退出/账号切换/租户重配、进程崩溃、初始化与清理失败、64 个共享声明边界。
-- [执行流自动化](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/embedded-invoke.test.js)新增 3 项：回执在途取消原身份、不误取消其他身份，以及真实 daemon 接纳期间 socket 断开向 submit 传递 abort。原 canonical/native 恢复测试仍通过。测试使用[独立假 Host](../../../test/fixtures/sdk-extra-host.js)和已有假 Provider，不调用真实模型。
+- [执行流自动化](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/test/embedded-invoke.test.js)新增 3 项：回执在途取消原身份、不误取消其他身份，以及真实 daemon 接纳期间 socket 断开向 submit 传递 abort。原 canonical/native 恢复测试仍通过。测试使用[独立假 Host](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/fixtures/sdk-extra-host.js)和已有假 Provider，不调用真实模型。
 - `pnpm typecheck`、`pnpm lint`、`pnpm test` 通过。Node 共 1078 项，1069 通过、9 项按既有环境条件跳过、0 失败；WebUI Vitest 35 项通过。
 - Octospec 校验与 `git diff --check` 通过；不将此前共享 loader 的 GC 或 im-test 证据算成本轮 SDK 新验收。
 

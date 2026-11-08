@@ -49,8 +49,12 @@ function input(prompt, providerSession, providerOptions = {}) {
     "dsh"
   );
 }
+function invoke(request) {
+  const { inputs: parts, agentEnv, sessionId, providerSession, ...metadata } = request;
+  return kernel.client.invoke({ ...metadata, parts }, sessionId, providerSession, agentEnv);
+}
 async function run(prompt, session, options) {
-  const events = await Array.fromAsync(kernel.client.invoke(input(prompt, session, options)));
+  const events = await Array.fromAsync(invoke(input(prompt, session, options)));
   assert.equal(terminal(events).length, 1);
   return events;
 }
@@ -92,22 +96,18 @@ try {
   const failed = await run("Reply OK without tools.", undefined, { provider: "deepseek-official" });
   assert.equal(terminal(failed)[0].type, "run.failed");
   report.providerFailure = terminal(failed)[0].payload.failure.reasonCode;
-  const aborted = new AbortController();
   const cancelled = [];
+  const handle = invoke(input("Use a shell tool to sleep for 30 seconds, then reply DONE."));
+  const interrupt = () => kernel.client.interrupt(handle.invocationId, "DSH_QA_CANCEL");
   const cancellation = (async () => {
-    try {
-      for await (const event of kernel.client.invoke(
-        input("Use a shell tool to sleep for 30 seconds, then reply DONE."),
-        { signal: aborted.signal }
-      )) {
-        cancelled.push(event);
-        if (event.type === "tool_call.create") aborted.abort(new Error("DSH_QA_CANCEL"));
-      }
-    } catch (error) {
-      assert.equal(error.message, "DSH_QA_CANCEL");
+    for await (const event of handle) {
+      cancelled.push(event);
+      if (event.type === "tool_call.create") await interrupt();
     }
   })();
-  const timer = setTimeout(() => aborted.abort(new Error("DSH_QA_CANCEL")), 20000);
+  const timer = setTimeout(() => {
+    void interrupt();
+  }, 20000);
   const sibling = run("Reply only SIBLING_OK.");
   await cancellation;
   clearTimeout(timer);

@@ -16,7 +16,6 @@
     "@mininglamp-oss/octo-runtime-adapter-dsh": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
     "json5": "^2.2.3",
-    "@mininglamp-oss/octo-runtime-extra-channel-gateway": "workspace:*",
     "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-openclaw": "workspace:*",
     "@mininglamp-oss/octo-runtime-cross-service": "workspace:*",
@@ -33,8 +32,6 @@
     "@mininglamp-oss/octo-runtime-adapter-mcode": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-opencode": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-qodercli": "workspace:*",
-    "@mininglamp-oss/octo-runtime-adapter-qoderclicn": "workspace:*",
-    "@mininglamp-oss/octo-runtime-extra-channel-wecom": "workspace:*",
-    "@mininglamp-oss/octo-runtime-extra-webui": "workspace:*"
+    "@mininglamp-oss/octo-runtime-adapter-qoderclicn": "workspace:*"
   }
 }

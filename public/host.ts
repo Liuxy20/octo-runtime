@@ -1,20 +1,10 @@
 export {
-  createExtraService,
   componentEndpoint,
   componentServiceId,
   homeHash,
   normalizedHome
 } from "@mininglamp-oss/octo-runtime-host-sdk";
-export type {
-  ExtraService,
-  ExtraServiceOptions,
-  ExtraServiceStatus
-} from "@mininglamp-oss/octo-runtime-host-sdk";
-export type { ExtraExecution, ExtraExecutionContext } from "@mininglamp-oss/octo-runtime-host-sdk";
-export type {
-  RuntimeLoggingOptions,
-  ExtraStatusRecord
-} from "@mininglamp-oss/octo-runtime-host-sdk";
+export type { RuntimeLoggingOptions } from "@mininglamp-oss/octo-runtime-host-sdk";
 export { createKernelService, ServiceInitializationError } from "./executor-kernel.js";
 export {
   STARTUP_CATALOG,

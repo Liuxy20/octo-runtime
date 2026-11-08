@@ -4,7 +4,7 @@
 
 Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、背景资料和执行配置，Runtime 调用 Codex、Claude Code 等 Provider，并将输出以事件流返回。
 
-这套文档面向接入 SDK、提供业务背景和工具、处理执行结果的开发者。SDK 文档按服务接入、高级依赖、可选 AgentRun 使用分章；根目录 `SDK_*` 指南补充具体业务接线。
+这套文档面向接入 SDK、提供业务背景和工具、处理执行结果的开发者。SDK 文档按服务接入、Context/会话管理、可选 AgentRun 使用分章；根目录 `SDK_*` 指南补充具体业务接线。
 
 ## 从这里开始
 
@@ -14,21 +14,21 @@ Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、
 
 ## 操作指南
 
-模块选择见 [Adapter 与 Extra 载入](concepts/module-loading.md)：SDK 原生组装，以及 CLI 内置清单和用户扩展清单。
+模块选择见 [Adapter 载入](concepts/module-loading.md)：SDK 原生对象组装与 CLI Adapter 清单。
 
 | 任务                                                           | 页面                                             |
 | -------------------------------------------------------------- | ------------------------------------------------ |
 | 安装配置 Harness、开启 Codex Computer Use、共享 WorkBuddy 额度 | [Harness 安装配置](guides/harnesses.md)          |
 | 提供业务背景、环境变量、图片或续聊信息                         | [Context 与会话](guides/context-and-sessions.md) |
 | 连接已安装的 MCP server                                        | [MCP](guides/mcp.md)                             |
-| 增加可选业务接入                                               | [Extra](guides/extras.md)                        |
+| 接入业务渠道 | [独立 Channel Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) |
 | 排查组件构造或初始化失败                                       | [启动诊断](guides/startup-diagnostics.md)        |
 | 排查失败或中断的调用                                           | [故障排查](guides/troubleshooting.md)            |
 
 ## SDK 分章阅读
 
-1. [KernelService 与 ChannelGateway ExtraService 接入](getting-started/sdk.md)
-2. [高级接入：Context、会话存储与自定义依赖](guides/sdk-dependencies.md)
+1. [KernelService 与公开客户端接入](getting-started/sdk.md)
+2. [Context 与会话续接](guides/context-and-sessions.md)
 3. [可选使用：AgentRun 调用、事件与控制](guides/agent-runs.md)
 
 ## 接口参考
@@ -42,3 +42,5 @@ Octo Runtime 为应用提供统一的 Agent 调用接口。应用提交任务、
 | Adapter 支持范围与实现边界       | [Provider](reference/providers.md)            |
 
 验证结果和旧文档的对应关系见[维护与验证](maintenance.md)。设备运维见 [CLI 安装与运维](getting-started/cli.md)。
+
+- [sessionId / invocationId / providerSession](concepts/identifiers.md)

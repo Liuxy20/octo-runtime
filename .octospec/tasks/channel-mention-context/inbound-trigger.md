@@ -12,7 +12,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 用户明确要求：群聊普通交流不得启动 Agent；正文中的 `@李白` 可能只是 Markdown 报告或代码，不能据此生成通知或触发执行。同时支持用户主动选择的 `@所有AI`，它是显式 mention，不是免 @。
 
-本文件属于[Mention 专项](brief.md)。2026-10-16 已在 [normalize.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 实施 UID/纯 ais 判断，文本和独立图片共用入口；[channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 通过准入后才提交消息或下载。没有修改通用 Host、Adapter 或 Context renderer，Run=7、Context=v3 不变。下文保留设计依据与验收矩阵。
+本文件属于[Mention 专项](brief.md)。2026-10-16 已在 [normalize.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 实施 UID/纯 ais 判断，文本和独立图片共用入口；[channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 通过准入后才提交消息或下载。没有修改通用 Host、Adapter 或 Context renderer，Run=7、Context=v3 不变。下文保留设计依据与验收矩阵。
 
 ## 标记与实际协议
 
@@ -91,4 +91,4 @@ const mentioned = direct || aiBroadcast;
 - 真实返回消息不带自动生成的 ais 或发起者 mention，其他 Bot 不因普通回复的正文名称被唤醒。无法覆盖的客户端、话题或图片发送能力如实记录，不把本文当成上线验收。
 - 交付源码、针对性测试、构建结果及脱敏验证记录；记录消息元数据形态和执行次数，不保存 token、群消息正文或图片。仅在实际变更协议时执行工程要求的跨项目同步构建与重启，本计划本身不变更协议。
 
-当前代码已实施；[准入矩阵测试](../../../test/im-mention-trigger.test.js)覆盖组合、类型及正文反例，真实链路验证与客户端表现另行记录。
+当前代码已实施；[准入矩阵测试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-mention-trigger.test.js)覆盖组合、类型及正文反例，真实链路验证与客户端表现另行记录。

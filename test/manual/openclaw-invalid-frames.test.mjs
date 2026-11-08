@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式运行：node --test test/manual/openclaw-invalid-frames.test.mjs；不加入默认 CI。
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -350,7 +351,8 @@ test(
     const before = await kernel.client.status();
     const run = (text) =>
       collect(
-        kernel.client.invoke(
+        invokeClient(
+          kernel.client,
           invocationInput(f.request({ prompt: text, modelInput: text }), "canonical", "openclaw")
         )
       );

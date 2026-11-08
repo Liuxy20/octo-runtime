@@ -143,7 +143,7 @@ deadline 只限制 Core 的等待，不证明底层操作已经停止，pending/
 | `git diff --check` | 通过。 |
 | `uv run --with pyyaml python .octospec/scripts/lint.py` | 仍只有原有 14 处跨仓库链接失效；迁移造成的新失效源码链接已修复，不称全仓检查通过。 |
 
-公开 API 的离线编译/执行见 [外部 fixture](../../../test-support/public-extra/executor.mts)；实际发行验证
+公开 API 的离线编译/执行见 [外部 fixture](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/executor.mts)；实际发行验证
 明确返回 `dirty=true`、`liveAgentRun=not-run`。测试只创建隔离临时 Home 与本次 child process；退出后回收，
 没有重启用户 Runtime，没有读取凭据或重建身份/profile/配置，没有改 Run/Context Schema。
 

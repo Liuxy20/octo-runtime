@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -88,13 +89,16 @@ test("CLI doctor reads resident PIDs without starting a Provider and shares its 
     );
     assert.deepEqual((await kernel.client.status()).service_processes, []);
     await Array.fromAsync(
-      kernel.client.invoke({
+      invokeClient(kernel.client, {
         inputs: [{ type: "text", text: "hello" }],
         protocol_mode: "canonical",
-        workdir: home,
-        contexts: {
-          schema: "octo.context-envelope/v3",
-          items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+
+        agentEnv: {
+          ...{
+            schema: "octo.context-envelope/v3",
+            items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+          },
+          workdir: home
         }
       })
     );

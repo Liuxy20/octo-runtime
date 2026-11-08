@@ -3,9 +3,7 @@ import { lstat, open, opendir } from "node:fs/promises";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import {
-  extraStatusRecord,
   kernelStatusRecord,
-  type ExtraStatusRecord,
   type KernelStatusRecord
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
@@ -17,24 +15,21 @@ interface Cursor {
   pending: string;
   skipping: boolean;
 }
-type StatusRecord = ExtraStatusRecord | KernelStatusRecord;
-function record(line: string, extra: string): StatusRecord | undefined {
+type StatusRecord = KernelStatusRecord;
+function record(line: string, component: string): StatusRecord | undefined {
   if (Buffer.byteLength(line) > MAX_LINE) return;
   try {
     const value = JSON.parse(line) as StatusRecord;
-    if (extra === "executor-kernel")
+    if (component === "executor-kernel")
       return value.source === "kernel" && typeof value.time === "string"
         ? kernelStatusRecord(value.level, value.event, value.data, value.time)
         : undefined;
-    if (value.source !== "extra" || value.extra_type !== extra || typeof value.time !== "string")
-      return;
-    return extraStatusRecord(extra, value.level, value.event, value.data, value.time);
   } catch {
     return;
   }
 }
-async function files(home: string, extra: string): Promise<string[]> {
-  const directory = extra === "executor-kernel" ? join(home, "logs") : join(home, "logs", "extras");
+async function files(home: string): Promise<string[]> {
+  const directory = join(home, "logs");
   for (const path of [join(home, "logs"), directory]) {
     try {
       const stat = await lstat(path);
@@ -45,9 +40,7 @@ async function files(home: string, extra: string): Promise<string[]> {
       throw error;
     }
   }
-  const pattern = new RegExp(
-    `^${extra === "executor-kernel" ? "kernel" : extra}-status-\\d{8}T\\d{2}\\.log$`
-  );
+  const pattern = new RegExp(`^${"kernel"}-status-\\d{8}T\\d{2}\\.log$`);
   // Keep only three candidates while scanning, without loading an unbounded directory listing.
   const selected: string[] = [];
   let count = 0;
@@ -81,9 +74,9 @@ async function read(path: string, start: number | undefined, maximum: number) {
   }
 }
 
-export async function showExtraLogs(options: {
+export async function showKernelLogs(options: {
   home: string;
-  extra: string;
+  component: string;
   lines: number;
   follow: boolean;
   json: boolean;
@@ -92,7 +85,7 @@ export async function showExtraLogs(options: {
   signal?: AbortSignal;
 }): Promise<void> {
   if (
-    !/^[a-z][a-z0-9-]{0,63}$/.test(options.extra) ||
+    !/^[a-z][a-z0-9-]{0,63}$/.test(options.component) ||
     !Number.isInteger(options.lines) ||
     options.lines < 1 ||
     options.lines > 10000
@@ -110,11 +103,11 @@ export async function showExtraLogs(options: {
   const emit = async (value: StatusRecord) => {
     const text = options.json
       ? JSON.stringify(value)
-      : `${value.time} ${value.level.toUpperCase()} ${value.source === "extra" ? value.extra_type : "executor-kernel"} ${value.event}${Object.keys(value.data).length ? ` ${JSON.stringify(value.data)}` : ""}`;
+      : `${value.time} ${value.level.toUpperCase()} ${"executor-kernel"} ${value.event}${Object.keys(value.data).length ? ` ${JSON.stringify(value.data)}` : ""}`;
     await options.output(text, controller.signal);
   };
   try {
-    const selected = await files(options.home, options.extra);
+    const selected = await files(options.home);
     let remaining = MAX_READ;
     const chunks: StatusRecord[][] = [];
     // Spend the shared byte budget newest-first, then emit complete records in file order.
@@ -133,7 +126,7 @@ export async function showExtraLogs(options: {
         });
         chunks.unshift(
           lines
-            .map((line) => record(line, options.extra))
+            .map((line) => record(line, options.component))
             .filter((value): value is StatusRecord => !!value)
         );
       } catch (error) {
@@ -142,11 +135,11 @@ export async function showExtraLogs(options: {
     }
     const tail = chunks.flat().slice(-options.lines);
     for (const value of tail) await emit(value);
-    if (!tail.length) options.errorOutput(`${options.extra}: no service status logs`);
+    if (!tail.length) options.errorOutput(`${options.component}: no service status logs`);
     if (!options.follow) return;
     while (!controller.signal.aborted) {
       await delay(500, undefined, { signal: controller.signal });
-      const current = await files(options.home, options.extra);
+      const current = await files(options.home);
       for (const path of cursors.keys()) if (!current.includes(path)) cursors.delete(path);
       let budget = MAX_READ;
       for (const path of current) {
@@ -170,7 +163,7 @@ export async function showExtraLogs(options: {
           }
           const pending = lines.pop() ?? "";
           for (const line of lines) {
-            const value = record(line, options.extra);
+            const value = record(line, options.component);
             if (value) await emit(value);
           }
           cursors.set(path, {

@@ -14,9 +14,9 @@ timestamp: 2026-10-16T00:00:00Z
 
 - 每 Bot 使用 stopped / connecting / online / retrying / failed 五态；只有 online 输出 connected=true 和 error=null。首次 start 任一步失败终止自动尝试，显式重新启动重新按首次规则执行。
 - 当前启动周期完整上线后，暂态断线立即进入 retrying。失败及旧资源释放后依次等 5/10/20/30/30 秒，恢复尝试期间不变 connecting；每次完整成功清错误并重置计数。
-- [ImRuntime](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 负责资格、退避和转换，连接对象及取消信号隔离过期回调；先完成旧连接清理再安排等待。清理失败停止恢复并保留诊断。停止取消等待和在途尝试，迟到结果不能复活连接。
-- [连接错误](../../../packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts) 保留 HTTP 阶段和状态、网络/超时分类及 Retry-After；响应体中断仍为网络错误，非法 JSON 为终端错误。非预期错误只输出稳定码，不输出任意响应正文、URL 或凭据。
-- [WuKong 传输](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 保留握手及断开 reason，心跳超时为可恢复异常；服务端明确拒绝或协议错误为终端失败。同包握手成功后立即被踢不能返回健康连接，挂起 send 会随断线结束。
+- [ImRuntime](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 负责资格、退避和转换，连接对象及取消信号隔离过期回调；先完成旧连接清理再安排等待。清理失败停止恢复并保留诊断。停止取消等待和在途尝试，迟到结果不能复活连接。
+- [连接错误](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/connection-error.ts) 保留 HTTP 阶段和状态、网络/超时分类及 Retry-After；响应体中断仍为网络错误，非法 JSON 为终端错误。非预期错误只输出稳定码，不输出任意响应正文、URL 或凭据。
+- [WuKong 传输](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts) 保留握手及断开 reason，心跳超时为可恢复异常；服务端明确拒绝或协议错误为终端失败。同包握手成功后立即被踢不能返回健康连接，挂起 send 会随断线结束。
 - Provider/卡片/投递诊断继续走 onDiagnostic，不再覆盖连接 error；重连不重新 invoke 任务，不把上线当作旧投递已成功。
 - Work App 设置（历史外部路径 `octo-work-app/src/renderer/src/settings/ImChannelsSettings.tsx`，当前工作区未提供） 接入失败文案，保留旧状态显示兼容，只标 online 为健康；每 3 秒轮询，窗口处于后台仍刷新。main 保持插件状态及错误透传。未增加宿主重连机器或第二个 preload 桥。
 - README、INTEGRATION 和渠道规则同步说明启动、恢复及 loaded/online 的区别。Run=7 与 Context=v3 不变，未修改或部署 Worker。
@@ -29,7 +29,7 @@ timestamp: 2026-10-16T00:00:00Z
 node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js
 ```
 
-最终全量 873 项：866 通过、7 跳过、0 失败，耗时 33.7 秒。新增[状态机专项](../../../test/im-connection-state-machine.test.js) 23 项全部通过，覆盖首次失败、两轮退避及重置、显式重启、并发 start、启动/恢复中停止、旧回调、清理顺序及失败、超长 Retry-After 分段等待、迟到唤醒不补发、多 Bot 状态、实际 HTTP/WS fixture、心跳超时、挂起 send、短拒绝帧及同包踢线、错误脱敏和响应体中断。
+最终全量 873 项：866 通过、7 跳过、0 失败，耗时 33.7 秒。新增[状态机专项](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-connection-state-machine.test.js) 23 项全部通过，覆盖首次失败、两轮退避及重置、显式重启、并发 start、启动/恢复中停止、旧回调、清理顺序及失败、超长 Retry-After 分段等待、迟到唤醒不补发、多 Bot 状态、实际 HTTP/WS fixture、心跳超时、挂起 send、短拒绝帧及同包踢线、错误脱敏和响应体中断。
 
 Work App `pnpm build:test`（含 tsc）通过；最后一次 `pnpm test` 为 194 文件通过、1 文件跳过，1624 测试通过、1 测试跳过。通道相关 UI/service 专项及窗口后台自动刷新的测试通过。
 
@@ -39,7 +39,7 @@ Work App `pnpm build:test`（含 tsc）通过；最后一次 `pnpm test` 为 194
 
 ## im-test 真实连接与收发
 
-固定使用 `https://im-test.deepminer.com.cn/api`，专用 QA Bot：orbtex-codex（`288zxxlbqsw6c4bd7ae_bot`）为连接测试，orbtex-codebuddy（`288zyjzasjbde21f02a_bot`）为探针发送者。凭据仅由[脚本](../../../scripts/verify-channel-connection-live.mjs) 从显式指定的受保护账户文件读取；只使用既有隔离 QA 群，不向普通聊天发消息。
+固定使用 `https://im-test.deepminer.com.cn/api`，专用 QA Bot：orbtex-codex（`288zxxlbqsw6c4bd7ae_bot`）为连接测试，orbtex-codebuddy（`288zyjzasjbde21f02a_bot`）为探针发送者。凭据仅由[脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-connection-live.mjs) 从显式指定的受保护账户文件读取；只使用既有隔离 QA 群，不向普通聊天发消息。
 
 真实鉴权、注册和加密 WS 建立后，仅终止测试进程自己持有的 socket，并在该进程阻断恢复鉴权请求。属于本地故障注入，不能称为服务端真实停机。
 
@@ -65,7 +65,7 @@ Work App `pnpm build:test`（含 tsc）通过；最后一次 `pnpm test` 为 194
 
 构建并重新启动受影响应用；最终验证的本机 daemon PID 为 `68307`，启动于 02:42:01，晚于本轮网关产物构建。既有 Home、profile 和身份沿用，没有重建或清库。验证开始和结束的 daemon PID 相同，原有通道 ID 集合相同。
 
-[CDP 验收脚本](../../../scripts/verify-channel-connection-renderer-live.mjs) 连接真实 Electron renderer（9222），断言根服务为 im-test。测试 Bot orbtex-claudecode（`288zyyqdci566e26e33_bot`）通过本地 HTTP/WS 代理访问真实服务；代理只在验收期间关闭该连接或返回受控 503。另一专用 Bot orbtex-opencode 直连 im-test，作为独立观察者。
+[CDP 验收脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-connection-renderer-live.mjs) 连接真实 Electron renderer（9222），断言根服务为 im-test。测试 Bot orbtex-claudecode（`288zyyqdci566e26e33_bot`）通过本地 HTTP/WS 代理访问真实服务；代理只在验收期间关闭该连接或返回受控 503。另一专用 Bot orbtex-opencode 直连 im-test，作为独立观察者。
 
 - DOM 与后台同时核对 failed / IM_AUTH_HTTP_401、online、retrying / IM_DISCONNECTED、恢复后 online 且错误消失；失败、恢复中和成功均保存并人工查看截图。
 - 窗口 hidden 时最初发现 React Query 暂停轮询，已加 refetchIntervalInBackground 并补 UI 用例；最终不用手动刷新即可观察恢复。展示仍为 3 秒轮询，非推送。

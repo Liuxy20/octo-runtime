@@ -24,8 +24,8 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
-  approvalMode: "full_access",
-  contexts: {
+  agentEnv: {
+    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -95,16 +95,16 @@ Core 最多保留 1,024 条调用身份记录，并在 120 秒后回收非活动
 
 ## 直接 Core 还是 Kernel
 
-| 关注点                     | 直接 `AgentExecutor`                                        | `KernelClient`                    |
-| -------------------------- | ----------------------------------------------------------- | --------------------------------- |
-| 执行位置                   | 你的进程                                                    | Kernel 所在宿主进程              |
-| 故障域                     | 共用事件循环；`process.exit`、OOM、同步阻塞会连宿主一起带走 | 同样共享宿主故障域 |
-| 提前结束迭代               | 请求取消                                                    | 仅停止观察                        |
-| 回放                       | 无                                                          | 有界，按原始身份与序号            |
-| `environment.streamLimits` | 支持                                                        | 拒绝                              |
-| 关闭                       | `shutdown()` 后看 `cleanup`                                 | `close()` 后看 `complete`         |
+| 关注点                     | 直接 `AgentExecutor`                                        | `KernelClient`            |
+| -------------------------- | ----------------------------------------------------------- | ------------------------- |
+| 执行位置                   | 你的进程                                                    | Kernel 所在宿主进程       |
+| 故障域                     | 共用事件循环；`process.exit`、OOM、同步阻塞会连宿主一起带走 | 同样共享宿主故障域        |
+| 提前结束迭代               | 请求取消                                                    | 仅停止观察                |
+| 回放                       | 无                                                          | 有界，按原始身份与序号    |
+| `environment.streamLimits` | 支持                                                        | 拒绝                      |
+| 关闭                       | `shutdown()` 后看 `cleanup`                                 | `close()` 后看 `complete` |
 
-Electron、Node SDK 与 CLI 宿主统一使用 KernelClient 经本地 RPC 调用。直接 Core 是供内核集成和执行语义测试使用的底层实现，不提供 Kernel 的接纳、观察和回放管理。两条路都不需要 Extra。
+Electron、Node SDK 与 CLI 宿主统一使用 KernelClient 经本地 RPC 调用。直接 Core 是供内核集成和执行语义测试使用的底层实现，不提供 Kernel 的接纳、观察和回放管理。两条路都不需要 business consumer。
 
 ## 导入与分发
 
@@ -112,6 +112,6 @@ private workspace 包：源码和子模块宿主从 `@mininglamp-oss/octo-runtim
 
 ## 延伸阅读
 
-- [实现与导出](src/index.ts)、[输入准备](src/invoke-input.ts)、[本轮渲染](src/model-input.ts)、[watchdog](src/watchdog.ts)。
+- [实现与导出](src/index.ts)、[输入准备](src/invoke-input.ts)、[watchdog](src/watchdog.ts)。
 - [Kernel](../octo-runtime-executor-kernel/README.zh.md)、[输入参考](../../docs/zh-CN/reference/invoke-input.md)、[输出与控制](../../docs/zh-CN/reference/output-and-control.md)。
 - [执行器测试](../../test/executor-core.test.js)、[清理预算测试](../../test/executor-cleanup-budget.test.js)。

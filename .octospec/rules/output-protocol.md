@@ -71,7 +71,7 @@ Driver 维护唯一控制者，响应写入确认后才发布 resolved；重复 
 
 旁路 async question 的 canonical expiresAt 可省略，正常 Run 完成不使未答问题失效；宿主保存原请求和 pending 状态，通过公开 AsyncQuestionReply 在活动时 steer、正常完成后同会话新 AgentRun。低层响应仍不能控制已结束 Run，native 同步 pending 期限不变。详见 [交互合同](protocol-design.md#交互与取消)。
 
-**Extra 兼容性强制要求：消费交互事件前必须按 `delivery: async` 分流，不能把新增 async question 直接送进旧同步交互处理器。** 未接入异步表单时，在登记、秘密输入检查、提示/卡片生成和等待状态投影之前过滤 requested，并按原 Run/interactionId 配对过滤不带 delivery 的 resolved；保持流游标连续及正文展示，不自动答复、不暂停、不覆盖同步等待。接入时必须支持原题身份、结构化整批回答、自定义文本及完整投递生命周期。缺 expiresAt 合法，不能靠删除期限守卫或传字符串伪装支持；responseRequired=false 也不能充当 async 标识。内置 Gateway、WeCom、WebUI 均采用成对过滤策略。公共说明见[Extra 处理合同](../../docs/zh-CN/reference/output-and-control.md#extra-必须明确选择处理方式)。
+**应用兼容性强制要求：消费交互事件前必须按 `delivery: async` 分流，不能把新增 async question 直接送进旧同步交互处理器。** 未接入异步表单时，在登记、秘密输入检查、提示/卡片生成和等待状态投影之前过滤 requested，并按原 Run/interactionId 配对过滤不带 delivery 的 resolved；保持流游标连续及正文展示，不自动答复、不暂停、不覆盖同步等待。接入时必须支持原题身份、结构化整批回答、自定义文本及完整投递生命周期。缺 expiresAt 合法，不能靠删除期限守卫或传字符串伪装支持；responseRequired=false 也不能充当 async 标识。独立业务消费者自行选择上述策略，Runtime 不提供内置渠道 UI。公共说明见[应用处理合同](../../docs/zh-CN/reference/output-and-control.md#应用必须明确选择处理方式)。
 
 canonical `interaction.requested.payload.responseRequired` 和 native pending interaction control 的
 可选布尔 `responseRequired` 表示外部是否需要回答。缺字段按 true 处理；仅 Adapter 已承担的
@@ -100,8 +100,7 @@ RPC 从同一源的首个状态帧取得回执并 ACK，继续消费后才启动
 | ----------------------------------------------------------- | ----------------------------------------------------------- |
 | `executor-kernel/src/server.ts`                               | 接纳前拒绝不支持的选择；将 RPC ACK 与帧流绑定到同一执行     |
 | `executor-kernel/src/server.ts`、`host-run-service.ts`       | 转发冻结模式，缓冲原帧，按 Host 控制事实维护终态            |
-| `executor-kernel/src/client.ts` | App 与 Extra 共用 invoke；显式传递选择；续流继承回执模式；canonical 暴露类型化视图 |
-| `extra-channel-*/src/execution/dispatcher.ts`               | 执行、final 文本与投递链路显式 canonical                    |
+| `octo-runtime-client/src/client.ts` | App 与独立消费者共用 invoke；显式传递选择；续流继承回执模式；canonical 暴露类型化视图 |
 | Provider 内部 `adapter.invoke`                              | 仍为 Driver 与转换器的内部边界，不以旧签名推导 native 可用  |
 
 Work App 等外部 HostApp 应在组合入口显式选择模式，并保持交互与回放一致；其当前接线和验收由各宿主仓库核对，不列为本仓已验证的实现。

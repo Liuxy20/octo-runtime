@@ -1,6 +1,6 @@
 # Output and Control
 
-Extras use `context.execution` in both direct and IPC modes. Ending observation does not cancel admitted work; explicit cancellation and Extra shutdown do. A terminal event is separate from resource cleanup: direct Extra shutdown also awaits the Core's first cleanup result for the exact accepted receipt. Raw Core iterator closure retains its cancellation semantics.
+KernelClient streams observe admitted work. Ending observation does not cancel execution; request cancellation explicitly and consume its outcome before closing owned connections. A terminal event is separate from resource cleanup. Closing a direct Core execution iterator early requests cancellation.
 
 [简体中文](../../zh-CN/reference/output-and-control.md) | [Documentation](../README.md)
 
@@ -17,7 +17,7 @@ The default is `native`, but some Adapters support only `canonical`. For most in
 
 For canonical output, check the final event: `run.completed` means success, `run.failed` means failure, and `run.cancelled` means cancellation. Execution failures may arrive as events without throwing, so handle events as well as errors thrown while reading. [invokeOnce](../../examples/invoke.mts) demonstrates both.
 
-For HostFrame output, use public `isHostTerminal` to identify Runtime's final status. States are `running`, `completed`, `failed`, `cancelled`, and `lost`. A terminal cannot replace resource cleanup confirmation; direct Extra closure also waits for Core's first cleanup result for the accepted receipt.
+For HostFrame output, use public `isHostTerminal` to identify Runtime's final status. States are `running`, `completed`, `failed`, `cancelled`, and `lost`. A terminal cannot replace resource cleanup confirmation; hosts must inspect their owned service’s close result separately.
 
 `lost` means the execution outcome cannot be determined; KernelClient reports `RUN_OUTCOME_UNKNOWN`. Missing final status, output loss and cleanup failure alone never prove success. Your application separately confirms whether results were saved, messages delivered, or the UI updated.
 
@@ -31,18 +31,13 @@ There are three frame kinds: `native` preserves Provider data and extension fiel
 
 ## Cancellation
 
-There are two ways to cancel:
+Use `client.interrupt(run.invocationId, reason?)` on the client that created the handle. There is no public invoke signal parameter. Identity is available immediately; before submission interruption prevents sending, while after submission it controls the original execution and preserves observation of the tail.
 
-- Pass an `AbortSignal` to `client.invoke(input, {signal})`, then call `abort(reason)` on its `AbortController`.
-- Call `cancelInvocation(invocationId, reason?)` on the same client that started the invocation. Set `invocationId` in the input first so other application code can refer to it.
-
-Cancellation before sending prevents submission. After sending, the client finds the original execution and requests cancellation while continuing to receive remaining output. With an aborted signal, normal completion of reading throws the original cancellation reason. A more specific output or control error encountered while reading takes precedence.
-
-The cancellation API returns `{accepted}` to indicate whether the cancellation request was accepted. Keep reading output to learn whether execution ultimately cancelled. For KernelClient, loop `break`, iterator `return()`, client `close()`, and subscription cancellation only stop receiving output. They do not cancel execution. Closing a direct AgentExecutor execution iterator early does request cancellation.
+An accepted ACK is not a terminal or cleanup confirmation. Keep consuming the original stream. For accepted KernelClient calls, break/return/throw/close only end observation. Before submission, return/throw release the local reservation. Direct Core execution iterators retain their internal cancellation contract. See [identifier ownership](../concepts/identifiers.md).
 
 ## Reply to Approvals and User Questions
 
-> **Extra compatibility requirement:** Check `payload.delivery` before registering or presenting an interaction. `delivery: "async"` is optional supplemental input, not a blocking question. Do not route it into an existing synchronous form, `/respond` command, or waiting-state handler without implementing the async contract below.
+> **Application compatibility requirement:** Check `payload.delivery` before registering or presenting an interaction. `delivery: "async"` is optional supplemental input, not a blocking question. Do not route it into an existing synchronous form, `/respond` command, or waiting-state handler without implementing the async contract below.
 
 In canonical mode, `interaction.requested` carries `interactionId`, `executionInstanceId`, and `request`. Its `kind` is `approval`, `question`, or `elicitation`, which requests additional user information. Synchronous requests require `expiresAt` (an ISO timestamp); async questions may omit it. The following response flow describes synchronous interactions:
 
@@ -69,24 +64,41 @@ Submit the entire batch once: `outcome: "answered"`, `value: {schema: "octo.ques
 
 Runtime sends one `turn/steer` to the original active turn. The Promise succeeds and `interaction.resolved` reports `resolved/answered/provider_accepted` only after a matching RPC reply. This proves acceptance, not persistence, model consumption, or task completion. `ASYNC_ANSWER_REJECTED` means explicit rejection; `OPERATION_OUTCOME_UNKNOWN` means sent but unconfirmed. Do not automatically retry either. `INVALID_QUESTION_RESPONSE` permits correction before sending; `INTERACTION_NOT_ACTIVE` rejects duplicate or inactive answers.
 
-Async ask is optional supplemental input. Leaving it unanswered does not block completion. The public `/executor-kernel` `AsyncQuestionReply` steers the original active run, or uses the existing `client.invoke` to create a new AgentRun after confirmed normal completion. The host supplies current continuation input with the same session/generation/provider binding and its current Context/configuration. The SDK assigns new execution IDs and replaces input with the original questions and answers. Codex continuation sets `providerSession.requireResume=true`: failed resume fails instead of starting a fresh provider session.
+Async ask is optional supplemental input. Leaving it unanswered does not block completion. The public `/executor-kernel` `AsyncQuestionReply` steers the original active run, or uses the existing `client.invoke` to create a new AgentRun after confirmed normal completion. The host supplies current continuation input with the same session/generation/provider binding and its explicitly selected agentEnv. The SDK assigns new execution IDs and replaces input with the original questions and answers. Codex continuation sets `providerSession.requireResume=true`: failed resume fails instead of starting a fresh provider session.
 
 A `route: "steer"` response confirms provider acceptance. A `route: "new_run"` response supplies an `events` stream: consumption starts submission, and returning the stream does not confirm delivery. Runtime admission, provider acceptance, model consumption, and completion are separate facts. See [asyncSupplementForm](../../examples/interactions.mts). Low-level respond still targets active runs only.
 
-Async questions have no default expiry; optional `expiresAt` is enforced, while synchronous interactions still require a deadline. Cancellation dismisses the form without cancelling model work. A single host controller owns storage and calls `observe` on original terminal/interaction frames before saving `snapshot()`. A persisted pending/completed snapshot can start a continuation after restart; a running or unknown submission cannot be replayed. Reset generations and changed provider bindings reject stale forms. Unknown steer delivery never falls back to a new Run or retries. The SDK provides neither a host database transaction nor exactly-once delivery across controllers.
+Async questions have no default expiry; optional `expiresAt` is enforced, while synchronous interactions still require a deadline. Cancellation dismisses the form without cancelling model work. A single host controller owns storage and calls `observe` on original terminal/interaction frames before saving `snapshot()`. A persisted pending/completed snapshot can start a continuation after restart; a running or unknown submission cannot be replayed. Mismatched supplied session identities/generations reject stale forms; the next section defines application binding ownership separately from configuration changes. Unknown steer delivery never falls back to a new Run or retries. The SDK provides neither a host database transaction nor exactly-once delivery across controllers.
 
 The shared limit is 16 active interactions, with at most 50 questions per batch, 50 options per question, and 4096 code points per title/option. Oversized or malformed snapshots fail explicitly. Synchronous questions, elicitation, approvals and `full_access` behavior remain unchanged. Host UI integration is still required; no Markdown parsing is needed.
 
-### Required Handling in Extras
+### Applications Own Continuation Configuration
 
-**Every Extra that consumes interaction events must explicitly choose one of these policies:**
+`agentEnv` is per-invocation configuration, not session identity. Runtime does not fingerprint the entire envelope or require cross-run equality; a change alone does not invalidate an old question. Hosts may explicitly authorize different effort, refreshed environment variables, MCP settings, approval policy or a workdir for the next run. Execution permission checks and Provider configuration/resume limitations still apply.
+
+| Situation | Configuration and ownership |
+| --- | --- |
+| Original Run is active | Steer the original RunRef/interactionId; continuation agentEnv cannot modify or redirect it |
+| Original Run has confirmed normal completion | The host selects and authorizes the next agentEnv through continuation; the SDK creates new execution IDs and requires the original Provider session to resume |
+| Session reset or Provider binding replacement | The host isolates old forms; mismatched supplied sessionId/generation, Provider sessionId or epoch causes SDK rejection |
+| Target or authorization cannot be confirmed | The host rejects continuation; unchecked global “current configuration” is not continuation authorization |
+
+`providerEpoch` remains optional and is maintained when the application identifies a Provider binding replacement, not on every agentEnv edit. Hosts using it must save the original value in the question snapshot. Both values being absent means this version protection is absent. The SDK does not detect Adapter, account, server or external configuration changes hidden behind identical IDs. Hosts omitting epoch must still invalidate old forms/controllers on binding replacement; an original providerSession must not be sent to another Provider identity domain.
+
+`respond()` reads and copies continuation input, including agentEnv. When the returned events stream is first consumed, it calls continuation again to check session identities/generations before submitting the run. This second read does not replace the captured agentEnv. Hosts must recheck their own business authorization before submission and consumption, throwing from the callback when needed. SDK identity checks do not replace authorization or provide transactions across business storage. Select different configuration before calling respond if that configuration should be used.
+
+“Stale binding” therefore does not mean configuration must remain permanently unchanged. A continuation is a new execution authorized by the application; failed resume fails explicitly, and configuration changes never justify replaying unknown delivery. This contract does not claim that every external application already maintains epochs correctly; each must verify its binding-change and form lifecycle policy.
+
+### Required Handling in Applications
+
+**Every application that consumes interaction events must explicitly choose one of these policies:**
 
 - **Without async form support:** Ignore async `interaction.requested` before interaction registration, secret-input handling, command/card generation, or waiting-state projection. Track its `interactionId` within the original Run and also ignore its `interaction.resolved`, which does not carry `delivery`. Continue consuming the stream, advance the original cursor, and display ordinary message text. Do not submit an automatic answer, pause execution, or let an ignored resolution clear a synchronous interaction's waiting state. Bound and clean up the identity tracking with the Run.
 - **With async form support:** Preserve the original request, question IDs, provider/session binding and submission state. Collect a complete `octo.question-response/v1` batch, support custom text and cancellation, and use the public `AsyncQuestionReply` lifecycle above. Handle expiry, duplicate submissions, stale bindings, restart and unknown delivery explicitly. Active runs use steer; confirmed normal completion permits a new AgentRun in the same session. Report delivery only when the provider accepts it.
 
 **Do not remove expiry checks or pass a plain answer string to make an old synchronous handler appear compatible.** Missing async `expiresAt` is valid, not evidence of expiry; async replies require the structured batch. `delivery` controls this distinction, not `kind`, `full_access`, message wording, or the presence of options. `responseRequired: false` is reserved for automatic approvals and is not an async-question discriminator.
 
-The built-in `channel-gateway`, `channel-wecom` and `webui` use the first policy: they display message text without async forms, answer commands, or waiting-state changes. Their synchronous questions, approvals and elicitation keep their existing behavior. New Extras and custom interaction renderers must make this choice explicitly; receiving the public protocol does not provide async UI support automatically. See [Extra development](../guides/extras.md).
+Each business UI chooses its own asynchronous question display and response policy; protocol support does not imply UI support.
 
 ## Errors and Recovery
 

@@ -23,7 +23,7 @@ timestamp: 2026-10-15T00:00:00Z
 | Codex Provider 原生重试 | willRetry=true 映射为 retry_scheduled notice | Provider 内部继续；不代表 Channel 已再次 invoke |
 | Channel 执行循环 | 工具/交互前的明确 Codex 暂态限流及不可用失败按预算再次 invoke；原生重试纳入同一预算，断流提示未知 | 只覆盖该边界，工具后的安全恢复仍待实施 |
 
-依据：[REST client](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/client.ts)、[投递 dispatcher](../../../packages/octo-runtime-extra-channel-gateway/src/delivery/dispatcher.ts)、[Codex app-server](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[IM 执行循环](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。本表是源码核对，不是部署证据。
+依据：[REST client](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/client.ts)、[投递 dispatcher](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/delivery/dispatcher.ts)、[Codex app-server](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[IM 执行循环](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。本表是源码核对，不是部署证据。
 
 ## 对齐要求与待确认
 

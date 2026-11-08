@@ -40,7 +40,7 @@ uv run --project native/python --frozen python -m unittest discover -s native/py
 node native/tests/run.mjs --language all --evidence .tmp/native-evidence.json
 ```
 
-两套 demo 的构建和启动见 [native README](../../../native/README.md)。`run.mjs` 使用测试宿主自己的临时服务；真实 Provider 使用独立命令，只附着用户指定的既有 Kernel：
+两套 demo 的构建和启动见 [native README](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/native/README.md)。`run.mjs` 使用测试宿主自己的临时服务；真实 Provider 使用独立命令，只附着用户指定的既有 Kernel：
 
 ```sh
 node native/tests/live-demo.mjs --endpoint "$OCTO_KERNEL_ENDPOINT" --language all

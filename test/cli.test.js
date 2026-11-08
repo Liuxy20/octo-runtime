@@ -1,8 +1,8 @@
-import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, access, rm } from "node:fs/promises";
+import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import { runCli } from "../apps/cli/dist/main.js";
 test("CLI help and version are local and removed daemon commands cannot create a service", async (t) => {
   const root = await mkdtemp(join(tmpdir(), "oc-help-"));
@@ -12,10 +12,7 @@ test("CLI help and version are local and removed daemon commands cannot create a
     [],
     ["--help"],
     ["executor-kernel", "--help"],
-    ["channel-gateway", "--help"],
     ["executor-kernel"],
-    ["channel-gateway"],
-    ["webui"],
     ["--version"]
   ]) {
     let text = "";
@@ -25,12 +22,7 @@ test("CLI help and version are local and removed daemon commands cannot create a
     );
     assert.ok(text.length);
   }
-  for (const command of [
-    ["daemon", "start"],
-    ["executor-kernel", "reload"],
-    ["channel-gateway", "enable"],
-    ["--force"]
-  ]) {
+  for (const command of [["daemon", "start"], ["executor-kernel", "reload"], ["--force"]]) {
     assert.equal(await runCli([...command, "--home", home], { output() {} }), 2);
   }
   await assert.rejects(access(home));

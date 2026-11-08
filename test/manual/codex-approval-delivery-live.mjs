@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -53,14 +54,18 @@ try {
         failure;
       const start = performance.now();
       try {
-        for await (const event of kernel.client.invoke(
+        for await (const event of invokeClient(
+          kernel.client,
           {
             inputs: [{ type: "text", text: input }],
-            contexts: { schema: "octo.context-envelope/v3", items },
+            agentEnv: {
+              ...{ schema: "octo.context-envelope/v3", items },
+              approvalMode: "full_access",
+              workdir: directory,
+              runtimeLimits: { runTimeoutMs: 120000 }
+            },
             protocol_mode: mode,
-            approvalMode: "full_access",
-            workdir: directory,
-            runtimeLimits: { runTimeoutMs: 120000 },
+
             invocationId: randomUUID(),
             runId: randomUUID()
           },

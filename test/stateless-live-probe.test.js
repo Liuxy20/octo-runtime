@@ -9,8 +9,7 @@ import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.
 import { readStatelessComponentStatus } from "../test-support/stateless-live-probes.mjs";
 
 const status = {
-  "executor-kernel": { runtime: { execution_ready: true } },
-  "channel-gateway": { runtime: { status: { bots: [{ state: "online" }] } } }
+  "executor-kernel": { runtime: { execution_ready: true } }
 };
 
 test("stateless status requests JSON and buffers the complete response before parsing", async () => {
@@ -61,9 +60,13 @@ test("stateless status rejects missing, malformed and unusable successful respon
     ["array", "[]", /component status object/],
     ["scalar", "42", /component status object/],
     ["error response", '{"error":{"code":"CLI_FAILED"}}', /component status object/],
-    ["empty object", "{}", /channel-gateway bot status/],
-    ["missing bots", '{"channel-gateway":{"runtime":{"status":{}}}}', /bot status/],
-    ["invalid bots", '{"channel-gateway":{"runtime":{"status":{"bots":{}}}}}', /bot status/]
+    ["empty object", "{}", /execution readiness/],
+    ["missing readiness", '{"executor-kernel":{"runtime":{}}}', /execution readiness/],
+    [
+      "invalid readiness",
+      '{"executor-kernel":{"runtime":{"execution_ready":{}}}}',
+      /execution readiness/
+    ]
   ]) {
     await t.test(name, async () => {
       await assert.rejects(
@@ -77,16 +80,13 @@ test("stateless status rejects missing, malformed and unusable successful respon
   }
 });
 
-test("stateless status leaves offline bot lists for the existing online assertion", async () => {
-  for (const bots of [[], [{ state: "offline" }]]) {
+test("stateless status preserves an unready Kernel for the readiness assertion", async () => {
+  for (const execution_ready of [false]) {
     const actual = await readStatelessComponentStatus("unused", async (_args, io) => {
-      io.output(JSON.stringify({ "channel-gateway": { runtime: { status: { bots } } } }));
+      io.output(JSON.stringify({ "executor-kernel": { runtime: { execution_ready } } }));
       return 0;
     });
-    assert.equal(
-      actual["channel-gateway"].runtime.status.bots.some((bot) => bot.state === "online"),
-      false
-    );
+    assert.equal(actual["executor-kernel"].runtime.execution_ready, false);
   }
 });
 
@@ -103,9 +103,10 @@ test("stateless status consumes actual runCli JSON through controlled native and
           jsonrpc: "2.0",
           id: request.id,
           result: {
-            name: "channel-gateway",
+            ipc_version: 2,
+            kernel_instance_id: "stateless-probe",
             pid: process.pid,
-            status: { bots: [{ state: "online" }] }
+            execution_ready: true
           }
         }) + "\n"
       );
@@ -114,7 +115,7 @@ test("stateless status consumes actual runCli JSON through controlled native and
   t.after(() => new Promise((resolve) => server.close(resolve)));
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(componentEndpoint(home, "channel-gateway"), resolve);
+    server.listen(componentEndpoint(home), resolve);
   });
   const backend = {
     kind: "fixture",
@@ -123,7 +124,7 @@ test("stateless status consumes actual runCli JSON through controlled native and
   const actual = await readStatelessComponentStatus(home, (args, io) =>
     runCli(args, { ...io, backend })
   );
-  assert.deepEqual(actual["channel-gateway"].runtime.status.bots, [{ state: "online" }]);
+  assert.equal(actual["executor-kernel"].runtime.execution_ready, true);
   assert.equal(actual["executor-kernel"].service.state, "running");
 
   // 真实 CLI 的 --json 失败也走 stdout；返回码必须阻止把 error 对象当作状态。

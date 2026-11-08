@@ -41,7 +41,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 隔离群 `0166f275fcb443cd830f1695788c0fdc`，名称 `Channel_QA_1792087413796`，保留供人工复核。本次运行结束已关闭临时 Bot WS 和 Host，并清除本机临时工作目录；没有将测试 Runtime 写进长期 Gateway 配置。后续调试需重新启动脚本，不宣称 Bot 持续由本次进程接待。
 
-可复验脚本：[verify-channel-features-live.mjs](../../../scripts/verify-channel-features-live.mjs)。显式设置受保护账号文件路径 `OCTO_CHANNEL_QA_ACCOUNTS`；`OCTO_CHANNEL_QA_GROUP` 可复用上述测试群，省略则通过测试 Work App 新建隔离群。脚本会向该隔离群发送测试消息和图片，不用于正式环境。
+可复验脚本：[verify-channel-features-live.mjs](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-features-live.mjs)。显式设置受保护账号文件路径 `OCTO_CHANNEL_QA_ACCOUNTS`；`OCTO_CHANNEL_QA_GROUP` 可复用上述测试群，省略则通过测试 Work App 新建隔离群。脚本会向该隔离群发送测试消息和图片，不用于正式环境。
 
 | 验证 | 实测结果与证据边界 |
 | --- | --- |
@@ -61,6 +61,6 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 重试证据
 
-[verify-im-retry-live.mjs](../../../scripts/verify-im-retry-live.mjs) 复验：im-test 首页 200、无效 Bot 401；本地真实 Codex 首次上游受控 503，第二次尝试 run.completed，最终随机标记匹配，累计两次尝试、一次 retry notice。此脚本不发 IM 消息，不把它与上表正常图片执行拼成“真实 IM 限流注入已验收”。
+[verify-im-retry-live.mjs](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-im-retry-live.mjs) 复验：im-test 首页 200、无效 Bot 401；本地真实 Codex 首次上游受控 503，第二次尝试 run.completed，最终随机标记匹配，累计两次尝试、一次 retry notice。此脚本不发 IM 消息，不把它与上表正常图片执行拼成“真实 IM 限流注入已验收”。
 
 不增加重复执行或补发流程来提高表面成功率。身份、权限、业务错误及执行结果未知继续遵循原边界；不宣称限流无条件恢复、跨重启恰好一次执行或通知必达。

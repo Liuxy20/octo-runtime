@@ -49,7 +49,7 @@ for (const mode of ["canonical", "native"]) {
               text: `Use the command execution tool exactly once to run: printf '%s' '${marker}' > receipt.txt\nThen reply DONE. Only create receipt.txt in the current working directory. Do not access the network or modify other files.`
             }
           ],
-          contexts: {
+          agentEnv: {
             schema: "octo.context-envelope/v3",
             items: [
               { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },

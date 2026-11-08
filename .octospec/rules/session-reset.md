@@ -1,7 +1,7 @@
 ---
 type: Rule
 title: 会话归属与 reset
-description: 业务映射、Provider binding 与有界 IM reset 的职责。
+description: 业务会话、执行身份与 Provider binding 的职责。
 tags: ["session","reset"]
 timestamp: 2026-10-19T00:00:00Z
 implementation_baseline: df63c8f
@@ -10,70 +10,24 @@ tier: repo
 priority: 90
 load_bearing: true
 inject_when:
-  paths: ["packages/octo-runtime-extra-channel-*/**","packages/octo-runtime-protocol/**","test/*session*","test/im-*"]
+  paths: ["packages/octo-runtime-protocol/**","test/*session*"]
   touches: ["session","reset"]
 source: self
 supersedes: []
 ---
 
-# 业务会话、执行 Session 与 Reset
+# 业务会话与执行身份
 
-业务方拥有 `conversation_id → 当前 session_id` 映射。Runtime 使用调用方已确定的执行身份和 opaque Provider session，不管理业务会话历史，不从旧请求补背景。Run 保持 7，Context 保持 v3。
+业务方拥有 conversation_id 到逻辑 session_id 的映射、reset 规则及 Provider binding 存储。Runtime 消费调用方明确给出的 session/generation 与 opaque Provider session，不管理聊天历史，不从旧请求补背景。Run 7 与 Context v3 独立版本保持不变。
 
-## 身份与重置
+sessionName 是展示名称，不是恢复句柄、权限或 registry key；同名不合并，续聊改名不切换原生会话。Core 仅在省略时补随机 UUID。调用方决定新建、续接、继承或 reset，框架不从缺省值推断产品操作。
 
-`sessionName` 仅为调用方的可读展示名称，与上述身份独立。各调用方生成并在自身 binding 保存策略结果；Host SDK/Kernel 不设业务命名器或名称 registry，Core 仅在省略时补随机 UUID。名称不能作为恢复句柄或权限，同名不合并，续聊改名不切换原生会话。
+业务 reset 与执行取消是两个动作。消费者更换 binding 后须隔离旧代次的迟到更新；Runtime 对原调用保持其冻结身份和实际执行终态。Provider 返回 sessionId 不保证下次恢复成功，真实失败按执行合同返回。
 
-Octo Gateway 使用连字符：`octo-dm-{uid}-{uuid}`、`octo-group-{groupId}-{uuid}`、`octo-group-{groupId}-topic-{topicId}-{uuid}`。展示用地址片段各最多 80 个码点，控制字符替换为 `-`，总长不超过公共上限；不改变原始地址或 scoped binding。名称与逻辑会话同代次创建，跨轮、重试、闲置调度回收保持；reset/new 清除名称，下一条普通消息再分配。旧 binding 补缺失名称或修复非法名称时，不换业务 session、代次或 Provider key。原来的 Bot/Server/Space/渠道地址 scoped binding 继续负责隔离，不能从名称解析身份；WeCom/WebUI 的策略归各调用方自行实施。
+agentEnv 是本轮配置，不是 Provider binding 的身份或 hash。providerEpoch 可选且归业务维护；是否替换 binding 由业务判断，不要求任意配置变化递增。使用 epoch 时将原值保存到异步问题快照；省略时须由业务使被替换绑定的旧表单失效，SDK 不检测隐藏配置变更。正常完成后的续跑配置由宿主显式授权，详见[异步续跑边界](protocol-design.md#异步续跑配置与身份边界)。
 
-`conversation_id` 表示业务会话，reset 前后不变。逻辑执行 session 在普通续聊中复用，reset 后换新；Provider 返回的 `sessionId` 是另一层原生恢复标识，存在该值不保证恢复成功。
+业务方负责下一轮所需背景、持久性、数据保护与历史展示。Runtime 不依赖 SQLite，不提供业务 store/数据库适配/迁移，也不读取或自动删除旧用户数据库。
 
-业务入口拦截 `/reset`，成功回复“会话已经重置”。命令自身不调用模型，不创建执行 Run，不删除历史、产物、工作目录或 Provider 长期记忆。reset 不取消原模型执行；取消使用独立执行入口。Issue #182 的最终文件交付独立受代次约束：reset 撤销旧代次的上传和 final 发送，不能把旧结果发回新会话。
+Octo 渠道的 reset/new/stop、群与话题身份、调度额度、会话缓存和历史窗口已归[独立 Gateway 仓库](https://github.com/Mininglamp-OSS/octo-channel-gateway)，不作为 Runtime 当前业务定义。迁移依据见[Issue 328](../tasks/328-remove-extra/brief.md)。
 
-Octo Gateway 的 `/new` 为同一 reset 分支的别名。reset 同时清除 binding 中的 `rulesContext`，下一条普通请求重新携带当前群/话题规则；规则更新本身不 reset，也不修改历史 gap。规则状态仅在成功终态且 session/generation/revision 匹配时确认，见[Channel 合同](channel-integration.md)。此别名不扩大至其他渠道。
-
-Issue #18：群/话题直接点名可携带原生前缀，`/reset`、`/new`、`/stop` 对剥离有效提及前缀后的完整输入精确匹配；语义文本中出现这些字符串不执行控制。广播（包括直接点名混合广播）不能执行三命令，普通任务准入不变，详见[Channel 规则](channel-integration.md)。stop 复用已有取消入口，不重置会话、不新增 Run；取消 ACK 只代表受理请求，不代表源执行已终止。DM 保持原行为。
-
-当前 IM 实现采用延迟分配：reset 清除 session 与 Provider binding、增加 generation，下一条普通输入入队时生成新的 session。已入队请求保留原先冻结的身份；旧执行的迟到更新不能恢复当前 binding。详见 [im-channel.ts](../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。
-
-新 session 所需的背景由下一轮业务发起方明确提供，执行层不读取旧 Event 或聊天历史自动补齐。
-
-2026-10-15 用户确认 IM Agent 固定 workdir；每会话目录不是需求。reset 只切业务 session、代次和 Provider binding，不切目录或删除产物；延迟分配的现有实现不应改成修改旧 Provider 的 opaque ID。2026-10-16 进一步明确这是 IM 层的架构决策，不是功能计划，也不要求通用 Host 限制其他调用方的合法目录配置。决策依据及共享文件、并发影响评估见[固定目录决策](../tasks/channel-fixed-workdir-decision/brief.md)，分层责任见[IM Agent 与 invoke 边界](../guides/im-agent-invocation-boundary.md)。
-
-IM reset 不要求无历史对话。已实施的[历史策略](../tasks/channel-new-session-history/brief.md)为：下一条普通输入可补 reset 前的最近聊天，每新 session 仅自动尝试一次冷启动读取，最多 20 条，完整序列化 messages 数组最多 8000 Unicode 码点（身份、时间、结构和转义均计入）；准备失败不消耗资格，实际交给执行后历史失败或空结果也消耗本次资格，当前任务空历史继续。正常群/话题续聊仍按实际缺口有界补取，无缺口不查；重试复用冻结快照。首轮、reset/new 与补位保留窗口内自身 Bot 消息，不能仅按 UID 排除。一次性资格由 Channel 在有界会话状态中管理，Host/Adapter 不去重或补齐 Context，不增加持久 reset 屏障。2026-10-16 im-test 已验证 reset 后补旧历史且工作目录不变，详见[交付记录](../journal/shared/2026-10-16-channel-features-delivery.md)。
-
-## 当前内置 IM 存储
-
-Issue #32的群/话题gap元数据附于同一有界binding，无旁路聊天库。观察与ACK只原子patch已有同session/generation条目，不续TTL、不改淘汰顺序；reset清除旧元数据，旧turn/ACK不能更新新代次。固定历史API在模型前完成，第一次交接只推进本地prepared事实，不宣称Provider已接受或Agent已读；API失败或正文被预算省略时保留待补边界。正常接续若保守省略已被assistant覆盖的自身输出，Gateway必须从同次已查询、已预算窗口准备互不重叠的恢复补充，沿既有freshFallbackModelInput/Parts在本次fresh fallback补回，不重拉本轮历史或另起invoke；主历史与恢复补充合计仍最多20条/8000序列化码点。Provider显式fresh_fallback也使下一条新输入按连续性未知重新有界取历史；同代次卡片重试复用两份冻结快照，不重新采集。详见[缺口状态机](../tasks/channel-context-gap/design.md)与[保守历史设计](../tasks/234-context-lifecycle/conservative-history-plan.md)。
-
-### 调度状态与业务 binding 分开
-
-Octo 与 WeCom 的 `ImRuntime.#sessions` 只登记有排队或在途执行的调度对象，不是历史会话列表，不设累计 128 个会话的接待门槛。当前队列计数为零且没有活动 invocation 时立即删除；准备失败、Provider 异常、控制命令和拒绝入队也执行同一释放检查。终态后的最终投递仍属于当前队列工作，投递结束后再释放。
-
-状态查询的 `sessions` 只返回上述在途条目。`/session` 从业务 store 恢复 binding 和最近 Run 元数据；回收调度对象不主动 reset 或删除业务 binding。卡片 cancel 按当前 key 与 invocation 查找；retry 重新进入当前队列，不能捕获并重新使用已经释放的调度对象。
-
-单设备每天一万个 Session 表示累计接待量，不等于一万个并发模型执行。Octo Gateway 的容量分为每 Bot 最多 64 个工作槽、每逻辑 session 另有最多 4 条排队消息；不能合称“64 条待处理消息”。例如 20 个 session 各有 1 条工作和 4 条排队，共占 20 个工作槽、80 个排队位置，100 条已受理消息并未超过 Bot 工作上限。64 个工作槽占满时，已有工作 session 仍可补满自己的 4 条排队；新/空闲 session 需要工作槽，须等待槽位释放后重新发送。完整计数、释放和拒收例子见 [Channel 容量合同](channel-integration.md#容量例子)。该合同仅适用于 Octo Gateway，不推广到 WeCom。
-
-历史 binding 独立计数，不占工作槽或排队额度；即使恢复了旧 binding，空闲 session 的新消息仍须申请工作槽。默认 store 的容量和期限仍是下述独立业务合同。此修复不代表 Kernel 的历史源窗口已经移除，也不承诺默认内存 store 保存一天内全部一万个 binding。
-
-当前 [Octo 接入模块](../../packages/octo-runtime-extra-channel-gateway/src/extra.ts) 默认使用 [MemoryImSessionStore](../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)，不创建 `im-sessions.db`，默认内存不承诺跨进程恢复。宿主可显式提供同步 createSessionStore，按可信 Bot/账号/组织/助理等 scope 保存同一 ImSessionStore 合同的数据；真实持久性及 reset/patch 原子性由宿主保证。整个 Runtime 不依赖 SQLite、不提供数据库适配；WeCom 的默认实现不变。接线与所有权见 [Extra 规则](extras.md#gateway-专属存储依赖)。
-
-| 数据 | 数量上限 | 序列化大小上限 | 保留时间 |
-| --- | --- | --- | --- |
-| session binding | 1024 | 4 MiB | 24 小时 |
-| 消息 occurrence | 4096 | 16 MiB | 120 秒 |
-| reset 去重 | 4096 | 1 MiB | 120 秒 |
-
-上述表格适用于默认 Memory：访问时检查过期，另有 10 秒清理定时器；超限淘汰最早项。模块关闭时清理其自有内存映射。重启、过期或淘汰后创建新 session，不声称恢复旧 Provider 会话。去重只在当前窗口内有效，不是持久投递保证。宿主 store 的保留、容量、数据保护和数据库生命周期由宿主制定；已保存的 binding 只提供下次续接身份，不恢复未完成 Run，也不保证 Provider 原生会话可恢复。
-
-Work App 的业务会话和完整事件保存在它自己的存储中，不属于 Runtime SQLite；宿主负责自己的 reset 持久化和历史展示。
-
-## 验证入口
-
-- [im-session-store.test.js](../../test/im-session-store.test.js)：映射、reset、容量、过期与关闭。
-- [gateway-host-session-store.test.js](../../test/gateway-host-session-store.test.js)：宿主工厂消费、重载读取、scope/reset、尾写和句柄所有权；真实数据库和 Electron 另由宿主验收。
-- [im-session-scheduling.test.js](../../test/im-session-scheduling.test.js)：两种渠道分别接待一万个不同会话、闲置回收、续聊、卡片重试、失败、排队、reset 与关闭；使用 `--expose-gc` 时额外断言预热后堆内存增长。
-- [im-runtime.test.js](../../test/im-runtime.test.js)、[im-wecom.test.js](../../test/im-wecom.test.js)：入口控制命令与执行行为。
-- [stateless-executor.test.js](../../test/stateless-executor.test.js)：执行内核不创建业务数据库、重启不恢复旧 Run。
-
-这些是当前测试入口，不表示本次文档整理重新完成了真实 IM 收发或线上执行验收。
+执行底座验证见[无数据库回归](../../test/stateless-executor.test.js)、[会话名称](../../test/session-names.test.js)。

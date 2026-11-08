@@ -30,8 +30,7 @@ try {
           invocationId,
           protocol_mode: "canonical",
           workdir,
-          agentConfig: { effort: "low" },
-          controlInstructions: "Read-only verification. Do not use tools.",
+
           ...(providerSession ? { providerSession } : {}),
           inputs: [
             {
@@ -42,12 +41,16 @@ try {
                   : "Repeat the marker from my previous message, with no other text. Do not use tools."
             }
           ],
-          contexts: {
-            schema: "octo.context-envelope/v3",
-            items: [
-              { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } },
-              { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
-            ]
+          agentEnv: {
+            ...{
+              schema: "octo.context-envelope/v3",
+              items: [
+                { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } },
+                { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+              ]
+            },
+            agentConfig: { effort: "low" },
+            controlInstructions: "Read-only verification. Do not use tools."
           }
         },
         { signal: controller.signal }

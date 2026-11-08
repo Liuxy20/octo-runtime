@@ -17,7 +17,7 @@ tags: [testing, integration, architecture]
 - 交付基线：`c35b261b31573bc2f08a16eeced12f18705b2560`；已同步主线，其中包含 #267 的 metadata 修复，本 PR 不重复修改这些文件。
 - Worktree：`/Users/lvsijia/github.com/Mininglamp-OSS/octo-runtime-issue-159`；分支：`fix/159-live-script-executor`。
 - [act-mode 脚本](../../../scripts/verify-actmode-live.mjs)仍静态导入 Kernel 的 `AgentExecutor`；[forwarding 脚本](../../../scripts/verify-codex-forwarding-live.mjs)默认路径仍动态取得该旧导出。当前 Kernel 未导出该类，Core 为唯一实现。
-- [IM Context 脚本](../../../scripts/verify-im-context-live.mjs)在 `d0e34377` / PR #262 已改为 Core 导入；本项只补充它的离线入口及必要装配复用，保留已有修复。
+- [IM Context 脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-im-context-live.mjs)在 `d0e34377` / PR #262 已改为 Core 导入；本项只补充它的离线入口及必要装配复用，保留已有修复。
 - 原 issue 的三份脚本失败证据属于旧基线 `8214292132d260c04cf72218580bef741788dd4a`。本轮分诊只做源码核对与三份脚本的 `node --check`，未构建或动态复现，不将语法通过表述为模块加载通过。
 
 ## 产品意图与责任归属

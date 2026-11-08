@@ -22,8 +22,8 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
-  approvalMode: "full_access",
-  contexts: {
+  agentEnv: {
+    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -95,16 +95,16 @@ Core keeps at most 1,024 invocation identity records and evicts inactive ones af
 
 ## Direct Core or Kernel
 
-| Concern                    | Direct `AgentExecutor`                                                                     | `KernelClient`                                      |
-| -------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Execution location         | Your process                                                                               | Kernel host process                            |
-| Failure domain             | Shares your event loop; `process.exit`, OOM, or a synchronous block takes the host with it | Shares the Kernel host failure domain |
-| Ending the iterator early  | Requests cancellation                                                                      | Stops observation only                              |
-| Replay                     | None                                                                                       | Bounded, by original identity and sequence          |
-| `environment.streamLimits` | Supported                                                                                  | Rejected                                            |
-| Shutdown                   | `shutdown()`, then check `cleanup`                                                         | `close()`, then check `complete`                    |
+| Concern                    | Direct `AgentExecutor`                                                                     | `KernelClient`                             |
+| -------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------ |
+| Execution location         | Your process                                                                               | Kernel host process                        |
+| Failure domain             | Shares your event loop; `process.exit`, OOM, or a synchronous block takes the host with it | Shares the Kernel host failure domain      |
+| Ending the iterator early  | Requests cancellation                                                                      | Stops observation only                     |
+| Replay                     | None                                                                                       | Bounded, by original identity and sequence |
+| `environment.streamLimits` | Supported                                                                                  | Rejected                                   |
+| Shutdown                   | `shutdown()`, then check `cleanup`                                                         | `close()`, then check `complete`           |
 
-Electron, Node SDK hosts, and CLI hosts use KernelClient over local RPC. Direct Core is the lower-level execution implementation for internal integration and tests; it does not provide Kernel admission, observation, or replay. Neither path needs an Extra.
+Electron, Node SDK hosts, and CLI hosts use KernelClient over local RPC. Direct Core is the lower-level execution implementation for internal integration and tests; it does not provide Kernel admission, observation, or replay. Neither path needs an business consumer.
 
 ## Import and distribution
 
@@ -112,6 +112,6 @@ Private workspace package: source and submodule hosts import `@mininglamp-oss/oc
 
 ## Further reading
 
-- [Implementation and exports](src/index.ts), [input preparation](src/invoke-input.ts), [current-turn rendering](src/model-input.ts), [watchdog](src/watchdog.ts).
+- [Implementation and exports](src/index.ts), [input preparation](src/invoke-input.ts), [watchdog](src/watchdog.ts).
 - [Kernel](../octo-runtime-executor-kernel/README.md), [input reference](../../docs/en/reference/invoke-input.md), [output and control](../../docs/en/reference/output-and-control.md).
 - [Executor tests](../../test/executor-core.test.js), [cleanup budget tests](../../test/executor-cleanup-budget.test.js).

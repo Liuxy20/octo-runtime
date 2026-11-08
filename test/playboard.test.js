@@ -22,13 +22,13 @@ const context = (items) => ({ schema: "octo.context-envelope/v3", items });
 const item = (namespace, name, payload) => ({ namespace, name, payload });
 const input = (text = "hello", overrides = {}) => ({
   inputs: [{ type: "text", text }],
-  contexts: context([]),
+  agentEnv: context([]),
   ...overrides
 });
 const echoInput = (text = "hello", extra = []) =>
   input(text, {
     protocol_mode: "canonical",
-    contexts: context([item("octo.execution", "adapter", { type: "playboard-test" }), ...extra])
+    agentEnv: context([item("octo.execution", "adapter", { type: "playboard-test" }), ...extra])
   });
 
 async function fixture(t, { legacyOpenClaw = false } = {}) {
@@ -229,7 +229,7 @@ test("playboard maps one snapshot and never invents provider continuity", () => 
   assert.equal(first.request.providerSession, undefined);
   assert.notEqual(first.request.runId, second.request.runId);
   assert.notEqual(first.request.invocationId, second.request.invocationId);
-  assert.deepEqual(request.contexts, context([]));
+  assert.deepEqual(request.agentEnv, context([]));
   const continued = preparePlayboard({
     ...request,
     providerSession: { sessionId: "opaque", custom: { keep: true } }
@@ -245,7 +245,7 @@ test("OpenClaw shorthand selects an existing agent without injecting a caller wo
   const adapter = (payload) => context([item("octo.execution", "adapter", payload)]);
   const submitted = input("hello", {
     protocol_mode: "canonical",
-    contexts: adapter({ type: "openclaw" })
+    agentEnv: adapter({ type: "openclaw" })
   });
   const snapshot = structuredClone(submitted);
   const prepared = preparePlayboard(submitted);
@@ -262,8 +262,11 @@ test("OpenClaw shorthand selects an existing agent without injecting a caller wo
   );
   const explicit = preparePlayboard({
     ...submitted,
-    agentSource: "provisioned",
-    contexts: adapter({ type: "openclaw", provider_agent_id: "researcher" })
+
+    agentEnv: {
+      ...adapter({ type: "openclaw", provider_agent_id: "researcher" }),
+      agentSource: "provisioned"
+    }
   });
   assert.equal(explicit.request.agentSource, "provisioned");
   assert.equal(explicit.request.agentConfig.providerAgentId, "researcher");
@@ -273,7 +276,7 @@ test("OpenClaw shorthand selects an existing agent without injecting a caller wo
       () =>
         preparePlayboard({
           ...submitted,
-          contexts: adapter({ type: "openclaw", provider_agent_id })
+          agentEnv: adapter({ type: "openclaw", provider_agent_id })
         }),
       /CONTEXT_SCHEMA_INVALID/
     );
@@ -288,7 +291,7 @@ test("invalid input, old context, and invalid continuity fail before execution",
     input("hello", { inputs: [] }),
     input("hello", { protocol_mode: "other" }),
     input("hello", { protocolMode: "canonical" }),
-    input("hello", { contexts: { schema: "octo.context-envelope/v2", items: [] } }),
+    input("hello", { agentEnv: { schema: "octo.context-envelope/v2", items: [] } }),
     input("hello", { sessionId: 3 }),
     input("hello", { continuityMode: "continue" }),
     input("hello", { providerSession: {} }),
@@ -300,17 +303,18 @@ test("invalid input, old context, and invalid continuity fail before execution",
   assert.equal(preparePlayboard(input("hello", { extra: true })).request.modelInput, "hello");
 });
 
-test("temporary daemon renders ordered context and leaves no identity or process state", async (t) => {
+test("temporary Kernel preserves caller-prepared business input and leaves no identity or process state", async (t) => {
   const settings = await fixture(t);
   const contexts = [
-    item("extra.playboard", "second", { text: "business-b" }),
     item("octo.control", "instructions", {
       entries: [{ text: "control-only" }]
     }),
-    item("extra.playboard", "first", { text: "business-a" }),
     item("octo.execution", "model", { selection: { id: "test-model" } })
   ];
-  const request = { ...echoInput("hello", contexts), sessionId: "same-session" };
+  const request = {
+    ...echoInput("business-b\nbusiness-a\nhello", contexts),
+    sessionId: "same-session"
+  };
   const result = await execute(settings, request);
   assert.equal(result.code, 0, result.stderr);
   terminal(result, "completed");
@@ -379,7 +383,10 @@ for (const protocolMode of ["native", "canonical"]) {
     const settings = await fixture(t);
     const result = await execute(
       settings,
-      input("approval", { protocol_mode: protocolMode, approvalMode: "ask" })
+      input("approval", {
+        protocol_mode: protocolMode,
+        agentEnv: { ...context([]), approvalMode: "ask" }
+      })
     );
     assert.equal(result.code, 1);
     assert.match(result.stderr, /PLAYBOARD_INTERACTION_REQUIRED/);
@@ -423,7 +430,13 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
     for (const [request, expected] of [
       [echoInput("normal"), "completed"],
       [echoInput("fail"), "failed"],
-      [input("approval", { protocol_mode: "canonical", approvalMode: "ask" }), "pending"]
+      [
+        input("approval", {
+          protocol_mode: "canonical",
+          agentEnv: { ...context([]), approvalMode: "ask" }
+        }),
+        "pending"
+      ]
     ]) {
       const result = await execute(settings, request, { cleanupFailure, env });
       assert.notEqual(result.code, 0, result.stderr);
@@ -676,8 +689,8 @@ for (const legacyOpenClaw of [false, true]) {
     await save();
     const request = input("hello", {
       protocol_mode: "canonical",
-      contexts: context([
-        item("octo.execution", "adapter", { type: "openclaw" }),
+      agentEnv: context([
+        item("octo.execution", "adapter", { type: "openclaw", provider_agent_id: "main" }),
         item("octo.security", "approval_policy", { mode: "full_access" })
       ])
     });

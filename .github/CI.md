@@ -22,8 +22,7 @@ naming check rather than relying on the runner image, then executes:
 5. `pnpm test:suites`, the same suites used by local `pnpm test` without another build.
 6. Single-distribution packaging and offline installation/public API verification.
 
-The complete test entry point includes the existing local debugging WebUI plugin
-tests. No production UI or new browser end-to-end gate is introduced. Provider tests
+Provider tests
 use fakes by default; required CI/release jobs do not enable native live-test opt-ins.
 For every adapter, real Provider/model/IM acceptance is a separate **non-gating**
 check, not a required GitHub status. CI success establishes offline regression
@@ -31,13 +30,7 @@ coverage, not real Provider availability. The change author owns live execution
 and evidence archiving; see the [live acceptance guide](../.octospec/guides/provider-live-acceptance.md)
 for the command, rerun triggers and missing-environment reporting. A dedicated
 Windows matrix builds and packs the distribution on both majors, runs Core/Kernel/Host lifecycle and
-IPC contract tests, and verifies the installed CLI with independent Kernel and Extra
-processes before uninstalling the package. Readiness uses a bounded overall deadline
-and reports the last status failure plus bounded component stderr on failure.
-Both Windows majors also run the recovery and Extra status-log suites: native Kernel lifecycle and cleanup, Gateway connection recovery,
-bounded status output, log following/rotation and the native SDK loopback IM trial.
-The CLI signal-injection variant and POSIX process-group cleanup injection retain
-their platform-specific skips; the SDK recovery trial runs on Windows.
+IPC contract tests, and verifies the installed Kernel CLI before uninstalling. Readiness uses a bounded deadline and preserves controlled startup diagnostics.
 The Windows matrix also verifies invocation-local spawn/pipe failures, mixed-case
 environment overrides and native scheduled-task installation through both SDK and
 CLI. Review regressions cover environment consumers and ACP/Grok spawns, explicit
@@ -64,7 +57,7 @@ Only Ubuntu/Node.js 24 uploads the verified `octo-runtime-release` artifact for 
 days, preserving a single canonical archive for publishing and recovery. All matrix
 entries pack and verify their distribution. Verification covers empty-cache offline
 global installation with strict engine checks, public type consumption, Core,
-owned Kernel, independent Extra and CLI entry points, and uninstalling without
+native Kernel and CLI entry points, and uninstalling without
 deleting Home. It does not install Providers automatically.
 
 Release validation calls this same required dual-version CI workflow. Publishing,

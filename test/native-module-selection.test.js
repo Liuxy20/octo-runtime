@@ -43,7 +43,7 @@ test(
       [...copied].every((name) => !name.includes("runtime-adapter-") || name.endsWith("-sdk"))
     );
     await writeFile(join(directory, "package.json"), '{"type":"module"}');
-    for (const file of ["native-loading-host.mts", "native-loading-extra.mjs", "test-adapter.js"])
+    for (const file of ["native-loading-host.mts", "test-adapter.js"])
       await cp(join(root, "test/fixtures", file), join(directory, file));
     const tsc = join(root, "node_modules/typescript/bin/tsc");
     await execute(

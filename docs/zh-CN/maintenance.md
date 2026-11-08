@@ -6,7 +6,19 @@
 
 ## 范围与基线
 
-本页供文档维护者查阅，记录源码版本、旧文档的用途和验证方法。本库首次核对的源码为 `d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e`，日期为 2026-10-21。这是首次验证的基线，不代表后续所有页面都只核对到该版本；后续局部更新及其验证范围记录在下方。架构参考根目录的架构和接入文档，接口字段按源码和 Schema 核对。
+本页供文档维护者查阅，记录源码版本、旧文档的用途和验证方法。本库首次核对的源码为 `d44f5cd42694b5f8cb7c8c18daa65eff0265ba8e`，日期为 2026-10-21。这是历史基线；后续核对范围分别记录。
+
+## Issue 328 文档追加清理
+
+2026-11-07，在基于 `bf9ff6b599b0e325362698acd3cebd9ac1363467` 的未提交拆分工作树上，使用 macOS、Node.js 26.13.0 复核。中英文入口、Harness、会话/Context、IPC、输出控制、Home 和诊断统一描述执行底座；渠道 SDK/CLI 与业务策略指向独立 Gateway。旧文档路径保留为迁移入口。
+
+`pnpm run docs:check` 通过：36 对页面、73 个 Markdown、12 个 JSON、8 个未修改的 Mermaid 块、全部 12 类 Context 示例和 4 项本地执行测试。另检查当前仍存在文档的链接与锚点，包含工程规则。本次文档更新未新增真实 Provider 或 IM 验收。
+
+## 历史验证
+
+以下按日期记录的结果对应各自原版本。Extra、Gateway loader、worker 和已删除包的描述仅为历史证据，不是当前接入合同。当前边界以 [Issue 328](../../.octospec/tasks/328-remove-extra/validation.md) 为准。
+
+架构和接口以当前文档、源码和 Schema 为准。
 
 中英文分别位于 `docs/en` 和 `docs/zh-CN`，页面路径一一对应，语言切换链接指向同一主题。可执行示例共用 `docs/examples`。本库直接使用仓库 Markdown，不依赖文档站；Octospec 继续用于研发过程记录。
 
@@ -16,7 +28,7 @@
 | ---------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | 根 [README](../../README.md)、[INTEGRATION](../../INTEGRATION.md)            | 项目介绍和接入选型，具体接口链接到本库。                    |
 | [ARCHITECTURE](../../ARCHITECTURE.md)                                        | 设计背景、历史比较和未来目标；当前模块接口见本库。          |
-| [SDK Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                       | 保留中文 IM 配置和存储实现细节；通用 Extra 生命周期见本库。 |
+| [SDK Gateway 指南](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                       | 迁移入口；渠道 SDK、CLI、配置及存储文档由独立 Gateway 仓库维护。 |
 | [CLI 运维](getting-started/cli.md)、[部署](../../DEPLOYMENTS.md)、CLI README | 提供服务运维和发行步骤。                                    |
 | 包 README                                                                    | 提供包内实现和贡献说明；应用接入接口见本库。                |
 | `release/README.md`                                                          | 已删除，打包使用根 README。CI 临时下载目录不受影响。        |
@@ -42,7 +54,7 @@
 | 服务/调用、交互、取消、图片完整性                   | 使用测试用 Adapter 和真实本地 Kernel IPC，不调用模型。                                      |
 | 公开 tgz 消费                                       | 现有打包/验证加共享示例，离线安装                                                           |
 | MCP 准备与映射                                      | 现有定向 `test/context-mcp.test.js`，地址使用 `example.com`                                 |
-| Mermaid                                             | 双语架构、监督、输入、IPC 恢复、MCP、Extra 生命周期图，另行渲染验证                         |
+| Mermaid                                             | 当前架构、输入、IPC 恢复和 MCP 图；修改图时另行渲染验证                         |
 | 真实 Provider、MCP 调用、IM、Electron、Windows 原生 | 本次未执行，需要相应环境中的集成测试。                                                      |
 | Harness 安装、Computer Use、账号额度                | 2026-10-21 核对源码命令及厂商官方文档；未执行 Provider 安装、登录、付费调用或桌面工具操作。 |
 

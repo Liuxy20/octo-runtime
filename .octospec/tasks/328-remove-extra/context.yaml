@@ -1,0 +1,13 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/328
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/extras.md
+  - .octospec/rules/channel-integration.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - octo-spec/global/comprehension-gate.md
+  - octo-spec/global/review.md
+  - octo-spec/global/security.md
+precedence: 用户本次授权和 Issue 328 取代旧 Extra 装配要求；执行和安全合同保留。

@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -24,7 +25,7 @@ async function fixture(t, invoke) {
 
 const input = (mode = "canonical") => ({
   inputs: [{ type: "text", text: "only this turn" }],
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
@@ -62,7 +63,7 @@ for (const mode of ["native", "canonical"])
     const localEvents = [],
       remoteEvents = [];
     for await (const event of local.host.invoke(value)) localEvents.push(event);
-    for await (const event of remote.client.invoke(value)) remoteEvents.push(event);
+    for await (const event of invokeClient(remote.client, value)) remoteEvents.push(event);
     const { signal: _local, ...localRequest } = received[0];
     const { signal: _remote, ...remoteRequest } = received[1];
     assert.deepEqual(remoteRequest, localRequest);
@@ -86,11 +87,14 @@ test("local and RPC pre-abort never start a Provider or transmit an invocation",
   const controller = new AbortController();
   const reason = new Error("cancelled before execution");
   controller.abort(reason);
-  for (const invoke of [host.invoke, client.invoke])
-    await assert.rejects(
-      invoke(input(), { signal: controller.signal }).next(),
-      (error) => error === reason
-    );
+  await assert.rejects(
+    host.invoke(input(), { signal: controller.signal }).next(),
+    (error) => error === reason
+  );
+  await assert.rejects(
+    invokeClient(client, input(), { signal: controller.signal }).next(),
+    /INVOCATION_INTERRUPTED_BEFORE_SUBMISSION/
+  );
   assert.equal(calls, 0);
   assert.deepEqual(wire, []);
 });
@@ -110,10 +114,14 @@ test("local and RPC active signal cancellation reaches Provider and closes the s
     const controller = new AbortController();
     const reason = new Error("cancel this invocation");
     const consume = (async () => {
-      for await (const event of handles[route].invoke(input(), { signal: controller.signal }))
-        void event;
+      const events =
+        route === "host"
+          ? handles.host.invoke(input(), { signal: controller.signal })
+          : invokeClient(handles.client, input(), { signal: controller.signal });
+      for await (const event of events) void event;
     })();
-    const rejected = assert.rejects(consume, (error) => error === reason);
+    const rejected =
+      route === "host" ? assert.rejects(consume, (error) => error === reason) : consume;
     await waitFor(() => started);
     controller.abort(reason);
     await rejected;

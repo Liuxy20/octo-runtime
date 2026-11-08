@@ -6,10 +6,9 @@ import {
   type ModuleManifest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 
-import { discoverGlobalExtras, mergeGlobalExtras } from "./global-extras.js";
 import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
-/** CLI 独占内置、Home 与全局 Extra 目录；SDK 不扫描，显式清单完全替换。 */
+/** CLI 装配 Adapter 目录；显式清单完全替换默认与 Home 来源。 */
 export async function loadCliManifest(
   home: string,
   override?: string,
@@ -34,9 +33,5 @@ export async function loadCliManifest(
   if (override) return read(resolve(override), { legacy: true });
   const builtin = await read(fileURLToPath(new URL("./manifest.json", import.meta.url)));
   const extension = await read(join(home, "manifest.json"), { optional: true });
-  return mergeGlobalExtras(
-    mergeModuleManifests(builtin, extension, report),
-    await discoverGlobalExtras(report),
-    report
-  );
+  return mergeModuleManifests(builtin, extension, report);
 }

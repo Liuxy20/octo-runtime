@@ -17,26 +17,26 @@ supersedes: []
 
 # Runtime 开发与验证约定
 
-#312 允许 Extra 显式 direct 借用宿主 Core；本规则下文“同进程也走 RPC”限定 Kernel 托管路径，见[装配范围](architecture.md#extra-双模式装配issue-312)。本专项测试位于 test/manual，保持手动执行；不加入默认测试、打包检查或 CI gate。
+Issue 328 移除 Extra 框架；业务消费者使用公开 client。Kernel 托管路径同进程也走 RPC；直接 Core 是显式低层能力，见[装配范围](architecture.md#sdk-原生装配与统一-rpc)。历史专项测试与验证记录不作为当前插件接入合同。
 
 ## 需求与方案的强制范围检查
 
 每个新增或修改需求必须先执行[基础架构的产品意图归属检查](architecture.md)，在对应 brief 记录业务目标、决定权归属、显式输入、合同内动作、越界动作及对其他接入产品的影响。先由第一性原理判断是否属于 octo-runtime，再选择实现位置；不能从旧兜底或技术实现方便反推职责。
 
-评审必须拒绝下列设计：基础层替产品决定模式/思考强度/会话生命周期；省略字段触发未经约定的体验策略；为上游错误在下游猜测补造意图；将单产品默认推广至 SDK、CLI 和其他 Extra。明确合同内校验、原生映射、权限、资源并发保护及真实故障处理仍由各执行模块承担，但不能以这些技术责任为由改变业务意图。不得要求宿主理解 Provider 私有参数来弥补 adapter 未接线。
+评审必须拒绝下列设计：基础层替产品决定模式/思考强度/会话生命周期；省略字段触发未经约定的体验策略；为上游错误在下游猜测补造意图；将单产品默认推广至 SDK、CLI 和其他接入应用。明确合同内校验、原生映射、权限、资源并发保护及真实故障处理仍由各执行模块承担，但不能以这些技术责任为由改变业务意图。不得要求宿主理解 Provider 私有参数来弥补 adapter 未接线。
 
 本要求是架构与评审约束，不宣称自动化检查能够识别全部职责越界。发现越界应修改方案和责任归属，而非仅添加风险说明或测试后保留越界行为。
 
-服务装配或进程生命周期需求还必须执行[统一原生服务原则](architecture.md#统一原生服务构造与部署边界)的拓扑、所有权和公共 API 检查。功能通过不能替代架构通过；CLI 服务进程和 Electron 主进程必须直接构造对应服务，严禁外部 Node 代启。库内以 CLI 直接加载共同 SDK、实际 PID/socket 和包外 SDK 类型及行为为主要证据；外部 Electron 集成独立跟踪，不作为库内改造前置条件，不以增加测试数量豁免架构问题。
+服务装配或进程生命周期需求还必须执行[统一原生服务原则](architecture.md#sdk-原生装配与统一-rpc)的拓扑、所有权和公共 API 检查。功能通过不能替代架构通过；CLI 服务进程和 Electron 主进程必须直接构造对应服务，严禁外部 Node 代启。库内以 CLI 直接加载共同 SDK、实际 PID/socket 和包外 SDK 类型及行为为主要证据；外部 Electron 集成独立跟踪，不作为库内改造前置条件，不以增加测试数量豁免架构问题。
 
 ## 工程与验证要求
 
 - 使用严格 TypeScript ES modules，不显式使用 `any`；类型引用使用 type-only import，错误必须显式处理。
-- 核心实现及接入使用代码必须遵守下文的核心代码注释要求；该要求覆盖全部公共执行层及 Extra。
+- 核心实现及接入使用代码必须遵守下文的核心代码注释要求；该要求覆盖全部公共执行层及其调用示例。
 - `pnpm build` 将源码 Git commit 与 dirty 状态写入 CLI 的 `dist/build-info.json`；根帮助和版本命令（version/--version）展示版本及构建时的 `commit:<12 位短 SHA>`，未提交修改标记 `(dirty)`。发行物保留此元数据，运行时不查询用户当前目录的 Git；缺少 Git 来源时显示 `commit:unknown`，不得伪造为干净提交。
 - 同一文件的 `buildTime` 为构建流程捕获的 UTC ISO 8601 时间，根帮助和版本命令显示 `build:`；旧或无效元数据显示 `build:unknown`，不得用运行、安装或 commit 时间代替。发行矩阵共用一次构建会话时间；同版本恢复必须校验并复用原发行物时间，仍以完整 archive integrity 阻止不可变版本内容漂移。
 - 协议 wire types 从 JSON Schema 生成。修改协议时同步 schema、生成类型、样例、调用端及测试，不手工只改生成文件。
-- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0，Electron 同进程业务也使用此路径。按 [#294 合同](architecture.md#sdk-原生装配与统一-rpc)，宿主注入实际 Adapter，Kernel 不启动执行 worker；旧 stdio worker RPC/Node IPC 心跳实现已删除，不提供兼容入口；公共 RPC 保留。Extra 生命周期由调用进程中的原生服务管理，业务依赖同进程直接调用；可选 controlEndpoint 仅查询状态，不代理依赖、不代启服务。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
+- CLI/SDK 到 Kernel 使用 Unix socket / Windows Pipe 上的 NDJSON JSON-RPC 2.0，Electron 同进程业务也使用此路径。按 [#294 合同](architecture.md#sdk-原生装配与统一-rpc)，宿主注入实际 Adapter，Kernel 不启动执行 worker；旧 stdio worker RPC/Node IPC 心跳实现已删除，不提供兼容入口；公共 RPC 保留。独立业务消费者通过公开 Client 管理自己所属调用。具体形状见 [本地传输合同](local-execution.md)。Provider 差异封装在 `octo-runtime-adapter-*` 内。
 - 默认自动化测试使用 fake Provider，不调用真实模型。所有 adapter 的真实验收独立运行，见下文；IM 接口调试连接 `https://im-test.deepminer.com.cn/`，分别记录离线回归与实际联调结果，不把 mock 结果当作线上证据。
 - 验证脚本消费 Runtime CLI 状态时显式传 `--json`；输出回调先收集完整 stdout/stderr，检查非零返回码并保留原始诊断后，再解析和校验状态结构。不能让 JSON 解析错误覆盖 CLI 失败，也不能把错误对象或缺失状态当作可继续验证的成功结果。
 - 按改动范围运行 `pnpm lint`、`pnpm typecheck` 和相关测试；跨包合同变更运行 `pnpm test`。纯文档改动检查 OKF 格式、索引与链接，无需触发真实模型执行。
@@ -63,7 +63,7 @@ supersedes: []
 
 ## 核心代码注释要求
 
-- 覆盖 Executor Core、Executor Kernel、Host SDK、公共传输/进程管理、Extra 核心流程及接入示例。新增或修改这些位置时，须检查并同步补齐关键注释；评审将缺失或失真的关键合同注释视为需修复项。
+- 覆盖 Executor Core、Executor Kernel、Host SDK、公共传输/进程管理、业务消费接入示例。新增或修改这些位置时，须检查并同步补齐关键注释；评审将缺失或失真的关键合同注释视为需修复项。
 - 公开接口和主要入口用就近的中文 JSDoc 说明职责、必要输入、返回结果含义、调用顺序及资源所有者；接入示例须说明谁负责取消、消费尾流、业务收尾和关闭。类型已表达的字段不逐项重复。
 - 复杂状态转换、跨进程 JSON 边界、身份/代次校验、实际在途额度、取消与超时竞态、恢复与重放限制，用短注释解释原因和不可破坏的条件。明确区分接纳 ACK、取消 ACK、执行终态、业务投递确认与资源清理完成。
 - 注释必须与实现及可验证保证一致；行为变更同步更新，禁止承诺无法保证的后代回收、幂等、内存上界或重载行为。引用历史任务不能代替当前行为说明。

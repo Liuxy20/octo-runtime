@@ -12,7 +12,6 @@ import {
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { assertJsonValue } from "../packages/octo-runtime-protocol/dist/context.js";
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
-import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { createAcpAdapter } from "../packages/octo-runtime-adapter-acp/dist/index.js";
@@ -34,14 +33,14 @@ test("actmode validates explicit values, applies configuration ownership and nev
     assertContextEnvelope(contexts(mode));
     const { request } = prepareInvokeInput({
       inputs: [{ type: "text", text: "test" }],
-      contexts: contexts(mode)
+      agentEnv: contexts(mode)
     });
     assert.equal(contextActmode(request.context), mode);
-    assert.equal(renderModelContexts(request.context), "");
+    assert.equal(request.modelInput, "test");
   }
   assert.equal(
     contextActmode(
-      prepareInvokeInput({ inputs: [{ type: "text", text: "test" }], contexts: contexts() }).request
+      prepareInvokeInput({ inputs: [{ type: "text", text: "test" }], agentEnv: contexts() }).request
         .context
     ),
     undefined

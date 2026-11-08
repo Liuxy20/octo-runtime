@@ -4,9 +4,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readdir } from "node:fs/promises";
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { createExtraService } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import * as selectedExtra from "./native-loading-extra.mjs";
 
 // SDK 宿主直接构造服务；Adapter、Core、Kernel 和 Extra 均在本进程，调用仍走 RPC。
 const home = process.cwd();
@@ -19,60 +17,52 @@ const kernel = createKernelService({
     testAdapter as unknown as import("@mininglamp-oss/octo-runtime-executor-kernel").HostedAdapter
   ]
 });
-let released = false;
-const extra = createExtraService({
-  home,
-  endpoint,
-  module: selectedExtra,
-  config: {},
-  dependencies: {
-    readValue: () => "native",
-    released: () => {
-      released = true;
-    }
-  }
-});
 try {
   await kernel.initialize();
-  await extra.initialize();
   assert.equal((await kernel.status()).pid, process.pid);
-  assert.equal((await extra.status()).pid, process.pid);
-  assert.deepEqual((await extra.status()).plugin, { value: "native", pid: process.pid });
   const input = InvokeInput.check({
-    approvalMode: "full_access",
-    workdir: home,
     inputs: [{ type: "text", text: "native-selected" }],
-    contexts: {
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "test" } }]
+    agentEnv: {
+      ...{
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "test" } }]
+      },
+      approvalMode: "full_access",
+      workdir: home
     }
   });
   const events = [];
-  for await (const event of kernel.client.invoke({ ...input, protocol_mode: "canonical" }))
+  const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
+  for await (const event of kernel.client.invoke(
+    { ...content, parts, protocol_mode: "canonical" },
+    sessionId,
+    providerSession,
+    agentEnv
+  ))
     events.push(event);
   assert.equal(events.at(-1)?.type, "run.completed");
-  const cancellation = new AbortController();
   const cancelled = kernel.client.invoke(
     {
-      ...input,
-      inputs: [{ type: "text", text: "wait-for-cancel" }],
+      ...content,
+      parts: [{ type: "text", text: "wait-for-cancel" }],
       protocol_mode: "canonical"
     },
-    { signal: cancellation.signal }
+    sessionId,
+    providerSession,
+    agentEnv
   );
-  const timer = setTimeout(() => cancellation.abort(new Error("selected-cancel")), 100);
+  const timer = setTimeout(() => {
+    void kernel.client.interrupt(cancelled.invocationId, "selected-cancel");
+  }, 100);
   try {
-    await assert.rejects(async () => {
-      for await (const event of cancelled) void event;
-    }, /selected-cancel/);
+    const cancelledEvents = [];
+    for await (const event of cancelled) cancelledEvents.push(event);
+    assert.equal(cancelledEvents.at(-1)?.type, "run.cancelled");
   } finally {
     clearTimeout(timer);
   }
-  assert.equal((await extra.close()).complete, true);
-  assert.equal(released, true);
   assert.equal((await kernel.client.status()).execution_ready, true);
 } finally {
-  await extra.close();
   assert.equal((await kernel.close()).complete, true);
 }
 assert.ok((await readdir(home)).every((name) => !name.includes("manifest")));

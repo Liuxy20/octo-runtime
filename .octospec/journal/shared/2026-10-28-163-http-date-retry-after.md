@@ -49,7 +49,7 @@ node --test --test-name-pattern='future HTTP-date|real HTTP message retry|real H
 node --test --test-name-pattern='numeric conversion overflow' test/manual/gateway-retry-after.test.mjs
 ```
 
-最终[共享解析](../../../packages/octo-runtime-extra-channel-gateway/src/transport/retry-after.ts)保留换算溢出的 Infinity，REST 按超预算停止；body 秒数解析及连接错误归零继续保持基线行为。最终同一专项通过，只有一次 HTTP 请求。
+最终[共享解析](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/retry-after.ts)保留换算溢出的 Infinity，REST 按超预算停止；body 秒数解析及连接错误归零继续保持基线行为。最终同一专项通过，只有一次 HTTP 请求。
 
 第二遍逐文件检查和运行回归后，没有遗留 medium 及以上发现。
 

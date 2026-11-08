@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { admissionClosedError } from "./submission-error.js";
+import { admissionClosedError, interruptedBeforeSubmissionError } from "./submission-error.js";
 import { isHostTerminal, type HostFrame } from "@mininglamp-oss/octo-runtime-protocol";
 import {
   KernelError,
@@ -86,6 +86,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
 
   accepted(record: TrackedInvocation, ref: RunRef, terminal?: HostFrame): void {
     record.ref = ref;
+    record.submitted = true;
     record.instance = ref.kernel_instance_id;
     record.phase = "accepted";
     record.settleAdmission();
@@ -112,6 +113,7 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
   }
 
   rejected(record: TrackedInvocation, error: unknown): void {
+    if (this.#records.get(record.key.invocation_id) !== record) return;
     if (record.ref) {
       record.settleAdmission();
       this.interrupted(record, error);
@@ -173,10 +175,15 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
     reason = "caller_cancelled",
     { explicit = false }: { explicit?: boolean } = {}
   ): Promise<{ accepted: boolean }> {
-    if (record.ref && this.#records.get(record.key.invocation_id) !== record)
+    if (this.#records.get(record.key.invocation_id) !== record)
       return Promise.resolve({ accepted: false });
     if (record.observationError === "RUN_OUTCOME_UNKNOWN")
       return Promise.reject(new KernelError("RUN_OUTCOME_UNKNOWN"));
+    if (!record.submitted) {
+      this.rejected(record, interruptedBeforeSubmissionError());
+      record.cancellation = "acknowledged";
+      return Promise.resolve({ accepted: true });
+    }
     record.reason ??= reason;
     if (record.cancellation === "none") record.cancellation = "requested";
     // 取消可能早于接纳 ACK：记住首次原因，等同一执行获得 RunRef 后发出一次控制请求。
@@ -259,6 +266,8 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
   close(): void {
     this.#closed = true;
     this.stopAdmission();
+    for (const record of this.#records.values())
+      if (!record.submitted) this.rejected(record, interruptedBeforeSubmissionError());
     for (const controller of this.#cancelControllers) controller.abort();
   }
 
@@ -296,6 +305,10 @@ export class InvocationRegistry implements KernelInvocationLifecycle {
           Array.from({ length: Math.min(4, records.length) }, async () => {
             while (index < records.length && !controller.signal.aborted && Date.now() < deadline) {
               const record = records[index++];
+              if (!record.submitted) {
+                await this.cancel(record, reason);
+                continue;
+              }
               record.reason ??= reason;
               if (record.cancellation === "none") record.cancellation = "requested";
               if (!record.instance) continue;

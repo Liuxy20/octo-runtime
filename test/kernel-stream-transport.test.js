@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
@@ -86,8 +87,8 @@ for (const transport of ["direct", "relay"])
     const text = "大".repeat(476_921) + "xy";
     assert.equal(Buffer.byteLength(text), 1_430_765);
     const [large, sibling] = await Promise.all([
-      collect(client.invoke(kernelInput(text))),
-      collect(client.invoke(kernelInput("sibling")))
+      collect(invokeClient(client, kernelInput(text))),
+      collect(invokeClient(client, kernelInput("sibling")))
     ]);
     assert.ok(
       large.find((event) => event.type === "message.update").payload.text === `Handled: ${text}`,
@@ -109,7 +110,7 @@ test("Kernel client decodes a UTF-8 character split across native IPC writes", a
         jsonrpc: "2.0",
         id,
         result: {
-          ipc_version: 1,
+          ipc_version: 2,
           kernel_instance_id: text,
           pid: process.pid,
           execution_ready: true
@@ -135,7 +136,7 @@ test("Kernel client rejects unterminated UTF-8 by bytes and keeps the next conne
         jsonrpc: "2.0",
         id,
         result: {
-          ipc_version: 1,
+          ipc_version: 2,
           kernel_instance_id: "utf8-test",
           pid: process.pid,
           execution_ready: true

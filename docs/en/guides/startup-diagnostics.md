@@ -41,11 +41,11 @@ Existing error classes, messages, public codes, cause chains, cleanup outcomes a
 
 `HOME_UNAVAILABLE` remains documented for older consumers. The #306 Home contract retires implicit SDK location selection; it is not a requirement to set LOCALAPPDATA. SDK hosts supply an existing valid absolute Home; the CLI owns preparation of its selected Home (default `~/.octo-runtime`, explicit `--home` takes precedence). Existing data is not moved automatically. This change integrates merged #306 (#310) and #303 (#311). POSIX Kernel uses the direct Home socket endpoint; there is no legacy endpoint migration or dual-owner detection layer.
 
-The existing #306 flat path fields remain readable on RuntimeHomeError.diagnostic; canonical JSON uses context.path/resource/operation and actions. CLI error.startup and optional error.cleanup remain available as compatibility projections of the shared contract. New consumers should use error.diagnostic. Two narrow mappings correct resource ownership: plugin-origin filesystem errors retain their actual errno rather than HOME_*; invalid Kernel logging options now fail with LOG_DIRECTORY_MUST_BE_ABSOLUTE or LOG_STATUS_OUTPUT_INVALID before Home path-budget validation (previously a relative logging directory could appear as HOME_INVALID). The outer SERVICE_INITIALIZATION_FAILED and CLI exit selection are unchanged.
+The existing #306 flat path fields remain readable on RuntimeHomeError.diagnostic; canonical JSON uses context.path/resource/operation and actions. CLI error.startup and optional error.cleanup remain compatibility projections; new consumers should use error.diagnostic. An invalid Kernel logging directory fails with LOG_DIRECTORY_MUST_BE_ABSOLUTE before Home path-budget validation. The outer SERVICE_INITIALIZATION_FAILED and CLI exit selection are unchanged.
 
 ## Readiness and safe diagnosis
 
-Process liveness, service phase, Kernel `execution_ready` and an Extra's business connectivity are separate facts. A ready Extra can report Kernel unavailable or business disconnected; diagnostics do not change that behavior. Provider probe results do not establish login/model availability. No cloud account, LLM or network request is introduced for local diagnostic formatting.
+Process liveness, service phase, Kernel `execution_ready` and an application's business connectivity are separate facts. A ready application can report Kernel unavailable or business disconnected; diagnostics do not change that behavior. Provider probe results do not establish login/model availability. No cloud account, LLM or network request is introduced for local diagnostic formatting.
 
 Cause traversal is bounded to 16 objects and six nested levels and supports aggregate/cyclic errors. Primary failure precedes cleanup causes; pending resources remain visible. Raw messages/stacks, environment, config, stderr, credentials and arbitrary properties are excluded. Dynamic values use the same deterministic sanitizer for text and JSON (control characters, URL credentials/query/fragment and recognizable credential assignments are removed). For untrusted serialized data use `restoreStartupDiagnostic` before rendering; explanations/actions are rebuilt from the catalog, not accepted from the record.
 
@@ -61,7 +61,6 @@ The English summary and recovery column below mirror the shared `STARTUP_CATALOG
 | --- | --- | --- | --- |
 | `STARTUP_UNKNOWN` | The startup cause is unknown. | Inspect the component configuration and controlled lifecycle logs in the host. Capture the diagnostic codes and safe resource context before retrying; the cause is not yet known. | user action |
 | `LOG_DIRECTORY_MUST_BE_ABSOLUTE` | The logging directory must be absolute. | Pass an absolute directory in logging.directory, then retry startup through the host. | user action |
-| `LOG_STATUS_OUTPUT_INVALID` | The logging status output callback is invalid. | Provide a function in logging.statusOutput or omit that optional callback, then retry construction. | user action |
 | `SERVICE_INITIALIZATION_FAILED` | Component initialization failed. | Inspect the component configuration and controlled lifecycle logs in the host. Capture the diagnostic codes and safe resource context before retrying; the cause is not yet known. | user action |
 | `KERNEL_START_CLEANUP_INCOMPLETE` | Kernel startup rollback is incomplete. | Inspect the endpoint owner and component status. Stop the owning service through its host before retrying; do not remove an active endpoint or ownership record. | user action |
 | `KERNEL_CLEANUP_INCOMPLETE` | Kernel resources have not all been released. | Inspect the endpoint owner and component status. Stop the owning service through its host before retrying; do not remove an active endpoint or ownership record. | user action |
@@ -86,7 +85,6 @@ The English summary and recovery column below mirror the shared `STARTUP_CATALOG
 | `ENOENT` | A required startup resource was not found. | Correct the reported resource selection or prepare the required dependency, then retry. | user action |
 | `ENOTDIR` | A required directory has the wrong resource type. | Correct the reported directory path to an existing directory, then retry. | user action |
 | `EISDIR` | A required file is a directory. | Correct the selected file path to the intended regular file, then retry. | user action |
-| `IM_CONTEXT_LOADING_CONFIG_INVALID` | The Extra context-loading configuration is invalid. | Set context_loading.timeout_ms to an integer from 1 to 30000 and max_in_flight to an integer from 1 to 32; remove unsupported keys, then retry Extra initialization. | user action |
 | `EACCES` | The startup operation was denied access. | Check the host account's permissions for the reported resource and operation, then retry. | user action |
 | `EPERM` | The operating system denied the startup operation. | Check the host account's permissions and the reported resource, then retry. | user action |
 | `EROFS` | The startup operation requires a writable filesystem. | Use an accessible writable resource for the reported operation, then retry. | user action |
@@ -97,20 +95,10 @@ The English summary and recovery column below mirror the shared `STARTUP_CATALOG
 | `KERNEL_CONFIGURATION_INVALID` | Kernel construction inputs are invalid. | Pass endpoint and an adapters array to createKernelService. Compose Adapter objects in the host; retired worker/manifest/env options are unsupported. | user action |
 | `ERR_MODULE_NOT_FOUND` | A selected module or one of its dependencies was not found. | Check the selected module and its installed dependency graph in the host; correct the declaration or install the required package, then retry. | user action |
 | `MODULE_NOT_FOUND` | A selected module or one of its dependencies was not found. | Check the selected module and its installed dependency graph in the host; correct the declaration or install the required package, then retry. | user action |
-| `EXTRA_MODULE_REQUIRED` | The Extra module selection is missing. | Supply the module field in the host's Extra declaration before loading it. | user action |
-| `EXTRA_CONFIG_OBJECT_REQUIRED` | The Extra configuration must be an object. | Provide a JSON object in the Extra config field, then retry initialization. | user action |
-| `EXTRA_CONFIG_JSON_REQUIRED` | The Extra configuration contains a non-JSON value. | Pass only finite JSON values in config; supply functions separately through dependencies. | user action |
-| `EXTRA_CONFIG_PERMISSIONS_INVALID` | The Extra configuration file failed its file or access checks. | Inspect the reported configuration file's type, identity and permissions under the host account; use a protected regular file, then retry. | user action |
-| `MANIFEST_INVALID` | The CLI module manifest is invalid. | Check the selected manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys. | user action |
-| `EXTRA_NOT_REGISTERED` | The Extra has no saved CLI declaration. | Save this component's declaration with its configure or extraset command, then start it. | user action |
-| `EXTRA_MODULE_LOAD_FAILED` | The selected Extra module could not be loaded. | Check the selected module, package installation and ESM exports; correct the declaration or reinstall the dependency, then retry. | user action |
-| `EXTRA_INITIALIZER_REQUIRED` | The Extra did not return an initializer. | Provide an Extra factory that synchronously returns its initialization function. | user action |
-| `EXTRA_NAME_MISMATCH` | The Extra module name differs from its declaration. | Make the selected module's exported name match its catalog entry. | user action |
-| `EXTRA_ALREADY_LOADED` | This Extra already has an active owner. | Close the existing Extra through its host before constructing another instance. | user action |
-| `EXTRA_DISPOSE_FAILED` | The previous Extra still has unconfirmed resources. | Inspect the previous cleanup result and pending resources. Complete the owning host's cleanup before retrying. | user action |
+| `MANIFEST_INVALID` | The CLI module manifest is invalid. | Check the selected manifest.json: version must be 1 and adapters must be valid arrays without duplicate keys. | user action |
 | `LOCAL_STATE_INVALID` | The local state could not be read. | Inspect the reported file and system cause. Preserve existing identities and configuration; correct the file or access through the host. | user action |
 | `WRITE_FAILED` | A local state update failed. | Inspect the reported path, operation and system cause; correct access before retrying the host operation. | user action |
-| `COMPONENT_UNAVAILABLE` | The component did not become ready. | Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness or Extra business connectivity. | yes |
+| `COMPONENT_UNAVAILABLE` | The component did not become ready. | Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness or application connectivity. | yes |
 | `SERVICE_PROCESS_EXITED` | The service process exited unexpectedly. | Inspect this startup attempt's controlled diagnostic and lifecycle logs before restarting. | user action |
 | `SERVICE_NOT_INSTALLED` | The component service is not installed. | Run this component's install command, then start it. | user action |
 | `NOT_INSTALLED` | The component service is not installed. | Run this component's install command, then start it. | user action |

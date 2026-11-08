@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -28,7 +29,7 @@ test("ACK and stream loss preserve one admission; old/new clients and sessions r
   const original = await fixture.client.status();
   const input = kernelInput("recovery", { runMetadata: { startsFile } });
   const observed = [];
-  for await (const frame of relay.client.invoke(input)) observed.push(frame);
+  for await (const frame of invokeClient(relay.client, input)) observed.push(frame);
   assert.equal(ackLost, true);
   assert.equal(streamLost, true);
   assert.equal(relay.count("agent_run.invoke"), 1);

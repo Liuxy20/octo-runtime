@@ -58,7 +58,10 @@ export function asyncQuestionForm(
 }
 
 /**
- * 宿主提供唯一控制者、原 RunRef/原题及当前 continuation input；不在读流时等用户。
+ * 宿主提供唯一控制者、原 RunRef/原题及明确授权的 continuation input；不在读流时等用户。
+ * currentInput 须核对业务绑定和续跑授权，无法确认则抛错；不能盲用全局当前配置。
+ * agentEnv 不做跨轮相等性检查；providerEpoch 是可选绑定版本，不是配置修改计数。
+ * respond 捕获配置副本，消费前再次调用 currentInput 仅复核身份/代次，不替换该副本。
  * 使用低层原帧订阅时将原终态交给 reply.observe(frame)；canonical invoke 消费结束后
  * 用 client.get(snapshot.ref, snapshot.ref.kernel_instance_id).terminal 交给 observe。
  * 保存 reply.snapshot()，包括 submitting/unknown 状态；重启不得恢复在途提交为 pending。

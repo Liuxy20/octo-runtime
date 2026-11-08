@@ -4,8 +4,6 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk/module-manifest";
 import type { HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { withStartupContext } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { readExtraDirectory } from "@mininglamp-oss/octo-runtime-host-sdk";
-import { dirname, join } from "node:path";
 
 /** CLI 只加载所选模块并构造实例；Kernel 不接触清单、模块路径或产品准备。 */
 export async function loadCliAdapters(
@@ -46,13 +44,8 @@ export async function loadCliAdapters(
     }
   }
   if (options && adapters.some((adapter) => adapter.metadata.type === "openclaw")) {
-    const { initializeCliOpenClaw, syncCliOpenClawToolEnvironment } = await import("./openclaw.js");
+    const { initializeCliOpenClaw } = await import("./openclaw.js");
     await initializeCliOpenClaw(options.profileRoot);
-    if (options.syncOpenClawTools)
-      await syncCliOpenClawToolEnvironment(
-        options.profileRoot,
-        await readExtraDirectory(join(dirname(options.profileRoot), "extras"))
-      );
   }
   return adapters;
 }

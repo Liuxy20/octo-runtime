@@ -8,9 +8,9 @@
 
 ## 服务无法连接
 
-使用 `octo-runtime channel-gateway logs --lines 200 --json` 读取服务状态，添加 `--follow` 观察连接和重试转换，Ctrl+C退出。仅包含Extra生命周期、Kernel可用性和连接状态，不含聊天正文、session/run/message标识、模型输出、工具参数或凭据。命令只读 `<home>/logs/extras/<extra>-status-<UTC小时>.log`，Kernel离线或模块配置损坏时仍可读取；最多读取最近三份中的4MiB，每份上限100MiB。空日志成功并向stderr提示。
+使用 `octo-runtime executor-kernel logs --lines 200 --follow` 观察执行服务诊断。日志不包含聊天正文或凭据。Gateway 的连接与投递诊断由独立 CLI 提供。
 
-CLI Extra同时将状态写stdout。原生SDK默认静默，可在绝对路径 `logging.directory` 旁提供 `logging.statusOutput(record)`；文件与有界stdout均尽力诊断，不阻塞恢复。Gateway首次暂态离线及后续暂态断线等待5、10、15秒，之后每15秒；Retry-After可延长。合法服务端 DISCONNECT 默认重连，包含 reason 12、滚动更新和未知断开码；明确认证、权限、封禁及协议错误仍停止。握手未知服务端原因、HTTP 超时/冲突/限流/5xx 及未知服务故障默认重试，只有明确认证/配置/协议错误停止。5/10/15 秒仅是旧连接回收后的等待；静默断网每 25 秒检查、超过 90 秒无包才发现，还需鉴权握手，不能保证 20 秒内上线。IM在线不证明执行或投递成功。
+渠道连通性、重试策略及投递日志归[独立 Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway)；使用其自己的 CLI 和 Home 排查。渠道在线不代表执行或投递成功。
 
 | 现象或错误码                    | 处理步骤                                                                                                                                   |
 | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -42,6 +42,6 @@ Kernel 不负责重启宿主进程；SDK 由应用管理，CLI 由原生服务�
 
 `close()` 返回 `complete=false` 时，检查 `errors` 和 `pendingResources`，确认哪些调用、应用函数或资源尚未结束。根据实际操作继续等待或报告清理失败，不要立即创建占用同一 endpoint 的服务。
 
-Agent 执行完成后，如果用户仍未收到消息，还应检查 Extra 的投递结果和应用存储。执行成功只说明执行本身完成，不代表消息已经发出或数据已经保存。
+Agent 执行完成后，如果用户仍未收到消息，还应检查 应用自己的投递结果和存储。执行成功只说明执行本身完成，不代表消息已经发出或数据已经保存。
 
 不要通过删除 Home、身份配置、凭据或数据库来尝试通用修复。更多执行状态说明见[输出与控制](../reference/output-and-control.md)，测试范围见[维护与验证](../maintenance.md)。

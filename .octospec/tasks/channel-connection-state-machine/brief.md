@@ -29,7 +29,7 @@ timestamp: 2026-10-16T00:00:00Z
 | `extra.ts` | onStatus 返回 bots；配置错误保留 config_error；按 Bot 隔离 | 保持状态查询和有效 Bot 隔离，Bot 失败不伪装成 Extra 加载失败 |
 | Work App | main 透传 state/error；renderer 3 秒轮询，只对 online 标正常 | 接入 failed 文案与兼容展示，验证异常和恢复可见 |
 
-源码依据：[状态和重试](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[传输](../../../packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[连接编排](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts)、[状态类型](../../../packages/octo-runtime-extra-channel-gateway/src/contracts.ts)、[Extra 入口](../../../packages/octo-runtime-extra-channel-gateway/src/extra.ts)。这是当前工作树核查，不代表正在运行或线上部署的版本。
+源码依据：[状态和重试](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[传输](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/wukong.ts)、[连接编排](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts)、[状态类型](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/contracts.ts)、[Extra 入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/extra.ts)。这是当前工作树核查，不代表正在运行或线上部署的版本。
 
 ## 责任与改动范围
 

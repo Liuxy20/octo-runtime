@@ -8,9 +8,9 @@ Record the error code and relevant `runId` and `invocationId`, then locate the p
 
 ## Cannot Connect to the Service
 
-Use `octo-runtime channel-gateway logs --lines 200 --json` for service status records, or add `--follow` to watch connection and retry transitions. Ctrl+C stops following. These are Extra lifecycle, Kernel availability and connection records, excluding conversation content, session/run/message identifiers, model output, tool arguments and credentials. The command reads only `<home>/logs/extras/<extra>-status-<UTC-hour>.log`, even with Kernel offline or a broken module configuration. It reads at most 4 MiB from the latest three files; each file is capped at 100 MiB. Empty logs succeed with a stderr notice.
+Use `octo-runtime executor-kernel logs --lines 200 --follow` for execution service diagnostics. Logs exclude conversation content and credentials. Gateway connection and delivery diagnostics belong to its independent CLI.
 
-CLI Extras also emit these records to stdout. Native SDK hosts remain silent unless `logging.statusOutput(record)` is provided alongside an absolute `logging.directory`. File logging and bounded stdout output are best effort and cannot block recovery. Gateway retries transient offline startup and later disconnections after 5, 10, then 15 seconds, repeating at 15 seconds; Retry-After may extend the wait. Valid server DISCONNECT packets reconnect by default, including reason 12, rolling restarts, and unknown disconnect codes. Explicit authentication, permission, ban, and protocol failures remain terminal. Handshake failures, including unknown server reasons, also retry unless explicitly terminal. HTTP timeouts, conflicts, rate limits, 5xx responses, and unclassified service failures retry; explicit authentication, configuration, and request/protocol errors stop recovery. Backoff starts after connection cleanup; it excludes outage detection and authentication/handshake time. Silent outages are checked every 25 seconds with a 90-second inactivity threshold, so recovery within 20 seconds is not guaranteed. IM online does not prove execution or delivery success.
+Channel connectivity, retry policies, and delivery logs belong to the [independent Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway). Check its own CLI and Home separately from Runtime. A connected channel does not prove execution or delivery success.
 
 | Symptom / code                             | Action                                                                                                                                                                   |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -42,6 +42,6 @@ Kernel does not restart its host process; the SDK application or CLI service man
 
 When `close()` returns `complete=false`, inspect `errors` and `pendingResources` to identify unfinished invocations, application functions, or resources. Wait or report cleanup failure according to the actual operation. Do not immediately create a service using the same endpoint.
 
-If the Agent finished but the user received no message, also check Extra delivery and application storage. Execution success does not mean the message was sent or the data saved.
+If the Agent finished but the user received no message, also check the application’s delivery result and storage. Execution success does not mean the message was sent or the data saved.
 
 Do not delete Home, identity configuration, credentials, or databases as a generic repair. See [Output and Control](../reference/output-and-control.md) for execution states and [Maintenance and Validation](../maintenance.md) for test scope.

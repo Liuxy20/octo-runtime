@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import { testAdapter as invokeAdapter } from "./fixtures/invoke-adapter.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -93,7 +94,7 @@ for (const mode of ["native", "canonical"])
     const stranger = attachKernel({ endpoint: f.endpoint });
     t.after(() => stranger.close());
     const values = [];
-    for await (const value of f.client.invoke(input)) {
+    for await (const value of invokeClient(f.client, input)) {
       values.push(value);
       if (
         mode === "native"
@@ -120,11 +121,11 @@ test("explicit invocation cancellation shares one intent and does not claim a te
   const f = await fixture(t),
     relay = await kernelRelay(t, f);
   const input = { ...kernelInput("wait-for-cancel"), protocol_mode: "native" };
-  const iterator = relay.client.invoke(input);
+  const iterator = invokeClient(relay.client, input);
   await iterator.next();
   const [first, second] = await Promise.all([
-    relay.client.cancelInvocation(input.invocationId),
-    relay.client.cancelInvocation(input.invocationId)
+    relay.client.interrupt(input.invocationId),
+    relay.client.interrupt(input.invocationId)
   ]);
   assert.equal(first.accepted, true);
   assert.deepEqual(first, second);
@@ -162,7 +163,7 @@ for (const code of [
           };
       }
     });
-    await assert.rejects(collect(relay.client.invoke(kernelInput())), new RegExp(code));
+    await assert.rejects(collect(invokeClient(relay.client, kernelInput())), new RegExp(code));
     assert.equal(relay.count("agent_run.invoke"), 1);
     assert.equal(relay.client.invocations.snapshot().length, 1);
   });
@@ -184,14 +185,14 @@ test("stop while status is pending prevents an invocation write after drain dead
       }
     }
   });
-  const running = collect(relay.client.invoke(kernelInput()));
-  const rejected = assert.rejects(running, /CLIENT_INVOCATION_ADMISSION_CLOSED/);
+  const running = collect(invokeClient(relay.client, kernelInput()));
+  const rejected = assert.rejects(running, /INVOCATION_INTERRUPTED_BEFORE_SUBMISSION/);
   await barrier;
   const result = await relay.client.invocations.drain({
     deadline: Date.now() + 50,
     reason: "owner"
   });
-  assert.equal(result.complete, false);
+  assert.equal(result.complete, true);
   release();
   await rejected;
   assert.equal(relay.count("agent_run.invoke"), 0);
@@ -215,7 +216,7 @@ test("owner drain resolves accepted identity while its invoke ACK is still pendi
       }
     }
   });
-  const iterator = relay.client.invoke(kernelInput("wait-for-cancel"));
+  const iterator = invokeClient(relay.client, kernelInput("wait-for-cancel"));
   const first = iterator.next();
   await barrier;
   const result = await relay.client.invocations.drain({
@@ -234,17 +235,17 @@ test("owner drain resolves accepted identity while its invoke ACK is still pendi
 test("invoke is lazy, rejects local limits and pre-abort without IO", async (t) => {
   const f = await fixture(t),
     relay = await kernelRelay(t, f);
-  const unused = relay.client.invoke(kernelInput());
+  const unused = invokeClient(relay.client, kernelInput());
   await unused.return();
   const controller = new AbortController(),
     reason = new Error("before next");
   controller.abort(reason);
   await assert.rejects(
-    relay.client.invoke(kernelInput(), { signal: controller.signal }).next(),
-    (e) => e === reason
+    invokeClient(relay.client, kernelInput(), { signal: controller.signal }).next(),
+    /INVOCATION_INTERRUPTED_BEFORE_SUBMISSION/
   );
   await assert.rejects(
-    relay.client.invoke(kernelInput(), { streamLimits: {} }).next(),
+    relay.client.submit(kernelInput(), { streamLimits: {} }),
     /KERNEL_STREAM_LIMITS_UNSUPPORTED/
   );
   assert.equal(relay.requests.length, 0);
@@ -256,7 +257,7 @@ for (const mode of ["native", "canonical"])
     const { client } = await fixture(t);
     const input = { ...kernelInput(), protocol_mode: mode };
     const before = structuredClone(input);
-    const values = await collect(client.invoke(input));
+    const values = await collect(invokeClient(client, input));
     assert.deepEqual(input, before);
     if (mode === "native") {
       assert.deepEqual(
@@ -293,12 +294,22 @@ test("native invoke forwards ordered multimodal input and isolated local environ
   const outputs = await Promise.all(
     ["one", "two"].map(async (value) => {
       const values = await collect(
-        client.invoke(
-          { ...input, invocationId: value, runId: value },
-          {
-            executionEnvOverrides: { env_variables: [{ key: "INVOKE_TEST", value }] }
+        invokeClient(client, {
+          ...input,
+          invocationId: value,
+          runId: value,
+          agentEnv: {
+            ...input.agentEnv,
+            items: [
+              ...input.agentEnv.items,
+              {
+                namespace: "octo.execution",
+                name: "envs",
+                payload: { env_variables: [{ key: "INVOKE_TEST", value }] }
+              }
+            ]
           }
-        )
+        })
       );
       return values.find((v) => v.kind === "native").payload;
     })
@@ -308,7 +319,9 @@ test("native invoke forwards ordered multimodal input and isolated local environ
     [input.inputs, input.inputs]
   );
   assert.deepEqual(
-    outputs.map((o) => o.environment.env_variables[0].value),
+    outputs.map(
+      (o) => o.agentEnv.items.find((item) => item.name === "envs").payload.env_variables[0].value
+    ),
     ["one", "two"]
   );
 });
@@ -331,10 +344,7 @@ for (const recovery of [false, true])
     });
     const input = kernelInput("wait-for-cancel"),
       values = [];
-    await assert.rejects(
-      collect(relay.client.invoke(input, { signal: controller.signal }), values),
-      (e) => e === reason
-    );
+    await collect(invokeClient(relay.client, input, { signal: controller.signal }), values);
     assert.ok(values.some((v) => v.type === "run.cancelled"));
     assert.equal(relay.count("agent_run.invoke"), 1);
     assert.equal(relay.count("agent_run.cancel"), 1);
@@ -352,8 +362,8 @@ test("abort at status response does not write invoke and preserves reason", asyn
     }
   });
   await assert.rejects(
-    relay.client.invoke(kernelInput(), { signal: controller.signal }).next(),
-    (e) => e === reason
+    invokeClient(relay.client, kernelInput(), { signal: controller.signal }).next(),
+    /INVOCATION_INTERRUPTED_BEFORE_SUBMISSION/
   );
   assert.equal(relay.count("agent_run.invoke"), 0);
   assert.deepEqual(relay.client.invocations.snapshot(), []);
@@ -379,8 +389,8 @@ test("abort after the invoke socket connects still prevents its first write", as
     return socket;
   });
   await assert.rejects(
-    f.client.invoke(kernelInput(), { signal: controller.signal }).next(),
-    (e) => e === reason
+    invokeClient(f.client, kernelInput(), { signal: controller.signal }).next(),
+    /INVOCATION_INTERRUPTED_BEFORE_SUBMISSION/
   );
   assert.equal(writes, 0);
   assert.deepEqual(f.client.invocations.snapshot(), []);
@@ -407,7 +417,7 @@ test("ACK loss and subscription repair retain one Provider start and contiguous 
     ...kernelInput("repair", { runMetadata: { startsFile } }),
     protocol_mode: "native"
   };
-  const values = await collect(relay.client.invoke(input));
+  const values = await collect(invokeClient(relay.client, input));
   assert.equal(relay.count("agent_run.invoke"), 1);
   assert.equal((await readFile(startsFile, "utf8")).trim(), "start");
   assert.deepEqual(
@@ -435,7 +445,7 @@ test("unrecoverable admission remains tracked and wins over caller abort", async
   });
   const input = kernelInput();
   await assert.rejects(
-    collect(relay.client.invoke(input, { signal: controller.signal })),
+    collect(invokeClient(relay.client, input, { signal: controller.signal })),
     /ACCEPTANCE_UNKNOWN/
   );
   assert.equal(relay.count("agent_run.invoke"), 1);
@@ -467,7 +477,7 @@ test("lost cancel ACK remains OPERATION_OUTCOME_UNKNOWN despite caller abort and
   const values = [];
   await assert.rejects(
     collect(
-      relay.client.invoke(kernelInput("wait-for-cancel"), { signal: controller.signal }),
+      invokeClient(relay.client, kernelInput("wait-for-cancel"), { signal: controller.signal }),
       values
     ),
     /OPERATION_OUTCOME_UNKNOWN/
@@ -490,7 +500,7 @@ test("respond ACK loss survives concurrent caller abort without replaying the an
   });
   const input = kernelInput("interaction");
   const consume = async () => {
-    for await (const event of relay.client.invoke(input, { signal: controller.signal })) {
+    for await (const event of invokeClient(relay.client, input, { signal: controller.signal })) {
       if (event.type === "interaction.requested")
         await relay.client.respondInteraction(input.invocationId, {
           interactionId: "approval",
@@ -519,7 +529,7 @@ test("real evicted replay reports STREAM_GAP without running the Provider again"
   });
   await assert.rejects(
     collect(
-      relay.client.invoke({
+      invokeClient(relay.client, {
         ...kernelInput("overflow", { runMetadata: { startsFile } }),
         protocol_mode: "native"
       })
@@ -534,7 +544,7 @@ for (const close of ["iterator", "client"])
   test(`${close} close leaves accepted Run executing and observable from another client`, async (t) => {
     const f = await fixture(t),
       relay = await kernelRelay(t, f);
-    const iterator = relay.client.invoke({
+    const iterator = invokeClient(relay.client, {
       ...kernelInput("wait-for-cancel"),
       protocol_mode: "native"
     });

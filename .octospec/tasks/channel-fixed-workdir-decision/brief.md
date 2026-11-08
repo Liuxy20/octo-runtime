@@ -41,7 +41,7 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 一致性核对
 
-依据：[请求目录选择](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[reset 与迟到更新](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[会话规则](../../rules/session-reset.md)、[Context 工作目录规则](../../rules/context-input.md)。
+依据：[请求目录选择](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[reset 与迟到更新](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)、[会话规则](../../rules/session-reset.md)、[Context 工作目录规则](../../rules/context-input.md)。
 
 后续涉及目录或会话的实现变更，按此架构约束回归：同一 IM Agent 在不同频道及 reset 前后 workdir 相同，Provider session 按合同换新，原文件仍存在；reset 不取消，旧排队身份及迟到更新保持既有约束。其他通用调用方的合法目录配置仍应有效，不能被 IM 策略覆盖。这些是一致性核对项，不是新增功能待办。需要真实调试时连接 https://im-test.deepminer.com.cn/。
 

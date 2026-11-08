@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
@@ -179,7 +180,8 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
   assert.equal(ownership.nativeOwner, true);
   assert.equal(ownership.worker, undefined);
   const events = await Array.fromAsync(
-    service.client.invoke(
+    invokeClient(
+      service.client,
       invocationInput(
         invokeRequest({ invocationId: "kernel-missing", approvalMode: "full_access" }),
         "canonical",

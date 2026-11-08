@@ -20,7 +20,6 @@ test("all prepared fields, primary/recovery images and provider extensions survi
   const context = {
     schema: "octo.context-envelope/v3",
     items: [
-      { namespace: "extra.test", name: "selection", payload: { text: "business" } },
       { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
       {
         namespace: "octo.execution",
@@ -70,7 +69,7 @@ test("removed channel snapshot metadata is ignored and never forwarded to execut
   for (const contextSnapshot of [{ snapshot_id: "old-reference" }, "unrecognized-extension"]) {
     const input = {
       inputs: [{ type: "text", text: "this turn only" }],
-      contexts: { schema: "octo.context-envelope/v3", items: [] },
+      agentEnv: { schema: "octo.context-envelope/v3", items: [] },
       contextSnapshot
     };
     const before = structuredClone(input);
@@ -78,7 +77,7 @@ test("removed channel snapshot metadata is ignored and never forwarded to execut
     const prepared = prepareInvokeInput(input);
     assert.equal(Object.hasOwn(prepared.request, "contextSnapshot"), false);
     assert.equal(prepared.request.modelInput, "this turn only");
-    assert.deepEqual(prepared.request.context, input.contexts);
+    assert.deepEqual(prepared.request.context, input.agentEnv);
     assert.deepEqual(input, before);
   }
 });
@@ -86,7 +85,7 @@ test("removed channel snapshot metadata is ignored and never forwarded to execut
 test("session names are optional caller data with a Core-only UUID default", () => {
   const input = {
     inputs: [{ type: "text", text: "hello" }],
-    contexts: { schema: "octo.context-envelope/v3", items: [] },
+    agentEnv: { schema: "octo.context-envelope/v3", items: [] },
     providerSession: { sessionId: "opaque-provider-session" }
   };
   const first = prepareInvokeInput(input).request;
@@ -122,7 +121,7 @@ test("every ingress can use the same plain JSON and exact model parts reach the 
   });
   const input = {
     inputs: [{ type: "text", text: "hello" }],
-    contexts: {
+    agentEnv: {
       schema: "octo.context-envelope/v3",
       items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } }]
     },
@@ -138,7 +137,7 @@ test("every ingress can use the same plain JSON and exact model parts reach the 
 test("recognized invalid fields reject and optional unknown extensions do not change the model input", () => {
   const input = {
     inputs: [{ type: "text", text: "hello" }],
-    contexts: { schema: "octo.context-envelope/v3", items: [] }
+    agentEnv: { schema: "octo.context-envelope/v3", items: [] }
   };
   for (const field of [
     { sessionGeneration: -1 },

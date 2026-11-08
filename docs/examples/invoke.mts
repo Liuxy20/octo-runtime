@@ -9,10 +9,27 @@ export async function invokeOnce(
   signal?: AbortSignal
 ): Promise<void> {
   InvokeInput.check(input);
+  const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
+  const run = client.invoke(
+    { ...content, parts, protocol_mode: "canonical" },
+    sessionId,
+    providerSession,
+    agentEnv
+  );
+  const interrupt = () => {
+    void client.interrupt(run.invocationId).catch(() => undefined);
+  };
+  signal?.addEventListener("abort", interrupt, { once: true });
+  if (signal?.aborted) interrupt();
   let outcome: string | undefined;
-  for await (const event of client.invoke({ ...input, protocol_mode: "canonical" }, { signal })) {
-    await consume(event);
-    if (["run.completed", "run.failed", "run.cancelled"].includes(event.type)) outcome = event.type;
+  try {
+    for await (const event of run) {
+      await consume(event);
+      if (["run.completed", "run.failed", "run.cancelled"].includes(event.type))
+        outcome = event.type;
+    }
+  } finally {
+    signal?.removeEventListener("abort", interrupt);
   }
   if (outcome !== "run.completed") throw new Error(outcome ?? "RUN_TERMINAL_MISSING");
 }

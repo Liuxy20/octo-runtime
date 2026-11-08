@@ -2,17 +2,17 @@
 
 本项目是内部 TypeScript monorepo。沟通和文档直接使用中文。
 
-先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是唯一执行实现；服务装配与调用遵守 [SDK 原生装配与统一 RPC](.octospec/rules/architecture.md#sdk-原生装配与统一-rpc)，宿主独立管理 Extra。#294 原生对象装配已在工作树实现，验证状态见对应任务。本地存在和执行不以登录、云端登记或 IM 建联为前提。
+先读 [OKF 知识目录](.octospec/index.md) 与 [基础架构](.octospec/rules/architecture.md)。Runtime 是本地运行时设备，AgentExecutor 是唯一执行实现；服务装配与调用遵守 [SDK 原生装配与统一 RPC](.octospec/rules/architecture.md#sdk-原生装配与统一-rpc)，渠道由独立 octo-channel-gateway 仓库管理；Runtime 不保留插件框架。#294 原生对象装配已在工作树实现，验证状态见对应任务。本地存在和执行不以登录、云端登记或 IM 建联为前提。
 
 ## 目录与命令
 
 - `apps/`：CLI 宿主入口；不再包含旧架构的独立应用。
-- `packages/`：协议、Executor Core/Kernel、Host SDK、Provider Adapter 和 Extra。
+- `packages/`：协议、Executor Core/Kernel、Host SDK、Provider Adapter 与独立 client。
 - `test/`：跨包测试；包内测试按各包目录维护。
 - `.octospec/rules/`、`.octospec/guides/`：当前合同与操作指南；历史结论放 journal。
-- `docs/{en,zh-CN}/getting-started/cli.md`：设备部署与运维（Home、生命周期、Gateway 配置、诊断）。
-- `docs/{en,zh-CN}/getting-started/sdk.md`：SDK 原生启动、事件消费与 Extra 装配；`docs/{en,zh-CN}/guides/extras.md` 是 Extra 细节。
-- `SDK_CHANNEL_GATEWAY_GUIDE.md`：仅接入 Octo IM，OctoBuddy 推荐入口。
+- `docs/{en,zh-CN}/getting-started/cli.md`：设备部署与运维（Home、Kernel 生命周期、Adapter 配置、诊断）。
+- `docs/{en,zh-CN}/getting-started/sdk.md`：SDK 原生启动与事件消费；渠道注册由独立 Gateway SDK 提供。
+- `SDK_CHANNEL_GATEWAY_GUIDE.md`：独立 Gateway 仓库的迁移入口；渠道 SDK/CLI 文档由该仓库维护。
 - `INTEGRATION.md`、`DEPLOYMENTS.md`：选型导航及发行部署入口。
 - `pnpm build`：构建 workspace。
 - `pnpm typecheck`：构建并检查类型。

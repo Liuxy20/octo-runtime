@@ -11,7 +11,7 @@ tags: [extra, channel, session, reset, storage]
 
 例如，Bot 在群 A 中已经使用逻辑会话 `S1`，对应 Codex 原生会话 `P1`。下次群 A 的合法消息到达时，Gateway 从 store 读取这组绑定，再向执行层明确提交 `S1/P1`。群 B 使用另一组 key 和绑定。执行层消费 Gateway 提供的身份，不自行查询 IM 数据库。
 
-当前源码接口见 [session-store.ts](../../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)。`createSessionStore` 工厂已接到真实 Gateway/Manager；业务类型从 `/extras/channel-gateway` 公开。完整方法语义、宿主装配示意及可运行无数据库样例见 [SDK 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)。源码消费方在能力合入后更新最新 main；真实 Electron/SQLite/Provider 联验由宿主执行。
+当前源码接口见 [session-store.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts)。`createSessionStore` 工厂已接到真实 Gateway/Manager；业务类型从 `/extras/channel-gateway` 公开。完整方法语义、宿主装配示意及可运行无数据库样例见 [SDK 指南](../../../SDK_CHANNEL_GATEWAY_GUIDE.md#自定义会话存储)。源码消费方在能力合入后更新最新 main；真实 Electron/SQLite/Provider 联验由宿主执行。
 
 ## 保存的数据
 

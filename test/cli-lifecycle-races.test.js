@@ -1,17 +1,17 @@
-import test from "node:test";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import net from "node:net";
-import { mkdtemp, mkdir, rm } from "node:fs/promises";
-import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { runCli } from "../apps/cli/dist/main.js";
+import { join } from "node:path";
+import test from "node:test";
 import { runForegroundService } from "../apps/cli/dist/foreground.js";
+import { runCli } from "../apps/cli/dist/main.js";
 import {
   describeError,
-  recordStartupFailure,
-  readStartupFailure
+  readStartupFailure,
+  recordStartupFailure
 } from "../apps/cli/dist/output.js";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 
 const deferred = () => Promise.withResolvers();
 async function fixture(t) {
@@ -30,19 +30,24 @@ async function fixture(t) {
   const listen = () =>
     new Promise((resolve, reject) => {
       server.once("error", reject);
-      server.listen(componentEndpoint(home, "channel-gateway"), resolve);
+      server.listen(componentEndpoint(home, "executor-kernel"), resolve);
     });
   const respond = (socket, bytes) =>
     socket.end(
       JSON.stringify({
         jsonrpc: "2.0",
         id: JSON.parse(bytes.toString()).id,
-        result: { name: "channel-gateway", pid: 123, status: {} }
+        result: {
+          ipc_version: 2,
+          kernel_instance_id: "race-kernel",
+          pid: 123,
+          execution_ready: true
+        }
       }) + "\n"
     );
   const call = async (action, backend, extra = {}) => {
     const output = [];
-    const code = await runCli(["--home", home, "channel-gateway", action, "--json"], {
+    const code = await runCli(["--home", home, "executor-kernel", action, "--json"], {
       backend,
       output: (line) => output.push(JSON.parse(line)),
       errorOutput() {},
@@ -156,7 +161,7 @@ for (const mode of ["closed", "rejected", "initialize-rejected", "initialize-and
       () => initialized.resolve(),
       async (error) => {
         failures.push(describeError(error));
-        await recordStartupFailure(join(home, "logs"), "channel-gateway", error);
+        await recordStartupFailure(join(home, "logs"), "executor-kernel", error);
       }
     );
     if (!mode.startsWith("initialize")) {
@@ -171,7 +176,7 @@ for (const mode of ["closed", "rejected", "initialize-rejected", "initialize-and
       mode.startsWith("initialize") ? "STARTUP_FAILED" : "SERVICE_PROCESS_EXITED"
     );
     assert.deepEqual([process.listenerCount("SIGINT"), process.listenerCount("SIGTERM")], counts);
-    const logged = await readStartupFailure(join(home, "logs"), "channel-gateway", 0);
+    const logged = await readStartupFailure(join(home, "logs"), "executor-kernel", 0);
     assert.equal(logged.message, failures[0].code);
     if (mode === "rejected") assert.equal(failures[0].cause_code, "WORKER_LOST");
     assert.equal(closes, mode === "closed" ? 0 : 1);

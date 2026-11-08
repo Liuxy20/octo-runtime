@@ -70,9 +70,9 @@ Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 
 
 ## Channel Gateway 的工具环境
 
-渠道为 octo-cli 提供的规范 token、兼容 token 别名及 API 地址使用独立 `InvokeEnvironment.executionEnvOverrides`，不写入 Context envs。Kernel RPC 将其作为 agent_run.invoke 的独立参数交给 Core，Core 复制到内部 InvokeRequest 的同名字段；不写入全局 process.env。条目格式沿用 env payload，独立限制 128 项和 65,536 字节，已识别值必须校验。
+渠道为 octo-cli 提供的 token、兼容别名和 API 地址由 Gateway 在调用前并入 agentEnv 的 octo.execution/envs，按实际平台的变量身份过滤已有同名值后追加可信值。不修改原始业务材料或全局 process.env，不进入模型正文。AgentEnv 经 RPC 校验、冻结并交给 Core；日志与展示必须整体剔除敏感环境。
 
-Adapter SDK 合并顺序为继承环境、Context envs、独立覆盖、Adapter 固定传输设置。Codex 原生 shell 与本地 MCP 白名单使用合并后的本轮值。内部字段不由 `invocationInput` 转为公共 JSON，不进入 Context hash、模型输入或渠道业务快照；带覆盖的 RPC 请求只记录脱敏摘要。该字段不是远程授权机制。
+Core 的低层 InvokeEnvironment.executionEnvOverrides 仍可用于宿主内部覆盖，不属于 KernelClient.invoke 的公开参数。Adapter 合并顺序为继承环境、执行信封 envs、低层宿主覆盖、Adapter 固定传输设置；环境快照与 hash 可能包含秘密，不可记录或当作凭据保险库。
 
 Windows 在 Adapter 启动环境合并时按不区分大小写的变量名逐层覆盖，每个名字只保留一个最终拼写；JSON-lines、通用 ACP 和 Grok ACP 最终 spawn 再合并继承值时也遵守同一规则，不能重新引入 PATH/path 别名。MCP 展开、命令发现、OpenCode 内联配置、Codex Home 等进程环境消费者通过 processEnvironmentValue 按相同身份只读自有属性，不能固定读取某种大小写拼写。Adapter 追加固定环境设置时继续使用同一合并规则，不能因固定 CODEX_HOME 再生成别名。POSIX 保持大小写敏感。该转换只针对实际进程环境，不改变协议列表、Context hash 或 mandatory 的跨平台键合同；每次返回独立对象，不修改宿主 process.env。
 

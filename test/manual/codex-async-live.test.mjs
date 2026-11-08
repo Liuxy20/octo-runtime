@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式手动运行：pnpm build && node --test test/manual/codex-async-live.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -32,7 +33,7 @@ for (const custom of [false, true]) {
         accepted = false,
         consumed = false,
         terminal;
-      for await (const event of f.client.invoke(input)) {
+      for await (const event of invokeClient(f.client, input)) {
         if (event.type === "interaction.requested" && event.payload.kind === "question") {
           question = event.payload;
           assert.equal(question.delivery, "async");

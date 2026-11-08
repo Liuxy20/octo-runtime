@@ -54,7 +54,7 @@ export const testAdapter = {
         payload: {
           exact: { future: [1, "retained"] },
           inputs: request.modelInputParts,
-          contexts: request.context,
+          agentEnv: request.context,
           ...(request.executionEnvOverrides ? { environment: request.executionEnvOverrides } : {})
         }
       };

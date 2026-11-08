@@ -34,10 +34,13 @@ const collect = async (stream) => {
 const input = (adapter = "docs", text = "example") =>
   InvokeInput.check({
     inputs: [{ type: "text", text }],
-    approvalMode: "full_access",
-    contexts: {
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: adapter } }]
+
+    agentEnv: {
+      ...{
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: adapter } }]
+      },
+      approvalMode: "full_access"
     }
   });
 
@@ -399,7 +402,10 @@ test(
     await withCleanup(async () => {
       await service.initialize();
       client = attachKernel({ endpoint });
-      const frames = await collect(client.invoke(input()));
+      const { inputs: parts, agentEnv, sessionId, providerSession, ...metadata } = input();
+      const frames = await collect(
+        client.invoke({ ...metadata, parts }, sessionId, providerSession, agentEnv)
+      );
       assert.equal(frames.at(-1).control.state, "completed");
       client.close();
       assert.equal((await service.client.status()).pid, process.pid);

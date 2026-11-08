@@ -26,7 +26,7 @@ timestamp: 2026-10-15T00:00:00Z
 | IM projector | notice 映射为“正在重试” | 更新进度卡，不执行重试 |
 | IM 执行循环 | run.failed 后结束本轮；流异常按结果未知处理 | 尚无业务自动重试编排 |
 
-源码依据：[IM 请求构造](../../../packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[Bot 校验](../../../packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts)、[协议时限](../../../packages/octo-runtime-protocol/src/context.ts)、[Host watchdog](../../../packages/octo-runtime-executor-core/src/watchdog.ts)、[Codex 转换](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[IM 执行](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。运行版本、Bot 配置和本轮 Context 决定实际值，源码默认值不能代替线上生效证据。
+源码依据：[IM 请求构造](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[Bot 校验](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/lifecycle/configuration.ts)、[协议时限](../../../packages/octo-runtime-protocol/src/context.ts)、[Host watchdog](../../../packages/octo-runtime-executor-core/src/watchdog.ts)、[Codex 转换](../../../packages/octo-runtime-adapter-codex/src/app-server.ts)、[IM 执行](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts)。运行版本、Bot 配置和本轮 Context 决定实际值，源码默认值不能代替线上生效证据。
 
 ## 时限模型
 
@@ -36,7 +36,7 @@ timestamp: 2026-10-15T00:00:00Z
 4. 全任务累计重试上限：独立于连续故障预算，防止少量输出反复清零计数而绕过限制。只有可验证的有效执行进度才能结束连续故障段；重试通知、心跳、usage、连接成功和 session.update 不算恢复。
 5. 模型空闲、工具空闲、工具执行时长与任务总期限分开配置。IM 工具无输出时限默认一天，Context limits 可以收紧；Host 首帧和模型空闲默认值保留，显式工具 wall 时限仍生效。快速时钟已覆盖 15 分钟静默工具，不使用 enforcement=observe 绕过保护。
 
-首期工程默认值：连续重试 5 次、本轮累计 20 次、连续恢复 120 秒、指数退避起点 2 秒且最大 30 秒，并增加不超过 20% 抖动；遵守 failure.retryAfterMs，目录默认提示可能使实际等待为 30 秒。每 Bot 可通过 codex_retry 调整或关闭，完整范围见 [配置说明](../../../packages/octo-runtime-extra-channel-gateway/README.md)。非空 message.delta 或工具完成重置连续故障段，累计计数不重置。一天总时限不表示跨进程重启可恢复。
+首期工程默认值：连续重试 5 次、本轮累计 20 次、连续恢复 120 秒、指数退避起点 2 秒且最大 30 秒，并增加不超过 20% 抖动；遵守 failure.retryAfterMs，目录默认提示可能使实际等待为 30 秒。每 Bot 可通过 codex_retry 调整或关闭，完整范围见 [配置说明](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/README.md)。非空 message.delta 或工具完成重置连续故障段，累计计数不重置。一天总时限不表示跨进程重启可恢复。
 
 ## 责任边界
 

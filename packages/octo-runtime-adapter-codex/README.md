@@ -25,7 +25,7 @@ executor.register(codexAdapter);
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
   }
@@ -45,7 +45,7 @@ const input = InvokeInput.check({
 
 ## Configuration and session ownership
 
-The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. Public `InvokeInput.approvalMode` is also supported, but must agree with an explicit Context policy. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
+The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. Public `InvokeInput.agentEnv.approvalMode` is also supported, but must agree with an explicit Context policy. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
 
 The caller saves and explicitly returns the complete `providerSession` from session updates, including Provider extension fields. Reusing the business `sessionId` alone starts fresh; Core keeps no persistent business-session-to-Provider binding table. See [Context and Sessions](../../docs/en/guides/context-and-sessions.md) for continuation and recovery input.
 
@@ -64,7 +64,6 @@ An idle or active transport failure proactively replaces the owned process, with
 - A nullable-turn elicitation can be routed on the first active subscription. On a reused thread its causality cannot be established, so the Adapter rejects it explicitly.
 - A nonempty completed `final_answer` with no open work or synchronous interaction can complete after a 15-second finalization fallback. Cancellation, Provider error and subsequent work invalidate eligibility. Turn cleanup remains independently observable and can fail after the result is completed.
 
-
 Human approval capacity counts requests awaiting a decision per invocation, up to 256. Request 257 receives an explicit rejection while admitted approvals remain valid. A valid decision releases its slot immediately; automatic approvals consume no human slots. Questions and MCP elicitations retain a separate limit of 16 unfinished requests. `full_access` keeps Codex's `untrusted` policy and lets Runtime handle supported approvals automatically, preserving dynamic MCP behavior.
 
 All stdin frames for one app-server share a bounded writer: 128 normal entries / 32 MiB, including the active frame, plus a reserve of 8 entries / 64 KiB for protocol rejections and interrupts. Human-capacity rejections use the normal queue so an ordinary overflow burst cannot exhaust the small control reserve. It waits for each write callback and, when `write` returns false, for `drain`. Five seconds without write progress or 30 seconds since enqueueing fails delivery. The human decision deadline remains 10 minutes. Resolved confirms a successful local write callback, not Provider receipt or tool completion. Cancellation removes only the invocation's queued responses; bytes already handed to the pipe cannot be recalled.
@@ -75,7 +74,7 @@ Structured local capacity, write, and timeout causes take precedence over unrela
 
 Default POSIX spawning creates an owned, independent process group. Cleanup awaits bounded `SIGTERM` → `SIGKILL` escalation and group-exit confirmation, including when the app-server leader has exited but tools remain. An injected `spawnFn` child is not assumed to own a process group; its cleanup targets the direct child.
 
-Normal completion, Stop and Extra closure release the invocation's subscription without terminating the shared app-server. The Core owner closes services during `shutdown()`; direct callers can inspect `executor.processes()` without starting or probing a Provider.
+Normal completion, Stop and business consumer closure release the invocation's subscription without terminating the shared app-server. The Core owner closes services during `shutdown()`; direct callers can inspect `executor.processes()` without starting or probing a Provider.
 
 Default owned spawning enables Windows process-tree cleanup through the existing system command. Injected children receive direct-child cleanup. Windows tree cleanup depends on a still-identifiable leader; leader-first exit, host crashes and escaped descendants remain outside a full descendant-exit guarantee. Check cleanup results rather than treating cancellation acknowledgement as exit proof.
 

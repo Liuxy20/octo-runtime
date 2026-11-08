@@ -81,7 +81,7 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 产品选择的加载集合也独立于以上状态。CLI 与 SDK 嵌入代码分别决定集合；Host 不因框架支持更多类型或机器上探测到更多 Provider 就自行加载。默认来源拆分已实施，SDK 不读取 CLI 清单，见 [方案及影响](../tasks/adapter-composition-ownership/brief.md)。
 
-2026-10-21 最新决定并已实施：CLI 默认集合统一为 `apps/cli/src/manifest.json`，与 `<home>/manifest.json` 用户扩展合并；两份均含 adapters、extras，不再新增 extra_adapters.json。Adapter 按 type、Extra 按 name 内置优先，忽略同名扩展且不解析或执行其模块。同一文件重复键报错。SDK 原生 import 并注册，不读取或生成 manifest，不以外部 Node 代启顶层服务。具体来源、解析、激活与迁移遵守[整体架构约束](architecture.md#cli-与-sdk-的-adapterextra-装配约束)。客户只持有发行包时的 `/adapter` 公共开发入口仍是[公开插件合同](../tasks/public-plugin-contracts/brief.md)的独立待办，本次不发布 private 包。
+Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。公开 `/adapter` authoring 入口仍为[历史待办](../tasks/public-plugin-contracts/brief.md)，不据此恢复 Extra API 或发布 private 包。
 
 Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 
@@ -93,7 +93,7 @@ Host 按执行合同校验来源、输出模式和实际交互 responder；审�
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。
 
-模型上下文统一使用本轮 Context v3，由 Host 固定渲染；没有 Compiler/Pipeline 或来源专属的自动背景链路。Run 版本保持 7，Adapter transport 版本保持 2。
+业务材料由 Gateway/应用自行准备 inputs；Host 只解析 agentEnv，模型业务 Context 不由 Host 渲染。
 
 ## 实现与验证入口
 
@@ -114,7 +114,7 @@ manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点�
 
 普通 CLI `--help` 说明默认使用内置 Adapter、无需 Adapter 配置，不展示高级 `--manifest` 参数。隐藏只影响帮助渲染，不能删除参数解析、优先级或显式清单执行支持。显式 manifest 是完整加载集合，不是自动追加；用户追加已统一由 `<Home>/manifest.json` 实现，不另设 extra_adapters.json。`/adapter` 公开 SDK 仍为独立待办。
 
-开发者用法、公开 import、完整 Extra/Adapter 示例及 SDK/CLI 兼容边界见[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)。公开合同属于增量导出，不能据此声称使用旧物理清单路径的宿主无需迁移。
+当前开发者入口及 SDK/CLI 边界见 [Adapter 载入](../../docs/zh-CN/concepts/module-loading.md)。早期[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)中的 Extra 示例为历史材料，不属于当前公开合同。
 
 - [Adapter SDK](../../packages/octo-runtime-adapter-sdk/src/index.ts)、[Adapter Host](../../packages/octo-runtime-executor-kernel/src/index.ts)。
 - [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[本地执行配置解析](../../packages/octo-runtime-executor-core/src/context.ts)。

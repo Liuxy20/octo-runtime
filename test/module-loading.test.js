@@ -1,28 +1,20 @@
-import { fixtureHome } from "./fixtures/service-home.js";
-import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
-import { nativeHost } from "./native-host-fixture.js";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import assert from "node:assert/strict";
-import test from "node:test";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import test from "node:test";
 import { pathToFileURL } from "node:url";
+import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
 import {
+  mergeModuleManifests,
   parseModuleManifest,
   readModuleManifest,
-  mergeModuleManifests,
   resolveAdapterModules,
   resolveModuleSpecifier
 } from "../packages/octo-runtime-adapter-sdk/dist/module-manifest.js";
-import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { runtimePaths } from "../apps/cli/dist/state.js";
-import { readExtra, getExtra, setExtra } from "../apps/cli/dist/extras.js";
-import { loadCliManifest } from "../apps/cli/dist/module-manifest.js";
-import { Readable } from "node:stream";
-import { waitFor } from "./runtime-fixture.js";
-import { spawn } from "node:child_process";
-import { once } from "node:events";
-import { createWindowsConsole, consoleProcessId } from "../test-support/windows-console.mjs";
+import { fixtureHome } from "./fixtures/service-home.js";
+import { nativeHost } from "./native-host-fixture.js";
 
 const runner = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const adapterFixture = resolve("test/fixtures/test-adapter.js");
@@ -90,112 +82,6 @@ test("two manifest origins retain ESM anchors, scoped subpaths and import condit
       ),
     { code: "ERR_MODULE_NOT_FOUND" }
   );
-});
-
-test("merge ignores collisions before resolution and keeps Adapter/Extra keys separate", async (t) => {
-  const root = await fixture(t),
-    diagnostics = [];
-  const a = parseModuleManifest(
-    manifest([declaration("./valid.mjs")], [{ name: "test", module: "./extra.mjs" }]),
-    join(root, "builtin.json")
-  );
-  const b = parseModuleManifest(
-    manifest(
-      [declaration("missing-ignored-adapter")],
-      [
-        { name: "test", module: "missing-ignored-extra" },
-        { name: "other", module: "not-started-extra" }
-      ]
-    ),
-    join(root, "home.json")
-  );
-  const result = mergeModuleManifests(a, b, (message) => diagnostics.push(message));
-  assert.equal(result.adapters.length, 1);
-  assert.equal(result.extras.length, 2);
-  assert.equal(diagnostics.length, 2);
-  assert.match(diagnostics[1], /selected.*builtin.json.*ignored.*home.json/);
-  assert.equal(
-    resolveAdapterModules(result)[0].module,
-    pathToFileURL(join(root, "valid.mjs")).href
-  );
-  for (const value of [
-    manifest([declaration("a"), declaration("b")]),
-    manifest(
-      [],
-      [
-        { name: "same", module: "a" },
-        { name: "same", module: "b" }
-      ]
-    ),
-    { version: 1, adapters: [] },
-    manifest([{ module: "a" }]),
-    manifest([], [{ name: "../escape", module: "a" }]),
-    { ...manifest(), version: 2 }
-  ])
-    assert.throws(() => parseModuleManifest(value, join(root, "bad.json")));
-});
-
-test("Home extension is optional, strict, follows selected Home and override fully replaces defaults", async (t) => {
-  const home = await fixture(t);
-  const builtin = await loadCliManifest(home);
-  assert.equal(builtin.adapters.length, 13);
-  assert.deepEqual(
-    builtin.extras.map((x) => x.name),
-    ["channel-gateway", "channel-wecom", "webui"]
-  );
-  await json(join(home, "manifest.json"), manifest([declaration("./user.mjs", "user")]));
-  assert.equal((await loadCliManifest(home)).adapters.length, builtin.adapters.length + 1);
-  const override = join(home, "explicit.json");
-  await json(override, { version: 1, adapters: [] });
-  assert.deepEqual(await loadCliManifest(home, override), manifest());
-  await writeFile(join(home, "manifest.json"), "{");
-  await assert.rejects(loadCliManifest(home), /Invalid manifest/);
-  await assert.rejects(readModuleManifest(join(home, "absent.json")), { code: "ENOENT" });
-});
-
-test("Extra modules resolve lazily from manifest; new and legacy configurations have explicit migration", async (t) => {
-  const home = await fixture(t),
-    paths = runtimePaths(home, "default");
-  const file = join(home, "manifest.json");
-  const declarations = parseModuleManifest(
-    manifest(
-      [],
-      [
-        { name: "example", module: "./plugins/example.mjs" },
-        { name: "disabled", module: "missing-disabled-package" }
-      ]
-    ),
-    file
-  );
-  await mkdir(join(home, "plugins"));
-  await writeFile(
-    join(home, "plugins/example.mjs"),
-    'export const name="example"; export default () => () => {};'
-  );
-  const save = (name, value) => setExtra(paths, name, Readable.from([JSON.stringify(value)]));
-  await save("example", { config: { business: true } });
-  const registration = await readExtra(paths, "example", declarations);
-  assert.deepEqual(registration.config, { business: true });
-  assert.equal((await registration.load()).name, "example");
-  await save("disabled", { enabled: false, config: {} });
-  assert.equal((await readExtra(paths, "disabled", declarations)).enabled, false);
-  const old = { module: "old-package", config: {} };
-  await save("example", old);
-  await assert.rejects(
-    readExtra(paths, "example", declarations),
-    /EXTRA_MODULE_MIGRATION_REQUIRED/
-  );
-  assert.deepEqual(await getExtra(paths, "example"), old);
-  await assert.rejects(
-    readExtra(paths, "example", manifest()),
-    /EXTRA_MANIFEST_DECLARATION_REQUIRED/
-  );
-  await save("example", { module: "matching-package", config: {} });
-  const matching = parseModuleManifest(
-    manifest([], [{ name: "example", module: "matching-package" }]),
-    file
-  );
-  assert.equal((await readExtra(paths, "example", matching)).module, "matching-package");
 });
 
 test("empty Adapter snapshot starts without resolving Extras; selected type mismatch fails", async (t) => {
@@ -297,118 +183,3 @@ export function selected() {
   );
   assert.equal(await readFile(calls, "utf8"), "1");
 });
-
-test(
-  "CLI Kernel and disabled Extra start independently while unused Extra modules are absent",
-  { timeout: 15000 },
-  async (t) => {
-    const home = await fixture(t),
-      file = join(home, "selected.json");
-    await json(
-      file,
-      manifest(
-        [],
-        [
-          { name: "disabled", module: "missing-disabled-package" },
-          { name: "unstarted", module: "missing-unstarted-package" }
-        ]
-      )
-    );
-    await setExtra(
-      runtimePaths(home, "default"),
-      "disabled",
-      Readable.from([JSON.stringify({ enabled: false, config: {} })])
-    );
-    const consoleControl = await createWindowsConsole();
-    for (const component of ["executor-kernel", "disabled"]) {
-      const args = [
-        resolve("apps/cli/dist/index.js"),
-        component,
-        "run",
-        "--json",
-        "--home",
-        home,
-        "--manifest",
-        file
-      ];
-      const options = { stdio: ["ignore", "pipe", "pipe"], windowsHide: true };
-      const child = consoleControl
-        ? consoleControl.spawn(args, options)
-        : spawn(process.execPath, args, options);
-      const exited = once(child, "close");
-      let pid = consoleControl ? undefined : child.pid;
-      let output = "",
-        errors = "";
-      child.stdout.on("data", (chunk) => {
-        output += chunk;
-      });
-      child.stderr.on("data", (chunk) => {
-        errors += chunk;
-        if (consoleControl) pid ??= consoleProcessId(errors);
-      });
-      try {
-        // 就绪由真实输出与 PID 共同确认，启动仍受本测试原有 15 秒总预算约束。
-        // 不把通用轮询的 2 秒上限混入控制台 fixture；超时/提前退出必须进入所属树清理。
-        await new Promise((resolve, reject) => {
-          const cleanup = () => {
-            child.stdout.removeListener("data", ready);
-            child.stderr.removeListener("data", ready);
-            child.removeListener("close", exitedEarly);
-            child.removeListener("error", failed);
-            t.signal.removeEventListener("abort", aborted);
-          };
-          const failed = (error) => {
-            cleanup();
-            reject(error);
-          };
-          const exitedEarly = () => failed(new Error(output + errors));
-          const aborted = () => failed(t.signal.reason);
-          const ready = () => {
-            if (output.includes('"state": "ready"') && pid) {
-              cleanup();
-              resolve();
-            }
-          };
-          child.stdout.on("data", ready);
-          child.stderr.on("data", ready);
-          child.once("close", exitedEarly);
-          child.once("error", failed);
-          t.signal.addEventListener("abort", aborted, { once: true });
-          if (t.signal.aborted) aborted();
-          else if (child.exitCode !== null || child.signalCode !== null) exitedEarly();
-          else ready();
-        });
-        assert.ok(pid, "the fixture must observe the actual CLI PID");
-        const started = Date.now();
-        if (consoleControl) await consoleControl.interrupt(pid);
-        else child.kill("SIGTERM");
-        let timer;
-        try {
-          const [code, signal] = await Promise.race([
-            exited,
-            new Promise((_, reject) => {
-              timer = setTimeout(
-                () => reject(new Error(`CLI did not close: ${output}${errors}`)),
-                7000
-              );
-            })
-          ]);
-          assert.deepEqual({ code, signal }, { code: 0, signal: null }, output + errors);
-          assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
-          t.diagnostic(
-            `${component}: ${consoleControl ? "CTRL_C_EVENT" : "SIGTERM"}, code=${code}, signal=${signal}, close=${Date.now() - started}ms`
-          );
-        } finally {
-          clearTimeout(timer);
-        }
-      } finally {
-        if (child.exitCode === null && child.signalCode === null) {
-          // 兜底只清理本 fixture 拥有的树；不能先杀 leader 再尝试找后代。
-          if (consoleControl && pid) await consoleControl.terminate(pid);
-          else child.kill("SIGKILL");
-        }
-        await exited;
-      }
-    }
-  }
-);

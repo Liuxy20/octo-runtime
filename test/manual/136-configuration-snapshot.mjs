@@ -20,12 +20,15 @@ const config = (revision) => ({
 });
 const input = (prompt = "report", fields = {}) => ({
   inputs: [{ type: "text", text: prompt }],
-  contexts: {
-    schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "snapshot" } }]
+  agentEnv: {
+    ...{
+      schema: "octo.context-envelope/v3",
+      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "snapshot" } }]
+    },
+    approvalMode: "full_access"
   },
   protocol_mode: "canonical",
-  approvalMode: "full_access",
+
   runId: randomUUID(),
   invocationId: randomUUID(),
   ...fields
@@ -233,7 +236,7 @@ test("A5: omitted Adapter selects codex configuration using this invocation's ru
     const events = await run(
       f.client,
       input("report", {
-        contexts: { schema: "octo.context-envelope/v3", items: [] },
+        agentEnv: { schema: "octo.context-envelope/v3", items: [] },
         runMetadata: { runtimeId }
       })
     );

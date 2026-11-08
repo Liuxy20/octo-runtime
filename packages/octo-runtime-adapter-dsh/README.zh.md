@@ -26,8 +26,8 @@ const input = InvokeInput.check({
   agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
-  approvalMode: "full_access",
-  contexts: {
+  agentEnv: {
+    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -36,15 +36,15 @@ const input = InvokeInput.check({
 
 ## 绑定了什么
 
-| 项           | 值                                                                                  |
-| ------------ | ----------------------------------------------------------------------------------- |
-| Adapter 类型 | `dsh`                                                                               |
-| 导出         | `dshAdapter`、`createDshAdapter`                                                    |
-| 公开入口     | `@mininglamp-oss/octo-runtime/adapters/dsh`                                         |
+| 项           | 值                                                                      |
+| ------------ | ----------------------------------------------------------------------- |
+| Adapter 类型 | `dsh`                                                                   |
+| 导出         | `dshAdapter`、`createDshAdapter`                                        |
+| 公开入口     | `@mininglamp-oss/octo-runtime/adapters/dsh`                             |
 | 可执行文件   | 必填：宿主选择的 JS 入口绝对路径 `dshBin`，通过 `process.execPath` 启动 |
-| 输出         | 仅 canonical 事件                                                                   |
-| 审批         | 只支持 `full_access`                                                                |
-| 默认值       | profile `sdk`、provider `deepseek-account`、model `deepseek-flash`                  |
+| 输出         | 仅 canonical 事件                                                       |
+| 审批         | 只支持 `full_access`                                                    |
+| 默认值       | profile `sdk`、provider `deepseek-account`、model `deepseek-flash`      |
 
 ## 兼容性
 

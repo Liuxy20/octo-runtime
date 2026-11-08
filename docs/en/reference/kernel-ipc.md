@@ -8,18 +8,19 @@ Start with the [SDK quickstart](../getting-started/sdk.md) for a first integrati
 
 ## Public Package Surface
 
-| Import subpath                                                                | Purpose                                                                                        |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| `/host`                                                                       | Create Kernel/Extra services, manage initialization and shutdown, generate component endpoints |
-| `/executor-kernel`                                                            | `attachKernel`, KernelClient types, KernelError, Kernel service factory         |
-| `/executor-core`                                                              | Use AgentExecutor directly in the calling process                                              |
-| `/protocol`                                                                   | InvokeInput, output/context types and public validators                                        |
-| `/protocol/schema.json`                                                       | Shared protocol schema                                                                         |
-| `/executor-kernel/ipc-schema.json`                                            | IPC v1 schema                                                                                  |
-| `/executor-kernel/ipc-fixtures.json`                                          | Test samples of valid and invalid IPC messages                                                 |
-| `/extra`, `/extras/channel-gateway`, `/extras/channel-wecom`, `/extras/webui` | Generic plugin API and built-in business modules                                               |
+| Import subpath                       | Purpose                                                                                  |
+| ------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `/host`                              | Create Kernel services, manage initialization and shutdown, generate component endpoints |
+| `/executor-kernel`                   | `attachKernel`, KernelClient types, KernelError, Kernel service factory                  |
+| `/executor-core`                     | Use AgentExecutor directly in the calling process                                        |
+| `/protocol`                          | InvokeInput, output/context types and public validators                                  |
+| `/protocol/schema.json`              | Shared protocol schema                                                                   |
+| `/executor-kernel/ipc-schema.json`   | IPC v2 schema                                                                            |
+| `/executor-kernel/ipc-fixtures.json` | Test samples of valid and invalid IPC messages                                           |
 
 All paths are under `@mininglamp-oss/octo-runtime`. For example, import the client from `@mininglamp-oss/octo-runtime/executor-kernel`. Internal workspace packages are private; applications use the public paths above.
+
+Applications consuming an existing Kernel can install only `@mininglamp-oss/octo-runtime-client` and import `attachKernel` from its root. They do not need the full Runtime package or a Runtime checkout.
 
 ## Create a Service
 
@@ -33,14 +34,14 @@ Initialization failure throws `ServiceInitializationError` with the original `ca
 
 ## KernelClient Methods
 
-| Method                                             | Purpose and result                                                                                                             |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `invoke(input, environment?)`                      | Async output stream that submits when read, manages execution identifiers, and reconnects within limits. Use for normal calls. |
-| `cancelInvocation(invocationId, reason?)`          | Cancel an invocation started through invoke on this client; returns `{accepted}`.                                              |
-| `respondInteraction(invocationId, response)`       | Reply to that invocation's canonical interaction.                                                                              |
-| `respondNativeInteraction(invocationId, response)` | Reply to that invocation's Provider-native interaction.                                                                        |
-| `status()` / `list()`                              | Query Kernel state or registered Adapter metadata with Provider probe results, respectively. Probing does not establish login or model access. |
-| `close()`                                          | Close client connections without cancelling submitted executions or closing the Kernel service.                                |
+| Method                                                 | Purpose and result                                                                                                                             |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invoke(inputs, sessionId, providerSession, agentEnv)` | Async output stream that submits when read, manages execution identifiers, and reconnects within limits. Use for normal calls.                 |
+| `interrupt(invocationId, reason?)`                     | Cancel an invocation started through invoke on this client; returns `{accepted}`.                                                              |
+| `respondInteraction(invocationId, response)`           | Reply to that invocation's canonical interaction.                                                                                              |
+| `respondNativeInteraction(invocationId, response)`     | Reply to that invocation's Provider-native interaction.                                                                                        |
+| `status()` / `list()`                                  | Query Kernel state or registered Adapter metadata with Provider probe results, respectively. Probing does not establish login or model access. |
+| `close()`                                              | Close client connections without cancelling submitted executions or closing the Kernel service.                                                |
 
 Use these lower-level methods only when managing submission and subscription yourself:
 
@@ -54,11 +55,11 @@ Use these lower-level methods only when managing submission and subscription you
 
 ## Model Catalog Boundary
 
-The host queries catalogs and passes business data directly, or lets Extra call a host-injected dependency. Neither path goes through Kernel or requires an additional IPC method.
+The host queries catalogs and passes business data directly, or lets an application call a host-injected dependency. Neither path goes through Kernel or requires an additional IPC method.
 
 `adapter.list` / `KernelClient.list()` returns registered Adapter metadata and actual probe information, not a model catalog or proof of account access to a model. Public IPC and Go/Python clients do not own unified model or effort catalog discovery, completion, or maintenance. A catalog is not a missing execution prerequisite.
 
-Hosts and Extras using the public `KernelClient` receive one list contract: registered Adapter metadata and Provider probe results, including `available`, `unavailableReason`, `providerPath`, and `providerVersion`. Only the Adapters assembled into that Kernel are listed. Probe results do not enumerate models or establish login or account authorization.
+Hosts and applications using the public `KernelClient` receive one list contract: registered Adapter metadata and Provider probe results, including `available`, `unavailableReason`, `providerPath`, and `providerVersion`. Only the Adapters assembled into that Kernel are listed. Probe results do not enumerate models or establish login or account authorization.
 
 The integrating host obtains or configures model options for its Provider, actual endpoint, and account. Official services, third-party proxies, and custom endpoints may expose different models or no catalog API while using the same Adapter. The host handles unavailable catalogs and query failures without fabricating successful empty lists or requiring consumers to use Runtime to scan private credentials or start discovery sessions.
 
@@ -76,22 +77,22 @@ Applications that create Kernel normally use the service's `close()`. An applica
 
 ## IPC Message Format
 
-IPC protocol version is 1. It is numbered independently from Run schema version 7, Context `octo.context-envelope/v3`, and internal Adapter transport version 2.
+IPC protocol version is 2. It is numbered independently from Run schema version 7, Context `octo.context-envelope/v3`, and internal Adapter transport version 2.
 
 Use a Unix domain socket on macOS/Linux or a Named Pipe on Windows. Each connection sends one UTF-8 JSON-RPC 2.0 request ending with LF. Its `id` must be a nonempty string. Numeric IDs, batch requests, and top-level or params fields undefined by the schema are rejected.
 
 Ordinary requests end the connection after their response. A subscription receives its response followed by `agent_run.event` notifications on the same connection. One JSON message may arrive across several socket reads. Limit buffering and parse only after receiving a complete LF-delimited line.
 
-| Wire method                | Params                                                 | Successful result                                                            |
-| -------------------------- | ------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `status`                   | `{}`                                                   | KernelStatus including `kernel_instance_id`, `execution_ready`, host `pid` |
+| Wire method                | Params                                                 | Successful result                                                                                                   |
+| -------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `status`                   | `{}`                                                   | KernelStatus including `kernel_instance_id`, `execution_ready`, host `pid`                                          |
 | `adapter.list`             | `{}`                                                   | Registered Adapter metadata array including `available`, `unavailableReason`, `providerPath`, and `providerVersion` |
-| `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`; receipt is the accepted execution identity  |
-| `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                                   |
-| `agent_run.subscribe`      | `{ref, after_seq}`                                     | Snapshot ACK, then ordered event notifications                               |
-| `agent_run.cancel`         | `{ref, reason?}`                                       | `{accepted}`                                                                 |
-| `agent_run.respond`        | `{ref, response}`                                      | Interaction acceptance result                                                |
-| `agent_run.native.respond` | `{ref, response}`                                      | Native response acceptance result                                            |
+| `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`; receipt is the accepted execution identity                                         |
+| `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                                                                          |
+| `agent_run.subscribe`      | `{ref, after_seq}`                                     | Snapshot ACK, then ordered event notifications                                                                      |
+| `agent_run.cancel`         | `{ref, reason?}`                                       | `{accepted}`                                                                                                        |
+| `agent_run.respond`        | `{ref, response}`                                      | Interaction acceptance result                                                                                       |
+| `agent_run.native.respond` | `{ref, response}`                                      | Native response acceptance result                                                                                   |
 
 Queries and controls use two identifier objects:
 
@@ -123,7 +124,7 @@ After checking readiness, submit once on a new connection (optionally include th
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
       "inputs": [{ "type": "text", "text": "Say hello." }],
-      "contexts": { "schema": "octo.context-envelope/v3", "items": [] }
+      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
     }
   }
 }

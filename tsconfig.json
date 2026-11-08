@@ -3,9 +3,5 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["apps/**/*.ts", "packages/**/*.ts", "public/**/*.ts"],
-  "exclude": [
-    "packages/octo-runtime-extra-webui/web",
-    "packages/octo-runtime-extra-webui/vite.config.ts"
-  ]
+  "include": ["apps/**/*.ts", "packages/**/*.ts", "public/**/*.ts"]
 }

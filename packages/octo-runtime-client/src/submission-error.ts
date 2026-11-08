@@ -27,3 +27,10 @@ export function markSubmissionRejected(error: unknown, instance: string): void {
 export function isInvocationNotSubmitted(error: unknown): boolean {
   return error instanceof KernelError && notSubmitted.has(error);
 }
+
+/** 本地取消只在 RPC 尚未写出时使用；不能伪造已提交调用的未执行证据。 */
+export function interruptedBeforeSubmissionError(): KernelError {
+  const error = new KernelError("INVOCATION_INTERRUPTED_BEFORE_SUBMISSION");
+  notSubmitted.add(error);
+  return error;
+}

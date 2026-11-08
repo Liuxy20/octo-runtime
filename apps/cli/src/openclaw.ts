@@ -1,8 +1,6 @@
-import { constants } from "node:fs";
-import { readFile, mkdir, writeFile, rename, lstat, open, rm } from "node:fs/promises";
-import { parseEnv, promisify } from "node:util";
+import { readFile, mkdir, writeFile, rename } from "node:fs/promises";
+import { promisify } from "node:util";
 import { execFile } from "node:child_process";
-import type { ExtraRegistration } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { randomUUID } from "node:crypto";
 import { isIP } from "node:net";
 import { homedir, networkInterfaces } from "node:os";
@@ -127,121 +125,6 @@ async function readCliOrigin(
   }
 }
 
-/** Octospec F24: one instance uses the last enabled OpenClaw Bot, never another Adapter. */
-export async function syncCliOpenClawToolEnvironment(
-  runtimeRoot: string,
-  extras: readonly ExtraRegistration[]
-): Promise<{ file?: string; written: boolean; restartRequired: boolean }> {
-  const channel = extras.find(
-    (extra) => extra.name === "channel-gateway" && extra.enabled !== false
-  );
-  if (!channel || channel.config.bots === undefined)
-    return { written: false, restartRequired: false };
-  const bots = channel.config.bots;
-  if (!Array.isArray(bots) || bots.length > 64) throw new Error("IM_CONFIG_LIST_REQUIRED");
-  let values: Record<string, string> | undefined;
-  for (const value of bots) {
-    const bot = record(value);
-    if (!bot) throw new Error("IM_CONFIG_INVALID");
-    if (bot.enabled === false || record(bot.adapter)?.adapter_type !== "openclaw") continue;
-    const token = typeof bot.bf_token === "string" ? bot.bf_token.trim() : undefined;
-    if (!token) throw new Error("IM_CREDENTIALS_REQUIRED");
-    // CLI 仅校验自己要写入的工具身份；完整 Bot 配置由启动后的 Extra 校验。
-    // 不为 Kernel 的 dotenv 同步导入整个业务 Extra，否则未启动 Extra 缺包也会阻塞 Kernel。
-    if (!/^bf_[A-Za-z0-9_-]+$/.test(token)) throw new Error("IM_BOT_TOKEN_INVALID");
-    let url: URL;
-    try {
-      if (typeof bot.api_url !== "string") throw new Error();
-      url = new URL(bot.api_url);
-    } catch {
-      throw new Error("IM_API_URL_INVALID");
-    }
-    if (
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      (url.protocol !== "https:" &&
-        !(url.protocol === "http:" && ["127.0.0.1", "localhost", "[::1]"].includes(url.hostname)))
-    )
-      throw new Error("IM_API_URL_INVALID");
-    let end = url.pathname.length;
-    while (end > 0 && url.pathname[end - 1] === "/") end--;
-    url.pathname = url.pathname.slice(0, end).replace(/\/api$/, "");
-    // 去掉 /api 后可能露出多重尾斜杠，仍需全部移除，并保留路径内部的分隔符。
-    const href = url.href;
-    end = href.length;
-    while (end > 0 && href[end - 1] === "/") end--;
-    values = {
-      OCTO_BOT_TOKEN: token,
-      OCTO_API_BASE_URL: href.slice(0, end)
-    };
-  }
-  if (!values) return { written: false, restartRequired: false };
-  const origin = await readCliOrigin(runtimeRoot);
-  const connection = await readOpenClawConnection(runtimeRoot);
-  if (!origin || origin.credential_ref !== connection?.credential_ref)
-    return { written: false, restartRequired: false };
-  const file = join(origin.openclaw_home, ".env");
-  const directory = await lstat(origin.openclaw_home);
-  if (!directory.isDirectory()) throw new Error("OPENCLAW_ENV_DIRECTORY_INVALID");
-  let previous = "";
-  try {
-    const handle = await open(
-      file,
-      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
-    );
-    try {
-      // 校验、读取和收紧权限绑定同一目标；拒绝链接，避免检查后重新按路径操作。
-      const info = await handle.stat();
-      if (!info.isFile()) throw new Error("OPENCLAW_ENV_FILE_INVALID");
-      if (!constants.O_NOFOLLOW) {
-        const entry = await lstat(file);
-        if (!entry.isFile() || entry.dev !== info.dev || entry.ino !== info.ino)
-          throw new Error("OPENCLAW_ENV_FILE_INVALID");
-      }
-      await handle.chmod(0o600);
-      previous = await handle.readFile("utf8");
-    } finally {
-      await handle.close();
-    }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-  // Remove only complete managed assignments, including quoted multiline values.
-  const retained = previous.replace(
-    /^[\t ]*(?:export[\t ]+)?(?:OCTO_BOT_TOKEN|OCTO_API_BASE_URL)[\t ]*=[\t ]*(?:"(?:\\.|[^"\\])*"|'[^']*'|[^\r\n]*)(?:[\t ]*#[^\r\n]*)?[\t ]*(?:\r?\n|$)/gm,
-    ""
-  );
-  const content =
-    retained +
-    (retained && !retained.endsWith("\n") ? "\n" : "") +
-    Object.entries(values)
-      .map(([key, value]) => `${key}=${JSON.stringify(value)}\n`)
-      .join("");
-  const before = parseEnv(previous),
-    after = parseEnv(content);
-  if (
-    Object.entries(before).some(
-      ([key, value]) => !Object.hasOwn(values, key) && after[key] !== value
-    ) ||
-    Object.entries(values).some(([key, value]) => after[key] !== value)
-  )
-    throw new Error("OPENCLAW_ENV_UPDATE_INVALID");
-  if (content === previous) {
-    return { file, written: false, restartRequired: true };
-  }
-  const temporary = join(origin.openclaw_home, `.octo-env-${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporary, content, { mode: 0o600, flag: "wx" });
-    await rename(temporary, file);
-  } finally {
-    await rm(temporary, { force: true });
-  }
-  return { file, written: true, restartRequired: true };
-}
-
-/** An absent optional Provider must not prevent the CLI daemon from starting. */
 export async function initializeCliOpenClaw(
   runtimeRoot: string,
   env = process.env

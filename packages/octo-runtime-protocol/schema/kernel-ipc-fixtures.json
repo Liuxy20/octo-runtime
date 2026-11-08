@@ -1,15 +1,25 @@
 {
-  "ipc_version": 1,
+  "ipc_version": 2,
   "cases": [
     {
       "name": "status",
-      "request": { "jsonrpc": "2.0", "id": "status-1", "method": "status", "params": {} },
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "status-1",
+        "method": "status",
+        "params": {}
+      },
       "valid": true,
       "result_definition": "KernelStatus"
     },
     {
       "name": "list",
-      "request": { "jsonrpc": "2.0", "id": "list-1", "method": "adapter.list", "params": {} },
+      "request": {
+        "jsonrpc": "2.0",
+        "id": "list-1",
+        "method": "adapter.list",
+        "params": {}
+      },
       "valid": true
     },
     {
@@ -33,7 +43,12 @@
     },
     {
       "name": "numeric-id",
-      "request": { "jsonrpc": "2.0", "id": 1, "method": "status", "params": {} },
+      "request": {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "status",
+        "params": {}
+      },
       "valid": false,
       "error_code": "INVALID_REQUEST"
     },
@@ -43,11 +58,18 @@
         "jsonrpc": "2.0",
         "id": "bad-1",
         "method": "status",
-        "params": { "extra": true }
+        "params": {
+          "extra": true
+        }
       },
       "valid": false,
       "error_code": "INVALID_PARAMS"
     },
-    { "name": "batch", "request": [], "valid": false, "error_code": "INVALID_REQUEST" }
+    {
+      "name": "batch",
+      "request": [],
+      "valid": false,
+      "error_code": "INVALID_REQUEST"
+    }
   ]
 }

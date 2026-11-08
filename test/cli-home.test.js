@@ -1,10 +1,10 @@
-import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import { runCli } from "../apps/cli/dist/main.js";
-for (const component of ["executor-kernel", "channel-gateway"]) {
+for (const component of ["executor-kernel"]) {
   test(`${component} restart never installs or enables a missing service`, async (t) => {
     const home = await mkdtemp(
       join(process.platform === "darwin" ? "/tmp" : tmpdir(), "oc-missing-")

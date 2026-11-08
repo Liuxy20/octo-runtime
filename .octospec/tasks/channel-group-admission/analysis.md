@@ -26,7 +26,7 @@ timestamp: 2026-10-17T00:00:00Z
 
 # 直接原因
 
-[normalize.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 当前逻辑：
+[normalize.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 当前逻辑：
 
 ```ts
 if (message.channelType === 1) return contentSupported();
@@ -37,9 +37,9 @@ if (
   return false;
 ```
 
-group_ids 省略时，可选链求值为 undefined，取反变为 true，触发拒绝。代码还没走到 mentionsBot 就已返回，后续 Context 准备、Host.invoke、typing、卡片和最终回复均不会启动。[channel.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 在准入失败时直接 return，因此用户只看到 Bot 在线却没有响应。
+group_ids 省略时，可选链求值为 undefined，取反变为 true，触发拒绝。代码还没走到 mentionsBot 就已返回，后续 Context 准备、Host.invoke、typing、卡片和最终回复均不会启动。[channel.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 在准入失败时直接 return，因此用户只看到 Bot 在线却没有响应。
 
-[配置 Schema](../../../packages/octo-runtime-extra-channel-gateway/config-schema.json) 明确写着“省略不按本项限制，空数组拒绝所有群/话题”。[CLI 示例](../../../docs/zh-CN/getting-started/cli.md)省略 group_ids，文档和实际执行互相矛盾。当前条件至少在历史提交 `ea1486fe` 中已经存在，早于本轮 SDK 函数装配提交 `28aa061`；不能将这次发现写成 loadContexts 改造引入的新回归。Schema 说明可追溯至 `0b00e4e0`，这里只记录可核对的历史，不以 Git 作者归因个人责任。
+[配置 Schema](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/config-schema.json) 明确写着“省略不按本项限制，空数组拒绝所有群/话题”。[CLI 示例](../../../docs/zh-CN/getting-started/cli.md)省略 group_ids，文档和实际执行互相矛盾。当前条件至少在历史提交 `ea1486fe` 中已经存在，早于本轮 SDK 函数装配提交 `28aa061`；不能将这次发现写成 loadContexts 改造引入的新回归。Schema 说明可追溯至 `0b00e4e0`，这里只记录可核对的历史，不以 Git 作者归因个人责任。
 
 # 为什么此前测试没有发现
 
@@ -52,8 +52,8 @@ group_ids 省略时，可选链求值为 undefined，取反变为 true，触发�
 
 # 本轮复现结果
 
-1. [准入与 transport 回归](../../../test/im-mention-trigger.test.js)：当前实现共 5 项，原有 2 项通过，新增 3 项失败。失败覆盖省略/空/显式群范围、明确授权的非 owner，以及真实 GatewayTransport 转交和原地址回复；传输回归中私聊通过，随后群消息未进入回调。
-2. [im-test 只读验证](../../../scripts/verify-channel-group-admission-live.mjs)：从已有 Channel_QA_ 群读取历史，选择包含当前 Bot 有效 mention 的非自身文本消息，保持其真实 payload；在重放配置中显式授权真实发送者，仅隔离群范围差异。显式群 ID 通过，省略群 ID 拒绝；空名单、名单外群、无授权、缺 @ 和错误 Space 均拒绝。
+1. [准入与 transport 回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-mention-trigger.test.js)：当前实现共 5 项，原有 2 项通过，新增 3 项失败。失败覆盖省略/空/显式群范围、明确授权的非 owner，以及真实 GatewayTransport 转交和原地址回复；传输回归中私聊通过，随后群消息未进入回调。
+2. [im-test 只读验证](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-channel-group-admission-live.mjs)：从已有 Channel_QA_ 群读取历史，选择包含当前 Bot 有效 mention 的非自身文本消息，保持其真实 payload；在重放配置中显式授权真实发送者，仅隔离群范围差异。显式群 ID 通过，省略群 ID 拒绝；空名单、名单外群、无授权、缺 @ 和错误 Space 均拒绝。
 3. 线上验证发送消息数为 0，模型调用数为 0；没有新建群、连接生产 Bot 或修改服务端配置。该证据是“真实历史 payload 在本地准入函数重放”，不是实时 WS 入站或模型回复闭环。
 
 复现命令（账号文件是受保护的本机文件，只传路径）：

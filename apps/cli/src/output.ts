@@ -59,7 +59,7 @@ export function residentProcesses(
     const managedPid = pid(snapshot.service.pid);
     add({
       ...(actualPid || managedPid ? { pid: actualPid ?? managedPid } : {}),
-      roles: [name === "executor-kernel" ? "Host/Kernel" : `Extra:${name}`],
+      roles: [name === "executor-kernel" ? "Host/Kernel" : name],
       state: actualPid ? "running" : snapshot.service.state,
       observation: actualPid ? "alive" : "unknown"
     });
@@ -220,35 +220,12 @@ export function describeError(
       : undefined;
   const hints: Record<string, string> = {
     COMMAND_FAILED: "The command failed. Check the native manager, configuration and service logs.",
-    KERNEL_UNAVAILABLE:
-      "Kernel is unavailable. Check executor-kernel status; Extras can remain running.",
+    KERNEL_UNAVAILABLE: "Kernel is unavailable. Check executor-kernel status.",
     INVALID_ARGUMENTS: "Use --help to see the available commands and flags.",
     ORPHAN_CLEANUP_OWNER_ALIVE:
       "The original Kernel or worker is still alive or its identity cannot be verified. Stop it safely before acknowledging cleanup.",
     ORPHAN_CLEANUP_NOT_PENDING:
-      "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home.",
-    EXTRA_COMMAND_FAILED:
-      "The Extra command failed. No private backend error is printed; check its input and configuration, then retry.",
-    EXTRA_CONFIG_CONFLICT:
-      "Configuration changed after this command read it. Read the latest configuration and retry.",
-    EXTRA_COMMAND_LOAD_FAILED:
-      "The selected Extra command module or one of its dependencies is broken. Check its package and commands export; lifecycle commands remain available.",
-    EXTRA_COMMAND_API_UNSUPPORTED:
-      "This CLI supports Extra command apiVersion 1. Install a compatible command extension.",
-    EXTRA_COMMAND_DEFINITION_INVALID:
-      "Command definitions must have unique names and valid options; lifecycle and host option names are reserved.",
-    EXTRA_COMMAND_NAMESPACE_CONFLICT:
-      "An Extra name conflicts with a Runtime command. Rename its manifest entry.",
-    EXTRA_COMMAND_NOT_FOUND:
-      "Unknown command. Use --help on the service command to see available subcommands.",
-    EXTRA_COMMAND_CANCELLED:
-      "The command was cancelled. Any save that already completed remains persisted.",
-    EXTRA_COMMAND_STDIN_REQUIRED:
-      "Pipe the required input through stdin; do not put credentials in command arguments.",
-    EXTRA_MANIFEST_DECLARATION_REQUIRED:
-      "Install this Extra alongside the global Runtime, or add its name and module to the selected Home manifest.json (extras array), then retry.",
-    EXTRA_MODULE_MIGRATION_REQUIRED:
-      "The saved module differs from manifest.json. Review both declarations, then save matching module text or omit module from the Extra configuration."
+      "There is no valid incomplete orphan cleanup to acknowledge. Run doctor with the same --home."
   };
   return {
     code,
@@ -317,7 +294,7 @@ export async function recordStartupFailure(
     } finally {
       await rm(temporary, { force: true }).catch(() => undefined);
     }
-    const log = component === "executor-kernel" ? logging.kernel : logging.extra(component);
+    const log = logging.kernel;
     if (failure.cause_code) log("error", "cli.initialization_cause", { code: failure.cause_code });
     log("error", "cli.initialization_failed", { code: failure.code });
   } finally {
@@ -375,8 +352,9 @@ export async function readStartupFailure(
   } catch {
     // 缺失、损坏或旧版本记录继续走既有白名单日志，不影响真实就绪等待。
   }
-  const root = component === "executor-kernel" ? directory : join(directory, "extras");
-  const prefix = component === "executor-kernel" ? "kernel-" : `${component}-`;
+  if (component !== "executor-kernel") return undefined;
+  const root = directory;
+  const prefix = "kernel-";
   try {
     const names = (await readdir(root))
       .filter((name) => name.startsWith(prefix) && /^.+-\d{8}T\d{2}\.log$/.test(name))
@@ -408,12 +386,7 @@ export async function readStartupFailure(
           Date.parse(row.time) < since
         )
           continue;
-        if (
-          component === "executor-kernel"
-            ? row.source !== "kernel"
-            : row.source !== "extra" || row.extra_type !== component
-        )
-          continue;
+        if (row.source !== "kernel") continue;
         const code = record(row.data).code;
         if (typeof code !== "string" || !/^[A-Z][A-Z0-9_]{1,100}$/.test(code)) continue;
         if (row.event === "cli.initialization_cause") cause = code;

@@ -4,7 +4,7 @@
 
 Octo Runtime gives applications a common interface for Agent calls. Your application supplies a task, background material, and execution settings. Runtime calls a Provider such as Codex or Claude Code and returns output as an event stream.
 
-This documentation is for developers integrating the SDK, supplying business context and tools, and handling execution results. SDK chapters cover service integration, advanced dependencies, and optional AgentRun usage; root `SDK_*` guides add specific business wiring.
+This documentation is for developers integrating the SDK, supplying business context and tools, and handling execution results. SDK chapters cover service integration, Context/session handling, and optional AgentRun usage; root `SDK_*` guides add specific business wiring.
 
 ## Start Here
 
@@ -12,7 +12,7 @@ This documentation is for developers integrating the SDK, supplying business con
 2. Read [Architecture](concepts/architecture.md) for module roles and the execution flow.
 3. Learn [Inputs and Contexts](concepts/inputs-and-contexts.md) to supply application data.
 
-For module selection, read [Adapter and Extra Loading](concepts/module-loading.md): SDK native composition and CLI built-in/user manifests.
+For module selection, read [Adapter Loading](concepts/module-loading.md): SDK object composition and CLI Adapter manifests.
 
 ## Guides
 
@@ -21,14 +21,14 @@ For module selection, read [Adapter and Extra Loading](concepts/module-loading.m
 | Install and configure a Harness; enable Codex Computer Use or share WorkBuddy credits | [Harness Setup](guides/harnesses.md)                   |
 | Supply business context, environment, images, or session continuation                 | [Context and Sessions](guides/context-and-sessions.md) |
 | Connect an installed MCP server                                                       | [MCP](guides/mcp.md)                                   |
-| Add an optional business integration                                                  | [Extras](guides/extras.md)                             |
+| Integrate a business channel | [Independent Channel Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) |
 | Diagnose component construction or initialization                                     | [Startup diagnostics](guides/startup-diagnostics.md)   |
 | Diagnose a failed or interrupted invocation                                           | [Troubleshooting](guides/troubleshooting.md)           |
 
 ## SDK Chapters
 
-1. [Integrate KernelService and ChannelGateway ExtraService](getting-started/sdk.md)
-2. [Advanced: Context, session storage, and custom dependencies](guides/sdk-dependencies.md)
+1. [Integrate KernelService and the public client](getting-started/sdk.md)
+2. [Context and session continuation](guides/context-and-sessions.md)
 3. [Optional: AgentRun invocation, events, and control](guides/agent-runs.md)
 
 ## Reference
@@ -42,3 +42,5 @@ For module selection, read [Adapter and Extra Loading](concepts/module-loading.m
 | Adapter support and implementation boundaries          | [Providers](reference/providers.md)                   |
 
 See [Maintenance and Validation](maintenance.md) for validation results and the relationship to existing documents. Device operations are covered in [CLI Installation and Operations](getting-started/cli.md).
+
+- [sessionId / invocationId / providerSession](concepts/identifiers.md)

@@ -1,3 +1,4 @@
+import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式手动专项：不加入默认测试或 CI；使用真实 Kernel/RPC 和宿主注入的 fake Adapter。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -144,7 +145,10 @@ async function replacement(t, f) {
   assert.equal(owner.nativeOwner, true);
   assert.equal(owner.kernelPid, process.pid);
   const events = [];
-  for await (const event of next.client.invoke(kernelInput("replacement after cancellation")))
+  for await (const event of invokeClient(
+    next.client,
+    kernelInput("replacement after cancellation")
+  ))
     events.push(event);
   assert.equal(events.at(-1).type, "run.completed");
   assert.ok(events.some((event) => event.payload.text?.includes("replacement after cancellation")));
@@ -319,7 +323,7 @@ for (const cancel of [false, true])
       });
       await endpointClosed(f.options.endpoint);
       const events = [];
-      for await (const event of live.client.invoke(kernelInput("sibling remains usable")))
+      for await (const event of invokeClient(live.client, kernelInput("sibling remains usable")))
         events.push(event);
       assert.equal(events.at(-1).type, "run.completed");
       assert.equal((await live.close()).complete, true);

@@ -26,8 +26,8 @@ const input = InvokeInput.check({
   agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
-  approvalMode: "full_access",
-  contexts: {
+  agentEnv: {
+    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -36,15 +36,15 @@ const input = InvokeInput.check({
 
 ## What it binds
 
-| Item         | Value                                                                               |
-| ------------ | ----------------------------------------------------------------------------------- |
-| Adapter type | `dsh`                                                                               |
-| Exports      | `dshAdapter`, `createDshAdapter`                                                    |
-| Public entry | `@mininglamp-oss/octo-runtime/adapters/dsh`                                         |
+| Item         | Value                                                                                       |
+| ------------ | ------------------------------------------------------------------------------------------- |
+| Adapter type | `dsh`                                                                                       |
+| Exports      | `dshAdapter`, `createDshAdapter`                                                            |
+| Public entry | `@mininglamp-oss/octo-runtime/adapters/dsh`                                                 |
 | Executable   | Required host-selected absolute `dshBin` JavaScript entry, launched with `process.execPath` |
-| Output       | canonical events only                                                               |
-| Approval     | `full_access` only                                                                  |
-| Defaults     | profile `sdk`, provider `deepseek-account`, model `deepseek-flash`                  |
+| Output       | canonical events only                                                                       |
+| Approval     | `full_access` only                                                                          |
+| Defaults     | profile `sdk`, provider `deepseek-account`, model `deepseek-flash`                          |
 
 ## Compatibility
 

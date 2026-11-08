@@ -1,12 +1,11 @@
-import test from "node:test";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { ExtraPlugins } from "../packages/octo-runtime-host-sdk/dist/index.js";
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest } from "./runtime-fixture.js";
 
 async function fixture(t) {
@@ -30,48 +29,6 @@ async function records(directory, subdirectory = "") {
     .filter(Boolean)
     .map((line) => JSON.parse(line));
 }
-test("F31 disabled logging creates no files, rejects implicit directories, and never serializes bodies", async (t) => {
-  const directory = await fixture(t),
-    disabled = new RuntimeLogging();
-  disabled.extra("fixture")("info", "fixture.started", { text: "private" });
-  await disabled.close();
-  assert.deepEqual(await readdir(directory), []);
-  assert.throws(() => new RuntimeLogging({ directory: "relative" }), /ABSOLUTE/);
-  const logging = new RuntimeLogging({ directory });
-  const extras = new ExtraPlugins(
-    [
-      {
-        name: "fixture",
-        config: {},
-        load: async () => ({
-          name: "fixture",
-          default: (ctx) => async () => {
-            assert.equal(typeof ctx.log, "function");
-            ctx.log("info", "fixture.started", {
-              extra_type: "forged",
-              status: "running",
-              token: "bf_secret",
-              error: Error("secret"),
-              input: "SECRET_INPUT",
-              context: { text: "SECRET_CONTEXT" },
-              model: "bf_secret"
-            });
-          }
-        })
-      }
-    ],
-    {},
-    (name) => logging.extra(name)
-  );
-  await extras.loadConfigured();
-  await extras.close();
-  await logging.close();
-  const rows = await records(directory, "extras");
-  assert.equal(rows[0].extra_type, "fixture");
-  assert.equal(rows[0].source, "extra");
-  assert.deepEqual(rows[0].data, { status: "running" });
-  assert.doesNotMatch(JSON.stringify(rows), /SECRET|bf_secret|forged/);
-});
 test("F31 kernel lifecycle counts only this input/context and keeps execution independent of logging", async (t) => {
   const directory = await fixture(t),
     logging = new RuntimeLogging({ directory });
@@ -88,14 +45,21 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   });
   const input = {
     inputs: [{ type: "text", text: "SECRET_INPUT" }],
-    contexts: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
-        { namespace: "extra.im", name: "rules", payload: { text: "SECRET_CONTEXT" } }
-      ]
+    agentEnv: {
+      ...{
+        schema: "octo.context-envelope/v3",
+        items: [
+          { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
+          {
+            namespace: "octo.execution",
+            name: "envs",
+            payload: { env_variables: [{ key: "SECRET_CONTEXT", value: "SECRET_VALUE" }] }
+          }
+        ]
+      },
+      approvalMode: "full_access"
     },
-    approvalMode: "full_access",
+
     sessionId: "session-log",
     invocationId: "invocation-log",
     runId: "run-log",
@@ -213,33 +177,4 @@ test("Core provides the shared adapter log sink and records the canonical failur
   } finally {
     await core.shutdown();
   }
-});
-
-test("channel failure metadata survives the real log worker and never reaches component status", async (t) => {
-  const directory = await fixture(t);
-  const status = [];
-  const logging = new RuntimeLogging({ directory, statusOutput: (record) => status.push(record) });
-  const data = {
-    code: "OH-RUN-2010",
-    reason_code: "IM_SESSION_STORE_FAILED",
-    diagnostic_id: `diag_${"a".repeat(32)}`,
-    stage: "channel_session_read",
-    failure_component: "octo-runtime",
-    occurred_at: new Date().toISOString()
-  };
-  logging.extra("channel-gateway")("warn", "channel.diagnostic", data);
-  logging.extra("channel-gateway")("warn", "channel.diagnostic", {
-    diagnostic_id: "private",
-    stage: "private",
-    failure_component: "private",
-    occurred_at: "2026-02-30T00:00:00.000Z",
-    failure: { secret: "PRIVATE_BODY" }
-  });
-  await logging.close();
-  const rows = await records(directory, "extras");
-  assert.deepEqual(rows[0].data, data);
-  assert.deepEqual(rows[1].data, {});
-  assert.equal(rows[0].source, "extra");
-  assert.deepEqual(status, []);
-  assert.ok(!(await readdir(join(directory, "extras"))).some((name) => name.includes("-status-")));
 });

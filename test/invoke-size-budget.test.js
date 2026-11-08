@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { PassThrough } from "node:stream";
@@ -16,11 +17,14 @@ import { fileURLToPath } from "node:url";
 
 const input = () => ({
   inputs: [{ type: "text", text: "test" }],
-  contexts: {
-    schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "size-fixture" } }]
+  agentEnv: {
+    ...{
+      schema: "octo.context-envelope/v3",
+      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "size-fixture" } }]
+    },
+    approvalMode: "full_access"
   },
-  approvalMode: "full_access",
+
   protocol_mode: "canonical",
   invocationId: randomUUID(),
   runId: randomUUID(),
@@ -59,12 +63,12 @@ test("Kernel RPC accepts a bounded request and rejects oversized input before ex
   });
   const large = input();
   large.runMetadata = { padding: "x".repeat(INVOKE_REQUEST_MAX_BYTES - 4096) };
-  assert.equal((await collect(client.invoke(large))).at(-1).type, "run.completed");
+  assert.equal((await collect(invokeClient(client, large))).at(-1).type, "run.completed");
   assert.equal(calls, 1);
   large.runMetadata.padding += "x".repeat(4096);
-  await assert.rejects(collect(client.invoke(large)), /INVOKE_REQUEST_TOO_LARGE/);
+  assert.throws(() => invokeClient(client, large), /INVOKE_REQUEST_TOO_LARGE/);
   assert.equal(calls, 1);
-  assert.equal((await collect(client.invoke(input()))).at(-1).type, "run.completed");
+  assert.equal((await collect(invokeClient(client, input()))).at(-1).type, "run.completed");
 });
 
 test("oversized raw line does not abort an active run or the next invocation", async (t) => {
@@ -83,7 +87,7 @@ test("oversized raw line does not abort an active run or the next invocation", a
     }
     yield { protocolVersion: 2, type: "run.completed", payload: {} };
   });
-  const active = collect(client.invoke(input()));
+  const active = collect(invokeClient(client, input()));
   await ready;
   const upstream = net.createConnection(endpoint);
   upstream.on("error", () => {});
@@ -96,7 +100,7 @@ test("oversized raw line does not abort an active run or the next invocation", a
   await dropped;
   finish();
   assert.equal((await active).at(-1).type, "run.completed");
-  assert.equal((await collect(client.invoke(input()))).at(-1).type, "run.completed");
+  assert.equal((await collect(invokeClient(client, input()))).at(-1).type, "run.completed");
 });
 
 test("bounded receiver preserves split UTF-8 and recovers after discarded records", () => {

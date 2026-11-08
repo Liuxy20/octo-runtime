@@ -8,12 +8,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
+      "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "agentConfig": {
-        "timeoutSeconds": 0.5
+        "items": [],
+        "agentConfig": {
+          "timeoutSeconds": 0.5
+        }
       }
     },
     "valid": true
@@ -27,12 +27,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
+      "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "agentConfig": {
-        "timeoutSeconds": 0
+        "items": [],
+        "agentConfig": {
+          "timeoutSeconds": 0
+        }
       }
     },
     "valid": false
@@ -46,12 +46,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
+      "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "agentConfig": {
-        "timeoutSeconds": -1
+        "items": [],
+        "agentConfig": {
+          "timeoutSeconds": -1
+        }
       }
     },
     "valid": false
@@ -65,12 +65,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
       "providerSession": {
         "sessionId": " abc "
+      },
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
       }
     },
     "valid": true
@@ -84,12 +84,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
       "providerSession": {
         "sessionId": ""
+      },
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
       }
     },
     "valid": false
@@ -103,12 +103,12 @@
           "text": "test"
         }
       ],
-      "contexts": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
       "providerSession": {
         "sessionId": "\t \n ﻿"
+      },
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": []
       }
     },
     "valid": false

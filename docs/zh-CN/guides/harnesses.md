@@ -8,7 +8,7 @@ Harness 是 Adapter 背后实际运行 Agent 的程序，负责模型调用、�
 
 ## Harness 专题
 
-每个内置 Harness 均有独立的安装、认证、Channel Gateway 样例和代理说明。先读[完整 Gateway 声明与代理隔离](harnesses/channel-gateway.md)，再选择框架；不要将 Antigravity 的实测结果视为其他框架的验收。
+每个内置 Harness 均有安装、认证和调用环境说明。先阅读 [SDK 接入](../getting-started/sdk.md)和[调用环境](context-and-sessions.md)。渠道配置及运维见[独立 Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway)；每个 Harness 必须分别验证。
 
 - [Codex](harnesses/codex.md)
 - [Claude Code](harnesses/claude-code.md)

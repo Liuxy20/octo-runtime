@@ -74,6 +74,90 @@ async function complete(f) {
   return frames;
 }
 
+test("async cancellation waits for ACK and blocks competing submissions", async (t) => {
+  const f = await setup(t);
+  const ack = Promise.withResolvers();
+  let calls = 0;
+  const reply = new AsyncQuestionReply(
+    {
+      respond: () => {
+        calls++;
+        return ack.promise;
+      }
+    },
+    f.snapshot,
+    () => f.next
+  );
+  const cancelling = reply.cancel();
+  assert.equal(reply.snapshot().phase, "submitting");
+  await assert.rejects(reply.cancel(), { code: "INTERACTION_NOT_ACTIVE" });
+  await assert.rejects(reply.respond(value), { code: "INTERACTION_NOT_ACTIVE" });
+  assert.equal(calls, 1);
+  ack.resolve();
+  await cancelling;
+  assert.equal(reply.snapshot().phase, "cancelled");
+});
+
+test("lost cancellation ACK stays unknown after restore and cannot replay", async (t) => {
+  const f = await setup(t);
+  let calls = 0;
+  const client = {
+    respond: async () => {
+      calls++;
+      throw new KernelError("OPERATION_OUTCOME_UNKNOWN");
+    }
+  };
+  const reply = new AsyncQuestionReply(client, f.snapshot, () => f.next);
+  await assert.rejects(reply.cancel(), { code: "OPERATION_OUTCOME_UNKNOWN" });
+  assert.equal(reply.snapshot().phase, "unknown");
+  const restored = new AsyncQuestionReply(client, reply.snapshot(), () => f.next);
+  await assert.rejects(restored.cancel(), { code: "INTERACTION_NOT_ACTIVE" });
+  await assert.rejects(restored.respond(value), { code: "INTERACTION_NOT_ACTIVE" });
+  assert.equal(calls, 1);
+});
+
+test("inactive cancellation is invalidated; completed cancellation needs no RPC", async (t) => {
+  const f = await setup(t);
+  let calls = 0;
+  const client = {
+    respond: async () => {
+      calls++;
+      throw new KernelError("INTERACTION_NOT_ACTIVE");
+    }
+  };
+  const inactive = new AsyncQuestionReply(client, f.snapshot, () => f.next);
+  await inactive.cancel();
+  assert.equal(inactive.snapshot().phase, "invalidated");
+  const completed = new AsyncQuestionReply(
+    client,
+    { ...f.snapshot, completed: true },
+    () => f.next
+  );
+  await completed.cancel();
+  assert.equal(completed.snapshot().phase, "cancelled");
+  assert.equal(calls, 1);
+});
+
+test("observed cancellation survives a lost ACK", async (t) => {
+  const f = await setup(t);
+  const ack = Promise.withResolvers();
+  const reply = new AsyncQuestionReply({ respond: () => ack.promise }, f.snapshot, () => f.next);
+  const cancelling = reply.cancel();
+  const rejected = assert.rejects(cancelling, { code: "OPERATION_OUTCOME_UNKNOWN" });
+  await f.client.respond(f.ref, {
+    interactionId: f.snapshot.question.interactionId,
+    outcome: "cancelled"
+  });
+  for await (const frame of f.client.subscribe(f.ref)) {
+    reply.observe(frame);
+    if (frame.event?.type === "interaction.resolved") break;
+  }
+  assert.equal(reply.snapshot().phase, "cancelled");
+  ack.reject(new KernelError("OPERATION_OUTCOME_UNKNOWN"));
+  await rejected;
+  assert.equal(reply.snapshot().phase, "cancelled");
+});
+
 test(
   "async final_answer survives more than the finalization deadline without answering",
   { timeout: 10000 },

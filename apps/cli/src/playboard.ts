@@ -16,7 +16,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  type InvokeInput,
+  InvokeInput,
   identifyInvokeInput,
   isHostTerminal,
   isTerminal
@@ -71,19 +71,19 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   }
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("playboard stdin must contain one JSON input object");
-  const input = identifyInvokeInput(value as InvokeInput);
+  const input = identifyInvokeInput(InvokeInput.check(value));
   // full_access 是本 CLI 宿主的缺省策略；显式策略（包括非法值）交给共享入口校验，
   // 不覆盖 Context，也不改变 SDK 的 ask 默认值。
   if (
-    !Object.hasOwn(input, "approvalMode") &&
+    !Object.hasOwn(input.agentEnv, "approvalMode") &&
     !(
-      Array.isArray(input.contexts?.items) &&
-      input.contexts.items.some(
+      Array.isArray(input.agentEnv?.items) &&
+      input.agentEnv.items.some(
         (item) => item?.namespace === "octo.security" && item.name === "approval_policy"
       )
     )
   )
-    input.approvalMode = "full_access";
+    input.agentEnv.approvalMode = "full_access";
   const profile = options.profile ?? "default";
   const home = options.home ?? defaultRuntimeHome(options.env);
   runtimePaths(home, profile); // Validate the selected profile before starting resources.
@@ -137,7 +137,14 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     });
     await kernel.initialize({ signal: controller.signal });
     let exitCode = 1;
-    for await (const frame of kernel.client.invoke(input, { signal: controller.signal })) {
+    const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
+    const run = kernel.client.invoke({ ...content, parts }, sessionId, providerSession, agentEnv);
+    const interruptRun = () => {
+      void kernel!.client.interrupt(run.invocationId, "CLI interrupted").catch(() => undefined);
+    };
+    controller.signal.addEventListener("abort", interruptRun, { once: true });
+    if (controller.signal.aborted) interruptRun();
+    for await (const frame of run) {
       await output(JSON.stringify(frame));
       if (
         ("kind" in frame &&

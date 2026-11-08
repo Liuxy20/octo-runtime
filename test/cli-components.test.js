@@ -1,10 +1,10 @@
-import test from "node:test";
+import { componentServiceId } from "@mininglamp-oss/octo-runtime-host-sdk";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import test from "node:test";
 import { runCli } from "../apps/cli/dist/main.js";
-import { componentServiceId } from "@mininglamp-oss/octo-runtime-host-sdk";
 function backend() {
   const state = new Map(),
     calls = [];
@@ -36,13 +36,13 @@ function backend() {
     }
   };
 }
-test("both CLI groups install with autostart by default and act on one component only", async (t) => {
+test("Kernel CLI install with autostart by default and act on one component only", async (t) => {
   const home = await mkdtemp(join(tmpdir(), "oc-"));
   t.after(() => rm(home, { recursive: true, force: true }));
   const native = backend();
   const run = (args) => runCli([...args, "--home", home], { backend: native, output() {} });
   await writeFile(join(home, "identity-marker"), "original");
-  for (const component of ["executor-kernel", "channel-gateway"]) {
+  for (const component of ["executor-kernel"]) {
     assert.equal(await run([component, "restart"]), 3);
     assert.equal(await run([component, "install"]), 0);
     assert.equal(native.state.get(componentServiceId(home, component)).enabled, true);

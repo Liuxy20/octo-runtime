@@ -1,27 +1,11 @@
-# Octo Runtime 使用与接入入口
+# 接入导航
 
-公开开发者文档：[English](docs/en/README.md) / [简体中文](docs/zh-CN/README.md)。首次调用、Kernel IPC、inputs/contexts、MCP 与交互合同优先查阅本库；下列指南保留宿主、CLI 和 IM 业务装配细节。
+连接已有 Kernel：安装 `@mininglamp-oss/octo-runtime-client`，调用 `attachKernel({endpoint})`，协议从 `/protocol` 导入。
 
-按使用场景选择指南，具体操作和示例只在对应指南维护。
+拥有执行服务：使用完整 Runtime 的 `/host` 构造 `createKernelService({home, endpoint, adapters})`，原生 import Adapter。桌面 App 使用 SDK，自行管理配置与生命周期。
 
-只连接已有 Kernel 的应用安装 `@mininglamp-oss/octo-runtime-client`，从根入口调用 `attachKernel({ endpoint })`，从 `/protocol` 取得协议。拥有 Kernel/Extra 或直接 Core 的宿主继续使用完整 `@mininglamp-oss/octo-runtime`。两包同 tag 同版本发布；完整包内置 client/protocol，保留单 tgz 离线安装。[client 包参考](packages/octo-runtime-client/README.md)说明跨发行物的类型兼容与对象身份边界。
+接入 IM：[独立 Channel Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) 提供 `ChannelRegistry.register(endpoint, definition)`，拥有自己的 npm 包、CLI、配置、会话存储和投递逻辑。
 
-| 场景                                        | 文档                                                     | 责任                                        |
-| ------------------------------------------- | -------------------------------------------------------- | ------------------------------------------- |
-| 云端设备的定制接入、部署和运维              | [CLI 安装与运维](docs/zh-CN/getting-started/cli.md)      | 使用完整 CLI 发行物及系统管理、自启服务     |
-| Electron 项目只接入 Octo IM；OctoBuddy 推荐 | [SDK Channel Gateway 指南](SDK_CHANNEL_GATEWAY_GUIDE.md) | submodule、依赖、IM 配置、主进程启动与重载  |
-| 普通业务调用 Kernel RPC，或负责托管 Runtime | [SDK 入门](docs/zh-CN/getting-started/sdk.md)            | 业务使用 KernelClient；装配入口另管原生服务 |
-
-**Electron、Tauri 2 桌面程序严禁通过 CLI 接入，必须使用 SDK。** 主进程直接构造 Kernel/Extra 服务，禁止外部 Node 代替启动；内部执行 worker 及 Adapter 的 Provider CLI 按原有隔离合同运行。
-
-CLI 默认包含全部 Adapter、Extra，以及系统管理、开启自启等服务能力；默认包含不表示安装后全部启用或已注册自启。SDK 宿主自行选择需要的依赖和装配范围。
-
-普通业务像调用工具一样使用 KernelClient.invoke(input, environment?)：传入输入并消费 RPC 结果，需要时发送取消或交互响应。App 可以使用注入的客户端或 attach 已有 endpoint；Extra 使用相同的 ctx.kernel。调用不要求构造服务、管理登记表或手动 drain。服务启动和关闭归 CLI/App 装配入口；无 Extra 也能执行。具体协议见 [Kernel](packages/octo-runtime-executor-kernel/README.md)。
-
-- 配置来源与对象契约：[Extra 指南](docs/zh-CN/guides/extras.md)。
-- CLI Extra 文件配置：[接入 Octo IM](docs/zh-CN/getting-started/cli.md)。
-- SDK Extra 装配：[SDK Extra 管理](SDK_CHANNEL_GATEWAY_GUIDE.md#装配顺序)。
-- 发行与打包：[DEPLOYMENTS.md](DEPLOYMENTS.md)。
-- 架构合同：[基础架构](.octospec/rules/architecture.md)、[Runtime 生命周期](.octospec/rules/runtime-lifecycle.md)。
-
-本文件仅作选型导航；原接入正文已拆入上述两份指南。
+- [SDK 入门](docs/zh-CN/getting-started/sdk.md)
+- [CLI 运维](docs/zh-CN/getting-started/cli.md)
+- [发行部署](DEPLOYMENTS.md)

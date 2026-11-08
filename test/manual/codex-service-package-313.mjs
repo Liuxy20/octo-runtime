@@ -36,7 +36,7 @@ import type { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const home = process.cwd();
 const makeAdapter = () => createCodexAdapter({ command: process.execPath, appServerArgs: [join(home, "provider.mjs"), join(home, "rpc.ndjson")] });
 const input: InvokeInput & { protocol_mode: "canonical" } = { inputs: [{ type: "text", text: "hello" }], workdir: home, protocol_mode: "canonical",
-  contexts: { schema: "octo.context-envelope/v3", items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }] } };
+  agentEnv: { schema: "octo.context-envelope/v3", items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }] } };
 const core = new AgentExecutor();
 core.register(makeAdapter());
 try {

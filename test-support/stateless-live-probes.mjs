@@ -20,8 +20,8 @@ export async function readStatelessComponentStatus(home, runCli) {
     "Runtime status must be a component status object"
   );
   assert.ok(
-    Array.isArray(status["channel-gateway"]?.runtime?.status?.bots),
-    "Runtime status must include channel-gateway bot status"
+    typeof status["executor-kernel"]?.runtime?.execution_ready === "boolean",
+    "Runtime status must include executor-kernel execution readiness"
   );
   return status;
 }

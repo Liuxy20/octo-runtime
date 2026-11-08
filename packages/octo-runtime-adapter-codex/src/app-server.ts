@@ -2394,7 +2394,7 @@ function turnCompletedEvents(turn: JsonRecord | undefined): CanonicalEvent[] {
   return [{ protocolVersion: 2, type: "run.completed", payload: {} }];
 }
 
-/** 仅转换 Provider 的结构化故障事实；是否自动重跑由 Extra 决定。 */
+/** 仅转换 Provider 的结构化故障事实；是否自动重跑由业务消费者决定。 */
 function codexFailureDetails(error: JsonRecord | undefined): JsonRecord {
   const info = error?.codexErrorInfo;
   if (info === "rateLimitExceeded") return { httpStatus: 429 };

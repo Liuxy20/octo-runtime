@@ -28,12 +28,6 @@ export const STARTUP_CATALOG: Readonly<Record<string, StartupCatalogEntry>> = Ob
     false,
     "logging.directory"
   ),
-  LOG_STATUS_OUTPUT_INVALID: entry(
-    "The logging status output callback is invalid.",
-    "Provide a function in logging.statusOutput or omit that optional callback, then retry construction.",
-    false,
-    "logging.statusOutput"
-  ),
   SERVICE_INITIALIZATION_FAILED: entry("Component initialization failed.", inspectAction),
   KERNEL_START_CLEANUP_INCOMPLETE: entry("Kernel startup rollback is incomplete.", endpointAction),
   KERNEL_CLEANUP_INCOMPLETE: entry("Kernel resources have not all been released.", endpointAction),
@@ -92,12 +86,6 @@ export const STARTUP_CATALOG: Readonly<Record<string, StartupCatalogEntry>> = Ob
     "A required file is a directory.",
     "Correct the selected file path to the intended regular file, then retry."
   ),
-  IM_CONTEXT_LOADING_CONFIG_INVALID: entry(
-    "The Extra context-loading configuration is invalid.",
-    "Set context_loading.timeout_ms to an integer from 1 to 30000 and max_in_flight to an integer from 1 to 32; remove unsupported keys, then retry Extra initialization.",
-    false,
-    "context_loading"
-  ),
   EACCES: entry(
     "The startup operation was denied access.",
     "Check the host account's permissions for the reported resource and operation, then retry."
@@ -141,55 +129,9 @@ export const STARTUP_CATALOG: Readonly<Record<string, StartupCatalogEntry>> = Ob
     "A selected module or one of its dependencies was not found.",
     "Check the selected module and its installed dependency graph in the host; correct the declaration or install the required package, then retry."
   ),
-  EXTRA_MODULE_REQUIRED: entry(
-    "The Extra module selection is missing.",
-    "Supply the module field in the host's Extra declaration before loading it.",
-    false,
-    "module"
-  ),
-  EXTRA_CONFIG_OBJECT_REQUIRED: entry(
-    "The Extra configuration must be an object.",
-    "Provide a JSON object in the Extra config field, then retry initialization.",
-    false,
-    "config"
-  ),
-  EXTRA_CONFIG_JSON_REQUIRED: entry(
-    "The Extra configuration contains a non-JSON value.",
-    "Pass only finite JSON values in config; supply functions separately through dependencies.",
-    false,
-    "config"
-  ),
-  EXTRA_CONFIG_PERMISSIONS_INVALID: entry(
-    "The Extra configuration file failed its file or access checks.",
-    "Inspect the reported configuration file's type, identity and permissions under the host account; use a protected regular file, then retry."
-  ),
   MANIFEST_INVALID: entry(
     "The CLI module manifest is invalid.",
-    "Check the selected manifest.json: version must be 1 and adapters/extras must be valid arrays without duplicate keys."
-  ),
-  EXTRA_NOT_REGISTERED: entry(
-    "The Extra has no saved CLI declaration.",
-    "Save this component's declaration with its configure or extraset command, then start it."
-  ),
-  EXTRA_MODULE_LOAD_FAILED: entry(
-    "The selected Extra module could not be loaded.",
-    "Check the selected module, package installation and ESM exports; correct the declaration or reinstall the dependency, then retry."
-  ),
-  EXTRA_INITIALIZER_REQUIRED: entry(
-    "The Extra did not return an initializer.",
-    "Provide an Extra factory that synchronously returns its initialization function."
-  ),
-  EXTRA_NAME_MISMATCH: entry(
-    "The Extra module name differs from its declaration.",
-    "Make the selected module's exported name match its catalog entry."
-  ),
-  EXTRA_ALREADY_LOADED: entry(
-    "This Extra already has an active owner.",
-    "Close the existing Extra through its host before constructing another instance."
-  ),
-  EXTRA_DISPOSE_FAILED: entry(
-    "The previous Extra still has unconfirmed resources.",
-    "Inspect the previous cleanup result and pending resources. Complete the owning host's cleanup before retrying."
+    "Check the selected manifest.json: version must be 1 and adapters must be valid arrays without duplicate keys."
   ),
   LOCAL_STATE_INVALID: entry(
     "The local state could not be read.",
@@ -201,7 +143,7 @@ export const STARTUP_CATALOG: Readonly<Record<string, StartupCatalogEntry>> = Ob
   ),
   COMPONENT_UNAVAILABLE: entry(
     "The component did not become ready.",
-    "Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness or Extra business connectivity.",
+    "Inspect component status and controlled lifecycle logs. Process liveness alone does not establish Kernel execution readiness.",
     true
   ),
   SERVICE_PROCESS_EXITED: entry(

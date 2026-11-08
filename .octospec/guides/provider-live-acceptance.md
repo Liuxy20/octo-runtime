@@ -17,7 +17,7 @@ tags: [adapter, testing, integration]
 
 # 现有 CodeBuddy 选模专项
 
-[脚本](../../scripts/verify-codebuddy-model-im-live.mjs)不由默认 test 或 CI 调用。
+[脚本](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-codebuddy-model-im-live.mjs)不由默认 test 或 CI 调用。
 由处理 CodeBuddy 变更的作者在已认证 CodeBuddy CLI、octo-cli、受保护 QA 账号及两 Bot 已加入的测试群环境中显式执行。
 脚本会产生真实模型请求及 QA 群消息，使用固定测试 Bot、模型和原生日志格式；本次适用版本、7 个场景、原生请求 ID 和 IM 回读见[217 验收](../tasks/217-codebuddy-model-selection/validation.md)。
 
@@ -33,7 +33,7 @@ node scripts/verify-codebuddy-model-im-live.mjs
 ```
 
 其他 adapter 沿用各自现有脚本或原生 opt-in 测试，按同一执行责任和证据要求单独报告；不借用 CodeBuddy 或其他 Provider 的通过结果。
-例如 [OpenCode IM](../../scripts/verify-opencode-im-live.mjs)、[DSH Kernel](../../scripts/verify-dsh-live.mjs)和 [OpenClaw Gateway](../../scripts/verify-openclaw-compatibility-live.mjs)是不同边界的专项，不等同于所有模型和平台的完整验收。
+例如 [OpenCode IM](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-opencode-im-live.mjs)、[DSH Kernel](../../scripts/verify-dsh-live.mjs)和 [OpenClaw Gateway](../../scripts/verify-openclaw-compatibility-live.mjs)是不同边界的专项，不等同于所有模型和平台的完整验收。
 本轮没有重新验收这些 Provider，也不改变其运行方式。
 
 # 证据要求

@@ -16,8 +16,8 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 当前依据
 
-- [入站准入](../../../packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 接受 type=1 文本与 type=2 独立图片；[Channel](../../../packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 仅在通过准入后绑定图片下载回调。
-- [图片下载](../../../packages/octo-runtime-extra-channel-gateway/src/transport/image-input.ts) 校验地址、实际格式、流式大小与取消；[IM 执行入口](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 在调用前生成 modelInputParts，并在非 Codex 情况下于下载前拒绝。
+- [入站准入](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/normalize.ts) 接受 type=1 文本与 type=2 独立图片；[Channel](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/channel.ts) 仅在通过准入后绑定图片下载回调。
+- [图片下载](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/image-input.ts) 校验地址、实际格式、流式大小与取消；[IM 执行入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 在调用前生成 modelInputParts，并在非 Codex 情况下于下载前拒绝。
 - [InvokeInput 合同](../../rules/invoke-input.md) 已有 text/image part，支持 PNG、JPEG、WebP；每组最多 4 张，单图 2 MiB，总计 8 MiB。沿用现有合同，图片字节不得转成说明文本或 URL 后声称模型已看到图片。
 - [Codex app-server](../../../packages/octo-runtime-adapter-codex/src/app-server.ts) 已有 image part 到 data URL 的转换，本次直接复用。本期不调查或改造 OpenClaw 图片附件路径。文件头、尺寸与完整尾部检查不是完整图片解码器，Provider 仍可能报告更深层的损坏错误。
 

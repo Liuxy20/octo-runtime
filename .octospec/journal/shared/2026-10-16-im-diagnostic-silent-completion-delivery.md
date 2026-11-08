@@ -33,7 +33,7 @@ timestamp: 2026-10-16T00:00:00Z
 | Work App `pnpm build` | Electron main/preload/renderer 与 tsc 成功 |
 | `git diff --check` | 通过 |
 
-关键回归位于 [诊断投影](../../../test/im-diagnostic-completion.test.js)、[Host/RPC 到 IM](../../../test/im-task-channel.test.js)及 [app-server 子进程](../../../test/codex-app-server.test.js)。覆盖首条诊断、2048 字节与脱敏、正常无 notice、空白/不可见字符/Markdown 空结构、最终快照覆盖、正文/代码/图片恢复、重试后空结束、工具后空结束、失败/取消优先、跨尝试隔离及无按钮重放。
+关键回归位于 [诊断投影](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-diagnostic-completion.test.js)、[Host/RPC 到 IM](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/im-task-channel.test.js)及 [app-server 子进程](../../../test/codex-app-server.test.js)。覆盖首条诊断、2048 字节与脱敏、正常无 notice、空白/不可见字符/Markdown 空结构、最终快照覆盖、正文/代码/图片恢复、重试后空结束、工具后空结束、失败/取消优先、跨尝试隔离及无按钮重放。
 
 过程中曾把 lint 与会清空 dist 的完整构建并行，触发类型解析级联报错；构建结束后单独重跑 lint 通过。一个新增坏帧测试起初只写无效 stdout 而不结束进程，因此按测试 AbortSignal 得到 cancelled；已改为“坏帧后 EOF”，验证缺失成功终态不能算成功，不宣称 Adapter 会将所有不可解析 stdout 立即转为失败。
 
@@ -55,13 +55,13 @@ Provider 是受控 app-server 子进程，Host/RPC、IM WS、卡片发送/编辑
 
 同步回来的消息为服务端展开后的 Adaptive Card，而非原始 state/data；验收检查展开后的“结果待核查”文本和不存在 `reasoning_retry` 动作，并与本轮真实 terminal/assessment 核对。最初两次尝试因测试替身漏答 config/read 超时，第三次又因脚本误将展开卡片当作原始 state/data 断言失败；修正测试脚本后两轮完整通过，没有修改生产 API 合同来迁就测试。
 
-复验入口：[verify-im-diagnostic-live.mjs](../../../scripts/verify-im-diagnostic-live.mjs)。显式提供 `OCTO_CHANNEL_QA_ACCOUNTS` 和 `OCTO_CHANNEL_QA_GROUP`；不在命令行或日志中输出凭据。
+复验入口：[verify-im-diagnostic-live.mjs](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-im-diagnostic-live.mjs)。显式提供 `OCTO_CHANNEL_QA_ACCOUNTS` 和 `OCTO_CHANNEL_QA_GROUP`；不在命令行或日志中输出凭据。
 
 ## 真实 Provider 与客户端
 
 - 真实 Codex 正常执行返回 `DIAGNOSTIC_NORMAL_OK`，terminal 为 run.completed，notice 为 0，工具调用为 0。
 - 桌面当前连接正式环境，未切换其账号或服务器。通过 CDP，将 im-test 实际返回的待核查卡片交给桌面原有 `ImKitProvider` / `AdaptiveCardMessage` 渲染；验证真实卡片 DOM、可见警告、无重试按钮、0 Runtime exception。测试挂载点在 finally 卸载，保留用户页面和配置。不是完整登录 im-test 的会话列表端到端验收。
-- 桌面验证使用第一轮已成功的 silent 卡片 `2110829129254211584`；截图在 `/tmp/octo-diagnostic-renderer.png`，本次人工查看确认文字清晰且不重叠。复验入口：[verify-im-diagnostic-renderer.mjs](../../../scripts/verify-im-diagnostic-renderer.mjs)，另需 `OCTO_DIAGNOSTIC_CARD_ID`；截图路径通过 `OCTO_DIAGNOSTIC_SCREENSHOT` 可选提供。
+- 桌面验证使用第一轮已成功的 silent 卡片 `2110829129254211584`；截图在 `/tmp/octo-diagnostic-renderer.png`，本次人工查看确认文字清晰且不重叠。复验入口：[verify-im-diagnostic-renderer.mjs](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/scripts/verify-im-diagnostic-renderer.mjs)，另需 `OCTO_DIAGNOSTIC_CARD_ID`；截图路径通过 `OCTO_DIAGNOSTIC_SCREENSHOT` 可选提供。
 - 本地内置 Runtime 确认 activeRuns=0、admittingRuns=0 后，停止 daemon PID 1254；通过宿主的 ensureRunning 重启为 PID 14279，Host ready，保留原 Home、身份和配置。重启后的真实 daemon → Host → Codex 执行返回 `DIAGNOSTIC_RESTART_OK`，terminal 为 run.completed，notice=0，工具=0。Worker 没有受影响的运行代码，构建后未重启或部署云端 Worker。
 
 ## 发布与剩余边界

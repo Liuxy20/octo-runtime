@@ -68,7 +68,7 @@ export function assertKernelStatus(value: unknown): asserts value is KernelStatu
           "service_processes"
         ].includes(key)
     ) ||
-    item.ipc_version !== 1 ||
+    item.ipc_version !== 2 ||
     typeof item.kernel_instance_id !== "string" ||
     !item.kernel_instance_id ||
     !positive(item.pid) ||

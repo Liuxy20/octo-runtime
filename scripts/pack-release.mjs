@@ -86,9 +86,6 @@ try {
         await cp(join(root, "apps/cli/dist/build-info.json"), join(target, "build-info.json"));
       }
       if (source.name === dshAdapterName) await bundleDshClient(path, target);
-      if (source.exports?.["./config-schema.json"]) {
-        await cp(join(path, "config-schema.json"), join(target, "config-schema.json"));
-      }
       const { scripts, devDependencies, packageManager, ...metadata } = source;
       const dependencies = Object.fromEntries(
         Object.keys(source.dependencies ?? {})
@@ -162,7 +159,6 @@ try {
         files: [
           "apps",
           "dist/public",
-          "packages/*/config-schema.json",
           "packages/octo-runtime-protocol/schema/*.json",
           "LICENSE",
           "NOTICE"

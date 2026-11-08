@@ -93,7 +93,7 @@ if (args[0] === "--check-endpoint") {
             text: `Run this exact read-only test command once: ${command}\nThen reply exactly with the marker it prints. Do not run other commands, modify other files, or send messages.`
           }
         ],
-        contexts: {
+        agentEnv: {
           schema: "octo.context-envelope/v3",
           items: [
             { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },

@@ -56,7 +56,6 @@ import {
   type MessageProvenance
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { InvocationExperience } from "./experience.js";
-import { withModelContexts } from "./model-input.js";
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { AdapterWatchdogTimeoutError, InvocationWatchdog } from "./watchdog.js";
 export type {
@@ -372,7 +371,7 @@ export class AgentExecutor {
     const received = Date.now();
     try {
       const parts = Array.isArray(input?.inputs) ? input.inputs : [];
-      const items = Array.isArray(input?.contexts?.items) ? input.contexts.items : [];
+      const items = Array.isArray(input?.agentEnv?.items) ? input.agentEnv.items : [];
       this.#log("info", "invoke.received", {
         run_id: input?.runId,
         invocation_id: input?.invocationId,
@@ -392,7 +391,7 @@ export class AgentExecutor {
         request.executionEnvOverrides = structuredClone(environment.executionEnvOverrides);
       const streamLimits = resolveStreamLimitPolicy(environment.streamLimits);
       const { signal, ...wire } = request;
-      const frozenRequest = withModelContexts({ ...structuredClone(wire), signal });
+      const frozenRequest = { ...structuredClone(wire), signal };
       return this.#admit(adapterType, frozenRequest, protocolMode, streamLimits, received);
     } catch (error) {
       this.#log("warn", "invoke.rejected", {

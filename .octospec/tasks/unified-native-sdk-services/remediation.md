@@ -60,9 +60,9 @@ signal 仍及时 abort，以停止准入、取消读取及触发 main 的清理�
 
 ## 实现位置与失败边界
 
-- [extra-service.ts](../../../packages/octo-runtime-host-sdk/src/extra-service.ts)：拆分依赖权限和 owner abort；协调共享截止、并发关闭与最终实际依赖等待。
-- [extras.ts](../../../packages/octo-runtime-host-sdk/src/extras.ts)：优先移除当前分支新增的阻塞式 `beforeDispose` hook，复用 main 的 close、逆序 disposer 和共享预算。初始化失败也须允许有界 disposer 收尾，服务最终等待实际依赖。
-- [shutdown.ts](../../../packages/octo-runtime-host-sdk/src/shutdown.ts)：复用现有私有预算；不新增公开生命周期或业务接口。
+- [extra-service.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-host-sdk/src/extra-service.ts)：拆分依赖权限和 owner abort；协调共享截止、并发关闭与最终实际依赖等待。
+- [extras.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-host-sdk/src/extras.ts)：优先移除当前分支新增的阻塞式 `beforeDispose` hook，复用 main 的 close、逆序 disposer 和共享预算。初始化失败也须允许有界 disposer 收尾，服务最终等待实际依赖。
+- [shutdown.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-host-sdk/src/shutdown.ts)：复用现有私有预算；不新增公开生命周期或业务接口。
 
 SDK 不能强停已经开始的宿主函数，也不能回滚其数据库写入。超时后拒绝新函数调用，并报告仍在执行的操作；宿主根据 incomplete 决定处置，不能据此无条件关闭数据库。
 
@@ -74,7 +74,7 @@ SDK 不能强停已经开始的宿主函数，也不能回滚其数据库写入�
 
 修改 `package.json.exports`，增加 `public/channel-wecom.ts`、`public/webui.ts`，同步 SDK 示例。禁止包外示例引用 private workspace 包、内部 node_modules、dist 私有路径或源码别名。三个 config-schema 出口继续保留。
 
-扩展[包外 fixture](../../../test-support/public-extra/host.mts) 和[发行验证](../../../scripts/verify-release.mjs)：隔离 consumer 只安装本次实际 tgz，使用 strict、skipLibCheck=false 编译并运行三个模块。WeCom 用空 Bot 配置；WebUI 用临时本地端口和隔离会话文件，读取首页及其引用的脚本/样式，最终关闭 HTTP 服务。不得只验证类型或 import 成功，不触发真实外部鉴权和模型调用。
+扩展[包外 fixture](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/host.mts) 和[发行验证](../../../scripts/verify-release.mjs)：隔离 consumer 只安装本次实际 tgz，使用 strict、skipLibCheck=false 编译并运行三个模块。WeCom 用空 Bot 配置；WebUI 用临时本地端口和隔离会话文件，读取首页及其引用的脚本/样式，最终关闭 HTTP 服务。不得只验证类型或 import 成功，不触发真实外部鉴权和模型调用。
 
 # 验收
 
@@ -113,9 +113,9 @@ C01-C12 通过、三个评审项均有整改证据后，重新判断正式 PR �
 | --- | --- |
 | C01 | engineering 旧 owner 代理条款已删除；architecture 新增第 9、10 条原则；生命周期、Extra 规则及 SDK 指南同步 |
 | C02-C04 | [真实 Kernel 回归](../../../test/host-sdk-lifecycle.test.js)：close 后新 invoke 拒绝；原调用收到终态后经过注入函数写入宿主 SQLite；Promise gate 挂起写入时 close 不完成，释放后成功 |
-| C05-C08 | [依赖关闭回归](../../../test/extra-service-shutdown.test.js)：disposer 保存、关闭后调用、初始化失败/取消、保存拒绝、挂起 initializer/disposer/依赖、共享截止、重复 close、失败替换、实际容量及迟到 settle |
+| C05-C08 | [依赖关闭回归](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test/extra-service-shutdown.test.js)：disposer 保存、关闭后调用、初始化失败/取消、保存拒绝、挂起 initializer/disposer/依赖、共享截止、重复 close、失败替换、实际容量及迟到 settle |
 | C09 | 真实 Kernel 回归验证兄弟 Extra、无关 Run 和共享 Kernel 继续运行；依赖回归在成功/失败关闭后继续查询宿主 SQLite，最终由宿主关闭 |
-| C10-C11 | [包外 fixture](../../../test-support/public-extra/builtin-extras.mts) 只从实际主包公开入口导入三个模块，strict/skipLibCheck=false 编译并初始化/查询/关闭；读取 WebUI 首页、全部引用 JS/CSS 及三个 Schema，关闭后 HTTP 连接失败；空 Bot 配置无外部连接 |
+| C10-C11 | [包外 fixture](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/test-support/public-extra/builtin-extras.mts) 只从实际主包公开入口导入三个模块，strict/skipLibCheck=false 编译并初始化/查询/关闭；读取 WebUI 首页、全部引用 JS/CSS 及三个 Schema，关闭后 HTTP 连接失败；空 Bot 配置无外部连接 |
 | C12 | 本轮类型、lint、命名、格式、全量测试、实际 tgz 和 OctoSpec 检查结果见[实施记录](implementation.md#评审整改验证) |
 
 ExtraPlugins 已还原 main 实现，Core、KernelClient、调用登记、协议和三个内置 Extra 的执行源码未改动。未新增完成协议、手动登记要求或数据库所有权；函数 Promise 复用仍按每次调用独立计数，不能绕过 128 在途上限。

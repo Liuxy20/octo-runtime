@@ -18,9 +18,9 @@ timestamp: 2026-10-16T00:00:00Z
 
 ## 现状与问题
 
-[im-channel](../../../packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 保存 session.update 返回的 Provider binding，默认 [MemoryImSessionStore](../../../packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 受数量、字节和 TTL 限制。进程内续聊可以恢复 binding；重启、过期或淘汰后会分配新业务 session。Provider 原生历史是否仍在，不等于 Channel 仍有对应 binding。
+[im-channel](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/im-channel.ts) 保存 session.update 返回的 Provider binding，默认 [MemoryImSessionStore](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/application/session-store.ts) 受数量、字节和 TTL 限制。进程内续聊可以恢复 binding；重启、过期或淘汰后会分配新业务 session。Provider 原生历史是否仍在，不等于 Channel 仍有对应 binding。
 
-[build_im_contexts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) 已替换旧 history_limit 逐轮策略：仅由 Channel 的 initialSession 资格触发，构造 extra.im/history。[消息 API](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts) 使用 start_message_seq=触发序号-1、end_message_seq=0、pull_mode=0 和 limit=15；im-test 已验证该组合确实取得最接近触发消息的此前记录。
+[build_im_contexts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/contexts.ts) 已替换旧 history_limit 逐轮策略：仅由 Channel 的 initialSession 资格触发，构造 extra.im/history。[消息 API](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts) 使用 start_message_seq=触发序号-1、end_message_seq=0、pull_mode=0 和 limit=15；im-test 已验证该组合确实取得最接近触发消息的此前记录。
 
 ## 目标行为
 

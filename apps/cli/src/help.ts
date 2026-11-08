@@ -27,14 +27,6 @@ const cliBuildInfo = `build:${validBuildTime ? buildTime : "unknown"}`;
 export const cliVersionInfo = `${cliVersion}\n${cliCommitInfo}\n${cliBuildInfo}`;
 export const cliHelpHeader = `Octo Runtime CLI (${cliVersion})\n${cliCommitInfo}\n${cliBuildInfo}`;
 
-// 产品指定的首页顺序只影响展示；缺席的 Extra 不补进有效命令目录。
-export const preferredRootCommands = [
-  "executor-kernel",
-  "channel-gateway",
-  "channel-wecom",
-  "webui"
-];
-
 export const lifecycleCommands = new Map([
   ["install", "Register and enable this service (autostart on by default)"],
   ["uninstall", "Remove this service, preserving configuration and data"],
@@ -43,16 +35,12 @@ export const lifecycleCommands = new Map([
   ["restart", "Restart this service and wait for readiness"],
   ["run", "Run this service in the foreground"],
   ["status", "Show service and runtime status"],
-  ["logs", "Read service status logs (no conversation content)"],
-  ["extraset", "Replace this service configuration from stdin JSON"],
-  ["extraget", "Read this service configuration, including credentials"]
+  ["logs", "Read service status logs (no conversation content)"]
 ]);
 export const rootCommands = new Map([
   ["adapter", "List and probe execution adapters"],
   ["doctor", "Diagnose the local runtime"],
   ["executor-kernel", "Manage native Agent execution and local RPC"],
-  ["extraget", "Read a complete service configuration (advanced)"],
-  ["extraset", "Replace a complete service configuration from JSON (advanced)"],
   ["help", "Help about any command"],
   ["playboard", "Run an Agent request from stdin JSON"],
   ["status", "Show runtime and service status"],

@@ -7,7 +7,6 @@ import {
   assertFrozenContextPlan,
   resolveContextConfiguration
 } from "../packages/octo-runtime-protocol/dist/index.js";
-import { renderModelContexts } from "../packages/octo-runtime-executor-core/dist/model-input.js";
 import {
   invocationMcpServers,
   expandMcpValue,
@@ -66,7 +65,7 @@ test("MCP dynamic keys freeze without entering model input; altered plan is reje
     "provisioned"
   );
   assertFrozenContextPlan(effectiveContext, resolvedExecutionPlan);
-  assert.equal(renderModelContexts(effectiveContext), "");
+  // 执行设置只解析为环境；模型材料的渲染回归已迁移到 Gateway。
   assert.deepEqual(resolvedExecutionPlan.mcp.mcpServers, servers);
   assert.throws(
     () =>

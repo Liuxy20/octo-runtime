@@ -64,8 +64,8 @@ R05/R06 的前提不依赖并发压测或恶意远端。安装缺失、可执行
 
 ## 实施前实际调用与核实证据
 
-- [conversations.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts) 的 getGroupInfo 未编码；相邻 getGroupMembers 已使用 encodeURIComponent。
-- [files.ts](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/files.ts) 包含 getUploadPresign 与 uploadFileToPresignedUrl；[API 汇总](../../../packages/octo-runtime-extra-channel-gateway/src/transport/api/index.ts)和[包入口](../../../packages/octo-runtime-extra-channel-gateway/src/index.ts)导出这些函数。
+- [conversations.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/conversations.ts) 的 getGroupInfo 未编码；相邻 getGroupMembers 已使用 encodeURIComponent。
+- [files.ts](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/files.ts) 包含 getUploadPresign 与 uploadFileToPresignedUrl；[API 汇总](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/transport/api/index.ts)和[包入口](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/index.ts)导出这些函数。
 - 在本仓 apps、packages、public、test 中检索这三个符号，结果仅为定义、说明和日志，没有业务调用。已查 Work App、SDK 注册 demo 与 Worker 的源码；匹配仅为其中 Runtime 源码副本，未发现宿主调用。不能据此保证未知外部消费者不存在。
 - files.ts 仍有正常使用：image-input.ts 使用 parseImageDimensions。若后续清理上传 helper，不得整文件删除或破坏首轮原生图片处理。
 - Node v24.19.0 下替换 fetch 为内存捕获函数，调用当前构建产物：groupNo 为 `a/../b?view=other#fragment` 时，Request URL 归一化为 `/v1/bot/groups/b?view=other#fragment`；带 fixture Authorization。fragment 不是发给服务端的内容，但改变了群 ID 的解析语义。

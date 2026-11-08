@@ -8,18 +8,19 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## 公开包入口
 
-| 导入子路径                                                                    | 用途                                                                           |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `/host`                                                                       | 创建 Kernel 和 Extra 服务，管理初始化和关闭，生成组件 endpoint                 |
-| `/executor-kernel`                                                            | `attachKernel`、KernelClient 类型、KernelError、Kernel 服务工厂 |
-| `/executor-core`                                                              | 在调用进程中直接使用 AgentExecutor                                             |
-| `/protocol`                                                                   | InvokeInput、输出/Context 类型与公开校验器                                     |
-| `/protocol/schema.json`                                                       | 共享协议 Schema                                                                |
-| `/executor-kernel/ipc-schema.json`                                            | IPC v1 Schema                                                                  |
-| `/executor-kernel/ipc-fixtures.json`                                          | IPC 合法与非法消息的测试样本                                                   |
-| `/extra`、`/extras/channel-gateway`、`/extras/channel-wecom`、`/extras/webui` | 通用插件 API 和内置业务模块                                                    |
+| 导入子路径                           | 用途                                                            |
+| ------------------------------------ | --------------------------------------------------------------- |
+| `/host`                              | 创建 Kernel 服务，管理初始化和关闭，生成组件 endpoint           |
+| `/executor-kernel`                   | `attachKernel`、KernelClient 类型、KernelError、Kernel 服务工厂 |
+| `/executor-core`                     | 在调用进程中直接使用 AgentExecutor                              |
+| `/protocol`                          | InvokeInput、输出/Context 类型与公开校验器                      |
+| `/protocol/schema.json`              | 共享协议 Schema                                                 |
+| `/executor-kernel/ipc-schema.json`   | IPC v2 Schema                                                   |
+| `/executor-kernel/ipc-fixtures.json` | IPC 合法与非法消息的测试样本                                    |
 
 上述路径都位于 `@mininglamp-oss/octo-runtime` 下。例如，导入客户端使用 `@mininglamp-oss/octo-runtime/executor-kernel`。仓库内部的 workspace 包是私有包，应用使用上表中的公开路径。
+
+仅消费已有 Kernel 的应用可只安装 `@mininglamp-oss/octo-runtime-client`，从包根导入 `attachKernel`，无需完整 Runtime 包或 Runtime checkout。
 
 ## 创建服务
 
@@ -33,14 +34,14 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## KernelClient 方法
 
-| 方法                                               | 用途与返回值                                                                                 |
-| -------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `invoke(input, environment?)`                      | 返回异步输出流，读取时提交请求，并自动处理执行标识和有限重连。普通调用使用此方法。           |
-| `cancelInvocation(invocationId, reason?)`          | 取消同一客户端通过 invoke 发起的调用，返回 `{accepted}`。                                    |
-| `respondInteraction(invocationId, response)`       | 回复该调用的 canonical 交互请求。                                                            |
-| `respondNativeInteraction(invocationId, response)` | 回复该调用的 Provider 原生交互请求。                                                         |
-| `status()` / `list()`                              | 分别查询 Kernel 状态，或已注册 Adapter 元数据及 Provider 探测结果。探测不证明已登录或具有模型访问权限。 |
-| `close()`                                          | 关闭客户端连接，不取消已提交的执行，也不关闭 Kernel 服务。                                   |
+| 方法                                                   | 用途与返回值                                                                                            |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `invoke(inputs, sessionId, providerSession, agentEnv)` | 返回异步输出流，读取时提交请求，并自动处理执行标识和有限重连。普通调用使用此方法。                      |
+| `interrupt(invocationId, reason?)`                     | 取消同一客户端通过 invoke 发起的调用，返回 `{accepted}`。                                               |
+| `respondInteraction(invocationId, response)`           | 回复该调用的 canonical 交互请求。                                                                       |
+| `respondNativeInteraction(invocationId, response)`     | 回复该调用的 Provider 原生交互请求。                                                                    |
+| `status()` / `list()`                                  | 分别查询 Kernel 状态，或已注册 Adapter 元数据及 Provider 探测结果。探测不证明已登录或具有模型访问权限。 |
+| `close()`                                              | 关闭客户端连接，不取消已提交的执行，也不关闭 Kernel 服务。                                              |
 
 只有需要自行管理提交和订阅时，才使用下面的底层方法：
 
@@ -54,11 +55,11 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## 模型目录边界
 
-模型目录查询和业务数据传递由宿主直接完成，或由 Extra 调用宿主注入的 dependency 完成；二者均不经过 Kernel，不需要为此增加 IPC 方法。
+模型目录查询和业务数据传递由宿主直接完成，或由应用调用宿主注入的 dependency 完成；二者均不经过 Kernel，不需要为此增加 IPC 方法。
 
 `adapter.list` / `KernelClient.list()` 返回已注册 Adapter 的元数据及实际探测信息，不返回模型目录，也不证明某个模型对当前账号可用。公共 IPC 及 Go/Python 客户端不承担统一模型或 effort 目录的发现、补齐和维护；这不是待补齐的执行前置条件。
 
-宿主和 Extra 通过公共 `KernelClient` 使用同一个列表合同：已注册 Adapter 元数据及 Provider 探测结果，包含 `available`、`unavailableReason`、`providerPath` 和 `providerVersion`。列表仅覆盖该 Kernel 已装配的 Adapter；探测结果不枚举模型，也不证明已登录或具有账号权限。
+宿主和应用通过公共 `KernelClient` 使用同一个列表合同：已注册 Adapter 元数据及 Provider 探测结果，包含 `available`、`unavailableReason`、`providerPath` 和 `providerVersion`。列表仅覆盖该 Kernel 已装配的 Adapter；探测结果不枚举模型，也不证明已登录或具有账号权限。
 
 模型选项由接入宿主依据其 Provider、实际 endpoint 和账号取得或配置。官方服务、第三方代理站与自定义 endpoint 即使使用相同 Adapter，也可能具有不同模型或没有目录接口。宿主自行处理目录不可用和查询失败，不应伪造成功空列表，也不应要求消费者通过 Runtime 扫描私有凭据或启动探测会话来补齐列表。
 
@@ -76,22 +77,22 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 ## IPC 消息格式
 
-IPC 协议版本为 1。它与 Run schema 版本 7、Context 版本 `octo.context-envelope/v3`、内部 Adapter 传输版本 2 分别独立编号。
+IPC 协议版本为 2。它与 Run schema 版本 7、Context 版本 `octo.context-envelope/v3`、内部 Adapter 传输版本 2 分别独立编号。
 
 macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接只发送一个 UTF-8 编码的 JSON-RPC 2.0 请求，以换行符 LF 结束。请求 `id` 必须是非空字符串；数字 ID、批量请求、Schema 未定义的顶层或 params 字段都会被拒绝。
 
 普通请求收到响应后结束连接。订阅请求收到响应后，在同一连接继续接收 `agent_run.event` 通知。读 socket 时，一条 JSON 可能分多次收到；应限制缓存大小，收到完整 LF 分隔行后再解析。
 
-| Wire 方法                  | Params                                                 | 成功结果                                                                |
-| -------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `status`                   | `{}`                                                   | KernelStatus，包含 `kernel_instance_id`、`execution_ready`、宿主 `pid` |
+| Wire 方法                  | Params                                                 | 成功结果                                                                                              |
+| -------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `status`                   | `{}`                                                   | KernelStatus，包含 `kernel_instance_id`、`execution_ready`、宿主 `pid`                                |
 | `adapter.list`             | `{}`                                                   | 已注册 Adapter 元数据数组，包含 `available`、`unavailableReason`、`providerPath` 和 `providerVersion` |
-| `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`，receipt 包含执行标识                   |
-| `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                              |
-| `agent_run.subscribe`      | `{ref, after_seq}`                                     | 快照 ACK，随后发送有序事件通知                                          |
-| `agent_run.cancel`         | `{ref, reason?}`                                       | `{accepted}`                                                            |
-| `agent_run.respond`        | `{ref, response}`                                      | 是否接受交互回复                                                        |
-| `agent_run.native.respond` | `{ref, response}`                                      | 是否接受原生交互回复                                                    |
+| `agent_run.invoke`         | `{input, executionEnvOverrides?, kernel_instance_id?}` | `{kernel_instance_id, receipt}`，receipt 包含执行标识                                                 |
+| `agent_run.get`            | `{key, kernel_instance_id?}`                           | `{ref, oldest_seq, latest_seq, terminal?}`                                                            |
+| `agent_run.subscribe`      | `{ref, after_seq}`                                     | 快照 ACK，随后发送有序事件通知                                                                        |
+| `agent_run.cancel`         | `{ref, reason?}`                                       | `{accepted}`                                                                                          |
+| `agent_run.respond`        | `{ref, response}`                                      | 是否接受交互回复                                                                                      |
+| `agent_run.native.respond` | `{ref, response}`                                      | 是否接受原生交互回复                                                                                  |
 
 查询和控制使用两种标识对象：
 
@@ -123,7 +124,7 @@ macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
       "inputs": [{ "type": "text", "text": "Say hello." }],
-      "contexts": { "schema": "octo.context-envelope/v3", "items": [] }
+      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
     }
   }
 }

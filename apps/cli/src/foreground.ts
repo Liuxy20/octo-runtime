@@ -1,9 +1,8 @@
-import type { ExtraService } from "@mininglamp-oss/octo-runtime-host-sdk";
 import type { KernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 /** CLI 持有前台服务；所有终止路径只清理、诊断及完成一次，不退出调用进程。 */
 export function runForegroundService(
-  handle: ExtraService | KernelService,
+  handle: KernelService,
   ready: () => void,
   failed: (error: unknown) => Promise<void>
 ): Promise<number> {
@@ -17,7 +16,7 @@ export function runForegroundService(
     const finish = async (
       reason: "signal" | "initialization" | "closed",
       error?: unknown,
-      closed?: Awaited<ExtraService["closed"]>
+      closed?: Awaited<KernelService["closed"]>
     ) => {
       if (terminal) return;
       terminal = true;

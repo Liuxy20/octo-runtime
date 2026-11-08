@@ -16,7 +16,7 @@ English and Chinese use matching paths under `docs/en` and `docs/zh-CN`. Languag
 | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Root [README](../../README.md), [INTEGRATION](../../INTEGRATION.md)                       | Project overview and integration selection; detailed APIs link here.                                  |
 | [ARCHITECTURE](../../ARCHITECTURE.md)                                                     | Design background, historical comparison, and future goals; current module APIs are covered here.     |
-| [SDK Gateway guide](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                                   | Retains Chinese IM configuration and storage implementations; common Extra lifecycle is covered here. |
+| [SDK Gateway guide](../../SDK_CHANNEL_GATEWAY_GUIDE.md)                                   | Migration entry pointing to the independent Gateway repository, which owns channel SDK/CLI documentation. |
 | [CLI operations](getting-started/cli.md), [deployments](../../DEPLOYMENTS.md), CLI README | Service operations and distribution steps.                                                            |
 | Package READMEs                                                                           | Package implementation and contribution details; application integration APIs are covered here.       |
 | `release/README.md`                                                                       | Removed; packaging uses the root README. Temporary CI download directories are unaffected.            |
@@ -42,9 +42,19 @@ For package validation, `scripts/verify-release.mjs` copies shared examples into
 | Service/invocation, interaction, cancellation, image integrity | Test Adapter over real local Kernel IPC, without calling a model.                                                                                           |
 | Public tgz consumer                                            | Existing pack/verify plus shared examples, offline installation                                                                                             |
 | MCP preparation/mapping                                        | Existing focused `test/context-mcp.test.js`; endpoints use `example.com`                                                                                    |
-| Mermaid                                                        | Bilingual architecture, supervision, inputs, IPC recovery, MCP, and Extra lifecycle diagrams; separately rendered for verification                          |
+| Mermaid                                                        | Current architecture, inputs, IPC recovery, and MCP diagrams; diagram changes require separate rendering                          |
 | Real Providers, MCP tool calls, IM, Electron, native Windows   | Not run for this delivery; require integration tests in those environments.                                                                                 |
 | Harness installation, Computer Use, account credits            | Source commands and official vendor documentation checked on 2026-10-21; no provider installation, login, billed call, or desktop tool execution performed. |
+
+## Issue 328 Documentation Follow-up
+
+On 2026-11-07, the uncommitted split worktree based on `bf9ff6b599b0e325362698acd3cebd9ac1363467` was checked on macOS with Node.js 26.13.0. Both language entries, Harness setup, session/Context guidance, IPC, output/control, Home, and diagnostics now describe the execution-only Runtime. Channel SDK/CLI and business policies link to the independent Gateway. Historical URLs remain migration entries.
+
+`pnpm run docs:check` passed: 36 paired pages, 73 Markdown files, 12 JSON examples, 8 unchanged Mermaid blocks, all 12 built-in Context examples, and four local execution tests. Existing-document links and anchors were also audited, including engineering rules. No live Provider or IM verification was run for this documentation update.
+
+## Historical Validation
+
+The dated results below describe their original revisions. References to Extra, Gateway loaders, workers, and removed packages are historical evidence, not the current integration contract. Current boundaries follow [Issue 328](../../.octospec/tasks/328-remove-extra/validation.md).
 
 On 2026-10-21, the build, documentation checks (16 paired pages, 14 JSON examples, all 12 built-in Context examples, and four tests), focused MCP/IPC tests (seven tests), and tgz packaging/installation verification passed on macOS. All 16 diagrams rendered successfully with Mermaid CLI 12.0.0 and local Chrome. After adding CLI and Harness setup, documentation checks passed again and the built CLI help was checked against the documented commands; the diagrams and runtime code were unchanged.
 

@@ -1,3 +1,4 @@
+import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { chmod, cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
@@ -267,7 +268,8 @@ test(
     client = attachKernel({ endpoint: componentEndpoint(home) });
     assert.equal((await client.list()).find((entry) => entry.type === "dsh").available, true);
     const events = await Array.fromAsync(
-      client.invoke(
+      invokeClient(
+        client,
         invocationInput(
           invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
           "canonical",

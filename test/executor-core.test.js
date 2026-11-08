@@ -14,12 +14,11 @@ import { deferred } from "./runtime-fixture.js";
 const collect = async (source) => Array.fromAsync(source);
 const input = (id = "one", mode = "native", text = "answer") => ({
   inputs: [{ type: "text", text }],
-  contexts: {
+  agentEnv: {
     schema: "octo.context-envelope/v3",
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type: "executor-fixture" } },
-      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
-      { namespace: "extra.executor", name: "background", payload: { text: "current context" } }
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
     ]
   },
   protocol_mode: mode,
@@ -394,11 +393,11 @@ test("unconsumed iterators reserve no capacity and snapshot caller input", async
   const value = input();
   const source = core.invokeFrames(value);
   value.inputs[0].text = "mutated";
-  value.contexts.items.length = 0;
+  value.agentEnv.items.length = 0;
   const frames = await collect(source);
   const snapshot = frames.find((frame) => frame.kind === "native").payload;
   assert.equal(snapshot.prompt, "answer");
-  assert.match(snapshot.modelInput, /current context/);
+  assert.equal(snapshot.modelInput, "answer");
   assert.doesNotMatch(snapshot.modelInput, /mutated/);
 });
 

@@ -36,14 +36,18 @@ try {
             : "Reply exactly READY. Do not call tools or change files."
         }
       ],
-      contexts: {
-        schema: "octo.context-envelope/v3",
-        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+      agentEnv: {
+        ...{
+          schema: "octo.context-envelope/v3",
+          items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+        },
+        workdir: home,
+        approvalMode: "full_access",
+        runtimeLimits: { runTimeoutMs: 60000 }
       },
-      workdir: home,
-      approvalMode: "full_access",
+
       protocol_mode: "canonical",
-      runtimeLimits: { runTimeoutMs: 60000 },
+
       ...(providerSession ? { providerSession } : {})
     };
     const environment = { signal: AbortSignal.timeout(65000) };

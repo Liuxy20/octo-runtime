@@ -1,11 +1,11 @@
 ---
 name: octo-runtime
-description: Operate, build, diagnose, and troubleshoot independent Octo Runtime executor-kernel and channel-gateway components, Home selection, provider adapters, logs, and source deployments. Do not use it as a cloud business control plane.
+description: Operate, build, diagnose, and troubleshoot Octo Runtime executor-kernel, Home selection, provider adapters, logs, and source deployments. Do not use it as a cloud business control plane.
 ---
 
 # Octo Runtime
 
-Use octo-runtime for independent Kernel and Channel Gateway lifecycle, provider checks, and local diagnostics. Host SDK clients use public package APIs directly. Runtime does not manage cloud business tasks or Agent definitions.
+Use octo-runtime for Kernel lifecycle, provider checks, and local diagnostics. Host SDK clients use public package APIs directly. Runtime does not manage cloud business tasks or Agent definitions.
 
 ## Establish The Target
 
@@ -16,7 +16,7 @@ Before a state-changing command, determine and state:
 - the profile for adapter configuration or `doctor`, if it is not `default`;
 - which component is targeted and whether it runs in the foreground or through a native user service.
 
-One Home partitions component endpoints, service IDs, configuration and identity. ExecutorKernel supervises its worker; each Extra runs independently and owns its business connections. HostApp or CLI manages each component explicitly. An attached client owns connections only. Existing machine/profile identity formats remain unchanged; the Kernel does not require login or create a durable business outbox.
+One Runtime Home partitions Kernel endpoints, service IDs, configuration and identity. HostApp or CLI owns Kernel lifecycle; attached clients own connections only. Kernel executes with injected Adapters in its own process. Business Gateway is a separate package with its own Home and CLI.
 
 Run octo-runtime help before relying on version-specific options. Structured command errors contain an error.code and return nonzero; do not infer success from stdout alone.
 
@@ -33,13 +33,13 @@ octo-runtime adapter list
 octo-runtime adapter probe codex
 ```
 
-doctor reports native manager availability and component service/runtime checks. Global status reports executor-kernel and channel-gateway separately. Distinguish execution_ready, worker health, Extra initialization and business connectivity.
+doctor reports manager availability and Kernel readiness. Global status reports executor-kernel only. execution_ready does not prove Provider authentication or business connectivity.
 
 ### Prepare The Local Home
 
-CLI 不提供 login。CLI 使用显式 --home，否则所有平台统一用户 ~/.octo-runtime；OCTO_RUNTIME_HOME、LOCALAPPDATA、Application Support 和 XDG 不参与选择。根目录由 CLI 准备，SDK 服务必须显式传入已存在的绝对 home。executor-kernel run 使用本地配置和显式 Adapter 集合；channel-gateway run 需要已保存的完整插件声明。运行组件不要求重新初始化或删除已有身份。
+CLI 不提供 login。--home 显式选择目录，否则统一使用 ~/.octo-runtime；CLI 准备根，SDK 服务只接受宿主准备好的绝对 Home。executor-kernel run 使用本地配置和显式 Adapter 集合，不要求删除或重新初始化身份。
 
-登录、登记与共享属于可选 Extra，不是本地设备存在或执行的条件。不得以本地就绪推导云端注册或连接成功，也不得按历史重置说明删除现有身份。
+业务登录、渠道登记与共享归独立 Gateway/宿主。不得从本地就绪推导云端连接成功，也不得自动重置身份。
 
 ### Manage Independent Components
 
@@ -53,35 +53,29 @@ octo-runtime executor-kernel stop
 octo-runtime executor-kernel uninstall
 octo-runtime executor-kernel run
 
-octo-runtime channel-gateway install
-octo-runtime channel-gateway start
-octo-runtime channel-gateway restart
-octo-runtime channel-gateway stop
-octo-runtime channel-gateway uninstall
-octo-runtime channel-gateway run
 ```
 
 Each command acts on its named component only. First and repeated `install` enable autostart by default; only explicit `--autostart=false` disables it. A later plain `install` enables it again. `start` automatically installs a missing service with autostart enabled, reports installation progress on stderr, then starts it and waits for readiness. Existing services keep their settings. `restart` requires an installed service and returns exit code 3 when it is missing.
 
 An explicitly disabled service rejects both `start` and `restart` with `SERVICE_DISABLED`. Run `<component> install --autostart=true` before starting it again. For foreground use without registering a system service, use `<component> run`. `stop` preserves the autostart setting; `uninstall` preserves Home data. There is no `--force` option. Never delete identity or configuration as an automatic recovery step.
 
-Save an enabled declaration with `extraset <extra-name>` before starting that Extra. Use its own component name: `octo-runtime webui start` for WebUI and `octo-runtime channel-wecom start` for WeCom; use the same names for `run` and `restart`. These commands do not start Kernel or another Extra. SDK hosts can instead use `createExtraService` with parsed configuration and own its lifecycle without CLI service registration.
+Channel Gateway uses the separate @mininglamp-oss/octo-channel-gateway package and octo-channel-gateway CLI. Runtime has no Extra declarations or business plugin loader.
 
-Use run for foreground debugging. Gateway may start before Kernel and report kernel_available=false; it must never start or maintain Kernel. A component restart does not restart its siblings.
+Use run for foreground debugging. Gateway connects to an explicitly selected existing Kernel endpoint and owns its own lifecycle.
 
 ### Inspect Local Execution
 
-Use the public /executor-kernel client for Run lookup, subscription, cancellation and interaction. The CLI provides playboard for temporary local execution:
+Use the public octo-runtime-client for Run lookup, subscription, cancellation and interaction. The CLI provides playboard for temporary local execution:
 
 ```bash
 octo-runtime playboard < request.json
 ```
 
-CLI logs use <home>/logs/kernel-YYYYMMDDTHH.log and <home>/logs/extras/<extra_type>-YYYYMMDDTHH.log. They contain operational metadata, not the complete business transcript. See the operations guide for retention and configuration.
+CLI logs use <home>/logs/kernel-YYYYMMDDTHH.log. They contain operational metadata, not the business transcript.
 
 Explicit Kernel client cancel affects the identified live Run; closing an attached client or subscription does not cancel it. Preserve the original receipt, Kernel instance and stream identity for replay; never reinvoke automatically after an unknown ACK.
 
-The CLI has no agent-run/agent-session command groups. Business task scheduling, retry policy, session persistence and message delivery belong to their respective services or Extras.
+The CLI has no agent-run/agent-session command groups. Business task scheduling, retry policy, session persistence and message delivery belong to their respective applications.
 
 ## Build And Link From Source
 

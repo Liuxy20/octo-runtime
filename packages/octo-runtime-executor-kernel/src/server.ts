@@ -127,7 +127,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   let ready = false;
   // 每轮只读取一次宿主配置；复制后冻结自有快照，不冻结宿主持有的原对象。
   const configure = (input: InvokeInput) => {
-    const type = contextItem(input.contexts, "octo.execution", "adapter")?.payload.type;
+    const type = contextItem(input.agentEnv, "octo.execution", "adapter")?.payload.type;
     const config = probeOptions(
       (options.configurations?.(
         typeof input.runMetadata?.runtimeId === "string" ? input.runMetadata.runtimeId : undefined
@@ -158,7 +158,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   let listening = false;
   let releaseEndpoint: (() => Promise<void>) | undefined;
   const status = (): KernelStatus => ({
-    ipc_version: 1,
+    ipc_version: 2,
     kernel_instance_id: instance,
     pid: process.pid,
     execution_ready: !closing && ready,
@@ -241,11 +241,14 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
           const configuredInput = config
             ? {
                 ...input,
-                agentConfig: {
-                  ...input.agentConfig,
-                  providerOptions: {
-                    ...input.agentConfig?.providerOptions,
-                    ...config.providerOptions
+                agentEnv: {
+                  ...input.agentEnv,
+                  agentConfig: {
+                    ...input.agentEnv.agentConfig,
+                    providerOptions: {
+                      ...input.agentEnv.agentConfig?.providerOptions,
+                      ...config.providerOptions
+                    }
                   }
                 }
               }
