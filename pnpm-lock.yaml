@@ -254,7 +254,7 @@ importers:
         version: link:../octo-runtime-protocol
       semver:
         specifier: ^7.8.5
-        version: 7.8.5
+        version: 7.8.6
     devDependencies:
       '@types/semver':
         specifier: ^7.8.0
@@ -4673,6 +4673,11 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  semver@7.8.6:
+    resolution: {integrity: sha512-9lpSSU4Mly3mrtruwLs1eLK6+gzbzqeBFwRNjIjE+9LuDpWdYctrQlQ3ej1Ilgi7gknpsTRnPoLP8DpCHqHIJw==}
+    engines: {node: '>=10'}
+    hasBin: true
+
   send@1.2.1:
     resolution: {integrity: sha512-1gnZf7DFcoIcajTjTwjwuDjzuz4PPcY2StKPlsGAQ1+YH20IRVrBaXSWmdjowTJ6u8Rc01PoYOGHXfP1mYcZNQ==}
     engines: {node: '>= 18'}
@@ -6793,7 +6798,7 @@ snapshots:
     dependencies:
       '@deepseek-ai/cordis': 4.0.5(@deepseek-ai/cordis-plugin-include@1.0.10)(@deepseek-ai/cordis-plugin-loader@1.0.6)
       '@deepseek-ai/dsh-package-manifest': 0.2.1-rc.4(@deepseek-ai/cordis@4.0.5)
-      semver: 7.8.5
+      semver: 7.8.6
 
   '@deepseek-ai/dsh-plugin-market@0.2.1-rc.4(@deepseek-ai/cordis-plugin-group@1.0.5(@deepseek-ai/cordis-plugin-loader@1.0.6)(@deepseek-ai/cordis@4.0.5))(@deepseek-ai/cordis-plugin-include@1.0.10)(@deepseek-ai/cordis-plugin-loader@1.0.6)(@deepseek-ai/cordis@4.0.5)(@deepseek-ai/dsh-home-paths@0.2.1-rc.4(@deepseek-ai/cordis@4.0.5))(@deepseek-ai/dsh-launch-environment@0.2.1-rc.4(@deepseek-ai/cordis@4.0.5))(@deepseek-ai/dsh-plugin-manager@0.2.1-rc.4(3877614687fa931a455355080b322a22))(@deepseek-ai/dsh-settings@0.2.1-rc.4(0cb0dac60f28f72d8dec33474a1093fb))(@deepseek-ai/dsh-tools@0.2.1-rc.4(cc529effceda4a9130f684509f68fe87))(@deepseek-ai/dsh-typert-protocol@0.2.1-rc.4(@deepseek-ai/cordis@4.0.5))':
     dependencies:
@@ -6809,7 +6814,7 @@ snapshots:
       '@deepseek-ai/dsh-util-values': 0.2.1-rc.4(@deepseek-ai/cordis@4.0.5)
       '@deepseek-ai/schemastery': 3.18.5
       minisearch: 7.2.0
-      semver: 7.8.5
+      semver: 7.8.6
       zod: 4.6.6
     optionalDependencies:
       '@deepseek-ai/dsh-settings': 0.2.1-rc.4(0cb0dac60f28f72d8dec33474a1093fb)
@@ -10039,6 +10044,8 @@ snapshots:
 
   semver@7.8.5: {}
 
+  semver@7.8.6: {}
+
   send@1.2.1:
     dependencies:
       debug: 4.4.3
@@ -10070,7 +10077,7 @@ snapshots:
     dependencies:
       '@img/colour': 1.1.0
       detect-libc: 2.1.2
-      semver: 7.8.5
+      semver: 7.8.6
     optionalDependencies:
       '@img/sharp-darwin-arm64': 0.35.5
       '@img/sharp-darwin-x64': 0.35.5
