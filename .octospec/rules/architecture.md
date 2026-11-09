@@ -25,7 +25,7 @@ SDK 宿主原生 import Adapter 对象，调用 `createKernelService({home, endp
 
 ### KernelClient 与 AgentExecutor 的选型合同
 
-默认推荐 KernelClient，已有服务调用方仅安装 octo-runtime-client。直接 Core 是显式高级选择，宿主承担生命周期。完整 Runtime 与 client 同版本、自包含双包发行。
+默认推荐 KernelClient，已有服务调用方仅安装 octo-runtime-client。直接 Core 是显式高级选择，宿主承担生命周期。完整 Runtime 与 client 同版本、自包含双包发行。npm 版本按用户确定的 1.1.11 → 1.1.12 递增；IPC v2、执行信封及 SDK 接口版本不要求 npm 升至 2.x。源码保留 0.0.0，由发行 tag 注入版本；不为旧接口增加兼容层。
 
 ## 独立渠道边界
 

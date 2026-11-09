@@ -2,6 +2,8 @@
 
 [English](../en/maintenance.md) | [文档目录](README.md)
 
+Runtime 与独立 client 使用相同 npm 发行版本，下一计划版本沿 1.1.11 递增为 1.1.12；IPC v2 不代表 npm 2.x。源码 manifest 保持 0.0.0，由发行 tag 注入版本。保留新的 agentEnv/invoke/interrupt 接口，不新增旧接口兼容层。草稿 release 不表示 npm 已可安装。
+
 [启动诊断目录](guides/startup-diagnostics.md)从共享 catalog 生成。修改定义或恢复建议后，显式运行 `node test/manual/generate-startup-catalog.mjs`，构建后运行 `node --test test/manual/startup-diagnostics.test.js`。这些手动检查不加入默认测试或 CI。
 
 ## 范围与基线

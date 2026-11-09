@@ -1,0 +1,4 @@
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/collaboration.md
+scope: npm 版本合同与双语维护文档；用户要求英文 PR，优先于中文 PR 默认约定。

@@ -2,6 +2,8 @@
 
 [简体中文](../zh-CN/maintenance.md) | [Documentation](README.md)
 
+Runtime and the standalone client share the npm release version. The next planned release is 1.1.12, following 1.1.11; IPC v2 does not imply npm 2.x. Source manifests remain 0.0.0 and the release tag supplies the version. The new agentEnv/invoke/interrupt API remains in place without an old-interface compatibility layer. A draft release is not evidence of npm availability.
+
 The [startup diagnostic catalog](guides/startup-diagnostics.md) is generated from the shared catalog. After changing its definitions or recovery guidance, explicitly run `node test/manual/generate-startup-catalog.mjs` and `node --test test/manual/startup-diagnostics.test.js` after the build. These manual checks do not extend default tests or CI.
 
 ## Scope and Baseline
