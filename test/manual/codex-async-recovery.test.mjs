@@ -8,7 +8,11 @@ import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
 
 // 测试宿主直接注入原生 Adapter；重建 Kernel 时仍使用同一 fake Provider。
-const options = { adapters: [adapter] };
+const options = {
+  get adapters() {
+    return [adapter()];
+  }
+};
 const input = (extra = {}) =>
   invocationInput(
     invokeRequest({

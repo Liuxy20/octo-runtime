@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createScopedCodexAdapter as createCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import {
   classifyFailure,
   assertHostControl
@@ -86,9 +86,16 @@ for (const mode of ["canonical", "native"]) {
       { timeout: 5000 },
       async (t) => {
         const r = await running(t, mode, "full_access", { hold: true, highWaterMark: 1 });
-        for (let i = 0; i < count; i++) r.fixture.request(`id-${i}`);
-        await until(() => r.pending().length === count, "all admitted");
-        assert.equal(r.resolved().length, 0);
+        // 服务 writer 有独立的 128 条容量；分批制造背压，验证总审批数不占人工配额。
+        for (let start = 0; start < count; start += 64) {
+          const end = Math.min(count, start + 64);
+          r.fixture.hold();
+          for (let i = start; i < end; i++) r.fixture.request(`id-${i}`);
+          await until(() => r.pending().length === end, "batch admitted");
+          assert.equal(r.resolved().length, start);
+          r.fixture.release();
+          await until(() => r.resolved().length === end, "batch written");
+        }
         assert.ok(r.pending().every((e) => (e.control ?? e.payload).responseRequired === false));
         r.fixture.release();
         await until(() => r.resolved().length === count, "all written");
@@ -123,17 +130,21 @@ for (const mode of ["canonical", "native"]) {
       { timeout: 5000 },
       async (t) => {
         const r = await running(t, mode, approvalMode, { hold: true, highWaterMark: 1 });
-        for (let i = 0; i < 512; i++) r.fixture.request(`id-${i}`);
+        for (let i = 0; i < 257; i++) r.fixture.request(`id-${i}`);
         await until(() => r.pending().length === 256 && r.fixture.responses.length === 1);
         assert.equal(r.error, undefined);
         r.fixture.release();
+        for (let i = 257; i < 512; i++) {
+          r.fixture.request(`id-${i}`);
+          await until(() => r.fixture.responses.length === i - 255);
+        }
         await until(() => r.fixture.responses.length === 256);
         assert.ok(
           r.fixture.responses.every(
             (reply) => reply.error?.message === "APPROVAL_PENDING_LIMIT_EXCEEDED"
           )
         );
-        await Promise.all(r.pending().map((event) => r.respond(event)));
+        for (const event of r.pending()) await r.respond(event);
         await until(() => r.resolved().length === 256);
         assert.equal(r.fixture.responses.length, 512);
         assert.equal(new Set(r.fixture.responses.map((reply) => reply.id)).size, 512);
@@ -347,10 +358,11 @@ for (const approvalMode of ["ask", "full_access"]) {
     { timeout: 5000 },
     async (t) => {
       const r = await running(t, "canonical", approvalMode, { hold: true, highWaterMark: 1 });
-      for (let i = 0; i < 256; i++) r.fixture.request(`id-${i}`);
-      await until(() => r.pending().length === 256);
+      const count = approvalMode === "full_access" ? 64 : 256;
+      for (let i = 0; i < count; i++) r.fixture.request(`id-${i}`);
+      await until(() => r.pending().length === count);
       asyncQuestion(r.fixture, "async-question");
-      await until(() => r.pending().length === 257);
+      await until(() => r.pending().length === count + 1);
       const question = r.pending().find((event) => event.payload.delivery === "async");
       const response = r.adapter.respondInteraction(r.request.invocationId, {
         interactionId: question.payload.interactionId,

@@ -2,7 +2,7 @@ import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式手动运行：pnpm build && node --test test/manual/codex-async-live.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createOwnedCodexAdapter as createCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import { randomUUID } from "node:crypto";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";

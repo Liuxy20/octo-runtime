@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-驱动双向的 `codex app-server` 协议。每次 Core 注册拥有独立服务作用域；兼容调用复用一个常驻 stdio app-server，每个进程代次只初始化一次。每轮启动或续接自己的 thread/turn，应答反向请求，返回 canonical 事件或 native 帧。Codex 会话、审批和取消由 Adapter 负责。
+驱动双向的 `codex app-server` 协议。宿主显式创建 managed owner 或注入业务 CodexEngineProvider；兼容调用复用常驻 app-server，每代进程只初始化一次。Adapter 管理每轮 thread/turn、反向请求、canonical/native 输出、审批与定向取消。
 
 ## 什么时候用它
 
@@ -17,10 +17,11 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { codexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime/adapters/codex";
 
 const executor = new AgentExecutor();
-executor.register(codexAdapter);
+const owner = createManagedCodexEngine({ codexHome: "/absolute/host-codex-home" });
+executor.register(createCodexAdapter({ engine: owner.provider }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -38,9 +39,9 @@ const input = InvokeInput.check({
 | 项           | 值                                                                                                            |
 | ------------ | ------------------------------------------------------------------------------------------------------------- |
 | Adapter 类型 | `codex`                                                                                                       |
-| 导出         | `codexAdapter`、`createCodexAdapter`                                                                          |
+| 导出         | `createCodexAdapter`、`createManagedCodexEngine` |
 | 协议         | `codex.app-server`，模式 `native` 与 `canonical`                                                              |
-| 传输         | Core 注册作用域拥有的常驻 stdio JSON-RPC app-server                                                           |
+| 传输         | 宿主拥有常驻 app-server，Adapter 借用 channel |
 | 会话         | 显式 Provider 会话对应原生 thread；resume 被拒或 rollout 缺失时，可以用调用方给的恢复输入做一次新 thread 兜底 |
 | 交互         | 命令/文件审批、用户输入、MCP elicitation，都回到同一个活动请求上应答                                          |
 
@@ -54,6 +55,14 @@ const input = InvokeInput.check({
 
 空闲或活动期间 transport 失效都会主动恢复自有进程；每个恢复周期最多替换 5 次，总预算 90 秒，不重放原业务或控制请求。可执行文件不存在等启动错误直接失败，不反复重试。连续健康 60 秒后重置恢复预算。
 
+## 构造、Home 与所有权
+
+createCodexAdapter({engine}) 为 Codex 专用签名；engine.acquire 返回 {channel, configuration}。channel.close 幂等且只释放本轮，configuration 仅包含 MCP 服务视图。provider 管理共享 RPC ID、thread/turn 路由与配置拒绝，不向 Adapter 暴露 owner.close。注册同一 descriptor 到多个 Core 借用同一 provider；宿主也可以为各 Runtime 分别创建 owner。
+
+SDK 必须显式传绝对 codexHome，缺失/相对路径报 CODEX_HOME_REQUIRED，逐轮冲突报 CODEX_HOME_CONFLICT。目录准备、权限与数据保留归宿主，关闭/恢复不删除 Home。CLI 自己选择默认 ~/.codex。业务已有 Engine 可注入自己的 provider，关闭借用 Kernel 不关闭业务 owner。
+
+旧单例、默认导出和旧进程构造参数已删除，无兼容层。其他 Adapter 的构造方式与参数完全由实现者决定，不要求 Codex 类型或统一 options。正常关闭、初始化回滚见[SDK 示例](../../docs/examples/codex-service.mts)和[架构](../../docs/zh-CN/concepts/architecture.md)。
+
 ## 限制
 
 - `ask` 和 `assisted` 模式通过当前交互桥处理审批；`full_access` 自动处理支持的审批，但不回答用户问题或 MCP elicitation。
@@ -61,7 +70,7 @@ const input = InvokeInput.check({
 - 权威的 session update 只在 turn start 成功后上报；Adapter 从不重建应用历史。
 - turn 回执、一段文本、子进程退出，都不证明执行成功或清理完成。
 - native 模式下必须同时读 Runtime 控制帧和 Provider 负载。
-- 每个 scope 最多 8 种服务配置，每个服务最多 8 个不同活动 thread；同 thread 并发明确拒绝。启动/恢复等待最多 128 条、32 MiB；每代次保留最多 4096 个已用 thread 的归属历史。容量不足不驱逐健康服务。
+- 每个 managed owner 最多 8 种服务配置，每个服务最多 8 个不同活动 thread；同 thread 并发明确拒绝。启动/恢复等待最多 128 条、32 MiB；每代次保留最多 4096 个已用 thread 的归属历史。容量不足不驱逐健康服务。
 - 缺少 turnId 的 elicitation 只在首次活动订阅上可归属；复用 thread 时无法证明因果关系，明确拒绝。
 - 非空且完成的 `final_answer` 在无活动工作、无同步交互时，可于 15 秒 finalization fallback 后完成。取消、Provider error 和后续新工作会使资格失效。轮次清理独立记录，结果完成后仍可能清理失败。
 
@@ -75,7 +84,7 @@ const input = InvokeInput.check({
 
 默认 POSIX spawn 创建自有独立进程组。清理会 await 有界的 `SIGTERM` → `SIGKILL` 升级及进程组退出确认；app-server leader 已退出但工具仍在时也会清理该组。注入的 `spawnFn` child 不推定拥有进程组，清理目标是直接子进程。
 
-正常完成、Stop 和 business consumer 关闭只释放所属调用的订阅，不终止共享 app-server。Core owner 在 `shutdown()` 时关闭服务；direct 调用方可只读 `executor.processes()`，不会启动或 probe Provider。
+正常完成、Stop 和 business consumer 关闭只释放所属调用的订阅。Core.shutdown 只清理本地 scope/lease。宿主先 owner.beginShutdown，再关闭 Core/Kernel，最后 owner.close({deadline}) 并检查 complete。deadline 使用 performance.now() 绝对毫秒。owner.processes() 和 Kernel 的宿主 serviceProcesses 回调只读，不启动或 probe Provider。
 
 Windows 默认自有 spawn 启用既有系统命令的进程树清理；注入 child 仅清理直接子进程。Windows 进程树清理依赖仍可识别的 leader；父进程先退出、宿主崩溃及逃逸后代不能保证全部清空。须检查清理结果，不能把取消回执当作退出证明。
 

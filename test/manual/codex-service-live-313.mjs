@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { AgentExecutor } from "../../packages/octo-runtime-executor-core/dist/index.js";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createFixtureCodexHost } from "../../test-support/codex-owner.mjs";
 import { componentEndpoint } from "../../packages/octo-runtime-host-sdk/dist/index.js";
 import { createKernelService } from "../../packages/octo-runtime-executor-kernel/dist/index.js";
 const mode = process.argv[process.argv.indexOf("--mode") + 1];
@@ -13,19 +13,24 @@ if (!["direct", "ipc"].includes(mode))
   throw new Error("Explicit --mode direct|ipc required for live model requests");
 const home = await mkdtemp(join(tmpdir(), "octo-live-313-"));
 const core = mode === "direct" ? new AgentExecutor() : undefined;
-core?.register(createCodexAdapter());
+const { owner, adapter } = createFixtureCodexHost();
+core?.register(adapter);
 const kernel = core
   ? undefined
   : createKernelService({
       home,
       endpoint: componentEndpoint(home),
-      adapters: [createCodexAdapter()]
+      adapters: [adapter],
+      serviceProcesses: () => owner.processes(),
+      async finalizeHostResources(deadline) {
+        assert.equal((await owner.close({ deadline })).complete, true);
+      }
     });
 let processes;
 try {
   await kernel?.initialize();
   processes = async () =>
-    core ? core.processes() : (await kernel.client.status()).service_processes;
+    core ? owner.processes() : (await kernel.client.status()).service_processes;
   async function run(providerSession, killWhenStarted = false) {
     const input = {
       inputs: [
@@ -114,9 +119,15 @@ try {
     })
   );
 } finally {
-  const cleanup = core
-    ? (await core.shutdown()).cleanup === "complete"
-    : (await kernel.close()).complete;
+  owner.beginShutdown();
+  let cleanup = false;
+  try {
+    cleanup = core
+      ? (await core.shutdown()).cleanup === "complete"
+      : (await kernel.close()).complete;
+  } finally {
+    assert.equal((await owner.close({ deadline: performance.now() + 2500 })).complete, true);
+  }
   console.log(JSON.stringify({ mode, ownerCleanup: cleanup }));
   assert.equal(cleanup, true);
   await rm(home, { recursive: true, force: true });

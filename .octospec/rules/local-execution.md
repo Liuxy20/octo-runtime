@@ -66,7 +66,7 @@ Playboard 直接构造临时 Kernel，只有真实 close 完成才删除所属�
 
 Kernel 在宿主进程构造 AgentExecutor，注册传入实例；不启动执行 worker，不提供心跳、退避替换、generation 或 worker.recovery 状态。status 仅报告当前实例、宿主 PID 和 execution_ready；注册就绪不证明 Provider 安装或登录成功。
 
-RPC 保留接纳、观察分离、ACK 查回、原游标恢复和取消/交互。宿主退出后不能把结果未知改成成功，也不自动重新 invoke；宿主重建服务产生新的 instance。Kernel 不改变进程信号处理、不调用 process.exit、不改全局环境。Adapter 内部按 Provider 原生协议拥有子进程。
+RPC 保留接纳、观察分离、ACK 查回、原游标恢复和取消/交互。宿主退出后不能把结果未知改成成功，也不自动重新 invoke；宿主重建服务产生新的 instance。Kernel 不改变进程信号处理、不调用 process.exit、不改全局环境。逐轮 Adapter 继续管理其明确拥有的本轮子进程；Codex 等常驻 Engine 由宿主 owner 管理，Adapter 只借用调用通道。
 
 关闭停止接纳、取消 Core，并在共享 5 秒绝对期限内等待 Adapter 清理、Run 消费和日志。未完成/失败的 finally 返回 incomplete，保留所有权证据；同进程同步阻塞、OOM 或进程退出无法靠 RPC 隔离，截止时间要求事件循环仍可调度。宿主依赖仍由宿主关闭。
 
@@ -84,7 +84,7 @@ POSIX 只回收自己创建的独立进程组，leader 退出不表示后代消�
 
 Windows 使用 Node.js 创建进程，并通过系统已有的 `taskkill /PID … /T /F` 处理仍可识别的进程树。ChildProcess、status 和 manifest 保留真实目标身份。父进程先退出后可能失去后代归属；Runtime 被强杀或事件循环无法运行时，退出回调也可能不执行。这些场景不具备 Job Object 级回收保证。现有清理在 leader 已退出时仍可能返回成功，因此 cleanup.complete 不是异常退出后整棵树已清空的证明；对应缺口保留，不以文档修改宣称已经修复。
 
-Kernel 资源记录仅接受原生 owner 格式。旧 worker 格式或损坏记录返回 ORPHAN_RECORD_UNSUPPORTED 并保留原文件；不做身份探测、进程树终止、转换或自动删除。inspect 显示 unsupported，人工确认也不接受未知格式。旧 worker 监督、心跳及恢复实现全部删除，不提供兼容或升级支持。Provider 进程清理仍由 Adapter 负责。
+Kernel 资源记录仅接受原生 owner 格式。旧 worker 格式或损坏记录返回 ORPHAN_RECORD_UNSUPPORTED 并保留原文件；不做身份探测、进程树终止、转换或自动删除。inspect 显示 unsupported，人工确认也不接受未知格式。旧 worker 监督、心跳及恢复实现全部删除，不提供兼容或升级支持。Provider 进程清理归其明确 owner；常驻 Codex 的 owner 是宿主，不是借用它的 Adapter scope。
 
 JSON-lines Provider 的 stdout、stderr 及 readline 错误归属单次调用，走相同有界清理路径；迟到的管道 error 仍有监听。进程清理后释放所属 stdin/stdout/stderr，失败继续传播；释放句柄不是进程已退出的证明。Windows 原生启动失败保留 ENOENT 等原始 errno，不用全局异常抑制或重启共享 worker 消化本次管道错误。
 

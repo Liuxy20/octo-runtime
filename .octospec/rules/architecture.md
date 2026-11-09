@@ -23,6 +23,19 @@ Issue 328 取代 Extra 插件及双模式装配方案。Runtime 只保留协议�
 
 SDK 宿主原生 import Adapter 对象，调用 `createKernelService({home, endpoint, adapters})`。Kernel 不接收 manifest 或业务定义。消费执行能力使用公开 KernelClient.invoke；SDK Desktop App 不通过外部 CLI 启动服务。AgentExecutor 是唯一执行实现。
 
+### 常驻 Engine 所有权细化（Issue 339）
+
+2026-11-09 Issue 339 已按用户授权实施，不保留兼容层。createCodexAdapter({engine}) 只接收 CodexEngineProvider；宿主显式 createManagedCodexEngine({codexHome}) 或注入业务 provider。旧单例、默认导出和进程构造参数删除；实施与验收见 [Issue 339 简报](../tasks/339-engine-lifecycle/brief.md)。
+
+- Adapter 注册统一执行合同，不转移 Engine、共享连接或 Home 的所有权。协议适配不承载默认进程托管决策；Core scope 可以拥有调用路由、订阅和 lease，但不得因此销毁业务自管 Engine。
+- CLI 在实际服务宿主进程显式装配默认 Codex 托管 owner，协调启动、恢复、失败回滚和关闭；短命 start 客户端不持有 owner。Electron 宿主通过同一 SDK 原生装配并注入访问依赖，不通过 CLI 启动。
+- 常驻 Engine 的启停/恢复归其 owner；每调用 channel/lease 的释放归 Adapter；Home 位置、目录准备、访问权限及数据保留/迁移/删除归 Home owner。三者可以由不同主体维护，引用关系不赋予管理权。
+- CODEX_HOME 必须由宿主显式注入 Engine 装配；CLI 可以在宿主层保留默认选择，Adapter/托管库不隐式 fallback、创建、改权限、迁移或清空 Home。进程退出不意味着 Home 生命周期结束；逐轮配置不得偷偷替换宿主绑定的 Home。
+- Runtime 不得限制 Adapter 的构造方法、参数数量/类型/顺序或注入形式；类、任意签名工厂、闭包及直接对象均可。可传 client 或任意其他依赖，不要求 client-only、统一 options、Engine 基类或 Codex provider 接口；只约束构造结果的注册执行合同。CLI manifest 工厂约定不得反向成为 SDK 构造限制。不新增统一 Engine 注册平台。Codex 专用访问合同按兼容配置获取本调用 channel，协议转换共用，owned/borrowed 关闭权分开。
+- 本次是架构边界细化，聚焦常驻进程 Adapter。docs 必须同步维护模块职责、持有对象、创建/关闭主体、借用范围和失败收尾；未实施目标与当前保证分别说明。详见[模块与生命周期方案](../tasks/339-engine-lifecycle/design.md)及[双语架构入口](../../docs/zh-CN/concepts/architecture.md)。
+
+doctor PID 树的常驻 Engine 归实际宿主 owner_pid，不归 Adapter。Kernel 的 serviceProcesses 是宿主安全快照回调，仅用于只读诊断，不转移启停权限；Core.processes 仅报告 scope 自有资源。CLI 管理默认 owner，Electron 自管 Engine 则由 Electron 维护。
+
 ### KernelClient 与 AgentExecutor 的选型合同
 
 默认推荐 KernelClient，已有服务调用方仅安装 octo-runtime-client。直接 Core 是显式高级选择，宿主承担生命周期。完整 Runtime 与 client 同版本、自包含双包发行。npm 版本按用户确定的 1.1.11 → 1.1.12 递增；IPC v2、执行信封及 SDK 接口版本不要求 npm 升至 2.x。源码保留 0.0.0，由发行 tag 注入版本；不为旧接口增加兼容层。

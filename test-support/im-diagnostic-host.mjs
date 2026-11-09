@@ -1,9 +1,9 @@
 import { fileURLToPath } from "node:url";
-import { createCodexAdapter } from "../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createFixtureCodexHost } from "./codex-owner.mjs";
 
-export const adapters = [
-  createCodexAdapter({
-    command: process.execPath,
-    appServerArgs: [fileURLToPath(new URL("./fake-codex-diagnostics.mjs", import.meta.url))]
-  })
-];
+const host = createFixtureCodexHost({
+  command: process.execPath,
+  appServerArgs: [fileURLToPath(new URL("./fake-codex-diagnostics.mjs", import.meta.url))]
+});
+export const owner = host.owner;
+export const adapters = [host.adapter];

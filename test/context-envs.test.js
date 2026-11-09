@@ -161,8 +161,9 @@ test("per-run environment preserves empty/literal values and adapter-owned overr
   );
   assert.deepEqual(base, { BASE: "parent", A: "parent" });
   assert.equal(
-    buildCodexCommand(request({ OCTO_ENVS_TEST: "codex" }), process.execPath, [], {}).env
-      .OCTO_ENVS_TEST,
+    buildCodexCommand(request({ OCTO_ENVS_TEST: "codex" }), process.execPath, [], {
+      CODEX_HOME: process.cwd()
+    }).env.OCTO_ENVS_TEST,
     "codex"
   );
 });

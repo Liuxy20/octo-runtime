@@ -61,7 +61,9 @@ for (const platform of ["win32", "linux"]) {
       const override = join(tmpdir(), "override codex");
       const req = request({ CODEX_HOME: context });
       req.executionEnvOverrides = payload({ codex_home: override });
-      const command = buildCodexCommand(req, process.execPath, [], {});
+      const command = buildCodexCommand(req, process.execPath, [], {
+        CODEX_HOME: platform === "win32" ? override : context
+      });
       assert.equal(command.env.CODEX_HOME, platform === "win32" ? override : context);
       assert.equal(
         Object.keys(command.env).filter((key) => key.toUpperCase() === "CODEX_HOME").length,

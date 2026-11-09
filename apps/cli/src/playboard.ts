@@ -1,4 +1,5 @@
 import { loadCliAdapters } from "./adapters.js";
+import { createCliKernelService } from "./kernel.js";
 import {
   defaultRuntimeHome,
   runtimePaths,
@@ -7,10 +8,7 @@ import {
 } from "./state.js";
 import { loadCliManifest } from "./module-manifest.js";
 import { readCliAdapterConfigurations } from "./adapter-configurations.js";
-import {
-  createKernelService,
-  type KernelService
-} from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { type KernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -120,21 +118,24 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
     const paths = runtimePaths(home, profile);
     const manifest = await loadCliManifest(home, options.manifest);
     const configuration = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
-    kernel = createKernelService({
-      home: temporary,
-      endpoint:
-        process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
-      adapters: await loadCliAdapters(manifest.adapters, {
+    kernel = await createCliKernelService(
+      {
+        home: temporary,
+        endpoint:
+          process.platform === "win32" ? componentEndpoint(temporary) : join(temporary, "k.sock"),
+        adapterConfigurations: await readCliAdapterConfigurations(
+          paths.profileRoot,
+          configuration?.adapters,
+          manifest,
+          options.env ?? process.env
+        )
+      },
+      await loadCliAdapters(manifest.adapters, {
         profileRoot: paths.profileRoot,
-        syncOpenClawTools: false
-      }),
-      adapterConfigurations: await readCliAdapterConfigurations(
-        paths.profileRoot,
-        configuration?.adapters,
-        manifest,
-        options.env ?? process.env
-      )
-    });
+        syncOpenClawTools: false,
+        env: options.env ?? process.env
+      })
+    );
     await kernel.initialize({ signal: controller.signal });
     let exitCode = 1;
     const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;

@@ -8,8 +8,9 @@
     },
     {
       "type": "codex",
-      "module": "@mininglamp-oss/octo-runtime-adapter-codex",
-      "export": "codexAdapter"
+      "module": "./codex.js",
+      "export": "createCliCodexAdapter",
+      "factory": true
     },
     {
       "type": "claude-code",

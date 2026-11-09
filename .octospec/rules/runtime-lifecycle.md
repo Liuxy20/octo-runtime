@@ -71,6 +71,10 @@ wrapper、聚合与持久化回读须保留主根因和清理/pending 事实；c
 
 ## 服务清理
 
+宿主可显式传 finalizeHostResources(deadline)，由 Kernel 在 Core/Run 排空后、释放所有权记录前等待宿主收尾；CLI 在回调内执行 assembly.close。失败必须保留 cleanupFailed 与端点租约，不能先删除证据再报告 Engine 清理失败。只读 serviceProcesses 回调与收尾回调分别表达观察和显式授权，不从引用或快照推导关闭权。
+
+常驻 Engine 与 Kernel/Adapter scope 分开拥有。CLI 的实际服务进程创建 Codex managed owner，先 beginShutdown 停获取与恢复，再关闭 Kernel 释放本地调用/lease，最后 owner.close，合用 5 秒绝对期限。Kernel 初始化失败也执行本装配 owner 的回滚，清理失败独立保留。业务自管的共享 Engine 不随借用 Kernel 关闭；只有业务 owner 可以停恢复或销毁。CODEX_HOME 由宿主显式注入，目录权限、保留、迁移与删除归 Home owner；与 Runtime Home 分开，任何取消/恢复/关闭都不授权清空 Home。详见[架构边界](architecture.md#常驻-engine-所有权细化issue-339)。
+
 close 停止接纳并取消所属调用，在共享截止时间内等待执行、源消费、监听和日志。单项失败仍尝试独立资源，重复 close 等待同一清理操作；不完整结果保留所有权，替换同 endpoint 的 Kernel 前须确认旧实例完整关闭。
 
 初始化观察 signal 和 close：先登记取消意图，取消初始化等待，异步创建后检查停止状态，不得建立迟到端点或报告 ready。ServiceInitializationError 保留 cause 和 cleanup；回滚失败保留资源所有权。close-before-initialize 永久关闭该对象，重复 initialize 复用原 Promise。服务没有 restart，完整关闭后重新构造。服务 status.pid 必须等于调用进程 PID。

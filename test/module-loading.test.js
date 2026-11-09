@@ -86,7 +86,7 @@ test("two manifest origins retain ESM anchors, scoped subpaths and import condit
 
 test("empty Adapter snapshot starts without resolving Extras; selected type mismatch fails", async (t) => {
   const home = await fixture(t);
-  const empty = await nativeHost(await loadCliAdapters([]));
+  const empty = await nativeHost((await loadCliAdapters([])).adapters);
   t.after(() => empty.close());
   assert.deepEqual(empty.adapters, []);
   const file = join(home, "adapter.mjs");
@@ -112,7 +112,8 @@ test(
     const kernel = createKernelService({
       home: fixtureHome,
       endpoint,
-      adapters: await loadCliAdapters(resolveAdapterModules(await readModuleManifest(file)))
+      adapters: (await loadCliAdapters(resolveAdapterModules(await readModuleManifest(file))))
+        .adapters
     });
     t.after(() => kernel.close());
     await kernel.initialize();
@@ -163,18 +164,20 @@ export function selected() {
   );
   const { loadCliAdapters: loadSelected } = await import(pathToFileURL(entrypoint).href);
   const worker = await nativeHost(
-    await loadSelected(
-      [
-        {
-          module,
-          export: "selected",
-          factory: true,
-          options: {},
-          sourceManifest: join(directory, "unused.json")
-        }
-      ],
-      { profileRoot: directory, syncOpenClawTools: false }
-    )
+    (
+      await loadSelected(
+        [
+          {
+            module,
+            export: "selected",
+            factory: true,
+            options: {},
+            sourceManifest: join(directory, "unused.json")
+          }
+        ],
+        { profileRoot: directory, syncOpenClawTools: false }
+      )
+    ).adapters
   );
   t.after(() => worker.close());
   assert.deepEqual(

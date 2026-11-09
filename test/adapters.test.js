@@ -451,6 +451,11 @@ test("Codex command starts app-server over stdio", async (t) => {
            if (!scenario.unsetHome) process.env.HOME = ${JSON.stringify(home)};
            if (scenario.codexHome !== undefined) process.env.CODEX_HOME = scenario.codexHome;
            assert.equal(homedir(), ${JSON.stringify(nativeHome)}, scenario.name);
+           if (!scenario.codexHome) {
+             assert.throws(() => buildCodexCommand(request), /CODEX_HOME_REQUIRED/);
+             completed.push(scenario.name);
+             continue;
+           }
            const command = await buildCodexCommand(request);
            try {
              assert.equal(command.command, "codex", scenario.name);

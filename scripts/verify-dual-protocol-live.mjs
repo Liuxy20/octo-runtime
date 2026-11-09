@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-import {
-  createCodexAdapter,
-  CodexEventNormalizer
-} from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { CodexEventNormalizer } from "@mininglamp-oss/octo-runtime-adapter-codex";
 import {
   createClaudeCodeAdapter,
   ClaudeEventNormalizer
@@ -14,18 +11,20 @@ import {
   isHostTerminal,
   invocationInput
 } from "@mininglamp-oss/octo-runtime-protocol";
+import { createFixtureCodexHost } from "../test-support/codex-owner.mjs";
 
 // Print evidence metadata only. Provider payloads stay in this process.
 const report = [];
 for (const [type, create, Normalizer] of [
-  ["codex", createCodexAdapter, CodexEventNormalizer],
+  ["codex", undefined, CodexEventNormalizer],
   ["claude-code", createClaudeCodeAdapter, ClaudeEventNormalizer]
 ]) {
   if (process.argv[2] && process.argv[2] !== type) continue;
   for (const protocolMode of ["native", "canonical"]) {
     if (process.argv[3] && process.argv[3] !== protocolMode) continue;
     const host = new AgentExecutor();
-    host.register(create());
+    const codex = type === "codex" ? createFixtureCodexHost() : undefined;
+    host.register(codex ? codex.adapter : create());
     const marker = "DUAL_PROTOCOL_" + randomUUID().slice(0, 8);
     const request = {
       protocolVersion: 2,
@@ -99,7 +98,15 @@ for (const [type, create, Normalizer] of [
       process.exitCode = 1;
     } finally {
       Normalizer.prototype.normalize = original;
-      await host.shutdown();
+      try {
+        await host.shutdown();
+      } finally {
+        if (codex)
+          assert.equal(
+            (await codex.owner.close({ deadline: performance.now() + 2500 })).complete,
+            true
+          );
+      }
     }
   }
 }

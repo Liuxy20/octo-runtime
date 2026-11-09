@@ -1,11 +1,11 @@
 import { loadCliAdapters } from "./adapters.js";
+import { createCliKernelService } from "./kernel.js";
 import { once } from "node:events";
 import { join, resolve } from "node:path";
 import {
   attachKernel,
   acknowledgeOrphanCleanup,
   inspectOrphanCleanup,
-  createKernelService,
   safeStartupValue,
   type KernelService
 } from "@mininglamp-oss/octo-runtime-executor-kernel";
@@ -302,22 +302,25 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       let handle: KernelService;
       {
         const config = await readJsonFile<ProfileConfiguration>(paths.profileConfig);
-        handle = createKernelService({
-          home,
-          logging: { directory: join(home, "logs") },
-          endpoint: kernelEndpoint(),
-          stateDirectory: kernelStateDirectory,
-          adapters: await loadCliAdapters(manifest.adapters, {
+        handle = await createCliKernelService(
+          {
+            home,
+            logging: { directory: join(home, "logs") },
+            endpoint: kernelEndpoint(),
+            stateDirectory: kernelStateDirectory,
+            adapterConfigurations: await readCliAdapterConfigurations(
+              paths.profileRoot,
+              config?.adapters,
+              manifest,
+              dependencies.env ?? process.env
+            )
+          },
+          await loadCliAdapters(manifest.adapters, {
             profileRoot: paths.profileRoot,
-            syncOpenClawTools: true
-          }),
-          adapterConfigurations: await readCliAdapterConfigurations(
-            paths.profileRoot,
-            config?.adapters,
-            manifest,
-            dependencies.env ?? process.env
-          )
-        });
+            syncOpenClawTools: true,
+            env: dependencies.env ?? process.env
+          })
+        );
       }
       return await runForegroundService(
         handle,

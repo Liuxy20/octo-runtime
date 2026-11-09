@@ -28,6 +28,7 @@ export interface ResidentProcessView {
   observation: string;
   service_id?: string;
   incarnation?: number;
+  ownership?: string;
 }
 
 /** doctor 仅投影已取得的常驻快照；同 PID 合并角色，层级表示所有权而非猜测 OS PPID。 */
@@ -73,7 +74,8 @@ export function residentProcesses(
         state: text(service.state),
         observation: text(service.observation),
         service_id: text(service.service_id),
-        incarnation: typeof service.incarnation === "number" ? service.incarnation : undefined
+        incarnation: typeof service.incarnation === "number" ? service.incarnation : undefined,
+        ownership: typeof service.ownership === "string" ? text(service.ownership) : undefined
       });
     }
   }
@@ -88,7 +90,7 @@ export function formatResidentProcesses(processes: readonly ResidentProcessView[
     );
     for (const child of processes.filter((value) => entry.pid && value.owner_pid === entry.pid))
       lines.push(
-        `    +-- ${child.roles.join(", ")}  PID ${child.pid ?? "-"}  ${child.state} (${child.observation})  incarnation ${child.incarnation ?? "-"}  service ${child.service_id ?? "-"}`
+        `    +-- ${child.roles.join(", ")}  PID ${child.pid ?? "-"}  ${child.state} (${child.observation})  ${child.ownership ?? "unknown"}  incarnation ${child.incarnation ?? "-"}  service ${child.service_id ?? "-"}`
       );
   }
   for (const entry of processes.filter(

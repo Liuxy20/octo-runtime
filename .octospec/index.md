@@ -2,6 +2,8 @@
 
 - [Issue 334：应用提示词归调用方](tasks/334-caller-owned-prompts/brief.md) 与 [Issue 335：调用方预建工作目录](tasks/335-caller-owned-workspace/brief.md)：两个方案准备度 96 分并经实施前审查，直接删除旧抽象，不提供兼容；缺目录返回稳定错误码。[联合验收](tasks/334-caller-owned-prompts/validation.md)记录全量、显式专项、双包和真实 Codex/Claude 结果；Gateway #23 已取消，仅记录消费者升级缺口。
 
+- [Issue 339：常驻 Engine 与 Adapter 生命周期边界细化](tasks/339-engine-lifecycle/brief.md)：独立 worktree、[95 分规划](tasks/339-engine-lifecycle/assessment.md)后按授权实施，无兼容层；默认托管归 CLI，业务 Engine 与 Home 归宿主，Adapter 构造方式不限。模块对象与接口见[方案](tasks/339-engine-lifecycle/design.md)，实际检查见[验证](tasks/339-engine-lifecycle/validation.md)。
+
 - [Issue 332：Schema 职责清理](tasks/332-schema-ownership/brief.md)：最新 main 独立 worktree、96 分规划后实施；协议/默认值/测试分离，13 个闲置定义清理，双包验收与审查见[验证](tasks/332-schema-ownership/validation.md)。不扩大 CI；正式 PR/main 状态以远端为准。
 
 - [CLI 生命周期命令平铺](tasks/flatten-runtime-cli/brief.md)：删除 executor-kernel 前缀，[实施前可执行性 96 分](tasks/flatten-runtime-cli/assessment.md)，实际验证单独记录。

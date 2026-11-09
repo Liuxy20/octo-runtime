@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-Drives the bidirectional `codex app-server` protocol. Each Core registration owns a service scope: compatible calls reuse one resident stdio app-server, initialized once per process incarnation. Each invocation starts or resumes its own thread and turn, answers reverse requests, and returns canonical events or native frames. Codex sessions, approvals, and cancellation stay in the Adapter.
+Drives the bidirectional `codex app-server` protocol. Hosts explicitly create a managed owner or inject a business CodexEngineProvider; compatible calls reuse a resident app-server, initialized once per incarnation. The adapter handles invocation threads/turns, reverse requests, canonical/native output, approvals and targeted cancellation.
 
 ## When to use it
 
@@ -17,10 +17,11 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { codexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime/adapters/codex";
 
 const executor = new AgentExecutor();
-executor.register(codexAdapter);
+const owner = createManagedCodexEngine({ codexHome: "/absolute/host-codex-home" });
+executor.register(createCodexAdapter({ engine: owner.provider }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -38,9 +39,9 @@ const input = InvokeInput.check({
 | Item         | Value                                                                                                                                                       |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Adapter type | `codex`                                                                                                                                                     |
-| Exports      | `codexAdapter`, `createCodexAdapter`                                                                                                                        |
+| Exports      | `createCodexAdapter`, `createManagedCodexEngine` |
 | Protocol     | `codex.app-server`, modes `native` and `canonical`                                                                                                          |
-| Transport    | resident stdio JSON-RPC app-server owned by the registered Core scope                                                                                       |
+| Transport    | host-owned resident app-server, invocation channels borrowed by the adapter |
 | Session      | explicit Provider session maps to the native thread; resume rejection or a missing rollout can trigger one fresh-thread fallback with caller-supplied input |
 | Interactions | command/file approvals, user input, and MCP elicitation answered on the same active request                                                                 |
 
@@ -54,6 +55,14 @@ Compatibility includes the executable identity, argv, cwd, complete effective en
 
 An idle or active transport failure proactively replaces the owned process, with at most five replacements per recovery episode and a 90-second budget. Original business and control requests are never replayed. Startup errors such as a missing executable fail without repeated retries. Healthy operation for 60 seconds resets the recovery budget.
 
+## Construction, Home and Ownership
+
+createCodexAdapter({engine}) is Codex-specific. engine.acquire returns {channel, configuration}; channel.close must be idempotent and invocation-specific, while configuration contains only the MCP view. The provider coordinates shared RPC IDs, thread/turn routing and configuration rejection without exposing owner.close. Registering one descriptor in multiple Cores borrows that provider; hosts can instead create separate owners.
+
+SDK hosts must supply an absolute codexHome. Missing/relative paths fail with CODEX_HOME_REQUIRED; invocation conflicts fail with CODEX_HOME_CONFLICT. Hosts own directory preparation, permissions and data retention. Closing or recovering a process never deletes Home. CLI chooses its own ~/.codex default. Existing business Engines may supply their own provider; closing a borrowing Kernel leaves that owner running.
+
+The singleton, default export and old process constructor options are removed without compatibility. Other adapters choose arbitrary construction signatures without Codex types or common options. See the [SDK example](../../docs/examples/codex-service.mts) for shutdown and initialization rollback and the [architecture](../../docs/en/concepts/architecture.md).
+
 ## Limits
 
 - In `ask` and `assisted` modes, approvals use the active interaction bridge. `full_access` automatically handles supported approvals, but does not answer user questions or MCP elicitation.
@@ -61,7 +70,7 @@ An idle or active transport failure proactively replaces the owned process, with
 - The authoritative session update is reported only after turn start succeeds; the Adapter never rebuilds application history.
 - A turn acknowledgement, a text chunk, or a child exit is not proof of successful completion or cleanup.
 - In native mode you must read Runtime control frames alongside Provider payloads.
-- Each scope admits at most eight service configurations; each service admits eight distinct active threads. A concurrent turn on the same thread is rejected. Startup/recovery waiters are bounded to 128 and 32 MiB; completed-thread routing history is bounded to 4096 distinct threads per incarnation. Capacity errors never evict a healthy service.
+- Each managed owner admits at most eight service configurations; each service admits eight distinct active threads. A concurrent turn on the same thread is rejected. Startup/recovery waiters are bounded to 128 and 32 MiB; completed-thread routing history is bounded to 4096 distinct threads per incarnation. Capacity errors never evict a healthy service.
 - A nullable-turn elicitation can be routed on the first active subscription. On a reused thread its causality cannot be established, so the Adapter rejects it explicitly.
 - A nonempty completed `final_answer` with no open work or synchronous interaction can complete after a 15-second finalization fallback. Cancellation, Provider error and subsequent work invalidate eligibility. Turn cleanup remains independently observable and can fail after the result is completed.
 
@@ -75,7 +84,7 @@ Structured local capacity, write, and timeout causes take precedence over unrela
 
 Default POSIX spawning creates an owned, independent process group. Cleanup awaits bounded `SIGTERM` → `SIGKILL` escalation and group-exit confirmation, including when the app-server leader has exited but tools remain. An injected `spawnFn` child is not assumed to own a process group; its cleanup targets the direct child.
 
-Normal completion, Stop and business consumer closure release the invocation's subscription without terminating the shared app-server. The Core owner closes services during `shutdown()`; direct callers can inspect `executor.processes()` without starting or probing a Provider.
+Normal completion, Stop and business consumer closure release the invocation subscription. Core.shutdown releases local scopes and leases. The host calls owner.beginShutdown(), awaits Core/Kernel cleanup, then owner.close({deadline}) and checks complete. The deadline is absolute performance.now() milliseconds. owner.processes() and Kernel serviceProcesses snapshots never start or probe a Provider.
 
 Default owned spawning enables Windows process-tree cleanup through the existing system command. Injected children receive direct-child cleanup. Windows tree cleanup depends on a still-identifiable leader; leader-first exit, host crashes and escaped descendants remain outside a full descendant-exit guarantee. Check cleanup results rather than treating cancellation acknowledgement as exit proof.
 

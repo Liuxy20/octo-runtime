@@ -6,10 +6,8 @@ import { fileURLToPath } from "node:url";
 import { PassThrough } from "node:stream";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { nativeHost } from "./native-host-fixture.js";
-import {
-  createCodexAdapter,
-  CodexEventNormalizer
-} from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { CodexEventNormalizer } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createOwnedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import {
   createClaudeCodeAdapter,
   ClaudeEventNormalizer

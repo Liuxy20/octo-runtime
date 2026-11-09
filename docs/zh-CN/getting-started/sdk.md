@@ -45,9 +45,8 @@ npm 版本与 IPC v2、Run 7、Context v3 分别管理。同次发行组合属�
 Provider 的安装、认证由宿主准备。这里只完成服务接入，不需要发起一次调用：
 
 ```ts
-import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createKernelService, componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime/adapters/codex";
 
 import { mkdir } from "node:fs/promises";
 
@@ -55,8 +54,23 @@ import { mkdir } from "node:fs/promises";
 const home = "/absolute/app-runtime-home";
 await mkdir(home, { recursive: true });
 const endpoint = componentEndpoint(home);
-const kernel = createKernelService({ home, endpoint, adapters: [createCodexAdapter()] });
-await kernel.initialize();
+const owner = createManagedCodexEngine({ codexHome: "/absolute/app-codex-home" });
+const kernel = createKernelService({ home, endpoint,
+  adapters: [createCodexAdapter({ engine: owner.provider })],
+  serviceProcesses: () => owner.processes(),
+  async finalizeHostResources(deadline) {
+    const result = await owner.close({ deadline });
+    if (!result.complete) throw new Error("ENGINE_CLEANUP_INCOMPLETE", { cause: result });
+  } });
+try {
+  await kernel.initialize();
+} catch (error) {
+  const deadline = performance.now() + 5000;
+  owner.beginShutdown();
+  const results = await Promise.allSettled([kernel.close()]);
+  results.push(...await Promise.allSettled([owner.close({ deadline })]));
+  throw new AggregateError([error, ...results], "HOST_INITIALIZATION_FAILED");
+}
 // 原生 SDK 已取得 RPC 客户端；无需 attachKernel，也无需立即发起 AgentRun。
 const client = kernel.client;
 ```
@@ -65,11 +79,19 @@ const client = kernel.client;
 
 ```ts
 // 应用退出前先完成所属业务的执行排空和持久化。
-const cleanup = await kernel.close();
-if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
+const deadline = performance.now() + 5000;
+owner.beginShutdown();
+const results = await Promise.allSettled([kernel.close()]);
+  results.push(...await Promise.allSettled([owner.close({ deadline })]));
+if (results.some((r) => r.status === "rejected" || !r.value.complete))
+  throw new AggregateError(results, "HOST_CLEANUP_INCOMPLETE");
 ```
 
 ## 3. 高级接入
+
+CODEX_HOME 必须由宿主选择、准备并显式注入，关闭进程不删除目录、认证或会话。上例的 owner 是宿主独占资源；更完整的顺序关闭和初始化回滚见[可编译示例](../../examples/codex-service.mts)。不再导出 codexAdapter 单例或接受旧构造参数。
+
+业务已有 Codex Engine 时，直接 createCodexAdapter({engine: businessProvider})。CodexEngineProvider.acquire 提供可独立释放的 channel 和本轮 MCP 配置，全部共享 RPC 关联由业务 provider 维护。关闭借用的 Kernel 不调用业务 owner.beginShutdown/close。其他黑盒 Adapter 可以采用任意构造参数，包括具体 client、函数、配置和多个对象；只要求构造结果满足注册执行合同，见[构造示例](../../examples/custom-adapter.mts)和[架构边界](../concepts/architecture.md)。
 
 [Channel Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) 提供独立业务注册 SDK。
 

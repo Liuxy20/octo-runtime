@@ -53,9 +53,8 @@ The host prepares an absolute Home directory. SDK does not create or select the 
 The host prepares Provider installation and authentication. Integration does not require an invocation:
 
 ```ts
-import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime-adapter-codex";
+import { createKernelService, componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime/adapters/codex";
 
 import { mkdir } from "node:fs/promises";
 
@@ -63,8 +62,23 @@ import { mkdir } from "node:fs/promises";
 const home = "/absolute/app-runtime-home";
 await mkdir(home, { recursive: true });
 const endpoint = componentEndpoint(home);
-const kernel = createKernelService({ home, endpoint, adapters: [createCodexAdapter()] });
-await kernel.initialize();
+const owner = createManagedCodexEngine({ codexHome: "/absolute/app-codex-home" });
+const kernel = createKernelService({ home, endpoint,
+  adapters: [createCodexAdapter({ engine: owner.provider })],
+  serviceProcesses: () => owner.processes(),
+  async finalizeHostResources(deadline) {
+    const result = await owner.close({ deadline });
+    if (!result.complete) throw new Error("ENGINE_CLEANUP_INCOMPLETE", { cause: result });
+  } });
+try {
+  await kernel.initialize();
+} catch (error) {
+  const deadline = performance.now() + 5000;
+  owner.beginShutdown();
+  const results = await Promise.allSettled([kernel.close()]);
+  results.push(...await Promise.allSettled([owner.close({ deadline })]));
+  throw new AggregateError([error, ...results], "HOST_INITIALIZATION_FAILED");
+}
 // 原生 SDK 已取得 RPC 客户端；无需 attachKernel，也无需立即发起 AgentRun。
 const client = kernel.client;
 ```
@@ -73,11 +87,19 @@ Native SDK hosts use `kernel.client`, which calls Kernel through local RPC. `att
 
 ```ts
 // 应用退出前先完成所属业务的执行排空和持久化。
-const cleanup = await kernel.close();
-if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
+const deadline = performance.now() + 5000;
+owner.beginShutdown();
+const results = await Promise.allSettled([kernel.close()]);
+  results.push(...await Promise.allSettled([owner.close({ deadline })]));
+if (results.some((r) => r.status === "rejected" || !r.value.complete))
+  throw new AggregateError(results, "HOST_CLEANUP_INCOMPLETE");
 ```
 
 ## 3. Advanced Integration
+
+The host selects, prepares and explicitly supplies CODEX_HOME. Process shutdown never deletes its directory, credentials or sessions. This example exclusively owns its Engine; see the [compiled example](../../examples/codex-service.mts) for sequential shutdown and initialization rollback. The codexAdapter singleton and old constructor options are removed.
+
+For an existing Codex Engine use createCodexAdapter({engine: businessProvider}). CodexEngineProvider.acquire supplies an independently releasable channel and invocation MCP configuration; the business provider coordinates shared RPC correlation. Closing a borrowing Kernel never calls the business owner's beginShutdown/close. Other black-box adapters may accept arbitrary arguments: concrete clients, functions, configuration or multiple objects. Only the constructed registration contract is shared; see the [construction example](../../examples/custom-adapter.mts) and [architecture](../concepts/architecture.md).
 
 [Channel Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) provides an independent business registration SDK.
 

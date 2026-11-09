@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readFile } from "node:fs/promises";
 import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
 
 const request = {
   protocolVersion: 2,
@@ -26,8 +27,14 @@ test("default adapters reject unsupported approval modes at their execution boun
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
   assert.equal(manifest.adapters.length, 13);
-  for (const entry of manifest.adapters) {
-    const adapter = (await import(entry.module))[entry.export];
+  for (const declaration of manifest.adapters) {
+    const entry = {
+      ...declaration,
+      options: {},
+      sourceManifest: fileURLToPath(new URL("../apps/cli/dist/manifest.json", import.meta.url))
+    };
+    const assembly = await loadCliAdapters([entry]);
+    const adapter = assembly.adapters[0];
     if (["antigravity", "dsh"].includes(entry.type)) {
       assert.equal(adapter.respondInteraction, undefined);
       for (const approvalMode of ["ask", "assisted"])

@@ -82,7 +82,7 @@ export class CodexTurnChannel {
   }
 }
 
-/** Core 作用域内的一种兼容配置；惰性首次启动，之后空闲退出也主动恢复，业务动作从不重放。 */
+/** 宿主托管池的一种兼容配置；惰性启动与空闲恢复由 owner 控制，业务动作从不重放。 */
 export class CodexService {
   readonly id = randomUUID();
   #state: ServiceProcessSnapshot["state"] = "not_started";
@@ -90,6 +90,7 @@ export class CodexService {
   #generation = 0;
   #nextId = 0;
   #closing = false;
+  #recoveryStopped = false;
   #supervision?: Promise<void>;
   #close?: Promise<void>;
   #failure?: Error;
@@ -483,7 +484,7 @@ export class CodexService {
     this.#early.clear();
     this.#earlyBytes = 0;
     this.#earlyItems = 0;
-    if (!this.#closing) {
+    if (!this.#closing && !this.#recoveryStopped) {
       this.#state = "recovering";
       // The supervisor observes idle failures as well; no business invocation is needed to restart.
       queueMicrotask(() => {
@@ -494,13 +495,14 @@ export class CodexService {
 
   #supervise(recovery: boolean): Promise<void> {
     if (this.#supervision) return this.#supervision;
-    if (this.#closing) return Promise.reject(codexTransportError("CODEX_SERVICE_CLOSED"));
+    if (this.#closing || this.#recoveryStopped)
+      return Promise.reject(codexTransportError("CODEX_SERVICE_CLOSED"));
     if (this.#state === "degraded" || this.#state === "cleanup_incomplete")
       return Promise.reject(this.#failure ?? codexTransportError("CODEX_SERVICE_DEGRADED"));
     this.#supervision = (async () => {
       if (!this.#episodeStart) this.#episodeStart = performance.now();
       let replace = recovery || this.#generation > 0;
-      while (!this.#closing) {
+      while (!this.#closing && !this.#recoveryStopped) {
         if (this.#current) {
           try {
             await this.#current.cleanup();
@@ -523,11 +525,11 @@ export class CodexService {
             break;
           }
         }
-        if (this.#closing) break;
+        if (this.#closing || this.#recoveryStopped) break;
         this.#state = replace ? "recovering" : "starting";
         try {
           await this.#start(Math.min(30_000, 90_000 - (performance.now() - this.#episodeStart)));
-          if (this.#closing) break;
+          if (this.#closing || this.#recoveryStopped) break;
           this.#state = "ready";
           this.#stableTimer = setTimeout(() => {
             this.#replacements = 0;
@@ -550,7 +552,7 @@ export class CodexService {
       throw this.#failure ?? codexTransportError("CODEX_SERVICE_CLOSED");
     })().finally(() => {
       this.#supervision = undefined;
-      if (!this.#closing && this.#state === "recovering")
+      if (!this.#closing && !this.#recoveryStopped && this.#state === "recovering")
         queueMicrotask(() => {
           void this.#supervise(true).catch(() => {});
         });
@@ -637,6 +639,12 @@ export class CodexService {
     }
   }
 
+  /** 宿主停止新获取/恢复，但已有健康 channel 仍可定向取消与收尾。 */
+  stopRecovery(): void {
+    this.#recoveryStopped = true;
+    this.#stop.abort();
+    clearTimeout(this.#stableTimer);
+  }
   beginShutdown(): void {
     if (this.#closing) return;
     this.#closing = true;

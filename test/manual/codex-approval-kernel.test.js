@@ -3,6 +3,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
+import { mkdir } from "node:fs/promises";
 import { kernelFixture } from "../kernel-fixture.js";
 
 for (const mode of ["native", "canonical"])
@@ -10,18 +11,22 @@ for (const mode of ["native", "canonical"])
     `${mode}: Kernel public invoke preserves approvals and local failure`,
     { timeout: 15000 },
     async (t) => {
+      const { createApprovalHost } = await import("./codex-approval-worker.mjs");
+      const host = createApprovalHost();
+      t.after(() => host.owner.close({ deadline: performance.now() + 2500 }));
       const f = await kernelFixture(t, {
         // 此用例刻意让一个 fake Provider 清理失败，原生 Kernel 必须保留 incomplete。
         expectedCleanupComplete: false,
-        adapters: (
-          await import(
-            (await import("node:url")).pathToFileURL(
-              resolve("test/manual/codex-approval-worker.mjs")
-            ).href
-          )
-        ).adapters
+        adapters: host.adapters,
+        serviceProcesses: () => host.owner.processes(),
+        async finalizeHostResources(deadline) {
+          if (!(await host.owner.close({ deadline })).complete)
+            throw new Error("ENGINE_CLEANUP_INCOMPLETE");
+        }
       });
       const run = async (scenario) => {
+        const workdir = resolve(f.directory, scenario);
+        await mkdir(workdir, { recursive: true });
         const events = [];
         for await (const event of invokeClient(f.client, {
           invocationId: randomUUID(),
@@ -33,7 +38,7 @@ for (const mode of ["native", "canonical"])
               items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
             },
             approvalMode: "full_access",
-            workdir: process.cwd()
+            workdir
           },
           protocol_mode: mode
         }))
@@ -72,6 +77,7 @@ for (const mode of ["native", "canonical"])
         assert.equal(failed.at(-1).type, "run.failed");
         assert.equal(failed.at(-1).payload.failure.reasonCode, "CODEX_STDIN_WRITE_FAILED");
       }
+      host.owner.beginShutdown();
       const cleanup = await f.server.close();
       assert.equal(cleanup.complete, false);
       assert.deepEqual(cleanup.pendingResources, ["kernel"]);

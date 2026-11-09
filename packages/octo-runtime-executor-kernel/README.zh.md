@@ -59,6 +59,8 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 ## 生命周期与故障边界
 
+宿主可传 serviceProcesses 只读回调展示自己管理的 Engine 快照。Kernel 校验并复制快照，不获得进程启停权。Codex Adapter 借用宿主 provider，kernel.close 只清理本地 Core/scope/lease；托管 owner 须由宿主在其后显式关闭，初始化失败也须回滚。共享业务 owner 不随借用 Kernel 关闭。模块对象与关闭责任见[架构](../../docs/zh-CN/concepts/architecture.md)。
+
 owner 等待 initialize 后使用 client。close 幂等，closed 返回同一个清理结果。先关自己拥有的 business consumer、业务投递与存储，再关 Kernel；attached client 不拥有服务。
 
 关闭先停止接纳、关闭连接，再取消 Core、等待 Adapter 清理和回收 Run/日志/端点。共用 5 秒截止时间，不为每步重启预算。Adapter next 异常可能来自 finally，不能据此证明清理完成；complete=false 保留失败事实和端点所有权证据。stateDirectory 可显式指定恢复记录目录；POSIX 缺省使用 endpoint + .runs，Windows 需显式配置才能保留该记录。

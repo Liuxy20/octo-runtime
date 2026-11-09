@@ -3,7 +3,7 @@ import { invokeClient } from "../../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createOwnedCodexAdapter as createCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import { AsyncQuestionReply } from "../../dist/public/executor-kernel.js";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";

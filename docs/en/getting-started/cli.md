@@ -2,6 +2,12 @@
 
 [简体中文](../../zh-CN/getting-started/cli.md)
 
+## Persistent Codex Engine
+
+The CLI service process creates the managed owner and injects its provider into the adapter, without new required configuration. That host chooses options.codexHome, then its own CODEX_HOME environment, then ~/.codex. Configure the service process environment separately from the short-lived start client. The first invocation starts app-server; compatible calls reuse it. stop and normal Playboard completion stop recovery, close Kernel, then close the owned Engine while preserving Home data.
+
+doctor's Resident processes (ownership) tree places codex app-server under Host/Kernel PID, showing owned, state and incarnation. Adapter references are not PID nodes. status/doctor read host snapshots without starting an Engine. Electron-owned Engines belong to Electron; SDK composition does not inherit CLI ownership policy.
+
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
 octo-runtime start

@@ -7,7 +7,10 @@ import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import {
+  createCodexAdapter,
+  createManagedCodexEngine
+} from "../../packages/octo-runtime-adapter-codex/dist/index.js";
 import { CodexService } from "../../packages/octo-runtime-adapter-codex/dist/service.js";
 import { AgentExecutor } from "../../packages/octo-runtime-executor-core/dist/index.js";
 import { invokeRequest, preparedFrames } from "../runtime-fixture.js";
@@ -33,7 +36,14 @@ const request = (modelInput = "hello", extra = {}) =>
   });
 test("Core cannot report complete when a scope reports incomplete without resource IDs", async () => {
   const core = new AgentExecutor();
-  const adapter = createCodexAdapter();
+  const adapter = createCodexAdapter({
+    engine: {
+      codexHome: process.cwd(),
+      async acquire() {
+        throw new Error("unused");
+      }
+    }
+  });
   core.register({
     ...adapter,
     createExecutionScope: () => ({
@@ -60,15 +70,16 @@ test("scope close observes late cleanup without starting another cleanup attempt
 });
 test("CLI doctor reads resident PIDs without starting a Provider and shares its text/JSON source", async () => {
   const home = await mkdtemp(join(tmpdir(), "octo-313-doctor-"));
+  const owner = createManagedCodexEngine({
+    codexHome: home,
+    command: process.execPath,
+    appServerArgs: [fixture, join(home, "rpc.ndjson")]
+  });
   const kernel = createKernelService({
     home,
     endpoint: componentEndpoint(home),
-    adapters: [
-      createCodexAdapter({
-        command: process.execPath,
-        appServerArgs: [fixture, join(home, "rpc.ndjson")]
-      })
-    ]
+    adapters: [createCodexAdapter({ engine: owner.provider })],
+    serviceProcesses: () => owner.processes()
   });
   const doctor = async (json) => {
     let output = "";
@@ -117,21 +128,43 @@ test("CLI doctor reads resident PIDs without starting a Provider and shares its 
     );
     assert.equal((await kernel.client.status()).service_processes[0].pid, provider.pid);
   } finally {
-    assert.equal((await kernel.close()).complete, true);
+    const kernelCleanup = await Promise.allSettled([kernel.close()]);
+    const engineCleanup = await Promise.allSettled([
+      owner.close({ deadline: performance.now() + 2500 })
+    ]);
     await rm(home, { recursive: true, force: true });
+    for (const result of [...kernelCleanup, ...engineCleanup]) {
+      assert.equal(result.status, "fulfilled");
+      assert.equal(result.value.complete, true);
+    }
   }
 });
 async function setup(t) {
   const dir = await mkdtemp(join(tmpdir(), "octo-313-"));
   const log = join(dir, "rpc.ndjson");
-  const adapter = createCodexAdapter({ command: process.execPath, appServerArgs: [fixture, log] });
-  const scope = adapter.createExecutionScope({ log: logSink });
+  const owner = createManagedCodexEngine({
+    codexHome: dir,
+    command: process.execPath,
+    appServerArgs: [fixture, log]
+  });
+  const adapter = createCodexAdapter({ engine: owner.provider });
+  const local = adapter.createExecutionScope({ log: logSink });
+  // 此手动 harness 是宿主，显式组合本地 scope 与 owner，非 Adapter 兼容 API。
+  const scope = {
+    ...local,
+    processes: () => owner.processes(),
+    async close(options) {
+      owner.beginShutdown();
+      await local.close(options);
+      return owner.close(options);
+    }
+  };
   t.after(async () => {
     const cleanup = await scope.close({ deadline: performance.now() + 2500 });
     assert.equal(cleanup.complete, true);
     await rm(dir, { recursive: true, force: true });
   });
-  return { scope, adapter, log };
+  return { scope, adapter, owner, log };
 }
 async function eventually(predicate) {
   const deadline = performance.now() + 6000;
@@ -152,9 +185,22 @@ for (const command of ["./codex", "bin/codex"])
         const binary = join(directory, command);
         const replacement = binary + ".next";
         const program = "#!/usr/bin/env node\n" + (await readFile(fixture, "utf8"));
-        const scope = createCodexAdapter({ command, appServerArgs: [] }).createExecutionScope({
+        const owner = createManagedCodexEngine({
+          codexHome: directory,
+          command,
+          appServerArgs: []
+        });
+        const local = createCodexAdapter({ engine: owner.provider }).createExecutionScope({
           log: logSink
         });
+        const scope = {
+          ...local,
+          processes: () => owner.processes(),
+          async close(options) {
+            await local.close(options);
+            return owner.close(options);
+          }
+        };
         t.after(async () => {
           assert.equal((await scope.close({ deadline: performance.now() + 2500 })).complete, true);
           await rm(directory, { recursive: true, force: true });
@@ -239,7 +285,7 @@ test("doctor keeps an exited cleanup resource separate from a reused live PID", 
   });
   assert.equal(processes.length, 3);
   assert.equal(processes.find((p) => p.service_id === "old").observation, "exited");
-  assert.equal(processes.find((p) => p.roles.includes("Extra:webui")).observation, "alive");
+  assert.equal(processes.find((p) => p.roles.includes("webui")).observation, "alive");
 });
 test("thread history capacity rejects before writing and preserves the healthy service", async () => {
   const service = new CodexService("history-capacity", {
@@ -348,8 +394,8 @@ test("config revisions isolate processes; normal turns share", async (t) => {
   assert.equal(scope.processes().length, 2);
   assert.notEqual(scope.processes()[0].pid, scope.processes()[1].pid);
 });
-test("two Core registrations of same descriptor own distinct processes", async (t) => {
-  const { adapter } = await setup(t);
+test("two Core registrations borrow the same host-owned process", async (t) => {
+  const { adapter, owner } = await setup(t);
   const a = new AgentExecutor(),
     b = new AgentExecutor();
   a.register(adapter);
@@ -360,9 +406,11 @@ test("two Core registrations of same descriptor own distinct processes", async (
   });
   await Array.fromAsync(preparedFrames(a, "codex", request(), { protocolMode: "canonical" }));
   await Array.fromAsync(preparedFrames(b, "codex", request(), { protocolMode: "canonical" }));
-  assert.notEqual(a.processes()[0].pid, b.processes()[0].pid);
+  assert.equal(owner.processes().length, 1);
+  assert.deepEqual(a.processes(), []);
+  assert.deepEqual(b.processes(), []);
   await a.shutdown();
-  assert.equal(b.processes()[0].state, "ready");
+  assert.equal(owner.processes()[0].state, "ready");
 });
 for (const protocolMode of ["canonical", "native"])
   test(`final-answer fallback succeeds through Core: ${protocolMode}`, async (t) => {
@@ -407,19 +455,22 @@ test("doctor lists resident ownership and merges same PID without turn fields", 
     webui: { service: { state: "running" }, runtime: { pid: 123 } }
   });
   assert.equal(view.length, 2);
-  assert.deepEqual(view[0].roles, ["Host/Kernel", "Extra:webui"]);
+  assert.deepEqual(view[0].roles, ["Host/Kernel", "webui"]);
   assert.match(formatResidentProcesses(view), /PID 456.*incarnation 2/);
   assert.doesNotMatch(JSON.stringify(view), /turn|thread|invocation|argv|env/);
 });
 test("unbound invocation rejects without spawning", async () => {
   let launches = 0;
-  const adapter = createCodexAdapter({
+  const owner = createManagedCodexEngine({
+    codexHome: process.cwd(),
     spawnFn: () => {
       launches++;
       throw new Error("unexpected spawn");
     }
   });
-  await assert.rejects(Array.fromAsync(adapter.invoke(request())), /CODEX_SERVICE_SCOPE_REQUIRED/);
+  const adapter = createCodexAdapter({ engine: owner.provider });
+  await assert.rejects(Array.fromAsync(adapter.invoke(request())), /CODEX_ADAPTER_SCOPE_REQUIRED/);
+  await owner.close({ deadline: performance.now() + 2500 });
   assert.equal(launches, 0);
 });
 
@@ -564,5 +615,5 @@ for (const protocolMode of ["canonical", "native"])
     const result = await core.shutdown();
     assert.equal(result.cleanup, "incomplete");
     assert.equal(result.failedCleanupInvocationIds.length, 1);
-    assert.equal(result.unresolvedServiceIds.length, 0);
+    assert.equal(result.unresolvedServiceIds.length, 1);
   });

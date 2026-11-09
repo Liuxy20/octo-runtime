@@ -1,6 +1,6 @@
 # Adapter SDK
 
-常驻资源 Adapter 可提供同步、惰性的 `createExecutionScope({log})`。Core 每次注册独占 scope，绑定调用及回复；取消前同步调用 `beginShutdown(reason)`，再等待 `close({deadline})`，deadline 为 `performance.now()` 绝对毫秒值。服务遗留和失败 ID 独立于 invocation 清理报告；可选 `processes()` 只返回安全常驻所有权快照。turn 释放订阅，scope 负责 transport 和进程清理。见[接口](src/execution-scope.ts)及 [Codex 实现](../octo-runtime-adapter-codex/src/service.ts)。
+常驻资源 Adapter 可提供同步、惰性的 `createExecutionScope({log})`。Core 每次注册独占 scope，绑定调用及回复；取消前同步调用 `beginShutdown(reason)`，再等待 `close({deadline})`，deadline 为 `performance.now()` 绝对毫秒值。服务遗留和失败 ID 独立于 invocation 清理报告；可选 `processes()` 只返回安全常驻所有权快照。turn 释放订阅，scope 只清理自己拥有的调用、lease 和资源。注入的常驻 Engine 与连接归显式宿主 owner；引用不转移关闭权。Adapter 可采用任意构造方法、参数及依赖，CLI manifest 约定不限制 SDK。见[接口](src/execution-scope.ts)及 [Codex 实现](../octo-runtime-adapter-codex/src/service.ts)。
 
 [English](README.md) | [包导航](../README.zh.md)
 

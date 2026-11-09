@@ -1,5 +1,7 @@
 # Octo Runtime 架构
 
+常驻 Engine 的创建、恢复和最终关闭归实际宿主 owner；Adapter 管理调用协议和 lease。默认 Codex owner 由 CLI 服务进程创建，Electron 可注入业务自管依赖；CODEX_HOME 及目录权限归 Home owner。Adapter 构造方式与参数不限，只统一注册执行合同。逐模块对象及生命周期见[架构正文](docs/zh-CN/concepts/architecture.md)。
+
 Runtime 只提供通用 Agent 执行基础设施。业务应用通过公开 client 调用已有 Kernel，或者原生构造并拥有自己的 Kernel。配置来源、模型目录、凭据、会话历史、渠道准入和结果投递由应用负责。
 
 ```mermaid

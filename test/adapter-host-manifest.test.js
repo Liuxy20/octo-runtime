@@ -103,7 +103,8 @@ async function writeManifest(manifest, module, exportName = "testAdapter") {
 
 async function startHost(t, root, manifest) {
   const host = await nativeHost(
-    await loadCliAdapters((await readModuleManifest(manifest, { legacy: true })).adapters)
+    (await loadCliAdapters((await readModuleManifest(manifest, { legacy: true })).adapters))
+      .adapters
   );
   t.after(() => host.close());
   return host;

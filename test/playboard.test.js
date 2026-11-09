@@ -61,8 +61,8 @@ async function fixture(t, { legacyOpenClaw = false } = {}) {
         },
         {
           type: "codex",
-          module: join(root, "packages/octo-runtime-adapter-codex/dist/index.js"),
-          export: "createCodexAdapter",
+          module: join(root, "apps/cli/dist/codex.js"),
+          export: "createCliCodexAdapter",
           factory: true,
           options: {
             command: process.execPath,

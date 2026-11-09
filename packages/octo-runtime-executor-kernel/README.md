@@ -1,5 +1,7 @@
 # Executor Kernel
 
+Hosts may supply serviceProcesses as a read-only callback for safe Engine snapshots. Kernel validates and copies them without acquiring process-control rights. Codex borrows a host provider: kernel.close cleans local Core scopes and leases; the host finally closes its owned Engine, including initialization rollback. Shared business owners remain running when borrowers close. See [architecture](../../docs/en/concepts/architecture.md).
+
 Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package retains compatible client exports and uses that same implementation. The full published Runtime bundles client/protocol internally; constructing Kernel services still requires the full SDK. Separate installed distributions may have different error/function identities even at matching versions.
 
 [简体中文](README.zh.md) | [Package index](../README.md)

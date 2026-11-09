@@ -15,7 +15,11 @@ import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
 
 // 测试宿主直接注入原生 Adapter；重建 Kernel 时仍使用同一 fake Provider。
-const options = { adapters: [adapter] };
+const options = {
+  get adapters() {
+    return [adapter()];
+  }
+};
 const value = {
   schema: "octo.question-response/v1",
   answers: [
@@ -139,7 +143,8 @@ test("inactive cancellation is invalidated; completed cancellation needs no RPC"
 });
 
 test("observed cancellation survives a lost ACK", async (t) => {
-  const f = await setup(t);
+  // 保持 turn 活跃，避免默认 stale 场景的 20ms 完成定时器先关闭交互。
+  const f = await setup(t, "normal");
   const ack = Promise.withResolvers();
   const reply = new AsyncQuestionReply({ respond: () => ack.promise }, f.snapshot, () => f.next);
   const cancelling = reply.cancel();

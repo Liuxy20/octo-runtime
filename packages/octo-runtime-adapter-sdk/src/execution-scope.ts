@@ -17,7 +17,11 @@ export interface AdapterScopeCleanup {
   failedCleanupServiceIds: readonly string[];
 }
 
-/** Core 每次注册独占一个作用域；构造不得启动进程，关闭后不可重新接纳或恢复。 */
+/**
+ * Core 每次注册独占本地调用作用域；构造不得启动进程，关闭后不再接纳。
+ * close 回收本 scope 的调用/订阅/租约，不隐含获得宿主注入 Engine 或共享连接的销毁权。
+ * Adapter 构造方法和参数由实现者决定；统一的是注册后的执行合同。
+ */
 export interface AdapterExecutionScope {
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<AdapterOutput>;
   respondInteraction?(invocationId: string, response: InteractionResponse): Promise<void>;

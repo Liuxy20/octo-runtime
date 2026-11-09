@@ -140,7 +140,7 @@ test("Codex carries private header references; Claude writes a private temporary
     { TOKEN: "private-value" },
     { approvalMode: "full_access" }
   );
-  const codex = buildCodexCommand(req, "codex", [], {});
+  const codex = buildCodexCommand(req, "codex", [], { CODEX_HOME: process.cwd() });
   assert.equal(JSON.stringify(codex.args).includes("private-value"), false);
   const ref = codex.mcpServers.business.env_http_headers.Authorization;
   assert.equal(codex.env[ref], "Bearer private-value");

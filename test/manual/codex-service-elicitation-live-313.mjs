@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createFixtureCodexHost } from "../../test-support/codex-owner.mjs";
 import { invokeRequest } from "../runtime-fixture.js";
 if (!process.argv.includes("--run"))
   throw new Error("Explicit --run required for a real model/MCP request");
-const scope = createCodexAdapter().createExecutionScope({ log: () => {} });
+const { owner, adapter } = createFixtureCodexHost();
+const scope = adapter.createExecutionScope({ log: () => {} });
 let elicitations = 0,
   approvals = 0,
   terminal;
@@ -57,11 +58,16 @@ try {
       terminal = event.type;
   }
   console.log(
-    JSON.stringify({ terminal, elicitations, approvals, processes: scope.processes().length })
+    JSON.stringify({ terminal, elicitations, approvals, processes: owner.processes().length })
   );
   assert.equal(terminal, "run.completed");
   assert.ok(elicitations >= 1);
 } finally {
-  const cleanup = await scope.close({ deadline: performance.now() + 2500 });
-  assert.equal(cleanup.complete, true);
+  const deadline = performance.now() + 2500;
+  const local = await Promise.allSettled([scope.close({ deadline })]);
+  const engine = await Promise.allSettled([owner.close({ deadline })]);
+  for (const result of [...local, ...engine]) {
+    assert.equal(result.status, "fulfilled");
+    assert.equal(result.value.complete, true);
+  }
 }

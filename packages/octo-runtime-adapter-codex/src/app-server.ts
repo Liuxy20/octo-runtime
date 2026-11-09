@@ -18,7 +18,7 @@ import {
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { codexTransportError } from "./stdin-writer.js";
-import type { CodexTurnChannel } from "./service.js";
+import type { CodexChannel, CodexTurnConfiguration } from "./engine.js";
 import { codexEnvironmentConfig } from "./environment.js";
 import { CodexAsyncQuestions, asyncQuestionMetadata } from "./async-questions.js";
 /**
@@ -161,8 +161,8 @@ export async function* runCodexAppServerTurn({
   onNativeResponder
 }: {
   request: InvokeRequest;
-  spec: CodexAppServerCommand;
-  channel?: CodexTurnChannel;
+  spec: CodexTurnConfiguration;
+  channel?: CodexChannel;
   context?: AdapterInvocationContext;
   onInteractionResponder?: (responder: CodexInteractionResponder | undefined) => void;
   onNativeResponder?: (
@@ -1276,7 +1276,7 @@ class CodexAppServerClient {
   };
 
   constructor(
-    readonly channel: CodexTurnChannel,
+    readonly channel: CodexChannel,
     requestTimeoutMs: number,
     interactive: boolean,
     readonly invocation: InvokeRequest,

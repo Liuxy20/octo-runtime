@@ -22,6 +22,8 @@ Agent 定义由业务方管理。Adapter 元数据与 probe 分别描述执行�
 
 ## 宿主掌握支持范围，Adapter 适配转发
 
+Adapter 构造方法和参数不受 Runtime 限制：类、任意签名工厂、闭包或直接对象均可，允许具体 client、函数、配置、多个对象及任意其他依赖。统一的是构造结果的注册执行合同。CodexEngineProvider 仅为 Codex 专用接口；CLI manifest 工厂 (options, {env}) 仅为 CLI 装配约定，不能施加到 SDK。注入引用不转移 Engine、连接或 Home 的关闭/权限管理权。
+
 2026-10-16 用户明确：CLI、desktop 及其他 SDK 宿主选择并交付具体 Adapter 和版本，功能支持范围由宿主管理。Adapter 将宿主的显式请求转换为 Provider 原生操作并返回真实结果；Runtime 不再额外维护一套功能标签供宿主发现、匹配或准入。
 
 - `executionFeatures` 自建字符串标签机制已删除，包括字段、常量、发现投影和标签驱动的判断；不得恢复标签，也不得换成另一份布尔字段表、能力 struct 或注册中心延续同一机制。
