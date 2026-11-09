@@ -3,6 +3,13 @@ import { pathToFileURL } from "node:url";
 
 // 确定性原生协议 fixture；不调用模型、不读取认证。也供 trajectory 专项复用。
 export function scenario(mode = "multi", root = "root") {
+  if (mode === "interrupted-completed") {
+    const events = scenario("final", root);
+    events.find(
+      (item) => item.params.event?.type === "assistant/message"
+    ).params.event.data.interrupted = true;
+    return events;
+  }
   const result = [];
   const seqs = new Map();
   const notify = (type, data, sessionId = root) => {

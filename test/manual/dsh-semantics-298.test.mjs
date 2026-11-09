@@ -66,6 +66,59 @@ for (const mode of ["cancel", "error", "max-tokens", "tool-only"])
       );
     assert.equal(finalText(events), "");
   });
+
+test("DSH interrupted commit is rejected even when the turn reports completed", () => {
+  const input = scenario("interrupted-completed");
+  assert.equal(
+    input.find((item) => item.params.event?.type === "assistant/message").params.event.data
+      .interrupted,
+    true
+  );
+  assert.equal(input.at(-1).params.event.data.reason.kind, "completed");
+  const trajectory = new DshTrajectory("root", 8192);
+  const events = input.flatMap((notification) => trajectory.accept(notification));
+  assert.throws(() => settle(trajectory), { code: "DSH_NO_FINAL_OUTPUT" });
+  assert.equal(
+    events.some((event) => event.type.startsWith("message.") && event.payload.channel === "final"),
+    false
+  );
+  assert.equal(terminal(events).length, 0);
+});
+
+test("official SDK and Core fail an interrupted commit with a completed turn without publishing final", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "dsh-298-interrupted-"));
+  const core = new AgentExecutor();
+  core.register(createDshAdapter());
+  t.after(async () => {
+    await core.shutdown();
+    await rm(directory, { recursive: true, force: true });
+  });
+  const request = invokeRequest({
+    workdir: directory,
+    approvalMode: "full_access",
+    agentConfig: {
+      providerOptions: {
+        dshBin: fileURLToPath(new URL("./fixtures/dsh-semantics-298.mjs", import.meta.url))
+      }
+    }
+  });
+  const events = await Array.fromAsync(
+    core.invoke(invocationInput(request, "canonical", "dsh"), {
+      executionEnvOverrides: {
+        env_variables: [{ key: "OCTO_DSH_SEMANTICS_MODE", value: "interrupted-completed" }]
+      }
+    })
+  );
+  events.forEach(assertCanonicalEvent);
+  assert.equal(
+    events.some((event) => event.type.startsWith("message.") && event.payload.channel === "final"),
+    false
+  );
+  assert.equal(terminal(events).length, 1);
+  assert.equal(terminal(events)[0].type, "run.failed");
+  assert.equal(terminal(events)[0].payload.failure.reasonCode, "DSH_NO_FINAL_OUTPUT");
+});
+
 test("DSH commit mismatch, byte budget, repeated seq and tool ownership", () => {
   const input = scenario("chunks");
   const index = input.findIndex((n) => n.params.event?.type === "assistant/message");

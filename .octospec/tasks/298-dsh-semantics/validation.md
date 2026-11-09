@@ -67,3 +67,18 @@ Gateway 默认 TS 7.0.2 构建失败：可选 `@typescript/typescript-win32-x64`
 真实 DSH 模型/账号、脱敏真实事件样本、实际 IM 卡片 payload 回读和截图、服务端唯一送达、macOS/Linux、新发行安装均未验证。原生握手不能代替模型 turn。仅工具 concluded 而无后续无工具回答会保守返回 DSH_NO_FINAL_OUTPUT；纯 final 的文本延迟到活动终局，保留 chunk 边界而非承诺实时 final。上游 SDK 解析前内存和完整工具后代清理仍不在本次保证内。
 
 本地验证完成后，用户已追加授权 commit、push 并创建关联 PR。交付前重新 fetch 确认 main 仍为 `157fabb7d680df1ee72d9d9e5ed40cfc6c22b336`；向上游 main 提 PR，以 Refs #298 关联，不自动关闭 Issue。未执行合并、发布或 CI 门禁扩展。本文通过结果对应上述源码基线加本次工作树；正式提交与托管检查结果由 PR 另行记录。
+
+# PR #340 中断候选评审验证
+
+复核对象为评审指定提交 `3a85e069be20ba996972760e5726c5d4684adef9`。修改前先运行评审所述 `assistant/message.interrupted=true → step/end → turn/end.completed`，实际 final 事件为零，finish 报 DSH_NO_FINAL_OUTPUT；原提交已在 step/end 将 interrupted 候选排除。
+
+本轮只增加两项手动回归及 fixture，并更新任务核查记录。生产源码与上述提交逐文件 diff 为空；未合入新主干、未修改 Gateway 或六项遗留失败。
+
+| 验证 | 实际结果 |
+| --- | --- |
+| 直接 trajectory 的 completed/interrupted 组合 | 无 final，DSH_NO_FINAL_OUTPUT |
+| 未修改官方 SDK → Adapter → Core 的同一组合 | 无 final，唯一 run.failed，failure.reasonCode=DSH_NO_FINAL_OUTPUT |
+| 构建 JS 负向注入：仅移除既有 `!step.interrupted` | 两项新增回归都失败；finally 恢复原产物 |
+| Node 24.19.0 / Node 26.13.0，四个既有 DSH 文件加手动专项 | 各 129 项：124 passed / 0 failed / 5 既有 POSIX skips；手动专项各 13 passed |
+
+独立 Gateway 测试通过 OCTO_GATEWAY_CHECKOUT 显式启用；没有该环境时 skip 是既有手动合同，本轮不把它加入 CI。仍为 fixture 验证，没有增加真实模型或 IM 请求。前述全量失败和真实验收缺口继续有效。

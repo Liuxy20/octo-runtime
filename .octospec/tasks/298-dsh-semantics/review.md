@@ -24,3 +24,13 @@ tags: [adapter, review, canonical]
 PR 交付前将手动 fixture 的直接运行判断统一为 pathToFileURL，避免编码后的 URL pathname 与含空格/中文的原生路径不相等。Node 24/26 手动专项各 11 项重验通过，另在任务外置 TEMP 的空格/中文路径复制入口并探测版本成功。
 
 关键限制及测试失败全部在 validation.md；没有把 fixture 卡片 HTML 或 replyFinal 端口调用标为 live IM 验收。
+
+# yujiawei 评审复核
+
+针对 [review 5823849154](https://github.com/Mininglamp-OSS/octo-runtime/pull/340#pullrequestreview-5823849154)，按评审所针对的 `3a85e069be20ba996972760e5726c5d4684adef9` 核查，没有复现 P1 所述的成功发布 partial final。评论跟踪了 assistant/message 的 step.answer 赋值，但没有计入同一提交 trajectory.ts 第 225 行在 step/end 构造 pending 时的 `answer: step.answer && !step.interrupted`。直接回放 `interrupted: true` 加 completed turn 的结果为 DSH_NO_FINAL_OUTPUT，final 事件为零。
+
+测试覆盖缺口成立：原 cancelled 用例走 aborted turn，不能代替 completed turn 的组合。仅补手动 trajectory 和官方 SDK→Adapter→Core 两项回归及相应 fixture，不修改生产实现、通用 Gateway、规则、CI 或范围外失败项。Core 用例要求唯一 run.failed、reasonCode=DSH_NO_FINAL_OUTPUT，并拒绝所有 final create/delta/update。
+
+负向验证只临时移除本任务构建 JS 中的既有守卫，两项新增回归均失败；finally 恢复产物后，Node 24/26 各 124 passed / 5 skipped，启用独立 Gateway 的手动专项各 13 passed。该证据证明新增测试能检出评审描述的缺陷，而非通过更改生产语义使断言成立。Gateway 专项需要显式环境变量的观察属实；本轮已显式启用，未扩大默认 CI。
+
+此结论为代码和执行证据的复核，不等同于外部 reviewer 已批准；不自行撤销 CHANGES_REQUESTED。
