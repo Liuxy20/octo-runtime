@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [CLI 生命周期命令平铺](tasks/flatten-runtime-cli/brief.md)：删除 executor-kernel 前缀，[实施前可执行性 96 分](tasks/flatten-runtime-cli/assessment.md)，实际验证单独记录。
+
 - [agentEnv 与可定位中断](tasks/agent-env-invocation/brief.md)：[实际验证](tasks/agent-env-invocation/validation.md)、[独立双轴审查](tasks/agent-env-invocation/review.md)。IPC v2 / client 2.x 为当前调用合同。
 当前架构以 [Issue 328](tasks/328-remove-extra/brief.md) 和[架构规则](rules/architecture.md)为准：Runtime 只提供执行基础设施；Channel Gateway 已迁入独立仓库。下方早期任务是历史证据，不再定义 Extra 装配。
 

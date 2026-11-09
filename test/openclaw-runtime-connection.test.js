@@ -235,15 +235,7 @@ export function selectedAdapter() {
       if (index === 0) await configureCliOpenClaw(join(home, "work"), {}, env);
       const child = spawn(
         process.execPath,
-        [
-          join(repo, "apps/cli/dist/index.js"),
-          "executor-kernel",
-          "run",
-          "--home",
-          home,
-          "--manifest",
-          manifest
-        ],
+        [join(repo, "apps/cli/dist/index.js"), "run", "--home", home, "--manifest", manifest],
         {
           env,
           stdio: ["ignore", "ignore", "pipe"]

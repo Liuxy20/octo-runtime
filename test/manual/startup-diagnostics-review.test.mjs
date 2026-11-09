@@ -36,7 +36,7 @@ async function cliFailure(home, module, json, preceding = []) {
     { mode: 0o600 }
   );
   const lines = [];
-  const args = ["executor-kernel", "run", "--home", home, "--manifest", manifest];
+  const args = ["run", "--home", home, "--manifest", manifest];
   if (json) args.push("--json");
   const since = Date.now() - 100;
   const code = await runCli(args, {

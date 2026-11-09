@@ -268,7 +268,7 @@ test("CLI recover requires acknowledgement and doctor exposes the manifest path"
       output = value;
     }
   };
-  assert.equal(await runCli(["executor-kernel", "recover", "--home", home, "--json"], capture), 2);
+  assert.equal(await runCli(["recover", "--home", home, "--json"], capture), 2);
   const backend = {
     kind: "windows-user-task",
     probe: async () => ({ manager: "windows-user-task", supported: true }),
@@ -279,12 +279,13 @@ test("CLI recover requires acknowledgement and doctor exposes the manifest path"
       drift: []
     })
   };
-  for (const args of [["--help"], ["executor-kernel", "--help"]]) {
+  for (const args of [["--help"], ["recover", "--help"]]) {
     assert.equal(await runCli(args, capture), 0);
-    assert.match(output, /Available Commands:/);
+    assert.match(output, /Usage:/);
     assert.doesNotMatch(output, /--manifest/);
   }
-  assert.match(output, /recover\s+Acknowledge orphan cleanup/);
+  assert.match(output, /octo-runtime recover/);
+  assert.match(output, /--acknowledge-orphan-cleanup/);
   assert.equal(
     await runCli(["doctor", "--home", home, "--manifest", modules, "--json"], {
       ...capture,
@@ -296,16 +297,7 @@ test("CLI recover requires acknowledgement and doctor exposes the manifest path"
   assert.equal(JSON.parse(output).recovery.state, "cleanup_incomplete");
   assert.equal(
     await runCli(
-      [
-        "executor-kernel",
-        "recover",
-        "--acknowledge-orphan-cleanup",
-        "--home",
-        home,
-        "--manifest",
-        modules,
-        "--json"
-      ],
+      ["recover", "--acknowledge-orphan-cleanup", "--home", home, "--manifest", modules, "--json"],
       capture
     ),
     0

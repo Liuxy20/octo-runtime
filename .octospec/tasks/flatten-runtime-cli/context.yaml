@@ -1,0 +1,15 @@
+rules:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+baseline: 47f0624f5730bb53fd7efb8fe0f02e3330a443ef
+global_source: Mininglamp-OSS/octo-spec@d456507bbd37cd4e3ac58671d07b89a61af35579
+global_rules_read:
+  - global/security.md
+  - global/review.md
+  - global/pr.md
+  - global/comprehension-gate.md

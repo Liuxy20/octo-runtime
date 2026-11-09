@@ -37,27 +37,27 @@ doctor reports manager availability and Kernel readiness. Global status reports 
 
 ### Prepare The Local Home
 
-CLI 不提供 login。--home 显式选择目录，否则统一使用 ~/.octo-runtime；CLI 准备根，SDK 服务只接受宿主准备好的绝对 Home。executor-kernel run 使用本地配置和显式 Adapter 集合，不要求删除或重新初始化身份。
+CLI 不提供 login。--home 显式选择目录，否则统一使用 ~/.octo-runtime；CLI 准备根，SDK 服务只接受宿主准备好的绝对 Home。octo-runtime run 使用本地配置和显式 Adapter 集合，不要求删除或重新初始化身份。
 
 业务登录、渠道登记与共享归独立 Gateway/宿主。不得从本地就绪推导云端连接成功，也不得自动重置身份。
 
-### Manage Independent Components
+### Manage the Runtime Service
 
 Use the native user-service commands for an installed Runtime:
 
 ```bash
-octo-runtime executor-kernel install
-octo-runtime executor-kernel start
-octo-runtime executor-kernel restart
-octo-runtime executor-kernel stop
-octo-runtime executor-kernel uninstall
-octo-runtime executor-kernel run
+octo-runtime install
+octo-runtime start
+octo-runtime restart
+octo-runtime stop
+octo-runtime uninstall
+octo-runtime run
 
 ```
 
-Each command acts on its named component only. First and repeated `install` enable autostart by default; only explicit `--autostart=false` disables it. A later plain `install` enables it again. `start` automatically installs a missing service with autostart enabled, reports installation progress on stderr, then starts it and waits for readiness. Existing services keep their settings. `restart` requires an installed service and returns exit code 3 when it is missing.
+Each command acts on the Runtime service. First and repeated `install` enable autostart by default; only explicit `--autostart=false` disables it. A later plain `install` enables it again. `start` automatically installs a missing service with autostart enabled, reports installation progress on stderr, then starts it and waits for readiness. Existing services keep their settings. `restart` requires an installed service and returns exit code 3 when it is missing.
 
-An explicitly disabled service rejects both `start` and `restart` with `SERVICE_DISABLED`. Run `<component> install --autostart=true` before starting it again. For foreground use without registering a system service, use `<component> run`. `stop` preserves the autostart setting; `uninstall` preserves Home data. There is no `--force` option. Never delete identity or configuration as an automatic recovery step.
+An explicitly disabled service rejects both `start` and `restart` with `SERVICE_DISABLED`. Run `octo-runtime install --autostart=true` before starting it again. For foreground use without registering a system service, use `octo-runtime run`. `stop` preserves the autostart setting; `uninstall` preserves Home data. There is no `--force` option. Never delete identity or configuration as an automatic recovery step.
 
 Channel Gateway uses the separate @mininglamp-oss/octo-channel-gateway package and octo-channel-gateway CLI. Runtime has no Extra declarations or business plugin loader.
 

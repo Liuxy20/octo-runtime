@@ -267,21 +267,27 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
           `Octo Runtime CLI (${metadata.version})\n${version.split("\n").slice(1).join("\n")}\n`
         )
       );
-      assert.match(help, /Examples:\n  octo-runtime executor-kernel start/);
-      assert.match(help, /Available Commands:\n  executor-kernel/);
+      assert.match(help, /Examples:\n  octo-runtime start/);
+      assert.match(help, /Available Commands:\n  start/);
     }
     await assert.rejects(
       run(["daemon"]),
       (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stderr)
     );
-    for (const component of ["executor-kernel"]) {
-      assert.match((await run([component])).stdout, /Usage:\s+octo-runtime .+\[command\]/);
-      await assert.rejects(
-        run([component, "restart", "--json"]),
-        (error) =>
-          error.code === 3 && JSON.parse(error.stdout).error.code === "SERVICE_NOT_INSTALLED"
+    for (const command of ["start", "run", "logs", "install", "recover"]) {
+      assert.match(
+        (await run([command, "--help"])).stdout,
+        new RegExp(`Usage:\\s+octo-runtime ${command}`)
       );
     }
+    await assert.rejects(
+      run(["executor-kernel", "start"]),
+      (error) => error.code === 2 && /INVALID_ARGUMENTS/.test(error.stderr)
+    );
+    await assert.rejects(
+      run(["restart", "--json"]),
+      (error) => error.code === 3 && JSON.parse(error.stdout).error.code === "SERVICE_NOT_INSTALLED"
+    );
     assert.match((await run(["status"])).stdout, /executor-kernel\s+service:/);
     const command = join(
       directory,
@@ -383,15 +389,11 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       ],
       { cwd: consumer, timeout: runtimeCheckTimeout, label: "Run public SDK component integration" }
     );
-    const child = spawn(
-      process.execPath,
-      [cli, "executor-kernel", "run", "--json", "--home", home],
-      {
-        cwd: consumer,
-        stdio: ["ignore", "pipe", "pipe"],
-        detached: process.platform !== "win32"
-      }
-    );
+    const child = spawn(process.execPath, [cli, "run", "--json", "--home", home], {
+      cwd: consumer,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32"
+    });
     let stdout = "",
       stderr = "";
     child.stdout.on("data", (chunk) => {

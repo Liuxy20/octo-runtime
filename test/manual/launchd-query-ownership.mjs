@@ -261,18 +261,15 @@ test("CLI reports unknown with the real backend and query failure", async (t) =>
   calls.length = 0;
   const invoke = async (json) => {
     const lines = [];
-    const exitCode = await runCli(
-      ["executor-kernel", "status", "--home", home, ...(json ? ["--json"] : [])],
-      {
-        backend,
-        output: (line) => lines.push(line)
-      }
-    );
+    const exitCode = await runCli(["status", "--home", home, ...(json ? ["--json"] : [])], {
+      backend,
+      output: (line) => lines.push(line)
+    });
     assert.equal(exitCode, 0);
     return lines.join("\n");
   };
   assert.match(await invoke(false), /service: unknown  autostart: unknown/);
-  const json = JSON.parse(await invoke(true));
+  const json = JSON.parse(await invoke(true))["executor-kernel"];
   assert.equal(json.service.state, "unknown");
   assert.equal(json.service.detail, "COMMAND_FAILED");
   assert.equal(json.service.enabled, false);

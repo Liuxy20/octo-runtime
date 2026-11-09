@@ -4,14 +4,14 @@
 
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
-octo-runtime executor-kernel start
+octo-runtime start
 octo-runtime doctor
 octo-runtime status
 octo-runtime adapter list
 octo-runtime adapter probe codex
-octo-runtime executor-kernel logs --lines 200 --follow
-octo-runtime executor-kernel stop
-octo-runtime executor-kernel uninstall
+octo-runtime logs --lines 200 --follow
+octo-runtime stop
+octo-runtime uninstall
 ```
 
 Requires Node.js 24/26. start installs if needed; install enables autostart unless --autostart=false. restart requires an installed service. stop/uninstall preserve Home, identity, configuration and logs.
@@ -19,3 +19,7 @@ Requires Node.js 24/26. start installs if needed; install enables autostart unle
 Use --home, --profile and --manifest to select the CLI environment; --json returns machine-readable results.
 
 Channels use [octo-channel-gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) with its own CLI and Home, pointing at an existing Kernel endpoint.
+
+Lifecycle commands are top-level: `install`, `uninstall`, `start`, `stop`, `restart`, `run`, `status`, `logs`, and `recover`. Use `octo-runtime run` for a foreground service and `octo-runtime <command> --help` for its options. `recover` requires `--acknowledge-orphan-cleanup` after you have stopped the orphan tools reported by `doctor`.
+
+The former `octo-runtime executor-kernel <command>` syntax is removed. Update scripts to the top-level commands. After upgrading an existing system-service installation, run `octo-runtime stop`, `octo-runtime install`, then `octo-runtime start` with the same `--home` (and the same explicit `--profile`/`--manifest` when used); `install` refreshes the service launch arguments to `run`. Use `--autostart=false` on `install` if automatic startup should remain disabled. This preserves the service identity, Home and configuration. `status --json` retains the `executor-kernel` status key; the Kernel SDK package and IPC endpoint names are unchanged.

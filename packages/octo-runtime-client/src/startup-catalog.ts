@@ -168,7 +168,7 @@ export const STARTUP_CATALOG: Readonly<Record<string, StartupCatalogEntry>> = Ob
   ),
   ORPHAN_CLEANUP_INCOMPLETE: entry(
     "Previous Kernel resource cleanup is incomplete.",
-    "CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run executor-kernel recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records."
+    "CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run octo-runtime recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records."
   ),
   ORPHAN_RECORD_UNSUPPORTED: entry(
     "The stored Kernel ownership format is unsupported.",

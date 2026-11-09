@@ -14,7 +14,7 @@ import {
   validateRuntimeHome,
   RuntimeHomeError
 } from "@mininglamp-oss/octo-runtime-host-sdk";
-import { cliVersionInfo } from "./help.js";
+import { cliVersionInfo, lifecycleCommands } from "./help.js";
 import { parseCliCommand } from "./command-tree.js";
 import { runForegroundService } from "./foreground.js";
 import { showKernelLogs } from "./logs.js";
@@ -56,7 +56,6 @@ export interface CliDependencies extends ServiceControlOptions {
   commandSignal?: AbortSignal;
 }
 const components = ["executor-kernel"] as const;
-const builtinComponents: readonly string[] = components;
 export async function runCli(args: string[], dependencies: CliDependencies = {}): Promise<number> {
   const output = dependencies.output ?? ((line: string) => process.stdout.write(`${line}\n`));
   // 参数解析失败也按宿主布尔标记输出 JSON；-- 后的字面位置参数不选择输出格式。
@@ -80,16 +79,17 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       return 0;
     }
     const { flags, positional } = parsed;
-    context = { component: positional[0], action: positional[1] };
+    const action = positional[0];
+    // 生命周期入口已平铺；内部服务身份仍用于锁、状态、日志与系统服务名称。
+    context = lifecycleCommands.has(action)
+      ? { component: "executor-kernel", action }
+      : { component: positional[0], action: positional[1] };
     json = Boolean(flags.json);
-    if (
-      flags["acknowledge-orphan-cleanup"] !== undefined &&
-      !(positional[0] === "executor-kernel" && positional[1] === "recover")
-    )
+    if (flags["acknowledge-orphan-cleanup"] !== undefined && action !== "recover")
       throw new Error("INVALID_ARGUMENTS");
-    if ((flags.lines !== undefined || flags.follow !== undefined) && positional[1] !== "logs")
+    if ((flags.lines !== undefined || flags.follow !== undefined) && action !== "logs")
       throw new Error("INVALID_ARGUMENTS");
-    json = Boolean(flags.json);
+    if (flags.autostart !== undefined && action !== "install") throw new Error("INVALID_ARGUMENTS");
     if (flags.version || positional[0] === "version") {
       output(cliVersionInfo);
       return 0;
@@ -97,7 +97,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     const home = selectRuntimeHome(flags.home, dependencies.env, dependencies.platform);
     // 先验证已存在的根，避免普通文件先退化成配置读取 ENOTDIR。
     // 缺失根只由后面已确认的宿主动作准备；未知/已移除命令不能因此创建 Home。
-    if (["install", "start", "restart", "run"].includes(positional[1])) {
+    if (["install", "start", "restart", "run"].includes(action)) {
       try {
         validateRuntimeHome(home);
       } catch (error) {
@@ -108,10 +108,10 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
     const kernelStateDirectory = join(home, "run");
     const kernelInvocationManifest = join(kernelStateDirectory, "kernel-invocations.json");
     // 恢复确认不加载 Provider 或访问服务管理器；原记录继续保留，下一次启动校验摘要后替换。
-    if (positional[0] === "executor-kernel" && positional[1] === "recover") {
+    if (action === "recover") {
       context = { component: "executor-kernel", action: "recover", logs: join(home, "logs") };
       if (
-        positional.length !== 2 ||
+        positional.length !== 1 ||
         flags["acknowledge-orphan-cleanup"] !== "true" ||
         flags.autostart !== undefined
       )
@@ -126,25 +126,19 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       output(
         json
           ? JSON.stringify(recovery)
-          : `Orphan cleanup acknowledged. Evidence: ${recovery.archivePath}\nStart executor-kernel again using the same --home.`
+          : `Orphan cleanup acknowledged. Evidence: ${recovery.archivePath}\nRun octo-runtime start again using the same --home.`
       );
       return 0;
     }
     // Route logs before config/module/manager access so offline failures remain diagnosable.
-    if (positional[1] === "logs") {
-      const component = positional[0];
+    if (action === "logs") {
+      const component = "executor-kernel";
       context = {
         component: component,
         action: "logs",
         logs: join(home, "logs")
       };
-      if (
-        positional.length !== 2 ||
-        !/^[a-z][a-z0-9-]{0,63}$/.test(component) ||
-        flags.autostart !== undefined
-      )
-        throw new Error("INVALID_ARGUMENTS");
-      if (!builtinComponents.includes(component)) throw new Error("INVALID_ARGUMENTS");
+      if (positional.length !== 1) throw new Error("INVALID_ARGUMENTS");
       if (flags.lines !== undefined && !/^[1-9][0-9]{0,4}$/.test(flags.lines))
         throw new Error("INVALID_ARGUMENTS");
       await showKernelLogs({
@@ -171,12 +165,16 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       runtimePaths(home, "default").rootConfig
     );
     const profile = flags.profile ?? root?.default_profile ?? "default";
+    const serviceArgs = [
+      ...(flags.profile ? ["--profile", profile] : []),
+      ...(flags.manifest ? ["--manifest", resolve(flags.manifest)] : [])
+    ];
     const paths = runtimePaths(home, profile, dependencies.platform);
     // 配置/恢复和 Playboard 不使用常驻端点；只在实际连接或托管常驻服务时派生并校验。
     const kernelEndpoint = () => componentEndpoint(home, "executor-kernel", dependencies.platform);
-    context = { component: positional[0], action: positional[1], logs: join(home, "logs") };
+    context = { ...context, logs: join(home, "logs") };
     // 部署、停止及配置修复命令不启动模块，也不因尚未可读的启动清单而无法操作。
-    const needsManifest = positional[0] === "executor-kernel" && positional[1] === "run";
+    const needsManifest = action === "run";
     const manifest = needsManifest
       ? await loadCliManifest(
           home,
@@ -185,7 +183,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         )
       : undefined;
     const componentNames = [...components];
-    const isComponent = (name: string) => builtinComponents.includes(name);
     const service = resolveServiceControl(dependencies);
     const input = dependencies.input ?? process.stdin;
     const publish = (value: unknown, human?: string) =>
@@ -194,7 +191,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       );
     const snapshot = async (component: string): Promise<ComponentSnapshot> => {
       const inspect = async () => {
-        let spec = service.spec(home, component);
+        let spec = service.spec(home, component, false, serviceArgs);
         let native = await service.backend.inspect(spec);
         // 自启是已安装服务的事实，不能用 status 的默认 spec(false) 伪造配置漂移。
         if (native.enabled) {
@@ -275,7 +272,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
           .map(([name, value]) => formatStatus(name, value))
           .join(
             "\n\n"
-          )}\n\n${formatResidentProcesses(processes)}\n\nOrphan cleanup: ${recovery.state}\nManifest: ${recovery.manifestPath}${recovery.state === "cleanup_incomplete" ? "\nStop all orphan tools, then run executor-kernel recover --acknowledge-orphan-cleanup with the same --home." : ""}`
+          )}\n\n${formatResidentProcesses(processes)}\n\nOrphan cleanup: ${recovery.state}\nManifest: ${recovery.manifestPath}${recovery.state === "cleanup_incomplete" ? "\nStop all orphan tools, then run octo-runtime recover --acknowledge-orphan-cleanup with the same --home." : ""}`
       );
       return 0;
     }
@@ -289,22 +286,14 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
       );
       return 0;
     }
-    const component = positional[0],
-      action = positional[1];
+    const component = "executor-kernel";
     if (
-      !isComponent(component) ||
-      positional.length !== 2 ||
-      !["uninstall", "install", "start", "restart", "stop", "run", "status"].includes(action)
+      positional.length !== 1 ||
+      !["uninstall", "install", "start", "restart", "stop", "run"].includes(action)
     )
       throw new Error("INVALID_ARGUMENTS");
-    if (flags.autostart !== undefined && action !== "install") throw new Error("INVALID_ARGUMENTS");
     if (["install", "start", "restart", "run"].includes(action))
       componentEndpoint(home, component, dependencies.platform);
-    if (action === "status") {
-      const status = await snapshots([component]);
-      publish(status[component], formatStatus(component, status[component]));
-      return 0;
-    }
     if (action === "run") {
       if (!manifest) throw new Error("MANIFEST_INVALID");
       runningComponent = component;
@@ -353,10 +342,6 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         }
       );
     }
-    const serviceArgs = [
-      ...(flags.profile ? ["--profile", profile] : []),
-      ...(flags.manifest ? ["--manifest", resolve(flags.manifest)] : [])
-    ];
     let spec = service.spec(home, component, false, serviceArgs);
     // 同组件所有部署修改及最终状态确认串行；不同组件仍可独立启动。
     return await withSetupLock(
@@ -415,7 +400,7 @@ export async function runCli(args: string[], dependencies: CliDependencies = {})
         const native = await service.backend.inspect(spec);
         publish(
           { component, action, service: native },
-          `${component}: ${action} succeeded\nService: ${native.state}  Autostart: ${native.enabled ? "on" : "off"}\n${action === "install" ? `Next: octo-runtime ${component} start --home ${JSON.stringify(home)}\n` : ""}Logs: ${join(home, "logs")}`
+          `${component}: ${action} succeeded\nService: ${native.state}  Autostart: ${native.enabled ? "on" : "off"}\n${action === "install" ? `Next: octo-runtime start --home ${JSON.stringify(home)}\n` : ""}Logs: ${join(home, "logs")}`
         );
         return 0;
       }

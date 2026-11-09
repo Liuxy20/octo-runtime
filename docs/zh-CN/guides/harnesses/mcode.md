@@ -24,7 +24,7 @@ mcode --version
 
 ## 启动与代理
 
-使用 `octo-runtime executor-kernel start` 启动 Runtime，再按 [SDK 接入](../../getting-started/sdk.md)调用 `mcode` Adapter。模型由 MiniMax Code 自行选择，Runtime 不发送会话级模型设置请求。
+使用 `octo-runtime start` 启动 Runtime，再按 [SDK 接入](../../getting-started/sdk.md)调用 `mcode` Adapter。模型由 MiniMax Code 自行选择，Runtime 不发送会话级模型设置请求。
 
 本轮代理使用 `agentEnv.items` 中的 `octo.execution/envs`，见[本轮环境](../context-and-sessions.md)。按安装的 MiniMax Code 版本确认代理支持，发送短请求并确认回答和成功终态；安装探测不代表模型可用。本次文档更新未进行真实 MiniMax Code 验收。
 

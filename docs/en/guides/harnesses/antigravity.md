@@ -19,7 +19,7 @@ Minimum version: `1.3.3`. Only `full_access` and canonical output are supported;
 
 ## Start and Verify
 
-Start the execution service with `octo-runtime executor-kernel start`. Follow [SDK integration](../../getting-started/sdk.md) to invoke the configured Antigravity Adapter with a short request such as “Reply only OK. Do not use tools.” Confirm both the answer and successful terminal event. Channel deployment is a separate operation in the independent repository.
+Start the execution service with `octo-runtime start`. Follow [SDK integration](../../getting-started/sdk.md) to invoke the configured Antigravity Adapter with a short request such as “Reply only OK. Do not use tools.” Confirm both the answer and successful terminal event. Channel deployment is a separate operation in the independent repository.
 
 ## Troubleshooting and Verification Limits
 

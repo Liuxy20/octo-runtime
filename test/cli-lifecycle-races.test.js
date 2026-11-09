@@ -47,7 +47,7 @@ async function fixture(t) {
     );
   const call = async (action, backend, extra = {}) => {
     const output = [];
-    const code = await runCli(["--home", home, "executor-kernel", action, "--json"], {
+    const code = await runCli(["--home", home, action, "--json"], {
       backend,
       output: (line) => output.push(JSON.parse(line)),
       errorOutput() {},

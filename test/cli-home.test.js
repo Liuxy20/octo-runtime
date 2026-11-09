@@ -19,7 +19,7 @@ for (const component of ["executor-kernel"]) {
       restart: async () => calls.push("restart")
     };
     assert.equal(
-      await runCli([component, "restart", "--home", home], {
+      await runCli(["restart", "--home", home], {
         backend,
         output() {},
         errorOutput() {}
@@ -43,7 +43,8 @@ for (const component of ["executor-kernel"]) {
       install: async (spec) => {
         calls.push("install");
         assert.equal(spec.enabled, true);
-        assert.ok(spec.args.includes(component));
+        assert.equal(spec.args[1], "run");
+        assert.ok(!spec.args.includes(component));
         assert.deepEqual(spec.args.slice(-4), ["--profile", "work", "--manifest", manifest]);
         throw new Error("INSTALL_FAILED");
       },
@@ -51,7 +52,7 @@ for (const component of ["executor-kernel"]) {
     };
     assert.equal(
       await runCli(
-        [component, "start", "--home", home, "--profile", "work", "--manifest", manifest, "--json"],
+        ["start", "--home", home, "--profile", "work", "--manifest", manifest, "--json"],
         {
           backend,
           output: (line) => {

@@ -104,7 +104,7 @@ The English summary and recovery column below mirror the shared `STARTUP_CATALOG
 | `NOT_INSTALLED` | The component service is not installed. | Run this component's install command, then start it. | user action |
 | `SERVICE_DISABLED` | The component service is disabled. | Run this component's install --autostart=true command, then start it. | user action |
 | `MANAGER_UNAVAILABLE` | The native service manager is unavailable. | Run doctor and inspect the current user's native service manager. | user action |
-| `ORPHAN_CLEANUP_INCOMPLETE` | Previous Kernel resource cleanup is incomplete. | CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run executor-kernel recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records. | user action |
+| `ORPHAN_CLEANUP_INCOMPLETE` | Previous Kernel resource cleanup is incomplete. | CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run octo-runtime recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records. | user action |
 | `ORPHAN_RECORD_UNSUPPORTED` | The stored Kernel ownership format is unsupported. | Preserve the ownership evidence. Stop and clean up using the version and host that created it before upgrading; do not acknowledge or delete an unknown record. | user action |
 
 The catalog does not prescribe a new public code for every failure or turn business connectivity errors into component startup errors. In particular, removed execution workers are not restored.

@@ -8,7 +8,7 @@
 
 ## 服务无法连接
 
-使用 `octo-runtime executor-kernel logs --lines 200 --follow` 观察执行服务诊断。日志不包含聊天正文或凭据。Gateway 的连接与投递诊断由独立 CLI 提供。
+使用 `octo-runtime logs --lines 200 --follow` 观察执行服务诊断。日志不包含聊天正文或凭据。Gateway 的连接与投递诊断由独立 CLI 提供。
 
 渠道连通性、重试策略及投递日志归[独立 Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway)；使用其自己的 CLI 和 Home 排查。渠道在线不代表执行或投递成功。
 

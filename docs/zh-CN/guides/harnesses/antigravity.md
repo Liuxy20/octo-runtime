@@ -19,7 +19,7 @@ agy --version
 
 ## 启动并验证
 
-使用 `octo-runtime executor-kernel start` 启动执行服务，再按 [SDK 接入](../../getting-started/sdk.md)调用已配置的 Antigravity Adapter，发送“只回复 OK，不调用工具”等短请求，确认回答和成功终态。渠道部署另按独立仓库的说明操作。
+使用 `octo-runtime start` 启动执行服务，再按 [SDK 接入](../../getting-started/sdk.md)调用已配置的 Antigravity Adapter，发送“只回复 OK，不调用工具”等短请求，确认回答和成功终态。渠道部署另按独立仓库的说明操作。
 
 ## 排查与验收边界
 

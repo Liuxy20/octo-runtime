@@ -4,10 +4,10 @@
 
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
-octo-runtime executor-kernel install
-octo-runtime executor-kernel start
+octo-runtime install
+octo-runtime start
 octo-runtime doctor
-octo-runtime executor-kernel logs --lines 200
+octo-runtime logs --lines 200
 ```
 
 首次和重复 install 默认开启自启，显式 `--autostart=false` 禁用。start 未安装时自动安装；restart 不隐式安装。stop/uninstall 保留 Home、身份、凭据和日志。不要删除或复制现有 Home 来完成本次迁移。

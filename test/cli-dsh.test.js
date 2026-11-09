@@ -249,15 +249,12 @@ test(
     const original = new Set(process.listeners("SIGTERM"));
     let ready = false;
     let client;
-    const running = runCli(
-      ["--home", home, "--manifest", file, "--json", "executor-kernel", "run"],
-      {
-        env: environment(selected.bin),
-        output: (line) => {
-          ready ||= line.includes('"state": "ready"');
-        }
+    const running = runCli(["--home", home, "--manifest", file, "--json", "run"], {
+      env: environment(selected.bin),
+      output: (line) => {
+        ready ||= line.includes('"state": "ready"');
       }
-    );
+    });
     t.after(async () => {
       client?.close();
       for (const stop of process.listeners("SIGTERM")) if (!original.has(stop)) stop();

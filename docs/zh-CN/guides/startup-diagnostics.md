@@ -104,7 +104,7 @@ CLI 在 `<home>/logs/startup-<component>.json` 保存每组件一份有界安全
 | `NOT_INSTALLED` | 组件服务未安装 | Run this component's install command, then start it. | 先由用户处理 |
 | `SERVICE_DISABLED` | 组件服务已禁用 | Run this component's install --autostart=true command, then start it. | 先由用户处理 |
 | `MANAGER_UNAVAILABLE` | 原生服务管理器不可用 | Run doctor and inspect the current user's native service manager. | 先由用户处理 |
-| `ORPHAN_CLEANUP_INCOMPLETE` | 前一 Kernel 资源清理未完成 | CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run executor-kernel recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records. | 先由用户处理 |
+| `ORPHAN_CLEANUP_INCOMPLETE` | 前一 Kernel 资源清理未完成 | CLI users: run doctor with the same --home. After confirming all owned orphan tools have stopped, run octo-runtime recover --acknowledge-orphan-cleanup with that Home, then start again. SDK hosts must use the corresponding inspect/acknowledge API; do not remove ownership records. | 先由用户处理 |
 | `ORPHAN_RECORD_UNSUPPORTED` | 不支持已保存的 Kernel 所有权格式 | Preserve the ownership evidence. Stop and clean up using the version and host that created it before upgrading; do not acknowledge or delete an unknown record. | 先由用户处理 |
 
 目录不为每个失败强制发明新公共码，也不把业务连通性错误改成组件启动错误。已删除的执行 worker 不恢复。

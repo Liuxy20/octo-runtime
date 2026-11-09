@@ -18,7 +18,7 @@ test("CLI preserves backend codes and suggests help without printing private exc
     }
   };
   assert.equal(
-    await runCli(["executor-kernel", "install", "--json"], {
+    await runCli(["install", "--json"], {
       backend,
       output: (line) => {
         output = line;

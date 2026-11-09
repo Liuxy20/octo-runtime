@@ -64,7 +64,7 @@
     "test:suites": "node --test test/*.test.js packages/octo-runtime-protocol/test/*.test.js",
     "docs:check": "tsc -p docs/examples/tsconfig.json && node scripts/check-developer-docs.mjs && node --test docs/checks/*.test.mjs",
     "cli": "pnpm build && node apps/cli/dist/index.js",
-    "host": "pnpm build && node apps/cli/dist/index.js executor-kernel run",
+    "host": "pnpm build && node apps/cli/dist/index.js run",
     "build": "pnpm --recursive --filter \"./packages/**\" --filter \"./apps/**\" run build && tsc -p public/tsconfig.json",
     "prepare": "pnpm run build",
     "typecheck": "pnpm build && tsc -p tsconfig.json --noEmit",

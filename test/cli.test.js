@@ -8,13 +8,7 @@ test("CLI help and version are local and removed daemon commands cannot create a
   const root = await mkdtemp(join(tmpdir(), "oc-help-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const home = join(root, "absent");
-  for (const command of [
-    [],
-    ["--help"],
-    ["executor-kernel", "--help"],
-    ["executor-kernel"],
-    ["--version"]
-  ]) {
+  for (const command of [[], ["--help"], ["run", "--help"], ["help", "logs"], ["--version"]]) {
     let text = "";
     assert.equal(
       await runCli([...command, "--home", home], { output: (line) => (text += line) }),
@@ -22,7 +16,15 @@ test("CLI help and version are local and removed daemon commands cannot create a
     );
     assert.ok(text.length);
   }
-  for (const command of [["daemon", "start"], ["executor-kernel", "reload"], ["--force"]]) {
+  for (const command of [
+    ["daemon", "start"],
+    ["executor-kernel"],
+    ["executor-kernel", "--help"],
+    ["executor-kernel", "start"],
+    ["executor-kernel", "run"],
+    ["executor-kernel", "logs"],
+    ["--force"]
+  ]) {
     assert.equal(await runCli([...command, "--home", home], { output() {} }), 2);
   }
   await assert.rejects(access(home));

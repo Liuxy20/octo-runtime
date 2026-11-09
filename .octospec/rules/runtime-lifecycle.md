@@ -87,12 +87,12 @@ Windows 使用 Node.js 和系统已有命令，公共层不引入原生 supervis
 
 ## CLI
 
-executor-kernel 的 logs 命令读取 Home/logs/kernel-status-*.log，现行事件为 kernel.ready、kernel.closing、kernel.execution_drained、kernel.start_failed 和 kernel.cleanup_incomplete。旧 worker 日志白名单已删除，不兼容历史 worker 心跳/重启状态。CLI 自动选择 Home/logs，SDK 显式传 logging.directory；Core 排空后关闭共享日志，沿用总关闭截止时间。日志不含执行正文、凭据或原始异常。
+顶层 `octo-runtime logs` 命令读取 Home/logs/kernel-status-*.log，现行事件为 kernel.ready、kernel.closing、kernel.execution_drained、kernel.start_failed 和 kernel.cleanup_incomplete。旧 worker 日志白名单已删除，不兼容历史 worker 心跳/重启状态。CLI 自动选择 Home/logs，SDK 显式传 logging.directory；Core 排空后关闭共享日志，沿用总关闭截止时间。日志不含执行正文、凭据或原始异常。
 
 
 start/restart 成功后确认当前 Kernel IPC 就绪，返回同一 service/runtime 状态；就绪不表示 Provider 已认证。
 
-CLI 仅管理 executor-kernel 的 uninstall/install/start/restart/stop/status/run。install 默认开启用户服务自启，仅 --autostart=false 禁用；start 在组件锁内对未安装服务先安装再启动并等待 IPC。restart 未安装返回 3，禁用服务保留 SERVICE_DISABLED。stop 不改自启；uninstall 保留 Home。独立 Gateway 不受 Runtime CLI 控制。
+CLI 仅管理 executor-kernel，生命周期入口平铺为 `octo-runtime uninstall/install/start/restart/stop/status/run/logs/recover`。旧 executor-kernel 子命令明确拒绝，不保留兼容别名；adapter list/probe 保持分组。系统服务 argv 使用顶层 run，服务 ID、Home 路径、锁与 status JSON 键保持；升级已有安装须显式 stop/install/start 刷新旧启动参数，install 的 profile/manifest/autostart 按用户原配置显式传入。install 默认开启用户服务自启，仅 --autostart=false 禁用；start 在组件锁内对未安装服务先安装再启动并等待 IPC。restart 未安装返回 3，禁用服务保留 SERVICE_DISABLED。stop 不改自启；uninstall 保留 Home。独立 Gateway 不受 Runtime CLI 控制。
 
 cross-service 沿用既有各平台启用/禁用实现：macOS 的 LaunchAgents 和 disabled override、Linux 的 user unit 与 target enable 链接、Windows 整个用户任务的 Enabled 设置。本轮不迁移 plist 目录或改造 Windows 触发器。均为用户服务，自动激活时机是用户登录/manager 激活，不承诺未登录时运行。
 

@@ -35,14 +35,14 @@ export const lifecycleCommands = new Map([
   ["restart", "Restart this service and wait for readiness"],
   ["run", "Run this service in the foreground"],
   ["status", "Show service and runtime status"],
-  ["logs", "Read service status logs (no conversation content)"]
+  ["logs", "Read service status logs (no conversation content)"],
+  ["recover", "Acknowledge orphan cleanup after stopping orphan tools"]
 ]);
 export const rootCommands = new Map([
+  ...lifecycleCommands,
   ["adapter", "List and probe execution adapters"],
   ["doctor", "Diagnose the local runtime"],
-  ["executor-kernel", "Manage native Agent execution and local RPC"],
   ["help", "Help about any command"],
   ["playboard", "Run an Agent request from stdin JSON"],
-  ["status", "Show runtime and service status"],
   ["version", "Print version and build information"]
 ]);

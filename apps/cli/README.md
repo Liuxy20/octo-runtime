@@ -3,8 +3,8 @@
 CLI 是执行服务的宿主，负责 Adapter manifest、Runtime Home 和原生用户服务。SDK 应用直接构造执行服务。
 
 ```text
-octo-runtime executor-kernel install|uninstall|start|stop|restart|run|status|logs
-octo-runtime executor-kernel recover --acknowledge-orphan-cleanup
+octo-runtime install|uninstall|start|stop|restart|run|status|logs
+octo-runtime recover --acknowledge-orphan-cleanup
 octo-runtime adapter list
 octo-runtime adapter probe <type>
 octo-runtime doctor

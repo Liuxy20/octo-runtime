@@ -69,10 +69,9 @@ for (const suffix of ["ascii", "中文 home with spaces"]) {
         assert.deepEqual((await backend.inspect(spec)).drift, []);
         const output = [];
         assert.equal(
-          await runCli(
-            ["executor-kernel", "install", "--home", home, `--autostart=${enabled}`, "--json"],
-            { output: (value) => output.push(value) }
-          ),
+          await runCli(["install", "--home", home, `--autostart=${enabled}`, "--json"], {
+            output: (value) => output.push(value)
+          }),
           0,
           output.join("\n")
         );
@@ -81,7 +80,7 @@ for (const suffix of ["ascii", "中文 home with spaces"]) {
         assert.equal(cliInstalled.enabled, enabled);
         assert.deepEqual(cliInstalled.drift, []);
         assert.equal(
-          await runCli(["executor-kernel", "uninstall", "--home", home, "--json"], {
+          await runCli(["uninstall", "--home", home, "--json"], {
             output: (value) => output.push(value)
           }),
           0,

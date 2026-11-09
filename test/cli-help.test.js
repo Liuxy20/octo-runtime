@@ -50,24 +50,56 @@ async function fixture(t, source = 'throw new Error("commands must not be import
   return { home, manifest, cli };
 }
 
-test("Native options retain their legacy position before components without accepting duplicates", async () => {
+test("Lifecycle options work before root commands without accepting duplicates", async () => {
   for (const [prefix, path, expected] of [
-    [["--autostart=false"], ["executor-kernel", "install"], { autostart: "false" }],
-    [["--lines", "100", "--follow"], ["executor-kernel", "logs"], { lines: "100", follow: "true" }],
-    [
-      ["--acknowledge-orphan-cleanup"],
-      ["executor-kernel", "recover"],
-      { "acknowledge-orphan-cleanup": "true" }
-    ]
+    [["--autostart=false"], ["install"], { autostart: "false" }],
+    [["--lines", "100", "--follow"], ["logs"], { lines: "100", follow: "true" }],
+    [["--acknowledge-orphan-cleanup"], ["recover"], { "acknowledge-orphan-cleanup": "true" }]
   ]) {
     const result = await parseCliCommand([...prefix, ...path], {});
     assert.deepEqual(result.positional, path);
     for (const [key, value] of Object.entries(expected)) assert.equal(result.flags[key], value);
   }
   await assert.rejects(
-    parseCliCommand(["--autostart=false", "executor-kernel", "install", "--autostart=true"], {}),
+    parseCliCommand(["--autostart=false", "install", "--autostart=true"], {}),
     /INVALID_ARGUMENTS/
   );
+});
+
+test("Root help exposes lifecycle commands and keeps help and offline logs local", async (t) => {
+  const { cli } = await fixture(t);
+  const help = await cli(["--help"]);
+  assert.equal(help.code, 0);
+  const commands = listedCommands(help.output);
+  for (const command of [
+    "start",
+    "run",
+    "stop",
+    "restart",
+    "install",
+    "uninstall",
+    "logs",
+    "recover",
+    "status",
+    "doctor",
+    "adapter"
+  ])
+    assert.ok(commands.includes(command), command);
+  assert.ok(!commands.includes("executor-kernel"));
+  assert.match(help.output, /octo-runtime start/);
+  for (const command of ["start", "run", "logs", "install", "recover"]) {
+    const result = await cli([command, "--help"]);
+    assert.equal(result.code, 0);
+    assert.match(result.output, new RegExp(`Usage:\\s+octo-runtime ${command}`));
+  }
+  assert.equal((await cli(["logs", "--lines", "10"])).code, 0);
+  for (const args of [
+    ["--lines", "10", "start"],
+    ["--autostart=false", "status"],
+    ["--acknowledge-orphan-cleanup", "stop"],
+    ["logs", "--lines", "0"]
+  ])
+    assert.equal((await cli(args)).code, 2, args.join(" "));
 });
 
 test("Legacy JSON equals flags keep parse failures machine readable", async (t) => {

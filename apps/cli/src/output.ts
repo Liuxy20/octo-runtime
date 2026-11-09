@@ -220,7 +220,7 @@ export function describeError(
       : undefined;
   const hints: Record<string, string> = {
     COMMAND_FAILED: "The command failed. Check the native manager, configuration and service logs.",
-    KERNEL_UNAVAILABLE: "Kernel is unavailable. Check executor-kernel status.",
+    KERNEL_UNAVAILABLE: "Kernel is unavailable. Run octo-runtime status.",
     INVALID_ARGUMENTS: "Use --help to see the available commands and flags.",
     ORPHAN_CLEANUP_OWNER_ALIVE:
       "The original Kernel or worker is still alive or its identity cannot be verified. Stop it safely before acknowledging cleanup.",

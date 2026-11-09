@@ -8,10 +8,10 @@ Requires Node.js 24 or 26.
 
 ```sh
 npm install -g @mininglamp-oss/octo-runtime
-octo-runtime executor-kernel start
+octo-runtime start
 octo-runtime doctor
 octo-runtime adapter list
-octo-runtime executor-kernel logs --lines 200 --follow
+octo-runtime logs --lines 200 --follow
 ```
 
 `start` installs the user service if needed and waits for readiness. `install` enables autostart by default; `--autostart=false` disables it. `stop` and `uninstall` preserve configuration and data.

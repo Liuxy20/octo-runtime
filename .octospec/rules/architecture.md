@@ -53,7 +53,7 @@ sessionId/sessionGeneration、providerSession.sessionId 和可选 providerEpoch 
 
 ## CLI 面向普通用户的产品默认值
 
-Runtime CLI 只管理 executor-kernel。start 未安装时自动安装并等待就绪；install 默认自启；stop/uninstall 保留配置与数据。帮助和版本查询不加载 Provider。不得改写或删除旧 Home 来迁移渠道。
+Runtime CLI 只管理 executor-kernel，运维命令直接使用顶层 start/run/logs 等；不保留 executor-kernel 子命令或兼容别名。start 未安装时自动安装并等待就绪；install 默认自启；stop/uninstall 保留配置与数据。帮助和版本查询不加载 Provider。不得改写或删除旧 Home 来迁移渠道。
 
 ## 本地信任边界：同一操作系统账号内互信
 

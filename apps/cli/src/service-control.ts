@@ -33,7 +33,6 @@ export function resolveServiceControl(options: ServiceControlOptions = {}) {
         command: resolve(options.nodeExecutable ?? process.execPath),
         args: [
           resolve(options.cliEntrypoint ?? cliEntrypoint()),
-          component,
           "run",
           "--home",
           resolve(home),

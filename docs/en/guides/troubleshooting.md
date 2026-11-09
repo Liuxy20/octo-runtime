@@ -8,7 +8,7 @@ Record the error code and relevant `runId` and `invocationId`, then locate the p
 
 ## Cannot Connect to the Service
 
-Use `octo-runtime executor-kernel logs --lines 200 --follow` for execution service diagnostics. Logs exclude conversation content and credentials. Gateway connection and delivery diagnostics belong to its independent CLI.
+Use `octo-runtime logs --lines 200 --follow` for execution service diagnostics. Logs exclude conversation content and credentials. Gateway connection and delivery diagnostics belong to its independent CLI.
 
 Channel connectivity, retry policies, and delivery logs belong to the [independent Gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway). Check its own CLI and Home separately from Runtime. A connected channel does not prove execution or delivery success.
 

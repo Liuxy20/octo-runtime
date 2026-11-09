@@ -11,7 +11,7 @@ implementation_baseline: feat/executor-kernel-host-lifecycle
 
 宿主准备 Home 与 Adapter，调用 createKernelService 后 initialize，或通过公开 Client 的 attachKernel 连接现有 Kernel。关闭时等待服务 close；客户端 close 只关闭自身连接，不停止 Kernel。
 
-CLI 使用 octo-runtime executor-kernel run/start/stop/restart/install/uninstall/status/logs；doctor 检查本地执行环境。--home 指定 Runtime Home，--json 输出完整状态并须检查退出码。install 默认开启用户服务自启；start 未安装时安装自身，uninstall 保留配置。
+CLI 使用 octo-runtime run/start/stop/restart/install/uninstall/status/logs；doctor 检查本地执行环境。--home 指定 Runtime Home，--json 输出完整状态并须检查退出码。install 默认开启用户服务自启；start 未安装时安装自身，uninstall 保留配置。
 
 Kernel status.execution_ready 表示接纳开放，不证明 Provider 已认证或模型调用成功。原 Run 的终态、取消 ACK、资源清理和业务投递分别确认。故障首先检查有效 IPC 响应、owner lock、Provider probe、工作目录、系统服务状态和日志，不因远端离线删除身份。
 
