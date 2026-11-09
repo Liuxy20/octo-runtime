@@ -19,17 +19,28 @@ function event(type: CanonicalEvent["type"], payload: Record<string, unknown>): 
   return { protocolVersion: 2, type, payload } as CanonicalEvent;
 }
 
+interface Step {
+  id: string;
+  tools: boolean;
+  committed: boolean;
+  answer: boolean;
+  interrupted: boolean;
+}
+
 /** 只保留当前工作和序号摘要；不存轨迹历史，不把 child 文本合并进 root final。 */
 export class DshTrajectory {
   readonly #sessions = new Map<string, { parent?: string; seq: number; digest: string }>();
-  readonly #steps = new Map<string, string>();
+  readonly #steps = new Map<string, Step>();
   readonly #turns = new Map<string, number>();
-  readonly #tools = new Map<string, { id: string; sessionId: string; time: number }>();
+  readonly #tools = new Map<string, { id: string; stepId: string; time: number }>();
   readonly #messages = new Map<string, { id: string; text: string }>();
   readonly #receipts = new Set<string>();
   #lastReason?: string;
   #lastNativeCode?: string | number;
-  #lastAnswer = false;
+  // 原生 commit 早于工具执行，甚至早于后续 turn。只暂存一个 root 候选，发布后不改分类。
+  #pendingText: CanonicalEvent[] = [];
+  #pendingBytes = 0;
+  #pendingStep?: { event: CanonicalEvent; answer: boolean };
   #objects = 0;
 
   constructor(
@@ -49,6 +60,34 @@ export class DshTrajectory {
   #lineage(sessionId: string): Record<string, unknown> {
     const parentSessionId = this.#sessions.get(sessionId)?.parent;
     return { providerSessionId: sessionId, ...(parentSessionId ? { parentSessionId } : {}) };
+  }
+
+  #flushText(channel: "commentary" | "final"): CanonicalEvent[] {
+    const events = this.#pendingText.map((value) =>
+      event(value.type, { ...value.payload, channel })
+    );
+    this.#pendingText = [];
+    this.#pendingBytes = 0;
+    return events;
+  }
+
+  #settleStep(
+    channel: "commentary" | "final",
+    status?: "completed" | "failed" | "cancelled"
+  ): CanonicalEvent[] {
+    const output = this.#flushText(channel);
+    if (this.#pendingStep) {
+      const value = this.#pendingStep.event;
+      output.push(
+        event(value.type, {
+          ...value.payload,
+          ...(status ? { status } : {}),
+          ...(channel === "final" ? { finishReason: "stop" } : {})
+        })
+      );
+      this.#pendingStep = undefined;
+    }
+    return output;
   }
 
   accept(notification: HarnessNotification): CanonicalEvent[] {
@@ -138,8 +177,8 @@ export class DshTrajectory {
         required(integer(data.turn) && !this.#turns.has(sessionId));
         this.#turns.set(sessionId, data.turn);
         if (sessionId === this.sessionId) {
+          output.push(...this.#settleStep("commentary"));
           this.#lastReason = undefined;
-          this.#lastAnswer = false;
         }
         output.push(
           event("activity.started", {
@@ -160,23 +199,36 @@ export class DshTrajectory {
             !this.#steps.has(sessionId)
         );
         this.#bound();
-        this.#steps.set(sessionId, stepId);
+        if (sessionId === this.sessionId) output.push(...this.#settleStep("commentary"));
+        this.#steps.set(sessionId, {
+          id: stepId,
+          tools: false,
+          committed: false,
+          answer: false,
+          interrupted: false
+        });
         output.push(event("model_step.started", { stepId, startedAtMs: source.time, ...lineage }));
         break;
-      case "step/end":
-        required(this.#steps.get(sessionId) === stepId);
+      case "step/end": {
+        const step = this.#steps.get(sessionId);
+        required(step?.id === stepId && !this.#messages.has(sessionId));
+        required(![...this.#tools.values()].some((tool) => tool.stepId === stepId));
         this.#steps.delete(sessionId);
-        output.push(
-          event("model_step.finished", {
-            stepId,
-            status: "completed",
-            endedAtMs: source.time,
-            ...lineage
-          })
-        );
+        const finished = event("model_step.finished", {
+          stepId,
+          status: step.interrupted ? "cancelled" : "completed",
+          ...(step.tools ? { finishReason: "tool-calls" } : {}),
+          endedAtMs: source.time,
+          ...lineage
+        });
+        if (sessionId === this.sessionId && !step.tools)
+          this.#pendingStep = { event: finished, answer: step.answer && !step.interrupted };
+        else output.push(finished);
         break;
+      }
       case "assistant/chunk": {
-        required(this.#steps.get(sessionId) === stepId && record(data.chunk));
+        const step = this.#steps.get(sessionId);
+        required(step?.id === stepId && !step.committed && record(data.chunk));
         const chunk = data.chunk;
         if (chunk.type !== "text-delta") break;
         required(typeof chunk.text === "string");
@@ -200,8 +252,10 @@ export class DshTrajectory {
         break;
       }
       case "assistant/message": {
+        const step = this.#steps.get(sessionId);
         required(
-          this.#steps.get(sessionId) === stepId &&
+          step?.id === stepId &&
+            !step.committed &&
             record(data.message) &&
             Array.isArray(data.message.content)
         );
@@ -225,7 +279,7 @@ export class DshTrajectory {
         if (reasoning) {
           required(Buffer.byteLength(reasoning) <= this.maxTextBytes);
           const analysis = {
-            id: this.#id(sessionId, "analysis", source.seq),
+            messageId: this.#id(sessionId, "analysis", source.seq),
             role: "assistant",
             channel: "analysis",
             exposure: "private_reasoning",
@@ -250,8 +304,9 @@ export class DshTrajectory {
           );
         // durable stream 只在 commit 到达；只发增量或快照一次，并验证二者一致。
         let sent = existing?.text ?? "";
-        if (!existing && data.stream !== undefined) {
+        if (data.stream !== undefined) {
           required(Array.isArray(data.stream));
+          let recorded = "";
           for (const part of data.stream) {
             required(record(part) && typeof part.type === "string");
             if (part.type !== "text-chunks") continue;
@@ -259,14 +314,16 @@ export class DshTrajectory {
               Array.isArray(part.texts) && part.texts.every((item) => typeof item === "string")
             );
             for (const delta of part.texts) {
-              sent += delta;
-              required(Buffer.byteLength(sent) <= this.maxTextBytes);
-              if (delta)
+              recorded += delta;
+              required(Buffer.byteLength(recorded) <= this.maxTextBytes);
+              if (!existing && delta)
                 output.push(
                   this.#messageEvent("message.delta", messageId, sessionId, stepId, { text: delta })
                 );
             }
           }
+          required(text.startsWith(recorded));
+          if (!existing) sent = recorded;
         }
         required(text.startsWith(sent));
         if (text.length > sent.length)
@@ -283,8 +340,9 @@ export class DshTrajectory {
         );
         this.#messages.delete(sessionId);
         this.#bound();
-        if (sessionId === this.sessionId)
-          this.#lastAnswer = text.trim().length > 0 && data.interrupted !== true;
+        step.committed = true;
+        step.answer = text.trim().length > 0;
+        step.interrupted = data.interrupted === true;
         if (record(data.usage)) {
           // 用量只复制已给出的数值，保留原生字段名；不填充未知 token。
           const usage = Object.fromEntries(
@@ -306,7 +364,8 @@ export class DshTrajectory {
           }
         }
         required(
-          this.#steps.get(sessionId) === stepId &&
+          this.#steps.get(sessionId)?.id === stepId &&
+            this.#steps.get(sessionId)?.committed &&
             identifier(data.callId) &&
             identifier(data.name) &&
             record(args)
@@ -315,7 +374,9 @@ export class DshTrajectory {
         required(!this.#tools.has(key));
         this.#bound();
         const id = this.#id(sessionId, "tool", hash(data.callId));
-        this.#tools.set(key, { id, sessionId, time: source.time });
+        this.#tools.set(key, { id, stepId, time: source.time });
+        this.#steps.get(sessionId)!.tools = true;
+        if (sessionId === this.sessionId) output.push(...this.#flushText("commentary"));
         output.push(
           event("tool_call.create", {
             id,
@@ -333,7 +394,10 @@ export class DshTrajectory {
         const key = `${sessionId}\0${data.message.toolCallId}`;
         const tool = this.#tools.get(key);
         required(
-          tool && this.#steps.get(sessionId) === stepId && Array.isArray(data.message.content)
+          tool &&
+            tool.stepId === stepId &&
+            this.#steps.get(sessionId)?.id === stepId &&
+            Array.isArray(data.message.content)
         );
         required(data.message.isError === undefined || typeof data.message.isError === "boolean");
         this.#tools.delete(key);
@@ -357,10 +421,18 @@ export class DshTrajectory {
             ["completed", "error", "aborted", "max-tokens"].includes(String(data.reason.kind))
         );
         this.#turns.delete(sessionId);
+        required(!this.#steps.has(sessionId) && !this.#messages.has(sessionId));
         if (sessionId === this.sessionId) {
           this.#lastReason = String(data.reason.kind);
           const code = record(data.reason.error) ? nativeCode(data.reason.error.code) : undefined;
           this.#lastNativeCode = code;
+          if (data.reason.kind !== "completed")
+            output.push(
+              ...this.#settleStep(
+                "commentary",
+                data.reason.kind === "aborted" ? "cancelled" : "failed"
+              )
+            );
         }
         output.push(
           event("activity.finished", {
@@ -377,7 +449,23 @@ export class DshTrajectory {
         break;
       }
     }
-    return output;
+    // 已知工具步骤/child 的公开文字可立即流出；其余 root 文字等后续生命周期确认。
+    // 两个独立上限覆盖空 chunk 洪泛和正文容量，不保存整个 invocation 的轨迹。
+    if (source.type !== "assistant/chunk" && source.type !== "assistant/message") return output;
+    return output.filter((value) => {
+      if (
+        !value.type.startsWith("message.") ||
+        value.payload.channel !== "commentary" ||
+        value.payload.providerSessionId !== this.sessionId ||
+        this.#steps.get(sessionId)?.tools
+      )
+        return true;
+      required(this.#pendingText.length < 4096);
+      this.#pendingBytes += Buffer.byteLength(value.payload.text ?? "");
+      required(this.#pendingBytes <= this.maxTextBytes);
+      this.#pendingText.push(value);
+      return false;
+    });
   }
 
   #messageEvent(
@@ -388,16 +476,19 @@ export class DshTrajectory {
     data: Record<string, unknown>
   ): CanonicalEvent {
     return event(type, {
-      id,
-      channel: sessionId === this.sessionId ? "final" : "commentary",
+      messageId: id,
+      channel: "commentary",
       stepId,
       ...this.#lineage(sessionId),
       ...data
     });
   }
 
-  /** wait 只证明 idle；receipt、durable terminal 和已提交回答分别验证。 */
-  finish(receiptId: string): CanonicalEvent {
+  /**
+   * wait 只证明 idle；receipt、durable terminal 和已提交回答分别验证。
+   * 返回已确认的正文/步骤与尾部 run 终态；调用方仍须等资源清理后再发布尾项。
+   */
+  finish(receiptId: string): CanonicalEvent[] {
     if (
       !this.#receipts.has(receiptId) ||
       !this.#lastReason ||
@@ -408,12 +499,12 @@ export class DshTrajectory {
     )
       throw new DshError("DSH_TRAJECTORY_INVALID");
     if (this.#lastReason === "aborted")
-      return event("run.cancelled", { reason: "provider_aborted" });
+      return [event("run.cancelled", { reason: "provider_aborted" })];
     if (this.#lastReason !== "completed")
       throw new DshError("DSH_EXECUTION_FAILED", {
         ...(this.#lastNativeCode === undefined ? {} : { nativeCode: this.#lastNativeCode })
       });
-    if (!this.#lastAnswer) throw new DshError("DSH_NO_FINAL_OUTPUT");
-    return event("run.completed", {});
+    if (!this.#pendingStep?.answer) throw new DshError("DSH_NO_FINAL_OUTPUT");
+    return [...this.#settleStep("final"), event("run.completed", {})];
   }
 }

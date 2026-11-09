@@ -286,7 +286,9 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
                 receiptId = receipt;
                 phase = "wait";
                 await owned.request("session/wait", { sessionId }, runTimeoutMs);
-                terminal = trajectory.finish(receiptId);
+                const finished = trajectory.finish(receiptId);
+                terminal = finished.pop();
+                for (const value of finished) queue.push(value);
                 queue.close();
               } catch (error) {
                 const failure = dshError(error, "DSH_EXECUTION_FAILED");

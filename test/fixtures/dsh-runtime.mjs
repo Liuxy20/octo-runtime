@@ -73,6 +73,13 @@ const answer = () => {
     );
   notify(root, "step/start", { turn: 0, step: 0 });
   if (mode === "tool") {
+    // 原生 loop 先提交模型消息，再执行工具；工具失败后由下一模型步骤回答。
+    notify(root, "assistant/message", {
+      turn: 0,
+      step: 0,
+      message: { content: [{ type: "text", text: "checking fixture" }] },
+      stream: []
+    });
     notify(root, "tool/call", {
       turn: 0,
       step: 0,
@@ -89,7 +96,10 @@ const answer = () => {
         content: [{ type: "text", text: "not found" }]
       }
     });
+    notify(root, "step/end", { turn: 0, step: 0 });
+    notify(root, "step/start", { turn: 0, step: 1 });
   }
+  const answerStep = mode === "tool" ? 1 : 0;
   if (mode === "child") {
     send({
       method: "subagent.started",
@@ -123,7 +133,7 @@ const answer = () => {
       });
     notify(root, "assistant/message", {
       turn: 0,
-      step: 0,
+      step: answerStep,
       message: {
         id: "message",
         content: [
@@ -141,7 +151,7 @@ const answer = () => {
       usage: { inputTokens: 12, outputTokens: 3 }
     });
   }
-  notify(root, "step/end", { turn: 0, step: 0 });
+  notify(root, "step/end", { turn: 0, step: answerStep });
   terminal();
 };
 createInterface({ input: process.stdin }).on("line", (line) => {

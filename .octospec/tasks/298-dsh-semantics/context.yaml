@@ -1,0 +1,42 @@
+brief: .octospec/tasks/298-dsh-semantics/brief.md
+injected:
+  - id: runtime-architecture
+    source: repo
+    reason: 当前拆仓归属及产品意图
+  - id: runtime-adapter-metadata
+    source: repo
+    reason: DSH 官方 SDK 与宿主安装边界
+  - id: runtime-protocol-design
+    source: repo
+    reason: 调用、终态及清理合同
+  - id: runtime-output-protocol
+    source: repo
+    reason: canonical、private reasoning 与消息身份
+  - id: runtime-stateless
+    source: repo
+    reason: 延迟分类缓冲有界
+  - id: runtime-context-input
+    source: repo
+    reason: 路径匹配，输入不改
+  - id: runtime-environment
+    source: repo
+    reason: 路径匹配，环境不改
+  - id: runtime-mcp
+    source: repo
+    reason: 路径匹配，MCP 不改
+  - id: runtime-reasoning
+    source: repo
+    reason: 路径匹配，不暴露私有推理
+  - id: runtime-engineering
+    source: repo
+    reason: 手动专项与 Windows 检查
+  - id: commit
+    source: repo
+    reason: 中文内部记录；按 CONTRIBUTING 使用英文提交和 PR，用户已追加交付授权
+files_expected:
+  - packages/octo-runtime-adapter-dsh/src/trajectory.ts
+  - packages/octo-runtime-adapter-dsh/src/index.ts
+  - test/manual/dsh-semantics-298.test.mjs
+  - test/manual/fixtures/dsh-semantics-298.mjs
+  - test/fixtures/dsh-runtime.mjs
+  - .octospec/rules/output-protocol.md

@@ -24,6 +24,8 @@ supersedes: []
 
 ## 1. 已实现的合同
 
+DSH 的 root 公开文字不得仅按 session 身份标为 final。官方 commit 可早于工具执行或后续 turn；Adapter 暂存一个有界候选，依据工具/后续生命周期发布 commentary，receipt、durable terminal 与 idle 共同确认后才发布唯一合格 root final。`step/end` 无原生 finishReason；tool-calls/stop 只能在对应证据充分时作为明确的 canonical 派生值。保留 chunk/commit 一致性、messageId、step/tool 身份与原生时间，child 不进入 root final，私有 reasoning 不公开。当前范围及保守拒绝边界见 [298 原生映射](../tasks/298-dsh-semantics/native-mapping.md)。
+
 Codex canonical 的 `commandExecution` 仅在 `status=failed`、`exitCode=1`、显式 `aggregatedOutput=""` 且命令属于支持的独立字面 `rg` / `rg.exe` 形态时，才能使用无匹配 completed 例外。整条 shell 退出码及 `commandActions` 展示分类不能证明各子命令已执行。复合命令、shell 包装、展开/转义和无法可靠归因的形式保留 failed；不能截取末段、猜测前置成功或删改输出掩盖失败。原始 exitCode、output、工具身份、顺序及生命周期不变。当前支持与拒绝范围、真实 shell 和未验收平台见 [Issue 157](../tasks/157-ripgrep-command-status/brief.md)。
 
 Codex 的合格非空 final_answer 在无活动工作、同步交互、取消或已知错误时，15 秒 finalization fallback 可确认 completed。AdapterInvocationContext 的本地 `reportExecutionResult` 回调传递固定 basis；Core 不解析 Codex 私有事件，也不增加公共 HostControl/AdapterOutput 联合。成功确认与清理分离：晚到中断不能改写成功，首次 iterator/turn 清理失败仍导致 waitForInvocationCleanup 和 owner shutdown incomplete。普通完成与其他 Adapter 保持原规则。证据范围见 [313 验证](../tasks/313-codex-service-lifecycle/validation.md)。
