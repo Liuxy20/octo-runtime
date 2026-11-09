@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -121,7 +121,7 @@ test(
       await waitForExit();
       await backend.uninstall(spec);
       await backend.uninstall(spec);
-      await assert.rejects(stat(path), { code: "ENOENT" });
+      await assert.rejects(readFile(path), { code: "ENOENT" });
       t.diagnostic("native stop/uninstall and repeated uninstall confirmed");
 
       await start();
@@ -134,7 +134,7 @@ test(
       );
       fault = undefined;
       await backend.uninstall(spec);
-      await assert.rejects(stat(path), { code: "ENOENT" });
+      await assert.rejects(readFile(path), { code: "ENOENT" });
       await waitForExit();
     } catch (error) {
       primaryFailure = error;

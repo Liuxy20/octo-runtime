@@ -101,7 +101,7 @@ test("恢复与新构建只查询 npm，不回退到其他 registry 或传递其
   const request = async (url, options) => {
     calls.push(String(url));
     assert.equal(options, undefined);
-    assert.equal(String(url), "https://registry.npmjs.org/@mininglamp-oss%2focto-runtime/1.0.1");
+    assert.equal(String(url), "https://registry.npmjs.org/%40mininglamp-oss%2Focto-runtime/1.0.1");
     return new Response(null, { status: 404 });
   };
   const before = Date.now();

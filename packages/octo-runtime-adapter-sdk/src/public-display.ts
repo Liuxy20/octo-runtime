@@ -27,10 +27,16 @@ export function sanitizeDiagnosticBody(body: string): string {
   if (/\\u[0-9a-f]{0,4}/i.test(safe)) safe = "[REDACTED]";
   // Headers can occur inside a JSON message too. Drop the entire suffix at the first
   // sensitive key instead of guessing where a spaced or truncated credential ends.
-  const keys = /["']?([\w-]+)[\\"']*\s*[:=]/g;
+  // 先消费完整 key，再单向检查分隔符，避免无分隔符长输入反复回溯后缀。
+  const keys = /[\w-]+/g;
   for (const match of safe.matchAll(keys)) {
-    if (SENSITIVE_OUTPUT_KEY.test(match[1])) {
-      safe = `${safe.slice(0, match.index)}[REDACTED]`;
+    let end = match.index + match[0].length;
+    while (end < safe.length && /[\\"']/.test(safe[end])) end += 1;
+    while (end < safe.length && /\s/.test(safe[end])) end += 1;
+    if ((safe[end] === ":" || safe[end] === "=") && SENSITIVE_OUTPUT_KEY.test(match[0])) {
+      const start =
+        match.index > 0 && /["']/.test(safe[match.index - 1]) ? match.index - 1 : match.index;
+      safe = `${safe.slice(0, start)}[REDACTED]`;
       break;
     }
   }

@@ -11,19 +11,25 @@ import { isMainThread } from "node:worker_threads";
 import WebSocket from "ws";
 
 function readControl(controlFile) {
-  const entry = lstatSync(controlFile);
-  if (!entry.isFile()) throw new Error("QA_FAULT_CONTROL_UNSAFE");
-  const fd = openSync(
-    controlFile,
-    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
-  );
+  let fd;
+  try {
+    fd = openSync(
+      controlFile,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0)
+    );
+  } catch (error) {
+    if (["ELOOP", "EMLINK", "EISDIR"].includes(error.code))
+      throw new Error("QA_FAULT_CONTROL_UNSAFE", { cause: error });
+    throw error;
+  }
   try {
     const info = fstatSync(fd);
+    // 先打开再校验同一描述符；无 O_NOFOLLOW 的平台额外核对入口身份。
+    const entry = constants.O_NOFOLLOW ? undefined : lstatSync(controlFile);
     if (
       !info.isFile() ||
       (process.platform !== "win32" && info.mode & 0o022) ||
-      entry.dev !== info.dev ||
-      entry.ino !== info.ino
+      (entry && (!entry.isFile() || entry.dev !== info.dev || entry.ino !== info.ino))
     )
       throw new Error("QA_FAULT_CONTROL_UNSAFE");
     if (info.size > 4096) throw new Error("QA_FAULT_CONTROL_TOO_LARGE");

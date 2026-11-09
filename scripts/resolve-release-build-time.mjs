@@ -7,7 +7,9 @@ import { readReleaseBuildInfo } from "./read-release-build-info.mjs";
 
 async function publishedBuildTime(version, commit, request, name) {
   const registry = "https://registry.npmjs.org";
-  const response = await request(`${registry}/${name.replace("/", "%2f")}/${version}`);
+  const response = await request(
+    `${registry}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`
+  );
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Registry lookup failed: ${response.status}`);
   const metadata = await response.json();

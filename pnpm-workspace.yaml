@@ -10,6 +10,8 @@ overrides:
   "fflate@0.8.2": "0.8.3"
   # Dependabot #3-6: AJV's URI parser security fixes.
   "fast-uri@3.1.8": "3.1.9"
+  # Dependabot #9: ESLint/TypeScript ESLint glob amplification fix.
+  "minimatch@10.2.6": "11.0.1"
 
 allowBuilds:
   esbuild: true

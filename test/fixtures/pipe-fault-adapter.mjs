@@ -37,8 +37,9 @@ export const testAdapter = {
       args: [
         "-e",
         mode === "sibling"
-          ? `const fs=require('node:fs');console.log(JSON.stringify({ready:true}));const t=setInterval(()=>{if(fs.existsSync(${JSON.stringify(gate)})){clearInterval(t);console.log(JSON.stringify({done:true}));}},20)`
-          : "console.log(JSON.stringify({done:true}));setInterval(()=>{},1000)"
+          ? "const fs=require('node:fs');console.log(JSON.stringify({ready:true}));const t=setInterval(()=>{if(fs.existsSync(process.argv[1])){clearInterval(t);console.log(JSON.stringify({done:true}));}},20)"
+          : "console.log(JSON.stringify({done:true}));setInterval(()=>{},1000)",
+        ...(mode === "sibling" ? [gate] : [])
       ],
       env: { OCTO_FIXTURE_PIPE_FAULT: ["stdout", "stderr"].includes(mode) ? mode : undefined }
     };

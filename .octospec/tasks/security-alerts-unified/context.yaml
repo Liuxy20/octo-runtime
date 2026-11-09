@@ -1,0 +1,7 @@
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/collaboration.md
