@@ -9,6 +9,8 @@ tags: [architecture, lifecycle, ownership, adapter, envs, mcp]
 
 本文件记录 #339 设计与实施合同。初始基线为 157fabb7，实施期间同步到 main d5aeae70，保留 #337 的调用方提示词/工作目录合同。当前对外说明见[中文架构](../../../docs/zh-CN/concepts/architecture.md)和[英文架构](../../../docs/en/concepts/architecture.md)，实际证据见[验证](validation.md)。
 
+后续更正：Issue #343 取代本文保留的兼容配置服务池、cwd/env/MCP 分池及 Host/Kernel 合并展示约定。当前 CLI 默认每类型一个受管 Harness，Codex owner 只有一个 app-server；thread/turn 承载调用配置，见 [343 简报](../343-single-harness/brief.md)及[现行架构规则](../../rules/architecture.md#cli-默认同类型-harness-单实例issue-343)。下文池设计只作为 #339 历史实施记录，不再定义当前合同。
+
 - Engine：实际执行 Provider 协议的实例，例如常驻 codex app-server；不是 Adapter，也不是 agentEnv。
 - owner：有权创建、恢复和最终关闭特定资源的主体；持有引用不等于 owner。
 - Codex Engine provider：宿主注入给 Codex Adapter 的访问依赖，为一次调用获取隔离的 channel/lease；这是 Codex 专用方案用语，不是所有 Engine 必须实现的公共接口，不代表已有 npm 版本已发布。

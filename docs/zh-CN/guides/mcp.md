@@ -124,7 +124,7 @@ MCP 让 Agent 通过工具访问外部系统，例如查询项目资料、读取
 
 ## 配置如何生效
 
-Runtime 先校验配置并替换环境变量，然后由 Adapter 转换成所选 Provider 的配置格式。例如，Codex Adapter 会将配置传给 Codex。最终由 Codex 等 Provider 启动本地程序或连接远端服务。Runtime 本身不会下载或安装 MCP server。
+Core 将本轮 AgentEnv 透传给 Adapter；Adapter 读取 MCP bean，通过 SDK helper 校验配置并替换环境变量，再转换成所选 Provider 的配置格式。例如，Codex Adapter 会将配置传给 Codex。最终由 Codex 等 Provider 启动本地程序或连接远端服务。Runtime 本身不会下载或安装 MCP server。
 
 ```mermaid
 flowchart TB

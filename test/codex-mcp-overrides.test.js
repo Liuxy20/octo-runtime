@@ -73,19 +73,18 @@ for (const resume of [false, true]) {
       const overrides = thread.params.config;
       const { business, ...otherServers } = overrides.mcp_servers;
       assert.deepEqual(otherServers, {
-        ...(forwardEnv ? { local: { env_vars: ["EXISTING", "RUN_VALUE"] } } : {}),
+        ...(forwardEnv ? { local: { env: { RUN_VALUE: "run-value" } } } : {}),
         added: {
           command: "node",
           args: ["tool.mjs"],
-          env: { SPECIFIC: "kept" },
-          ...(forwardEnv ? { env_vars: ["RUN_VALUE"] } : {})
+          env: { ...(forwardEnv ? { RUN_VALUE: "run-value" } : {}), SPECIFIC: "kept" }
         }
       });
       assert.equal(business.url, "https://example.invalid/run");
-      assert.match(business.env_http_headers.Auth, /^OCTO_MCP_/);
+      assert.equal(business.http_headers.Auth, "header-value");
       assert.doesNotMatch(
         JSON.stringify(server.writes),
-        /header-value|tool_timeout_sec|experimental_environment/
+        /tool_timeout_sec|experimental_environment/
       );
       assert.equal(
         overrides["shell_environment_policy.set"]?.RUN_VALUE,

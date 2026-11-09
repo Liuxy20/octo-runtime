@@ -15,8 +15,8 @@ Runs one invocation through CodeBuddy ACP: starts `codebuddy --acp`, creates or 
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { codebuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
 
 const executor = new AgentExecutor();

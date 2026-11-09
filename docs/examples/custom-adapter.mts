@@ -1,9 +1,9 @@
-import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime/executor-core";
-import type { InvokeRequest, CanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
+import type { InvokeRequest, CanonicalEvent } from "@mininglamp-oss/octo-runtime-protocol";
 import {
   invocationRuntimeLimits,
   type AdapterInvocationContext
-} from "@mininglamp-oss/octo-runtime/adapter-sdk";
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 interface XxxClient {
   execute(request: InvokeRequest, tenant: string): AsyncIterable<CanonicalEvent>;

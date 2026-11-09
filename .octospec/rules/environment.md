@@ -59,12 +59,12 @@ supersedes: []
 
 | 执行路径 | 行为 |
 | --- | --- |
-| Codex | 注入 app-server 进程；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 变量白名单。配置读取失败则停止调用，不伪装为已应用。 |
+| Codex | app-server 仅继承 owner 固定环境；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 的实际 env 值。配置读取失败则停止调用，不伪装为已应用。 |
 | Claude Code、CodeBuddy、通用 ACP、Antigravity、通用 CLI | 注入每次调用新建的 Provider 子进程。Provider 启动的 CLI/stdio MCP 依其原生继承规则获得变量。 |
 | OpenClaw Gateway | 非空 envs 返回 `CONTEXT_ENVS_UNSUPPORTED`，因为当前 Gateway 没有本次调用的环境变量载体。空 envs 不影响调用。 |
 | 远程 HTTP MCP、远程 executor MCP | 不把本机环境直接传给远端进程。HTTP MCP 可以通过 Provider 已配置的环境变量引用取得客户端认证信息；不会自动新增 header。 |
 
-Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 include 白名单。本地 MCP 保留原有配置，追加变量名白名单；MCP 自己显式配置的同名 `env` 仍按 Provider 原生优先级生效。因此 mandatory 约束的是 Run 注入值，并不改写用户的 MCP 专用配置。不会重新安装、同步或修改 MCP/插件文件。
+Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 include 白名单。本地 MCP 经本轮 thread 配置传实际 env 值，不从其他调用或共享进程读取；MCP 自己显式配置的同名 `env` 仍按 Provider 原生优先级生效。因此 mandatory 约束的是 Run 注入值，并不改写用户的 MCP 专用配置。账户/Provider 启动认证属于 owner 固定环境；Run envs 不是切换账户或更改共享服务环境的入口。不会重新安装、同步或修改 MCP/插件文件。
 
 环境变量中的值不会被编译成模型材料或控制指令。Host 调试日志会剔除 envs payload 和 Codex 原生 shell 注入值，不依赖变量名是否包含 token/secret。请求和执行快照仍保存这些值；此能力不是凭据保险库，也不承诺阻止工具主动输出环境变量。
 

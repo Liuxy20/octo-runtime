@@ -109,7 +109,8 @@ export interface CodexAppServerCommand {
   /** Executable and app-server args; tests can substitute a fake server. */
   command: string;
   args: string[];
-  cwd: string;
+  /** 独占命令可显式指定；managed server 省略，业务目录由 thread/turn RPC 提供。 */
+  cwd?: string;
   env: NodeJS.ProcessEnv;
   mcpServers?: Record<string, Record<string, unknown>>;
   cleanup?: () => void | Promise<void>;
@@ -118,7 +119,7 @@ export interface CodexAppServerCommand {
 export type CodexAppServerSpawn = (
   command: string,
   args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv }
+  options: { cwd?: string; env: NodeJS.ProcessEnv }
 ) => ChildProcessWithoutNullStreams;
 
 /** A JSON-RPC error the app-server explicitly returned, preserving method, code and raw data. */
@@ -190,7 +191,7 @@ export async function* runCodexAppServerTurn({
     throwIfAborted(request.signal);
 
     // 作用域已完成服务初始化；这里仅装配本轮 thread/turn，不重复握手。
-    let environmentConfig: JsonRecord | undefined;
+    let environmentConfig: JsonRecord | undefined = spec.config;
     if (Object.keys(invocationEnvs(request)).length || spec.mcpServers) {
       const result = recordValue(
         await client.request("config/read", {
@@ -208,10 +209,13 @@ export async function* runCodexAppServerTurn({
             code: "MCP_SERVER_NAME_CONFLICT"
           });
       }
-      environmentConfig = codexEnvironmentConfig(request, {
-        ...config,
-        mcp_servers: { ...nativeServers, ...spec.mcpServers }
-      });
+      environmentConfig = {
+        ...spec.config,
+        ...codexEnvironmentConfig(request, {
+          ...config,
+          mcp_servers: { ...nativeServers, ...spec.mcpServers }
+        })
+      };
       if (spec.mcpServers) {
         const forwarding = recordValue(environmentConfig.mcp_servers) ?? {};
         // config/read is a read model: optional nulls cannot be round-tripped as overrides.

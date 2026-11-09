@@ -1,13 +1,30 @@
 # SDK Integration
 
-## Choose The npm Package
+## Choose an Integration Path
 
 | Need | Install | Entry |
 | --- | --- | --- |
 | Consume an existing local Kernel | `@mininglamp-oss/octo-runtime-client` | `attachKernel({ endpoint })` |
-| Own Kernel services or use Core directly | `@mininglamp-oss/octo-runtime` | Native service factories, then `kernel.client`; direct Core remains explicit |
+| Run Kernel as a CLI service | `@mininglamp-oss/octo-runtime` | Start `octo-runtime start`; an independent App uses the client |
+| Own an embedded Kernel or explicitly use Core directly | Kernel/Core, shared helpers and selected Adapters from source workspace | Native service factories, then `kernel.client`; no CLI aggregate dependency |
 
 The client is independently installable and includes shared protocol types, helpers and schemas, without the CLI, Core, Adapters. It never starts a Kernel. [Client package reference](../../../packages/octo-runtime-client/README.md) describes exports, cancellation and ownership.
+
+The CLI distribution owns its bundled composition; `octo-runtime-client` neither includes nor loads Adapters. Native embedding uses source workspace packages: hosts declare the packages they actually use, then import or dynamically import the selected Adapters directly. The full package exposes no `/adapters/codex` or `/adapters/dsh` aggregate exports. Independent Apps connecting to an existing Kernel need only the client and select an already registered server-side Adapter through AgentEnv, without a Runtime checkout or Adapter dependency.
+
+For example, a native Codex-only host declares these dependencies in its own pnpm workspace application. Include these source packages and their transitive dependencies in the workspace, and build the required packages first. An OpenClaw-only host replaces the Codex dependency with `@mininglamp-oss/octo-runtime-adapter-openclaw`, without installing or importing the Codex Adapter.
+
+```json
+{
+  "dependencies": {
+    "@mininglamp-oss/octo-runtime-executor-kernel": "workspace:*",
+    "@mininglamp-oss/octo-runtime-host-sdk": "workspace:*",
+    "@mininglamp-oss/octo-runtime-adapter-codex": "workspace:*"
+  }
+}
+```
+
+Construct and register Adapters before Kernel initialization. Hosts choose the import set when loading according to product configuration; unselected Adapters stay out of that host's dependency and loading set. Default CLI imports all composition entries in its manifest; Codex process startup on the first invocation is a separate behavior. Direct Core remains an explicit advanced choice, with execution, cancellation and shutdown owned by the native host. See the [architecture constraints](../concepts/architecture.md) for scenarios and ownership.
 
 ```ts
 import { attachKernel } from "@mininglamp-oss/octo-runtime-client";
@@ -41,7 +58,7 @@ The POSIX Kernel address is `<home>/executor-kernel.sock`; Windows uses a named 
 
 [简体中文](../../zh-CN/getting-started/sdk.md) | [Documentation](../README.md)
 
-Electron/Node.js hosts import Adapter objects and construct Kernel services through the public /host SDK.
+Electron/Node.js hosts import selected Adapter objects from source workspace packages and construct Kernel services through the source Kernel API.
 
 The host prepares an absolute Home directory. SDK does not create or select the root; see [Runtime Home](../reference/runtime-home.md).
 
@@ -58,8 +75,9 @@ The host prepares an absolute Home directory. SDK does not create or select the 
 The host prepares Provider installation and authentication. Integration does not require an invocation:
 
 ```ts
-import { createKernelService, componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime/adapters/codex";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime-adapter-codex";
 
 import { mkdir } from "node:fs/promises";
 
@@ -100,6 +118,50 @@ if (results.some((r) => r.status === "rejected" || !r.value.complete))
   throw new AggregateError(results, "HOST_CLEANUP_INCOMPLETE");
 ```
 
+## 2. AgentEnv and Private Adapter Configuration
+
+The host places invocation settings in `AgentEnv.items`. Core snapshots the envelope and forwards items in order for the Adapter to consume. Shared model selection uses the public `octo.execution/model` bean. Adapter-specific settings use a namespace/name agreed by the host and that Adapter, read through `agentEnvItem<T>(req.agentEnv, namespace, name)`. Private beans need no public schema registration, generated public type or intermediate configuration projection.
+
+This example uses a custom `my-adapter`; the source package using this snippet also declares direct workspace dependencies on `octo-runtime-adapter-sdk` and `octo-runtime-protocol`. The host supplies `agentEnv` as the fourth argument to `client.invoke`; `invokeMyAdapter` shows the Adapter's internal configuration reader and native client mapping. See the [construction example](../../examples/custom-adapter.mts) for actual Adapter registration and lifecycle.
+
+```ts
+import { agentEnvItem, invocationModel } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import type { AgentEnv, InvokeRequest } from "@mininglamp-oss/octo-runtime-protocol";
+
+// 宿主构造本轮信封；agentId 仅属于宿主与 my-adapter 的私有约定。
+const agentEnv: AgentEnv = {
+  schema: "octo.context-envelope/v3",
+  items: [
+    { namespace: "octo.execution", name: "adapter", payload: { type: "my-adapter" } },
+    { namespace: "octo.execution", name: "model", payload: { selection: { id: "provider/model" } } },
+    { namespace: "adapter.my-adapter", name: "options", payload: { agentId: "researcher" } }
+  ]
+};
+
+interface MyAdapterOptions {
+  agentId: string;
+}
+
+interface MyHarnessClient {
+  execute(request: InvokeRequest, options: { agentId: string; model?: string }): Promise<void>;
+}
+
+export function invokeMyAdapter(req: InvokeRequest, client: MyHarnessClient) {
+  const options = agentEnvItem<MyAdapterOptions>(req.agentEnv, "adapter.my-adapter", "options");
+  // 泛型不做运行时校验；消费该私有 bean 的 Adapter 检查自己的字段。
+  if (!options || typeof options.agentId !== "string" || !options.agentId.trim())
+    throw new TypeError("MY_ADAPTER_AGENT_ID_REQUIRED");
+
+  // 公共模型 helper 也只读取本轮显式值，Provider 映射和校验归 Adapter。
+  const model = invocationModel(req);
+  if (model !== undefined && (typeof model !== "string" || !model.trim()))
+    throw new TypeError("MY_ADAPTER_MODEL_INVALID");
+  return client.execute(req, { agentId: options.agentId, ...(model === undefined ? {} : { model }) });
+}
+```
+
+`agentEnvItem` matches namespace/name exactly and returns `undefined` when absent. It returns the original payload reference rather than a copy; consume it as read-only data. The generic provides TypeScript hints only. The consumer owns required fields, defaults and runtime validation. Other Adapters ignore items they do not consume; private settings do not become public configuration types. `invocationModel` reads `selection.id` from the public bean, returns `undefined` when absent and does not select a default model or query a catalog. Business material and prompts remain in `inputs`; private items are not automatically rendered into model input. See the [architecture](../concepts/architecture.md) for ownership boundaries.
+
 ## 3. Advanced Integration
 
 The host selects, prepares and explicitly supplies CODEX_HOME. Process shutdown never deletes its directory, credentials or sessions. This example exclusively owns its Engine; see the [compiled example](../../examples/codex-service.mts) for sequential shutdown and initialization rollback. The codexAdapter singleton and old constructor options are removed.
@@ -125,8 +187,10 @@ import { join } from "node:path";
 const workdir = await mkdtemp(join(tmpdir(), "my-agent-"));
 const agentEnv = {
   schema: "octo.context-envelope/v3" as const,
-  workdir,
-  items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+  items: [
+    { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
+    { namespace: "octo.execution", name: "workspace", payload: { path: workdir } }
+  ]
 };
 for await (const event of client.invoke(
   [{ type: "text", text: "Summarize this directory." }],

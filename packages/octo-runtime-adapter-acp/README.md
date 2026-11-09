@@ -13,8 +13,8 @@ Turns any ACP-speaking CLI into a Runtime Adapter: one prompt turn per invocatio
 ## Make one call
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 const executor = new AgentExecutor();
@@ -75,7 +75,7 @@ The optional second argument overrides the transport: `{ acpClientFactory, comma
 
 ## Import and distribution
 
-Private workspace package. The published distribution exposes `/adapters/dsh` only, so there is no public ACP subpath today.
+Private workspace package, neither independently published nor re-exported through the full package. Native hosts declare a workspace dependency on its source and import it as needed; independent applications connect to an already composed Kernel through the client.
 
 ## Further reading
 

@@ -14,8 +14,8 @@ Binds the China distribution of Qoder CLI (`qoderclicn --acp`) to Runtime. It be
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { qoderCliCnAdapter } from "@mininglamp-oss/octo-runtime-adapter-qoderclicn";
 
 const executor = new AgentExecutor();

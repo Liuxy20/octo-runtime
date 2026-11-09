@@ -110,15 +110,14 @@ test("MCP variable resolution is single-pass, isolated, preserves literals and f
     "parent"
   );
 });
-test("Codex carries private header references; Claude writes a private temporary config; OpenCode overlays", async () => {
+test("Codex carries thread headers without argv secrets; Claude writes private config; OpenCode overlays", async () => {
   const req = request(
     { business: remote({ Authorization: "Bearer ${TOKEN}" }) },
     { TOKEN: "private-value" }
   );
   const codex = buildCodexCommand(req, "codex", [], { CODEX_HOME: process.cwd() });
   assert.equal(JSON.stringify(codex.args).includes("private-value"), false);
-  const ref = codex.mcpServers.business.env_http_headers.Authorization;
-  assert.equal(codex.env[ref], "Bearer private-value");
+  assert.equal(codex.mcpServers.business.http_headers.Authorization, "Bearer private-value");
   const claude = await buildClaudeCommand(req);
   const file = claude.args[claude.args.indexOf("--mcp-config") + 1];
   try {

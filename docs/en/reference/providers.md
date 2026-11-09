@@ -4,7 +4,7 @@
 
 A Provider is the program that executes Agent tasks, such as Codex or Claude Code. Its Adapter translates Runtime input into Provider calls. Select an Adapter through `octo.execution/adapter` and install/authenticate the corresponding Provider on the execution machine. Runtime does not download these dependencies automatically.
 
-For installation, account configuration, Codex Computer Use, and CodeBuddy/WorkBuddy credits, see [Harness Installation and Configuration](../guides/harnesses.md). For Runtime service commands and `octo-cli` dependencies, see [CLI Installation and Invocation](../getting-started/cli.md).
+For installation, account configuration, Codex Computer Use, and CodeBuddy/WorkBuddy credits, see [Harness Installation and Configuration](../guides/harnesses.md). For Runtime's own service commands, see [CLI Installation and Invocation](../getting-started/cli.md).
 
 The table describes the checked-in Adapters. Confirm that your actual Provider version and account configuration work; registering an Adapter alone does not make it ready to execute.
 

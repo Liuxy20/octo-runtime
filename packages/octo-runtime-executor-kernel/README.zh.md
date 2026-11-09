@@ -1,6 +1,6 @@
 # Executor Kernel
 
-只消费已有 Kernel 的应用可独立安装 [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md)，调用 `attachKernel({ endpoint })`。本包保留兼容客户端导出，并复用同一实现；完整 Runtime 发行物内置 client/protocol，原生构造 Kernel 仍使用完整 SDK。不同发行物可能有独立模块副本，不承诺跨副本类/函数身份相同。
+只消费已有 Kernel 的应用可独立安装 [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md)，调用 `attachKernel({ endpoint })`。本包复用同一客户端实现；完整 Runtime 发行物内置 client/protocol，纯原生构造 Kernel 则从源码 workspace 依赖本包和所选 Adapter。不同发行物可能有独立模块副本，不承诺跨副本类/函数身份相同。
 
 [English](README.md) | [包导航](../README.zh.md)
 
@@ -13,9 +13,9 @@ Kernel 是 Electron SDK 和 CLI 的统一执行入口。在宿主进程持有 Ag
 宿主 import 并构造 Adapter，再提供本地 `endpoint` 和 `adapters`。endpoint 是 Unix socket / Named Pipe，Home 是宿主目录；`componentEndpoint(home)` 将两者连接起来。模块 manifest、解析、动态 import 和工厂调用属于 CLI 等宿主，Kernel 不接收或读取它们。
 
 ```ts
-import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 import { mkdir } from "node:fs/promises";
 
@@ -43,7 +43,7 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 | Electron                          | 主进程 import/构造对象、选择 endpoint、创建 business consumer、退出协调          | 注册对象、RPC、Run 接纳与执行管理      |
 | CLI                               | 读取/合并 manifest、解析模块、动态 import/工厂、OpenClaw 产品准备                | 接收实例，与 Electron 使用同一服务工厂 |
 | 跨进程独立应用（包括 CLI 客户端） | attachKernel、发起和取消自己拥有的 Run、关闭 client；原生 SDK 使用 kernel.client | 维持共享服务和原执行                   |
-| Provider 子进程                   | Adapter 按原生协议创建、控制和确认清理                                           | 调用 Core 并如实汇总清理事实           |
+| Provider 子进程                   | 实际 owner 创建和确认清理；Codex 为宿主 Engine，逐轮自有子进程由 Adapter 管理 | 调用 Core 并如实汇总清理事实           |
 
 模块路径、workerEntrypoint、adapterModules、manifest、子进程 env 均不属于 Kernel 装配输入。Kernel 不启动执行 worker，不提供 worker 心跳或自动重启；status 返回 ipc_version、kernel_instance_id、宿主 pid 和 execution_ready，没有虚构 worker 状态。日志通过 logging.directory 显式配置，SDK 不读取 CLI 日志环境变量。
 
@@ -52,7 +52,7 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 `KernelClient -> 本地 RPC -> Kernel/HostRunService -> AgentExecutor -> Adapter` 是标准调用路径。Adapter 对象留在服务进程；RPC 传递调用、控制和事件数据。直接 Core 不替代标准 SDK 接入。
 
 - invoke 开始消费才提交；提交 ACK 仅表示接纳。
-- signal 在提交前取消则不提交，提交后取消请求仍消费尾流。
+- `client.interrupt(run.invocationId)` 在提交前阻止发送，提交后沿原执行请求取消并继续消费尾流；公开 invoke 不接收 signal。
 - iterator.return、订阅断开和 client.close 仅停止观察，已接纳 Run 继续执行。
 - get/subscribe 使用原身份和原游标；丢失 ACK 只查询，不重复 invoke。
 - respond/respondNative 只响应原 Run 的有效交互，取消 ACK 不等于终态。
@@ -67,7 +67,7 @@ owner 等待 initialize 后使用 client。close 幂等，closed 返回同一个
 
 原生 owner 的记录不是模块 manifest。异常退出后不能通过宿主 PID 推断 Provider 子进程已回收；保留 nativeOwner/cleanupIncomplete 证据，操作者确认资源已停止后沿既有 orphan-cleanup 确认流程处理。旧 worker 格式或损坏记录报 ORPHAN_RECORD_UNSUPPORTED 并保留原文件；不提供旧架构兼容、升级或自动清理。
 
-Kernel 与 Adapter 共享宿主事件循环、内存及故障域。RPC 不隔离同步阻塞、process.exit 或 OOM；关闭期限要求事件循环可调度。服务重建产生新 kernel_instance_id，旧 Run 不重放。Adapter 内部 Provider 进程仍由 Adapter 回收。
+Kernel 与 Adapter 共享宿主事件循环、内存及故障域。RPC 不隔离同步阻塞、process.exit 或 OOM；关闭期限要求事件循环可调度。服务重建产生新 kernel_instance_id，旧 Run 不重放。Provider 进程由实际 owner 回收；Codex 的共享进程由宿主 Engine 管理，Adapter scope 仅释放自己的调用和 lease。
 
 默认 Run 窗口 4096 帧 / 32 MiB，全局 128 MiB / 128 Run，保留 120 秒；最多 64 连接、16 订阅。它们是有界回放记录，不是业务历史或 RSS 上限。整轮期限默认 24 小时，最多七天。
 

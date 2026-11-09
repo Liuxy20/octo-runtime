@@ -31,12 +31,22 @@ SDK 宿主原生 import Adapter 对象，调用 `createKernelService({home, endp
 - CLI 在实际服务宿主进程显式装配默认 Codex 托管 owner，协调启动、恢复、失败回滚和关闭；短命 start 客户端不持有 owner。Electron 宿主通过同一 SDK 原生装配并注入访问依赖，不通过 CLI 启动。
 - 常驻 Engine 的启停/恢复归其 owner；每调用 channel/lease 的释放归 Adapter；Home 位置、目录准备、访问权限及数据保留/迁移/删除归 Home owner。三者可以由不同主体维护，引用关系不赋予管理权。
 - CODEX_HOME 必须由宿主显式注入 Engine 装配；CLI 可以在宿主层保留默认选择，Adapter/托管库不隐式 fallback、创建、改权限、迁移或清空 Home。进程退出不意味着 Home 生命周期结束；逐轮配置不得偷偷替换宿主绑定的 Home。
-- Runtime 不得限制 Adapter 的构造方法、参数数量/类型/顺序或注入形式；类、任意签名工厂、闭包及直接对象均可。可传 client 或任意其他依赖，不要求 client-only、统一 options、Engine 基类或 Codex provider 接口；只约束构造结果的注册执行合同。CLI manifest 工厂约定不得反向成为 SDK 构造限制。不新增统一 Engine 注册平台。Codex 专用访问合同按兼容配置获取本调用 channel，协议转换共用，owned/borrowed 关闭权分开。
+- Runtime 不得限制 Adapter 的构造方法、参数数量/类型/顺序或注入形式；类、任意签名工厂、闭包及直接对象均可。可传 client 或任意其他依赖，不要求 client-only、统一 options、Engine 基类或 Codex provider 接口；只约束构造结果的注册执行合同。CLI manifest 工厂约定不得反向成为 SDK 构造限制。不新增统一 Engine 注册平台。Codex 专用访问合同从同一 owner 的唯一服务获取本调用 channel，配置随 thread/turn 传递、不参与进程选择；协议转换共用，owned/borrowed 关闭权分开。
 - 本次是架构边界细化，聚焦常驻进程 Adapter。docs 必须同步维护模块职责、持有对象、创建/关闭主体、借用范围和失败收尾；未实施目标与当前保证分别说明。详见[模块与生命周期方案](../tasks/339-engine-lifecycle/design.md)及[双语架构入口](../../docs/zh-CN/concepts/architecture.md)。
 
 doctor PID 树的常驻 Engine 归实际宿主 owner_pid，不归 Adapter。Kernel 的 serviceProcesses 是宿主安全快照回调，仅用于只读诊断，不转移启停权限；Core.processes 仅报告 scope 自有资源。CLI 管理默认 owner，Electron 自管 Engine 则由 Electron 维护。
 
+### CLI 默认同类型 Harness 单实例（Issue 343）
+
+CLI 默认纳管的通用 Harness 按类型只有一个 owner/实例，不因 cwd、任务命令、模型、环境、MCP、容量或并发数量拆分进程池。装配在已声明类型重复时先于工厂调用拒绝；未声明类型的动态工厂在结果校验时拒绝并回滚。这个通用宿主合同不要求 SDK 自管 Adapter 实现统一 Engine 基类，也不改变其他 Adapter 既有逐轮子进程模型。
+
+Codex managed owner 只监督一个 app-server，多 Agent 使用不同 thread/turn 并发复用。启动不显式指定 spawn cwd，自然继承宿主目录，不能把 CODEX_HOME 数据目录当成启动 cwd；argv/环境由 owner 固定。业务工作目录由本轮 thread/start、thread/resume 和 turn/start RPC 传入，shell/MCP 环境、HTTP headers 和容量随本轮配置传递。旧 codexServiceRevision 逐轮分池请求明确拒绝；原地更改账户或启动配置须由宿主关闭并重建 owner。仅账户等明确强隔离需求允许宿主显式装配多个 owner，不能从请求差异推断隔离需求。
+
+并发接纳和资源配额由宿主决定。owner 不设置 Agent 数量、估算 lease 内存、累计 thread 数或交互总数配额，不新增资源预算配置。只保留当前执行的临时 RPC/thread/turn 路由，释放时删除，不保存已结束 thread 历史或业务 session 映射；清理未确认时保留原归属事实。未知 thread 的早到通知仅在待决 thread/start 期间暂存，最后一个 start 结算后释放仍无法关联的通知并拒绝孤立反向请求。既有传输队列与单条消息限制继续执行，不同调用的流限额在路由后分别执行。故障恢复回收旧代再替换，不重放已接纳动作。doctor 显示 CLI Host 拥有平级的 Kernel（in-process，共用 PID）与 app-server，不制造不存在的 Kernel 进程。任务和实际证据见 [343 简报](../tasks/343-single-harness/brief.md)。
+
 ### KernelClient 与 AgentExecutor 的选型合同
+
+接入场景分为 CLI 执行服务 + 独立 App，以及应用内纯原生嵌入。前者由 octo-runtime CLI 拥有 Kernel/内置 Harness，App 仅依赖 octo-runtime-client，经 RPC 调用，不加载 Adapter。后者统一从源码 workspace 依赖 Kernel/Core、公共辅助包与所选 Adapter，按需 import 或动态 import，初始化前完成注册；仅用 Codex 不引入 OpenClaw，反之亦然。private 源码包不单独 npm 发布；删除完整包的 /adapters/codex、/adapters/dsh 聚合入口，不以 CLI 全量依赖作为原生 SDK 接入方式。现有 CLI 仍加载 manifest 的全部装配项，Codex 进程在首次调用时启动，不能把进程惰性启动说成首次请求才加载模块。具体场景、依赖和所有权见 [SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。
 
 默认推荐 KernelClient，已有服务调用方仅安装 octo-runtime-client。直接 Core 是显式高级选择，宿主承担生命周期。完整 Runtime 与 client 同版本、自包含双包发行。npm 版本按用户确定的 1.1.11 → 1.1.12 递增；IPC v2、执行信封及 SDK 接口版本不要求 npm 升至 2.x。源码保留 0.0.0，由发行 tag 注入版本；不为旧接口增加兼容层。
 

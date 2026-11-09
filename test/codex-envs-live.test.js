@@ -11,7 +11,7 @@ import { codexEnvironmentConfig } from "../packages/octo-runtime-adapter-codex/d
 import { invokeRequest } from "./runtime-fixture.js";
 // Native app-server and a real stdio MCP child; no model turn or credentials required.
 test(
-  "native Codex passes Run envs through its MCP whitelist",
+  "native Codex passes Run envs through thread-local MCP configuration",
   { skip: process.env.OCTO_RUN_CODEX_ENVS_LIVE !== "1", timeout: 30000 },
   async () => {
     const root = await mkdtemp(join(tmpdir(), "octo-envs-native-"));
@@ -20,7 +20,8 @@ test(
     await writeFile(
       script,
       `const fs=require('node:fs');const rl=require('node:readline').createInterface({input:process.stdin});
-fs.writeFileSync(${JSON.stringify(receipt)},JSON.stringify({value:process.env.OCTO_ENVS_NATIVE_TEST,empty:process.env.OCTO_ENVS_EMPTY,tool:process.env.OCTO_TOOL_OVERRIDE_TEST}));
+fs.writeFileSync(${JSON.stringify(receipt + ".tmp")},JSON.stringify({value:process.env.OCTO_ENVS_NATIVE_TEST,empty:process.env.OCTO_ENVS_EMPTY,tool:process.env.OCTO_TOOL_OVERRIDE_TEST}));
+fs.renameSync(${JSON.stringify(receipt + ".tmp")},${JSON.stringify(receipt)});
 rl.on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;let result={};
 if(m.method==='initialize')result={protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'env-test',version:'1'}};
 if(m.method==='tools/list')result={tools:[]};console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result}));});`

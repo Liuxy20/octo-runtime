@@ -19,7 +19,20 @@ import {
   type RuntimeLimits
 } from "@mininglamp-oss/octo-runtime-protocol";
 
-/** 只读取目标条目；私有 bean 无须注册，消费方负责 payload 类型与语义。 */
+/**
+ * 在 Adapter 消费本轮 AgentEnv 时，按 namespace/name 精确读取 bean 的 payload；不存在则返回 undefined。
+ * 公共与私有 bean 都可读取。私有名称、字段和类型由宿主与对应 Adapter 约定，无须公共 schema 注册。
+ * T 仅提供编译期类型提示，不做运行时校验；必填检查、默认值及 Provider 原生映射由消费方负责。
+ * 返回原 payload 引用，不复制或修改信封；调用方应只读使用，不写回默认值或跨调用保存配置。
+ *
+ * @example
+ * const options = agentEnvItem<{ agentId: string }>(req.agentEnv, "adapter.my-adapter", "options");
+ * if (!options || typeof options.agentId !== "string" || !options.agentId.trim())
+ *   throw new TypeError("MY_ADAPTER_AGENT_ID_REQUIRED");
+ *
+ * @see https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/zh-CN/getting-started/sdk.md
+ * @see https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/en/getting-started/sdk.md
+ */
 export function agentEnvItem<T extends object = Record<string, unknown>>(
   env: AgentEnv,
   namespace: string,
@@ -28,6 +41,15 @@ export function agentEnvItem<T extends object = Record<string, unknown>>(
   return contextItem(env, namespace, name)?.payload as T | undefined;
 }
 
+/**
+ * Adapter 读取公共 octo.execution/model bean 的 selection.id，取得本轮显式选择的 Provider 模型标识。
+ * 条目或 id 缺失时返回 undefined；不补默认模型、不查询模型目录，也不读取私有 options 中的同名字段。
+ * 本函数只读不改写 AgentEnv；字段类型、可用性检查及 Provider 原生参数映射仍由 Adapter 负责。
+ * 私有配置使用 agentEnvItem<T>(request.agentEnv, namespace, name)，不扩展公共 model bean。
+ *
+ * @see https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/zh-CN/getting-started/sdk.md
+ * @see https://github.com/Mininglamp-OSS/octo-runtime/blob/main/docs/en/getting-started/sdk.md
+ */
 export function invocationModel(request: InvokeRequest): string | undefined {
   return agentEnvItem<{ selection?: { id?: string } }>(request.agentEnv, "octo.execution", "model")
     ?.selection?.id;

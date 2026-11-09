@@ -20,7 +20,7 @@ implementation_baseline: df63c8f
 SDK 已删除 `executionFeatures` 自建能力声明机制，功能支持范围归宿主管理；不得恢复标签或设计替代能力表。Adapter 按明确执行合同适配转发，必要的校验与原生握手仍在执行边界处理。规则见 [Adapter 责任边界](../rules/adapter-metadata.md#宿主掌握支持范围adapter-适配转发)。
 
 ```js
-import { defineAdapter, probeCommand } from "@mininglamp-oss/octo-runtime/adapter-sdk";
+import { defineAdapter, probeCommand } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const adapter = defineAdapter({
   metadata: {
@@ -51,7 +51,7 @@ CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json
 3. 不得把 provider 的原始事件名直接当作 Octo Runtime 规范事件类型发出。
 4. 在可能的情况下，先发出 create 事件，再发出对应的 delta；Host 的补齐逻辑只用于安全兜底。
 5. 每次调用只产生一个终态事件；Host 会等异步生成器清理完成后再向上游转发该事件。
-6. 必须响应 `request.signal`，把取消请求传给 Provider，并 await 自有资源清理。[SDK 清理工具](../../packages/octo-runtime-adapter-sdk/src/process-cleanup.ts) 已提供有界 TERM/KILL 升级及确认；实际范围由 spawn 所有权和调用参数决定。`spawnJsonLines` 与 Codex 默认 spawn 在 POSIX 创建并清理独立组，leader 退出不代表组内后代退出；Codex 注入的 child 不推定拥有组。当前 Codex/Claude Windows 路径未启用工具的 `processTree`，只确认直接子进程，不承诺全部后代退出。宿主崩溃或进程脱离受管组的限制仍在，不按进程名全机扫描。具体边界见 [Codex](../../packages/octo-runtime-adapter-codex/README.zh.md) 与 [Claude Code](../../packages/octo-runtime-adapter-claude-code/README.zh.md)。
+6. 必须响应 `request.signal`，把取消请求传给 Provider，并 await 自有资源清理。[SDK 清理工具](../../packages/octo-runtime-adapter-sdk/src/process-cleanup.ts) 已提供有界 TERM/KILL 升级及确认；实际范围由 spawn 所有权和调用参数决定。`spawnJsonLines` 与 Codex 默认 spawn 在 POSIX 创建并清理独立组，leader 退出不代表组内后代退出；Codex 注入的 child 不推定拥有组。Codex 默认 owned spawn 在 Windows 启用 `processTree`，注入 child 与当前 Claude 路径仅确认直接子进程；Windows leader 先退出时仍不能保证全部后代退出。宿主崩溃或进程脱离受管组的限制仍在，不按进程名全机扫描。具体边界见 [Codex](../../packages/octo-runtime-adapter-codex/README.zh.md) 与 [Claude Code](../../packages/octo-runtime-adapter-claude-code/README.zh.md)。
 7. 应用启动提示词只作为调用方准备的普通输入传递；Adapter 不按首轮、续接或 fallback 添加提示词，不提升为 system/developer/受信角色，不新增等价字段或注入 helper。Provider 私有提示词能力不构成 Runtime 公共抽象。保留调用方文本/图片次序，原生映射不得加入空指令块或额外分隔符。
 8. Token 和其他敏感值不得出现在命令行参数、prompt、事件 payload 或工作目录中。
 9. 会话、审批、图片等行为在 Adapter 中按具体合同实现，由宿主管理功能支持范围；不得新增 `executionFeatures` 标签、自有 capabilities、能力字段表或 AbilityProvider 注册体系。当前输出模式仍使用 `protocolSupport`，其简化不在本次文档决定中实施。单独记录真实 Provider 验证范围，不将静态声明当作执行证据。

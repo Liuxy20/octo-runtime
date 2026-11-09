@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-通过 DeepSeek Harness 官方 Client SDK 和 stdio 服务跑一轮调用：启动或续接一个显式原生会话，送入本轮输入，把轨迹映射成 `CanonicalEvent`。这是唯一带公开入口的 Adapter：`@mininglamp-oss/octo-runtime/adapters/dsh`。它封装的是未经修改的上游 SDK，所以这项集成按实验性对待，不构成稳定性承诺。
+通过 DeepSeek Harness 官方 Client SDK 和 stdio 服务跑一轮调用：启动或续接一个显式原生会话，送入本轮输入，把轨迹映射成 `CanonicalEvent`。原生宿主从源码依赖私有 workspace 包 `@mininglamp-oss/octo-runtime-adapter-dsh`；CLI 装配其内置副本。它封装的是未经修改的上游 SDK，所以这项集成按实验性对待，不构成稳定性承诺。
 
 ## 什么时候用它
 
@@ -15,9 +15,9 @@
 以下节选负责注册与输入准备。实际执行使用 `executor.invoke(input)`；完整的消费、终态判断和 `shutdown()` 示例见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter);
@@ -47,7 +47,7 @@ const input = InvokeInput.check({
 | ------------ | ----------------------------------------------------------------------- |
 | Adapter 类型 | `dsh`                                                                   |
 | 导出         | `dshAdapter`、`createDshAdapter`                                        |
-| 公开入口     | `@mininglamp-oss/octo-runtime/adapters/dsh`                             |
+| 源码 workspace 入口 | `@mininglamp-oss/octo-runtime-adapter-dsh`                      |
 | 可执行文件   | 必填：宿主选择的 JS 入口绝对路径 `dshBin`，通过 `process.execPath` 启动 |
 | 输出         | 仅 canonical 事件                                                       |
 | 审批         | 只支持 `full_access`                                                    |

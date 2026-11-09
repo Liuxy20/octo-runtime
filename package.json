@@ -10,14 +10,6 @@
       "types": "./dist/public/adapter-sdk.d.ts",
       "import": "./dist/public/adapter-sdk.js"
     },
-    "./adapters/codex": {
-      "types": "./dist/public/codex.d.ts",
-      "import": "./dist/public/codex.js"
-    },
-    "./adapters/dsh": {
-      "types": "./dist/public/dsh.d.ts",
-      "import": "./dist/public/dsh.js"
-    },
     "./executor-kernel/ipc-fixtures.json": "./packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json",
     "./protocol/schema.json": "./packages/octo-runtime-protocol/schema/protocol.schema.json",
     "./executor-kernel/ipc-schema.json": "./packages/octo-runtime-protocol/schema/kernel-ipc.schema.json",

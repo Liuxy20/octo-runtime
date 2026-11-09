@@ -13,7 +13,7 @@ The toolkit for writing a Provider Adapter: the `Adapter` authoring interface, `
 ## Write a minimal adapter
 
 ```ts
-import { defineAdapter } from "@mininglamp-oss/octo-runtime/adapter-sdk";
+import { defineAdapter } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const echoAdapter = defineAdapter({
   metadata: {
@@ -40,6 +40,8 @@ Register it like any other Adapter: `createKernelService({ home, endpoint, adapt
 
 Core forwards `request.agentEnv` as an ordered snapshot. Read common beans with helpers such as `invocationModel`, `invocationEffort` and `invocationApprovalMode`; read an agreed private payload with `agentEnvItem<T>(request.agentEnv, namespace, name)`. The consuming Adapter owns validation and native mapping. Caller composition uses `withAgentEnvItems` and an Adapter's independent `defaultAgentEnv` copy; invocation does not append defaults to the request. Private items need no public schema or generated type changes. See the [OpenClaw example](../../docs/en/concepts/architecture.md).
 
+`agentEnvItem<T>` performs no runtime type validation. It returns `undefined` when absent and the original payload reference when present; Adapters consume it read-only and own required fields, defaults and semantics. See the [SDK private bean example](../../docs/en/getting-started/sdk.md) for host construction and Adapter consumption.
+
 | Helper                                                              | What it saves you                                                                                                                                                    |
 | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `defineAdapter(adapter)`                                            | Validates and freezes a definition, defaults to canonical-only, rejects unsupported MCP and protocol use, emits `run.notice` when reasoning effort cannot be applied |
@@ -64,7 +66,7 @@ An Adapter with resident resources may supply synchronous, lazy `createExecution
 
 ## Import and distribution
 
-The implementation is a private workspace package. Published applications import its helpers and authoring types through `@mininglamp-oss/octo-runtime/adapter-sdk`.
+The implementation is a private workspace package. Native hosts and Adapter authors integrate its source, declare a workspace dependency on `@mininglamp-oss/octo-runtime-adapter-sdk`, and import helpers and authoring types. It is not independently published; applications only connecting to Kernel use the client without this dependency.
 
 ## Further reading
 

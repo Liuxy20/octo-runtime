@@ -6,7 +6,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { randomUUID } from "node:crypto";
-import { createCodexAdapter, createManagedCodexEngine } from "../../dist/public/codex.js";
+import {
+  createCodexAdapter,
+  createManagedCodexEngine
+} from "../../packages/octo-runtime-adapter-codex/dist/index.js";
 import { AgentExecutor } from "../../dist/public/executor-core.js";
 import { createKernelService, componentEndpoint } from "../../dist/public/host.js";
 import { loadCliAdapters } from "../../apps/cli/dist/adapters.js";
@@ -58,7 +61,7 @@ function scope(adapter) {
 const closeScope = (value) => value.close({ deadline: performance.now() + 2500 });
 
 test("explicit SDK Home, removed singleton and conflicting per-call Home", async (t) => {
-  const exports = await import("../../dist/public/codex.js");
+  const exports = await import("../../packages/octo-runtime-adapter-codex/dist/index.js");
   assert.equal(exports.codexAdapter, undefined);
   assert.equal(exports.default, undefined);
   assert.throws(() => createManagedCodexEngine({}), /CODEX_HOME_REQUIRED/);
@@ -209,7 +212,8 @@ test("host-owned diagnostics place app-server under host PID, independent of ada
   });
   assert.equal(processes.length, 2);
   const tree = formatResidentProcesses(processes);
-  assert.match(tree, /Host\/Kernel.*PID/);
+  assert.match(tree, /CLI Host.*PID/);
+  assert.match(tree, /\+-- Kernel.*in-process/);
   assert.match(tree, /\+-- codex app-server.*owned/);
   assert.doesNotMatch(tree, /adapter/i);
   await kernel.close();
@@ -224,8 +228,8 @@ test("CLI assembly failure attempts every owned disposer and retains the origina
     module,
     `export const calls=[];
 const adapter={metadata:{type:"fixture",agentSources:["provisioned"],protocolSupport:{protocol:"fixture",modes:["canonical"],nativeMethods:[]}},async *invoke(){}};
-export function first(){return {adapter,async close(){calls.push("first");throw Error("CLEANUP_FAILED");}};}
-export function second(){return {adapter,async close(){calls.push("second");return {complete:true,unresolvedServiceIds:[],failedCleanupServiceIds:[]};}};}
+export function first(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"first"}},async close(){calls.push("first");throw Error("CLEANUP_FAILED");}};}
+export function second(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"second"}},async close(){calls.push("second");return {complete:true,unresolvedServiceIds:[],failedCleanupServiceIds:[]};}};}
 export function broken(){throw Error("CONSTRUCTION_FAILED");}
 `
   );
@@ -271,8 +275,8 @@ test("CLI rollback releases dependent sessions before their transport", async (t
     `export const calls=[];let alive=true;
 const adapter={metadata:{type:"fixture",agentSources:["provisioned"]},async *invoke(){}};
 const complete={complete:true,unresolvedServiceIds:[],failedCleanupServiceIds:[]};
-export function transport(){return {adapter,async close(){calls.push("transport");alive=false;return complete;}};}
-export function session(){return {adapter,async close(){calls.push("session");if(!alive)throw Error("TRANSPORT_CLOSED_BEFORE_UNSUBSCRIBE");return complete;}};}
+export function transport(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"transport"}},async close(){calls.push("transport");alive=false;return complete;}};}
+export function session(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"session"}},async close(){calls.push("session");if(!alive)throw Error("TRANSPORT_CLOSED_BEFORE_UNSUBSCRIBE");return complete;}};}
 export function broken(){throw Error("CONSTRUCTION_FAILED");}`
   );
   const entries = ["transport", "session", "broken"].map((name) => ({

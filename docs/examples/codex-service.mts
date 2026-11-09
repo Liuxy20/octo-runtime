@@ -1,13 +1,13 @@
 import {
   createKernelService,
-  componentEndpoint,
   type KernelService
-} from "@mininglamp-oss/octo-runtime/host";
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import {
   createCodexAdapter,
   createManagedCodexEngine,
   type CodexEngineProvider
-} from "@mininglamp-oss/octo-runtime/adapters/codex";
+} from "@mininglamp-oss/octo-runtime-adapter-codex";
 
 /** 宿主已准备两种 Home；持有 owner 的宿主负责回滚和最终关闭。 */
 export async function startOwnedCodex(home: string, codexHome: string) {

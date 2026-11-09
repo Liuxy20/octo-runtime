@@ -13,8 +13,8 @@
 ## 发起一次调用
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 const executor = new AgentExecutor();
@@ -75,7 +75,7 @@ try {
 
 ## 导入与分发
 
-private workspace 包。发行版只暴露 `/adapters/dsh`，目前没有公开的 ACP 子路径。
+private workspace 包，不单独发布或通过完整包聚合导出。原生宿主从源码声明本包的 workspace 依赖并按需 import；独立应用使用 client 连接已装配的 Kernel。
 
 ## 延伸阅读
 

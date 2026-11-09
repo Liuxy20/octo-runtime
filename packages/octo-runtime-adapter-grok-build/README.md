@@ -15,8 +15,8 @@ Runs one invocation over Grok Build's ACP stdio protocol: starts `grok --no-auto
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
 const executor = new AgentExecutor();

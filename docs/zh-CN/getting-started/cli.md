@@ -4,9 +4,9 @@
 
 ## Codex 常驻 Engine
 
-默认配置由 CLI 服务进程创建 managed owner，再把 provider 注入 Adapter，无需新增必填配置。CODEX_HOME 由该宿主选择：工厂 options.codexHome、服务进程 CODEX_HOME、最后 ~/.codex。服务进程环境与发起 start 的短命客户端环境须分别配置。首次调用启动 app-server；兼容调用复用。stop 和正常 Playboard 结束由 CLI 停止恢复、关闭 Kernel、回收 owned Engine，保留 Home 数据。
+默认配置由 CLI 服务进程创建 managed owner，再把 provider 注入 Adapter，无需新增必填配置。CODEX_HOME 由该宿主选择：工厂 options.codexHome、服务进程 CODEX_HOME、最后 ~/.codex。服务进程环境与发起 start 的短命客户端环境须分别配置。首次调用启动 app-server；同一 owner 的全部调用复用该进程。stop 和正常 Playboard 结束由 CLI 停止恢复、关闭 Kernel、回收 owned Engine，保留 Home 数据。
 
-doctor 的 Resident processes (ownership) 树把 codex app-server 挂在 Host/Kernel PID 下，显示 owned、状态与 incarnation。Adapter 只引用 Engine，不是 PID 树节点。status/doctor 读取宿主快照，不启动 Engine。Electron 自管 Engine 归 Electron，不套用 CLI 默认托管策略。
+CLI 默认纳管的同类型 Harness 只有一个实例，Codex 的不同工作目录、任务与并发调用共享一个 app-server。doctor 的 Resident processes (ownership) 树在 CLI Host 下平级显示 Kernel（in-process，共用 PID）与 app-server；后者显示 owned、状态与 incarnation。Adapter 只引用 Engine，不是 PID 树节点。status/doctor 读取宿主快照，不启动 Engine。Electron 自管 Engine 归 Electron，不套用 CLI 默认托管策略。
 
 ```sh
 npm install -g @mininglamp-oss/octo-runtime

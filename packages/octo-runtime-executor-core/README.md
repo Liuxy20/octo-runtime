@@ -13,9 +13,9 @@
 ## Make one call
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throws
@@ -58,7 +58,7 @@ Two details that trip people up: the Adapter is chosen by the `octo.execution` /
 
 The application prepares `/absolute/prepared/project` before calling. Local execution requires an explicit existing absolute directory through a path-only workspace item. Core does not inherit cwd, create application directories, allocate random workspaces or restore a missing directory during resume/fresh recovery. Workspace-owning external/preset Agents and `metadata.workspace: false` Adapters may omit the override. Missing/invalid paths produce stable `WORKDIR_*` reasons classified as `OH-ADP-3004`; see [input validation](../../docs/en/reference/invoke-input.md). `prepareRunContext` and `WorkspaceAssignments` are removed; Runtime operational state is separate.
 
-It validates and freezes the request, renders this turn's model input, resolves the local environment, and admits the run. Admission happens before any Provider starts: identity, capacity, and closed-state checks all run there. Business Context comes from this invocation only — Core never fills a gap from session history.
+Core validates and snapshots this invocation's input and AgentEnv, reads only the Adapter route, and forwards the caller's prepared text/images and configuration items in order. The Adapter owns configuration semantics, defaults, environment merging and native Provider mapping. Core creates no agentConfig or other configuration projection, renders no business Context and fills no gaps from session history. Identity, capacity and closed-state checks run during admission, before the Provider starts.
 
 `invokeFrames` validates synchronously, so a malformed request throws at the call. `invoke` is an async generator, so everything runs at the first `next()`. Wrap the whole consumption loop, not just one call: an unconsumed iterator reserves no capacity and starts no Provider.
 
@@ -66,6 +66,7 @@ It validates and freezes the request, renders this turn's model input, resolves 
 
 - `signal` — cancellation for this run.
 - `executionEnvOverrides` — trusted values the host injects.
+- `providerOptions` — trusted host connection settings bound locally for Adapter consumption, without writing them back into AgentEnv.
 - `streamLimits` — local budgets; Kernel rejects this one (`KERNEL_STREAM_LIMITS_UNSUPPORTED`).
 
 ## API
@@ -117,7 +118,7 @@ Electron, Node SDK hosts, and CLI hosts use KernelClient over local RPC. Direct 
 
 ## Import and distribution
 
-Private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-executor-core`. Published consumers use `@mininglamp-oss/octo-runtime/executor-core`.
+Private workspace package: native hosts integrate `@mininglamp-oss/octo-runtime-executor-core` from source and depend only on selected Adapters, without installing the CLI package and all bundled Adapters. Independent applications use `octo-runtime-client` to connect to an existing Kernel.
 
 ## Further reading
 

@@ -15,7 +15,7 @@
 ## 写一个最小 Adapter
 
 ```ts
-import { defineAdapter } from "@mininglamp-oss/octo-runtime/adapter-sdk";
+import { defineAdapter } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const echoAdapter = defineAdapter({
   metadata: {
@@ -42,6 +42,8 @@ export const echoAdapter = defineAdapter({
 
 Core 将 `request.agentEnv` 按原顺序作为快照透传。共性 bean 使用 `invocationModel`、`invocationEffort`、`invocationApprovalMode` 等 helper；约定的私有 payload 使用 `agentEnvItem<T>(request.agentEnv, namespace, name)` 读取，由消费它的 Adapter 校验并映射到原生参数。调用方通过 `withAgentEnvItems` 与 Adapter 的独立 `defaultAgentEnv` 副本显式组合，执行时不向请求追加默认条目。私有 item 无须修改公共 schema 或生成类型。见 [OpenClaw 示例](../../docs/zh-CN/concepts/architecture.md)。
 
+`agentEnvItem<T>` 不执行运行时类型校验，条目缺失时返回 `undefined`，存在时返回原 payload 引用；Adapter 只读使用并自行处理必填项、默认值和语义。宿主构造及 Adapter 消费的完整代码见 [SDK 私有 bean 示例](../../docs/zh-CN/getting-started/sdk.md)。
+
 | 工具                                                                | 省掉了什么                                                                                                   |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `defineAdapter(adapter)`                                            | 校验并冻结定义，默认 canonical-only，拒绝不支持的 MCP 与协议用法，reasoning effort 落不下去时发 `run.notice` |
@@ -64,7 +66,7 @@ Core 将 `request.agentEnv` 按原顺序作为快照透传。共性 bean 使用 
 
 ## 导入与分发
 
-实现位于 private workspace 包；发行版应用通过 `@mininglamp-oss/octo-runtime/adapter-sdk` 导入帮助类与 Adapter 编写类型。
+实现位于 private workspace 包；原生宿主及 Adapter 作者从源码声明 `@mininglamp-oss/octo-runtime-adapter-sdk` 的 workspace 依赖，导入帮助类与编写类型。本包不是独立 npm 发行物；仅连接 Kernel 的应用使用 client，无须依赖本包。
 
 ## 延伸阅读
 

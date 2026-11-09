@@ -29,7 +29,7 @@ A closer manages resources it created or explicitly owns; a module dependency do
 | Executor Core | Registered adapters, per-registration execution scopes, invocation controllers, iterators, interaction state | Core manages admission, targeted cancellation, invocation cleanup, and scope shutdown; there is no separate execution worker. |
 | Adapter SDK | Adapter/scope/cleanup contracts, queue, log and process helpers | Consumers own concrete helper instances; the helper library does not create a global Engine by default. |
 | Codex adapter | Injected CodexEngineProvider, scope routes, invocation channels, protocol and interaction state | createCodexAdapter({engine}) does not supervise processes; Core scope shutdown releases local work and leases. |
-| ManagedCodexEngine / CodexService | Configuration pool, owned app-server, stdio reader/writer, RPC correlation, recovery timers, incarnation | The host explicitly creates createManagedCodexEngine({codexHome}), holds it and finally closes the owner; channel.close releases one invocation. |
+| ManagedCodexEngine / CodexService | One owned app-server, stdio reader/writer, RPC correlation, recovery timers, incarnation | The host explicitly creates createManagedCodexEngine({codexHome}), holds it and finally closes the owner; channel.close releases one invocation. |
 | ACP Client / other Provider adapters | Per-invocation subprocesses, native session queues, or remote connections | Each adapter retains its existing resource model; callers of spawnAcpClient must close the client. Codex ownership does not define every Provider's model. |
 | protocol | Schemas, execution envelopes, identity and event types | No runtime ownership of processes or connections. |
 | runtime-client | Its own connections, invocation registry, observation and control handles | Consumers stop admission, drain their own invocations, then close the client; close does not cancel accepted work or stop a shared Kernel. |
@@ -57,15 +57,15 @@ Construction freedom preserves the execution contract: adapters must still corre
 
 | Object | Creation and shutdown responsibility | Borrower authority |
 | --- | --- | --- |
-| Default managed Codex owner, configuration pool, and processes | The actual CLI service host creates and finally closes them; supervision is a reusable module. | The adapter acquires an invocation channel without owner.close/restart authority. |
+| Default managed Codex owner and one app-server | The actual CLI service host creates and finally closes them; each managed harness type has one default instance. | The adapter acquires an invocation channel without owner.close/restart authority. |
 | Existing application Engine and shared connection | The existing Electron/business owner manages startup, recovery, shutdown, and connection correlation. | The adapter uses supplied access without duplicate spawning, shared-reader shutdown, or independent Engine recovery. |
 | Adapter scope | Core creates and closes a scope per registration; the scope manages its own routes, subscriptions, and leases. | Scope close releases local resources without stopping sibling invocations or the shared Engine. |
 | Invocation channel / lease | The provider allocates it; the adapter releases it after completion, cancellation, or cleanup. | Release is idempotent and invocation-specific; closing a dedicated connection requires explicit provider authorization. |
 | CODEX_HOME directory, permissions, and persistent data | The Home owner selects, prepares, and explicitly injects it, and decides access, retention, migration, and deletion. | The adapter consumes configuration; process or lease shutdown does not authorize permission changes or deletion of authentication, configuration, skills, or native sessions. |
 
-Default CLI composition creates the managed owner and passes owner.provider to the adapter. Electron may supply its own CodexEngineProvider with the same protocol adaptation. Compatible executable, cwd, environment, Home and MCP settings select an app-server; provider.acquire returns an invocation channel and configuration.mcpServers. channel.close must be idempotent and invocation-specific. Shared connections require coordinated RPC IDs and notification routing; two Runtime instances must not independently read the same stdio stream. Other adapters need not implement this Codex-specific contract.
+Default CLI composition creates one instance of each managed harness type and passes owner.provider to the adapter. A Codex owner supervises one app-server: cwd, environment, MCP, model, capacity and concurrency never select additional processes. provider.acquire returns a channel, configuration.mcpServers and configuration.config for per-thread/turn settings. The owner imposes no agent-count or estimated lease-memory admission limit. Separate owners require an explicit strong isolation decision, such as separate accounts. Electron may supply its own CodexEngineProvider with the same protocol adaptation. channel.close is idempotent and invocation-specific. Shared connections require coordinated RPC IDs and notification routing; two Runtime instances must not independently read the same stdio stream. Other adapters need not implement this Codex-specific access interface.
 
-doctor renders process ownership using owner_pid: the default app-server belongs under the CLI host (Host/Kernel PID), with no Adapter PID node. Kernel accepts safe host snapshots through serviceProcesses; Core.processes does not claim borrowed Codex Engines. Application-owned snapshots retain the actual owner_pid and ownership. Observation never grants control authority.
+doctor uses owner_pid to show Kernel and app-server as peer resources under CLI Host. Kernel is marked in-process and shares the host PID; no separate Kernel process is invented. Adapter references are not PID nodes. Kernel accepts safe host snapshots through serviceProcesses; Core.processes does not claim borrowed Codex Engines. Application-owned snapshots retain the actual owner_pid and ownership. Observation never grants control authority.
 
 ### CODEX_HOME and Process Lifetimes
 
@@ -80,6 +80,17 @@ Hosts may explicitly supply finalizeHostResources(deadline). Kernel awaits this 
 The host stops local admission and acquisition, cancels and drains its work, closes Kernel/Core resources and releases leases, then closes owned Engines. CLI calls owner.beginShutdown, kernel.close, then owner.close({deadline}) within one five-second budget; deadline is absolute performance.now() milliseconds. SDK hosts owning an exclusive owner follow the same order. Borrowers close only their own Kernel, never owner.beginShutdown/close, so other consumers can continue acquiring the shared Engine.
 
 Initialization failure rolls back only resources created by that composition, without destroying an injected shared owner. Timeouts, release failures, and unconfirmed process exits remain distinct; independent cleanup still runs after another disposer fails. Managed Engines recover through their owner; application Engines recover through the business owner. Recovery never replays accepted turns, tool actions, or interaction decisions, or routes stale interactions into a new incarnation.
+
+## Integration Scenarios and Selective Composition
+
+| Scenario | Dependencies and entry | Ownership and loading |
+| --- | --- | --- |
+| CLI execution service + independent App | Install and start `octo-runtime` for CLI; the App installs only `octo-runtime-client` and calls through `attachKernel({ endpoint })` | CLI owns Kernel and bundled Harnesses; the App loads no Adapter and starts no Provider, and closing its client leaves the service running |
+| Native embedding inside an application | Depend on Kernel/Core, shared helpers and selected Adapters from source workspace, importing their package names directly | The application owns services and explicitly created Engines; Codex-only hosts need no OpenClaw dependency, and OpenClaw-only hosts need no Codex dependency |
+
+Native integration uses no Adapter aggregate exports from the full CLI package. Source packages stay private rather than becoming independent npm products. Hosts declare required source dependencies with `workspace:*`, select imports or dynamic imports according to product configuration, then construct and register Adapters before Kernel initialization. Runtime neither scans for, installs nor adds unselected Adapters, and requires no new common Engine interface. See [SDK integration](../getting-started/sdk.md) for dependencies and complete examples.
+
+Selective module loading and lazy process startup are separate: source hosts choose the Adapters to load; current CLI loads every composition entry in its manifest. A Codex owner's app-server starts on the first invocation, and calls with different cwd, models or settings share that process. The CLI release still contains its own bundled dependencies; source hosts need not carry that full set. The client remains an RPC consumer and never becomes an Adapter host.
 
 ## AgentEnv Goes Directly to the Adapter
 
@@ -105,6 +116,8 @@ For OpenClaw, the target Agent is a private agreement between the host and the O
 ```
 
 The public protocol defines the envelope and shared beans. The name, fields, types, defaults and validation of `adapter.openclaw/options` belong exclusively to the host and OpenClaw Adapter. This example does not make them public protocol fields. Core forwards the item; OpenClaw reads `agentId`; other Adapters ignore it. Adding private settings or a custom Harness requires only the caller's item and its consuming Adapter, without a public schema registration, public type or protocol-version change. Private items are not rendered into model input.
+
+Adapters read private payloads through `agentEnvItem<T>(req.agentEnv, namespace, name)`; the generic performs no runtime validation. See [SDK integration](../getting-started/sdk.md) for host construction, Adapter validation and shared model reading through `invocationModel`.
 
 Trusted connection credentials travel through the local Adapter context. Envelope validation checks structure, unique keys, JSON depth and size; the consuming Adapter reports semantic errors in recognized settings.
 

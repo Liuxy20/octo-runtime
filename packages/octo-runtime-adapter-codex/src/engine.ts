@@ -1,10 +1,8 @@
-import { createHmac, randomBytes, randomUUID } from "node:crypto";
-import { realpathSync, statSync } from "node:fs";
-import { delimiter, isAbsolute, resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import { isAbsolute } from "node:path";
 import {
   invocationEnvironment,
   invocationEnvs,
-  invocationMcpServers,
   invocationProviderOptions,
   invocationWorkdir,
   mergeProcessEnvironment,
@@ -42,7 +40,9 @@ export interface CodexChannel {
 }
 
 /** 本轮协议配置，不向借用者暴露 spawn 或进程 cleanup。 */
-export type CodexTurnConfiguration = Pick<CodexAppServerCommand, "mcpServers">;
+export type CodexTurnConfiguration = Pick<CodexAppServerCommand, "mcpServers"> & {
+  config?: Record<string, unknown>;
+};
 export interface CodexEngineLease {
   channel: CodexChannel;
   configuration: CodexTurnConfiguration;
@@ -100,7 +100,7 @@ export function buildCodexCommand(
   };
 }
 
-/** 宿主显式创建惰性托管池；同配置复用，关闭 owned 进程但保留全部 Home 数据。 */
+/** 宿主显式拥有唯一 app-server；本轮配置只进入 thread，不参与进程选择。 */
 export function createManagedCodexEngine({
   codexHome,
   command = "codex",
@@ -110,10 +110,15 @@ export function createManagedCodexEngine({
 }: ManagedCodexEngineOptions): ManagedCodexEngine {
   assertCodexHome(codexHome);
   const inherited = mergeProcessEnvironment(env, { CODEX_HOME: codexHome });
-  const args = [...appServerArgs];
   const scopeId = randomUUID();
-  const salt = randomBytes(32);
-  const services = new Map<string, { semantic: string; service: CodexService }>();
+  // server 启动继承宿主目录；CODEX_HOME 仅是数据目录，本轮 cwd 只经 thread/turn RPC 传入。
+  const spec: CodexAppServerCommand = {
+    command,
+    args: [...appServerArgs],
+    env: inherited,
+    cleanup: () => undefined
+  };
+  let service: CodexService | undefined;
   let closing = false;
   let close: Promise<void> | undefined;
   const unresolved = new Set<string>();
@@ -125,57 +130,41 @@ export function createManagedCodexEngine({
       async acquire(request, context) {
         if (closing) throw new Error("CODEX_SERVICE_CLOSED");
         assertCodexInvocationHome(request, codexHome);
+        if (invocationProviderOptions(request, "codex").codexServiceRevision !== undefined)
+          throw new Error("CODEX_SERVICE_REVISION_UNSUPPORTED");
         const runEnv = invocationEnvironment(request, {}, inherited);
         const rawMessageMaxBytes = resolveStreamLimitPolicy(
           context?.streamLimits
         ).rawMessageMaxBytes;
-        // 按解析语义分池，私有 MCP header 随机环境名不影响服务复用。
-        const semantic = stableJson({
-          command: executableIdentity(command, runEnv, invocationWorkdir(request)),
-          args: [...args, ...nativeCapacityOverrides(request)],
-          cwd: invocationWorkdir(request),
-          env: runEnv,
-          home: codexHome,
-          mcp: invocationMcpServers(request, runEnv),
-          revision: invocationProviderOptions(request, "codex").codexServiceRevision ?? "",
-          rawMessageMaxBytes
-        });
-        const key = createHmac("sha256", salt).update(semantic).digest("hex");
-        let entry = services.get(key);
-        if (entry && entry.semantic !== semantic) throw new Error("CODEX_SERVICE_KEY_COLLISION");
-        if (!entry) {
-          if (services.size >= 8) throw new Error("CODEX_SERVICE_CONFIGURATIONS_EXCEEDED");
-          entry = {
-            semantic,
-            service: new CodexService(
-              scopeId,
-              buildCodexCommand(request, command, args, inherited),
-              spawnFn,
-              rawMessageMaxBytes
-            )
-          };
-          services.set(key, entry);
-        }
-        const channel = await entry.service.acquire(
+        const mcp = codexMcpConfig(request, runEnv);
+        const config = codexCapacityConfig(request);
+        service ??= new CodexService(scopeId, spec, spawnFn);
+        const channel = await service.acquire(
           request.signal,
-          Buffer.byteLength(JSON.stringify(request)),
-          context?.protocolMode !== "native" && hasImageInput(request)
+          context?.protocolMode !== "native" && hasImageInput(request),
+          rawMessageMaxBytes
         );
-        return { channel, configuration: { mcpServers: entry.service.spec.mcpServers } };
+        return {
+          channel,
+          configuration: {
+            ...(Object.keys(mcp.servers).length ? { mcpServers: mcp.servers } : {}),
+            ...(Object.keys(config).length ? { config } : {})
+          }
+        };
       }
     },
-    processes: () => [...services.values()].map(({ service }) => service.snapshot()),
+    processes: () => (service ? [service.snapshot()] : []),
     beginShutdown() {
       closing = true;
-      for (const { service } of services.values()) service.stopRecovery();
+      service?.stopRecovery();
     },
     async close({ deadline }) {
       if (!Number.isFinite(deadline)) throw new TypeError("CLEANUP_DEADLINE_INVALID");
       closing = true;
       if (!close) {
-        for (const { service } of services.values()) unresolved.add(service.id);
+        if (service) unresolved.add(service.id);
         close = Promise.all(
-          [...services.values()].map(async ({ service }) => {
+          (service ? [service] : []).map(async (service) => {
             try {
               await service.close();
               unresolved.delete(service.id);
@@ -207,8 +196,15 @@ export function createManagedCodexEngine({
 
 /** 宿主已确认的容量映射为原生参数，不重发已接受的 turn。 */
 function nativeCapacityOverrides(request: InvokeRequest): string[] {
+  return Object.entries(codexCapacityConfig(request)).flatMap(([key, value]) => [
+    "-c",
+    `${key}=${value}`
+  ]);
+}
+/** 容量属于本轮 thread 配置，不改变共享服务的 argv。 */
+function codexCapacityConfig(request: InvokeRequest): Record<string, number> {
   const value = request.runMetadata?.contextCapacity as Record<string, unknown> | undefined;
-  if (!value) return [];
+  if (!value) return {};
   const window = value.contextWindow;
   const reserve = value.outputReserveTokens;
   if (
@@ -222,44 +218,8 @@ function nativeCapacityOverrides(request: InvokeRequest): string[] {
     reserve >= window
   )
     throw new TypeError("CONTEXT_CAPACITY_UNAVAILABLE");
-  return [
-    "-c",
-    `model_context_window=${window}`,
-    "-c",
-    `model_auto_compact_token_limit=${window - reserve}`
-  ];
-}
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value && typeof value === "object")
-    return `{${Object.entries(value)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, entry]) => `${JSON.stringify(key)}:${stableJson(entry)}`)
-      .join(",")}}`;
-  return JSON.stringify(value);
-}
-/** 路径命令相对 cwd 解析一次；文件身份改变即选择新服务。 */
-function executableIdentity(command: string, env: NodeJS.ProcessEnv, cwd: string): unknown {
-  const extensions =
-    process.platform === "win32" && !/\.[a-z]+$/i.test(command)
-      ? (processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT").split(";")
-      : [""];
-  const directories =
-    isAbsolute(command) || /[/\\]/.test(command)
-      ? [""]
-      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter);
-  for (const directory of directories)
-    for (const extension of extensions) {
-      try {
-        const path = realpathSync(resolve(cwd, directory, command + extension));
-        const info = statSync(path);
-        if (info.isFile())
-          return { path, dev: info.dev, ino: info.ino, size: info.size, mtime: info.mtimeMs };
-      } catch (error) {
-        if (!["ENOENT", "ENOTDIR"].includes((error as NodeJS.ErrnoException).code ?? ""))
-          throw error;
-      }
-    }
-  return { command };
+  return {
+    model_context_window: window,
+    model_auto_compact_token_limit: window - reserve
+  };
 }

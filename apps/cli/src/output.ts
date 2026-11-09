@@ -60,7 +60,7 @@ export function residentProcesses(
     const managedPid = pid(snapshot.service.pid);
     add({
       ...(actualPid || managedPid ? { pid: actualPid ?? managedPid } : {}),
-      roles: [name === "executor-kernel" ? "Host/Kernel" : name],
+      roles: name === "executor-kernel" ? ["CLI Host", "Kernel"] : [name],
       state: actualPid ? "running" : snapshot.service.state,
       observation: actualPid ? "alive" : "unknown"
     });
@@ -85,9 +85,12 @@ export function residentProcesses(
 export function formatResidentProcesses(processes: readonly ResidentProcessView[]): string {
   const lines = ["Resident processes (ownership):"];
   for (const entry of processes.filter((value) => !value.owner_pid)) {
+    const embeddedKernel = entry.roles.includes("CLI Host") && entry.roles.includes("Kernel");
     lines.push(
-      `  ${entry.roles.join(", ")}  PID ${entry.pid ?? "unknown"}  ${entry.state} (${entry.observation})`
+      `  ${entry.roles.filter((role) => !embeddedKernel || role !== "Kernel").join(", ")}  PID ${entry.pid ?? "unknown"}  ${entry.state} (${entry.observation})`
     );
+    if (embeddedKernel)
+      lines.push(`    +-- Kernel  in-process (shared PID ${entry.pid ?? "unknown"})`);
     for (const child of processes.filter((value) => entry.pid && value.owner_pid === entry.pid))
       lines.push(
         `    +-- ${child.roles.join(", ")}  PID ${child.pid ?? "-"}  ${child.state} (${child.observation})  ${child.ownership ?? "unknown"}  incarnation ${child.incarnation ?? "-"}  service ${child.service_id ?? "-"}`

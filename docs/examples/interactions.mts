@@ -1,15 +1,15 @@
 import { randomUUID } from "node:crypto";
-import type { KernelClient } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { AsyncQuestionReply } from "@mininglamp-oss/octo-runtime/executor-kernel";
+import type { KernelClient } from "@mininglamp-oss/octo-runtime-client";
+import { AsyncQuestionReply } from "@mininglamp-oss/octo-runtime-client";
 import type {
   InvokeInput,
   CanonicalEvent,
   InteractionRequestedPayload,
   InteractionResponse
-} from "@mininglamp-oss/octo-runtime/protocol";
-import type { AsyncQuestionReplySnapshot } from "@mininglamp-oss/octo-runtime/protocol";
+} from "@mininglamp-oss/octo-runtime-client/protocol";
+import type { AsyncQuestionReplySnapshot } from "@mininglamp-oss/octo-runtime-client/protocol";
 import { invokeOnce } from "./invoke.mts";
-import { assertQuestionRequest } from "@mininglamp-oss/octo-runtime/protocol";
+import { assertQuestionRequest } from "@mininglamp-oss/octo-runtime-client/protocol";
 
 /** 用户界面决定回复；在原 client、原 invocation 下响应，并继续消费到终态。 */
 export async function invokeInteractive(

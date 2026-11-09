@@ -83,7 +83,7 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 产品选择的加载集合也独立于以上状态。CLI 与 SDK 嵌入代码分别决定集合；Host 不因框架支持更多类型或机器上探测到更多 Provider 就自行加载。默认来源拆分已实施，SDK 不读取 CLI 清单，见 [方案及影响](../tasks/adapter-composition-ownership/brief.md)。
 
-Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。公开 authoring 与通用帮助类由 `@mininglamp-oss/octo-runtime/adapter-sdk` 提供，不恢复 Extra API 或单独发布 private 包。
+Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。纯原生 authoring 与通用帮助类从源码 workspace 的 `@mininglamp-oss/octo-runtime-adapter-sdk` 引入，按需依赖所选 Adapter，不依赖 CLI 聚合包；private 包不单独 npm 发布，不恢复 Extra API。
 
 Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 

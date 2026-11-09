@@ -1,5 +1,5 @@
-import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { attachKernel } from "@mininglamp-oss/octo-runtime-client";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-client/protocol";
 import { randomUUID } from "node:crypto";
 import { invokeOnce } from "./invoke.mts";
 

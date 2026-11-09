@@ -4,7 +4,7 @@
 
 Provider 是实际执行 Agent 任务的程序，例如 Codex 或 Claude Code。Adapter 负责将 Runtime 输入转换为对应 Provider 的调用。应用通过 `octo.execution/adapter` 选择 Adapter，并在执行机器上安装、登录对应 Provider；Runtime 不会自动下载这些依赖。
 
-安装、账号配置、Codex Computer Use 和 CodeBuddy/WorkBuddy 共享额度见 [Harness 安装配置](../guides/harnesses.md)。Runtime 服务命令和 `octo-cli` 依赖见 [CLI 安装与调用](../getting-started/cli.md)。
+安装、账号配置、Codex Computer Use 和 CodeBuddy/WorkBuddy 共享额度见 [Harness 安装配置](../guides/harnesses.md)。Runtime 自身的服务命令见 [CLI 安装与调用](../getting-started/cli.md)。
 
 下表记录当前源码中的 Adapter。使用前还需确认实际 Provider 版本和账号配置可用，不能只根据 Adapter 已注册就认定能够执行。
 

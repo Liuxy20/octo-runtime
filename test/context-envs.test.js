@@ -159,7 +159,7 @@ test("concurrent CLI invocations and their child tools inherit isolated envs", a
   ]);
   assert.equal(process.env[key], previous);
 });
-test("Codex whitelists env names for local MCP and supplies shell env without changing other policies", () => {
+test("Codex supplies thread-local MCP and shell env while retaining native precedence", () => {
   const config = {
     shell_environment_policy: { set: { EXISTING: "kept" }, include_only: ["PATH"] },
     mcp_servers: {
@@ -173,7 +173,7 @@ test("Codex whitelists env names for local MCP and supplies shell env without ch
   assert.deepEqual(codexEnvironmentConfig(request({ A: "run" }), config), {
     "shell_environment_policy.set": { EXISTING: "kept", A: "run" },
     "shell_environment_policy.include_only": ["PATH", "A"],
-    mcp_servers: { "local.mcp": { env_vars: ["EXISTING", "A"] } }
+    mcp_servers: { "local.mcp": { env: { A: "server" } } }
   });
   assert.deepEqual(config, original);
   assert.deepEqual(codexEnvironmentConfig(request({}), config), {});

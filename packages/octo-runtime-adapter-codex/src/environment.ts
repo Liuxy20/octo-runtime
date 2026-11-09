@@ -1,4 +1,8 @@
-import { invocationEnvs, type InvokeRequest } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  invocationEnvs,
+  mergeProcessEnvironment,
+  type InvokeRequest
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 /** Per-thread overrides; the provider's effective configuration stays on disk unchanged. */
 export function codexEnvironmentConfig(
@@ -10,7 +14,10 @@ export function codexEnvironmentConfig(
   if (!keys.length) return {};
   const shell = record(config.shell_environment_policy);
   const overrides: Record<string, unknown> = {
-    "shell_environment_policy.set": { ...record(shell.set), ...envs }
+    "shell_environment_policy.set": mergeProcessEnvironment(
+      record(shell.set) as NodeJS.ProcessEnv,
+      envs
+    )
   };
   if (Array.isArray(shell.include_only) && shell.include_only.length) {
     overrides["shell_environment_policy.include_only"] = [
@@ -26,15 +33,11 @@ export function codexEnvironmentConfig(
       server.experimental_environment === "remote"
     )
       continue;
-    // Whitelist names only: values come from this app-server's isolated environment.
-    // Existing per-server env overrides retain their provider-native precedence.
+    // 共享 app-server 环境固定；逐线程传实际值，MCP 自有 env 继续具有原生优先级。
     Object.defineProperty(servers, name, {
       enumerable: true,
       value: {
-        env_vars: [
-          ...(Array.isArray(server.env_vars) ? (server.env_vars as unknown[]) : []),
-          ...keys
-        ]
+        env: mergeProcessEnvironment(envs, record(server.env) as NodeJS.ProcessEnv)
       }
     });
   }

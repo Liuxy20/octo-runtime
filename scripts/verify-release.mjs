@@ -122,10 +122,10 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     assert.equal(moduleManifest.adapters.length, 13);
     const dshEntry = moduleManifest.adapters.find((entry) => entry.type === "dsh");
     assert.equal(dshEntry?.module, "@mininglamp-oss/octo-runtime-adapter-dsh");
-    const dshModule = await import(`${pathToFileURL(installed).href}/dist/public/dsh.js`);
+    const dshDirectory = join(installed, "node_modules", dshEntry.module);
+    const dshModule = await import(pathToFileURL(join(dshDirectory, "dist/index.js")).href);
     assert.equal(dshModule[dshEntry.export].metadata.type, "dsh");
     assert.deepEqual(dshModule[dshEntry.export].metadata.protocolSupport.modes, ["canonical"]);
-    const dshDirectory = join(installed, "node_modules", dshEntry.module);
     const dshNotice = await readFile(join(dshDirectory, "dist/dsh-sdk-NOTICE.txt"), "utf8");
     const dshSource = JSON.parse(
       await readFile(join(root, "packages/octo-runtime-adapter-dsh/package.json"), "utf8")
@@ -319,13 +319,14 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
-    await cp(join(root, "docs/examples"), join(consumer, "docs-examples"), { recursive: true });
+    // 原生文档已统一源码 workspace 接入，不能用仅安装 CLI 包的目录解析其依赖。
+    // 下方 public-sdk fixtures 继续独立验证发行物保留的通用公开入口。
     await execute(
       process.execPath,
       [
         join(root, "node_modules/typescript/bin/tsc"),
         "-p",
-        "docs-examples/tsconfig.json",
+        join(root, "docs/examples/tsconfig.json"),
         "--typeRoots",
         join(root, "node_modules/@types")
       ],
@@ -342,7 +343,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       import { resolve } from "node:path";
       import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
       import { testAdapter } from "./docs-adapter.mjs";
-      import { runOwnedInvocation } from "./docs-examples/service.mts";
+      import { runOwnedInvocation } from ${JSON.stringify(pathToFileURL(join(root, "docs/examples/service.mts")).href)};
       const home = resolve("docs-home");
       await (await import("node:fs/promises")).mkdir(home, {recursive:true});
       let completed = false;

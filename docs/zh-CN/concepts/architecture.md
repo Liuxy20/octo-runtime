@@ -29,7 +29,7 @@ Gateway 为独立仓库，配置、授权、上下文、会话和投递由其负
 | Executor Core | 已注册 Adapter、每注册执行 scope、调用控制器、迭代器和交互状态 | Core 管理接纳、定向取消、调用清理及 scope.beginShutdown/close；本进程内没有独立执行 worker |
 | Adapter SDK | Adapter/scope/cleanup 合同，队列、日志及进程辅助对象 | 使用方维护具体实例；辅助库不默认创建全局 Engine |
 | Codex Adapter | 注入的 CodexEngineProvider、本 scope 调用路由、本轮 channel、协议与交互状态 | createCodexAdapter({engine}) 不托管进程；Core 关闭 scope 只释放本地调用与 lease |
-| ManagedCodexEngine / CodexService | 配置服务池、owned app-server、stdio reader/writer、RPC 关联、恢复 timer 和 incarnation | 宿主显式 createManagedCodexEngine({codexHome})，持有并最终 close owner；channel.close 只释放本轮资源 |
+| ManagedCodexEngine / CodexService | 单个 owned app-server、stdio reader/writer、RPC 关联、恢复 timer 和 incarnation | 宿主显式 createManagedCodexEngine({codexHome})，持有并最终 close owner；channel.close 只释放本轮资源 |
 | ACP Client / 其他 Provider Adapter | 逐轮子进程、原生会话队列或远端连接 | 各 Adapter 按已有模型释放本轮资源；调用 spawnAcpClient 的一方负责 client.close；不能由 Codex 模型推导全部 Provider |
 | protocol | Schema、执行信封、身份和事件类型 | 没有进程或连接的运行期所有权 |
 | runtime-client | 自己的连接、调用登记、观察及控制句柄 | 消费者停止接纳、排空自己调用，再关闭 client；close 不等于取消已接纳执行或关闭共享 Kernel |
@@ -57,15 +57,15 @@ CLI manifest 对工厂的配置和调用约定只是 CLI 的装配机制，不�
 
 | 对象 | 创建与关闭责任 | 借用方可以做什么 |
 | --- | --- | --- |
-| 默认 Codex 托管 owner、配置服务池和进程 | CLI 的实际服务宿主创建并最终关闭；监督实现为可复用模块 | Adapter 获取本轮 channel，不获得 owner.close/restart 权限 |
+| 默认 Codex 托管 owner 与单个 app-server | CLI 的实际服务宿主创建并最终关闭；默认同类型 Harness 一个实例 | Adapter 获取本轮 channel，不获得 owner.close/restart 权限 |
 | 业务已有 Engine 与共享连接 | Electron/业务既有 owner 维护启停、恢复和连接关联器 | Adapter 仅使用宿主提供的访问依赖；不能重复 spawn、关闭共享 reader 或自行恢复 Engine |
 | Adapter scope | Core 为每次注册建立并关闭；scope 管理自身路由、订阅与租约 | scope.close 释放本 scope 资源，不停止兄弟调用或底层共享 Engine |
 | 本调用 channel / lease | provider 分配，Adapter 在本轮结束、取消或清理时释放 | release 幂等且限于本调用；关闭独占连接须由 provider 合同明确授权 |
 | CODEX_HOME 目录、权限与持久数据 | Home owner 选择、准备并显式注入，维护访问权限、保留/迁移/删除策略 | Adapter 只消费配置；关闭进程或 lease 不授权改权限或删除认证、配置、skills、原生会话 |
 
-默认 CLI 由宿主装配托管对象，再将 owner.provider 交给 Codex Adapter。Electron 可以注入业务自管的 CodexEngineProvider，复用相同协议适配。app-server 按 executable、cwd、env、Home、MCP 等兼容配置分配服务；provider.acquire 返回本轮 channel 与 configuration.mcpServers。channel.close 必须幂等，只有本轮释放权。共享连接必须有统一 RPC ID 和通知关联器，不能让两个 Runtime 各自独立读取同一 stdio。这是 Codex 专用设计，不是其他 Adapter 的构造要求。
+默认 CLI 由宿主装配托管对象，再将 owner.provider 交给 Codex Adapter。每种受管 Harness 默认只有一个实例，Codex owner 内只有一个 app-server；cwd、环境、MCP、模型、容量及并发数量不触发分池。provider.acquire 返回本轮 channel、configuration.mcpServers 与 configuration.config；thread/turn 承载每轮参数。owner 不按 Agent 数量或估算的 lease 内存设置接纳门槛。账户等强隔离必须由宿主显式选择独立 owner。Electron 可以注入业务自管的 CodexEngineProvider，复用相同协议适配。channel.close 幂等且只有本轮释放权；共享连接必须有统一 RPC ID 和通知关联器，不能让两个 Runtime 各自独立读取同一 stdio。这是 Codex 专用访问接口，不限制其他 Adapter 的构造方式。
 
-doctor 的 PID 树按 owner_pid 展示真实托管关系：默认 app-server 是 CLI 宿主（Host/Kernel PID）的子资源，Adapter 不是 PID 树节点。Kernel 的 serviceProcesses 回调只接收宿主提供的安全快照；Core.processes 不再把借用的 Codex Engine 声称为自有资源。Electron 自管 Engine 的快照须保留实际 owner_pid 与 ownership；只读展示不授予控制权限。
+doctor 按 owner_pid 展示 CLI Host 拥有平级的 Kernel 和 app-server。Kernel 标明 in-process 并共用宿主 PID，不虚构独立进程；Adapter 不是 PID 树节点。Kernel 的 serviceProcesses 回调只接收宿主提供的安全快照；Core.processes 不把借用的 Codex Engine 声称为自有资源。Electron 自管 Engine 的快照须保留实际 owner_pid 与 ownership；只读展示不授予控制权限。
 
 ### CODEX_HOME 与进程生命周期分别维护
 
@@ -80,6 +80,17 @@ Runtime Home 用于 Kernel 自身状态；CODEX_HOME 用于 Codex 数据。Home 
 关闭顺序由宿主协调：停止本装配接纳和新资源获取，取消并排空自己调用，关闭 Kernel/Core 本地资源并释放租约，最后由 owner 关闭 owned Engine。CLI 先 owner.beginShutdown 停获取/恢复，再 kernel.close，最后 owner.close({deadline})；deadline 为 performance.now() 绝对毫秒，共享 5 秒预算。SDK 独占 owner 也遵循此顺序。借用共享 owner 的 Runtime 仅关闭自己的 Kernel，不调用 owner.beginShutdown/close，其他消费者仍可获取资源。
 
 初始化失败只回收本装配已创建的资源；注入的共享 owner 不参与销毁。超时、release 失败和未确认进程退出分别记录，前项失败仍尝试其他独立清理。托管 Engine 由其 owner 恢复，业务 Engine 由业务 owner 恢复；恢复不自动重放 turn、工具动作或交互决定，也不把旧交互发送到新 incarnation。
+
+## 接入场景与按需装配约束
+
+| 场景 | 依赖与入口 | 所有权及加载范围 |
+| --- | --- | --- |
+| CLI 执行服务 + 独立 App | CLI 安装 `octo-runtime` 并启动；App 仅安装 `octo-runtime-client`，通过 `attachKernel({ endpoint })` 调用 | CLI 拥有 Kernel 和内置 Harness；App 不加载 Adapter、不启动 Provider，关闭 client 不停止服务 |
+| 应用内纯原生嵌入 | 从源码 workspace 依赖 Kernel/Core、公共辅助包及所选 Adapter，直接按包名 import | 应用拥有服务及明确创建的 Engine；只需 Codex 就不依赖 OpenClaw，只需 OpenClaw 就不依赖 Codex |
+
+纯原生接入不依赖完整 CLI 包的 Adapter 聚合导出；源码包保持 private，不作为独立 npm 产品发布。宿主通过 `workspace:*` 声明所需源码依赖，按产品配置选择 import 或动态 import，在 Kernel 初始化前完成 Adapter 构造和注册。Runtime 不扫描、安装或自动补齐未选择的 Adapter；也不要求新增统一 Engine 接口。依赖声明及完整示例见 [SDK 接入](../getting-started/sdk.md)。
+
+按需模块加载与进程惰性启动分别定义：源码宿主选择需要加载的 Adapter；当前 CLI 会加载其 manifest 的全部装配项。Codex owner 的 app-server 在首次调用时启动，同 owner 内各 cwd、模型及配置共用单进程。CLI 发行仍包含自己的内置依赖，这不意味着源码宿主必须携带整套依赖。client 始终只负责 RPC，不能把它变成 Adapter 宿主。
 
 ## AgentEnv 直接交给 Adapter
 
@@ -105,6 +116,8 @@ Runtime Home 用于 Kernel 自身状态；CODEX_HOME 用于 Codex 数据。Home 
 ```
 
 公共协议只定义信封和公共 bean；上例 `adapter.openclaw/options` 的名称、字段、类型、默认值及校验均归宿主与 OpenClaw Adapter，不属于公共协议。Core 保序透传，OpenClaw Adapter 自己读取 `agentId`，其他 Adapter 忽略该私有 item。新增 OpenClaw 专属参数或定制 Harness 时，只需宿主构造对应 item、对应 Adapter 消费，无须注册公共 schema、增加公共类型或修改协议版本。私有 item 不会自动进入模型输入。
+
+Adapter 使用 `agentEnvItem<T>(req.agentEnv, namespace, name)` 读取私有 payload；泛型不执行运行时校验。宿主构造、Adapter 校验和公共 `invocationModel` 读取的完整示例见 [SDK 接入](../getting-started/sdk.md)。
 
 连接认证等宿主可信配置由本地 Adapter 上下文提供，不写进示例或模型正文；信封仅接受结构、唯一键、JSON 深度及大小等通用检查，已识别配置的语义错误由消费它的 Adapter 报告。
 

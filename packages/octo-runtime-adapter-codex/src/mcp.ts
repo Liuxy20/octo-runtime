@@ -1,13 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { invocationMcpServers, type InvokeRequest } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
-/** Header secrets travel in the subprocess environment, never argv or persisted config. */
+/** 本轮 MCP 经私有 thread RPC 传递；不依赖共享进程环境，不写 argv 或配置文件。 */
 export function codexMcpConfig(request: InvokeRequest, env: NodeJS.ProcessEnv) {
-  const prefix = `OCTO_MCP_${randomUUID().replaceAll("-", "")}`;
   const servers = invocationMcpServers(request, env);
-  const secrets: NodeJS.ProcessEnv = {};
   const native = Object.fromEntries(
-    Object.entries(servers).map(([name, server], index) => {
+    Object.entries(servers).map(([name, server]) => {
       const entry: Record<string, unknown> = {};
       if (server.type === "stdio") {
         entry.command = server.command;
@@ -16,13 +13,7 @@ export function codexMcpConfig(request: InvokeRequest, env: NodeJS.ProcessEnv) {
         if (server.env) entry.env = server.env;
       } else {
         entry.url = server.url;
-        entry.env_http_headers = Object.fromEntries(
-          Object.entries(server.headers ?? {}).map(([key, value], header) => {
-            const variable = `${prefix}_${index}_${header}`;
-            secrets[variable] = value;
-            return [key, variable];
-          })
-        );
+        entry.http_headers = server.headers ?? {};
       }
       if (server.required !== undefined) entry.required = server.required;
       if (server.startupTimeoutMs !== undefined)
@@ -31,5 +22,5 @@ export function codexMcpConfig(request: InvokeRequest, env: NodeJS.ProcessEnv) {
       return [name, entry];
     })
   );
-  return { servers: native, env: secrets };
+  return { servers: native, env: {} };
 }

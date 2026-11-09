@@ -50,13 +50,15 @@ export class CodexTurnChannel {
   closed = false;
   startingTurn = false;
   startingThread = false;
+  freshThread = false;
   readonly buffered: Message[] = [];
   bufferedBytes = 0;
   #close?: Promise<void>;
   constructor(
     readonly service: CodexService,
     readonly incarnation: number,
-    readonly allowInputEcho = false
+    readonly allowInputEcho = false,
+    readonly rawMessageMaxBytes = DEFAULT_STREAM_LIMIT_POLICY.rawMessageMaxBytes
   ) {}
   reserveRequestId(): Id {
     return this.service.reserveRequestId();
@@ -82,7 +84,7 @@ export class CodexTurnChannel {
   }
 }
 
-/** 宿主托管池的一种兼容配置；惰性启动与空闲恢复由 owner 控制，业务动作从不重放。 */
+/** owner 的唯一进程与关联器；多调用共享 stdio，故障替代不重放业务动作。 */
 export class CodexService {
   readonly id = randomUUID();
   #state: ServiceProcessSnapshot["state"] = "not_started";
@@ -101,13 +103,10 @@ export class CodexService {
   readonly #pending = new Map<Id, Pending>();
   readonly #channels = new Set<CodexTurnChannel>();
   readonly #threads = new Map<string, CodexTurnChannel>();
-  readonly #usedThreads = new Set<string>();
   readonly #serverRequests = new Map<Id, CodexTurnChannel>();
   readonly #early = new Map<string, Message[]>();
   #earlyBytes = 0;
   #earlyItems = 0;
-  #waiters = 0;
-  #waitingBytes = 0;
   constructor(
     readonly scopeId: string,
     readonly spec: CodexAppServerCommand,
@@ -115,55 +114,46 @@ export class CodexService {
     readonly rawMessageMaxBytes = DEFAULT_STREAM_LIMIT_POLICY.rawMessageMaxBytes
   ) {}
 
-  /** 取消等待不取消共享启动；等待者数和活动 thread 数分别有界。 */
+  /** 所有调用等待同一次启动；取消等待仅影响本调用，不取消共享启动。 */
   async acquire(
     signal?: AbortSignal,
-    retainedBytes = 0,
-    allowInputEcho = false
+    allowInputEcho = false,
+    rawMessageMaxBytes = this.rawMessageMaxBytes
   ): Promise<CodexTurnChannel> {
     if (this.#closing) throw codexTransportError("CODEX_SERVICE_CLOSED");
-    const queuedBytes = this.#state === "ready" ? 0 : retainedBytes;
-    if (this.#waitingBytes + queuedBytes > 32 * 1024 * 1024)
-      throw codexTransportError("CODEX_SERVICE_WAITING_BYTES_EXCEEDED");
-    if (++this.#waiters > 128) {
-      this.#waiters--;
-      throw codexTransportError("CODEX_SERVICE_WAITERS_EXCEEDED");
-    }
-    this.#waitingBytes += queuedBytes;
+    signal?.throwIfAborted();
+    const ready = this.#state === "ready" ? Promise.resolve() : this.#supervise(false);
+    let abort: (() => void) | undefined;
     try {
-      signal?.throwIfAborted();
-      const ready = this.#state === "ready" ? Promise.resolve() : this.#supervise(false);
-      let abort: (() => void) | undefined;
-      try {
-        await (signal
-          ? Promise.race([
-              ready,
-              new Promise<never>((_, reject) => {
-                abort = () =>
-                  reject(
-                    signal.reason instanceof Error
-                      ? signal.reason
-                      : codexTransportError("CODEX_INVOCATION_CANCELLED")
-                  );
-                signal.addEventListener("abort", abort, { once: true });
-                if (signal.aborted) abort();
-              })
-            ])
-          : ready);
-      } finally {
-        if (abort) signal?.removeEventListener("abort", abort);
-      }
-      signal?.throwIfAborted();
-      if (this.#closing || this.#state !== "ready")
-        throw codexTransportError("CODEX_SERVICE_UNAVAILABLE");
-      if (this.#channels.size >= 8) throw codexTransportError("CODEX_SERVICE_TURNS_EXCEEDED");
-      const channel = new CodexTurnChannel(this, this.#generation, allowInputEcho);
-      this.#channels.add(channel);
-      return channel;
+      await (signal
+        ? Promise.race([
+            ready,
+            new Promise<never>((_, reject) => {
+              abort = () =>
+                reject(
+                  signal.reason instanceof Error
+                    ? signal.reason
+                    : codexTransportError("CODEX_INVOCATION_CANCELLED")
+                );
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+            })
+          ])
+        : ready);
     } finally {
-      this.#waiters--;
-      this.#waitingBytes -= queuedBytes;
+      if (abort) signal?.removeEventListener("abort", abort);
     }
+    signal?.throwIfAborted();
+    if (this.#closing || this.#state !== "ready")
+      throw codexTransportError("CODEX_SERVICE_UNAVAILABLE");
+    const channel = new CodexTurnChannel(
+      this,
+      this.#generation,
+      allowInputEcho,
+      rawMessageMaxBytes
+    );
+    this.#channels.add(channel);
+    return channel;
   }
 
   snapshot(): ServiceProcessSnapshot {
@@ -215,7 +205,6 @@ export class CodexService {
       const params = record(message.params);
       try {
         if (method === "thread/start") {
-          this.#reserveThreadHistory();
           channel.startingThread = true;
         }
         if (method === "thread/resume") this.#claimThread(channel, text(params.threadId));
@@ -241,6 +230,7 @@ export class CodexService {
       message,
       (error) => {
         if (method && id !== undefined) this.#pending.delete(id);
+        this.#discardUnclaimedEarly();
         onError(error);
       },
       onWritten,
@@ -249,6 +239,7 @@ export class CodexService {
     return () => {
       cancel();
       if (method && id !== undefined) this.#pending.delete(id);
+      this.#discardUnclaimedEarly();
     };
   }
 
@@ -256,13 +247,14 @@ export class CodexService {
     this.#current?.writer.cancelOwner(channel, error);
   }
 
-  /** 未确认中断/退订时保留 thread 和容量，阻止迟到通知进入后续调用。 */
+  /** 未确认中断/退订时保留 thread 归属，阻止迟到通知进入后续调用。 */
   async release(channel: CodexTurnChannel): Promise<void> {
     if (channel.closed) return;
     channel.closed = true;
     this.cancelPending(channel, codexTransportError("INTERACTION_NOT_ACTIVE"));
     for (const [id, pending] of this.#pending)
       if (pending.channel === channel) this.#pending.delete(id);
+    this.#discardUnclaimedEarly();
     for (const [id, owner] of this.#serverRequests)
       if (owner === channel) {
         this.#serverRequests.delete(id);
@@ -305,27 +297,16 @@ export class CodexService {
   }
   #forget(channel: CodexTurnChannel): void {
     this.#channels.delete(channel);
-    if (channel.threadId) this.#usedThreads.add(channel.threadId);
     if (channel.threadId && this.#threads.get(channel.threadId) === channel)
       this.#threads.delete(channel.threadId);
   }
   #claimThread(channel: CodexTurnChannel, id: string): void {
     if (!id) throw codexTransportError("CODEX_THREAD_ID_MISSING");
-    if (!this.#usedThreads.has(id) && !this.#threads.has(id))
-      this.#reserveThreadHistory(channel.startingThread ? 1 : 0);
     const owner = this.#threads.get(id);
     if (owner && owner !== channel) throw codexTransportError("CODEX_THREAD_BUSY");
     if (channel.threadId && channel.threadId !== id) this.#threads.delete(channel.threadId);
     channel.threadId = id;
     this.#threads.set(id, channel);
-  }
-
-  /** 发出新 thread 前预留历史槽，避免 ACK 里的容量拒绝污染健康传输。 */
-  #reserveThreadHistory(ownReservation = 0): void {
-    const live = [...this.#threads.keys()].filter((id) => !this.#usedThreads.has(id)).length;
-    const starting = [...this.#channels].filter((channel) => channel.startingThread).length;
-    if (this.#usedThreads.size + live + starting - ownReservation >= 4096)
-      throw codexTransportError("CODEX_SERVICE_THREAD_HISTORY_EXCEEDED");
   }
 
   #rpc(method: string, params: unknown, timeoutMs = 30_000): Promise<unknown> {
@@ -368,6 +349,7 @@ export class CodexService {
             const result = record(message.result);
             const thread = record(result.thread);
             this.#claimThread(channel, text(thread.id ?? result.threadId));
+            channel.freshThread = pending.method === "thread/start";
             channel.startingThread = false;
           }
           if (pending.method === "turn/start") {
@@ -397,6 +379,7 @@ export class CodexService {
         }
       } else if (message.error) pending.reject?.(codexTransportError("CODEX_SERVICE_RPC_REJECTED"));
       else pending.resolve?.(message.result);
+      this.#discardUnclaimedEarly();
       return;
     }
     const params = record(message.params);
@@ -417,6 +400,23 @@ export class CodexService {
       this.#earlyItems++;
     } else if (id !== undefined) this.#rejectRequest(current, id, threadId ? -32000 : -32601);
   }
+  /** 最后一个 start 已结算后，剩余通知不再有可关联的调用，不能作为历史保留。 */
+  #discardUnclaimedEarly(): void {
+    if (
+      !this.#early.size ||
+      [...this.#pending.values()].some((pending) => pending.method === "thread/start")
+    )
+      return;
+    const abandoned = [...this.#early.values()].flat();
+    this.#early.clear();
+    this.#earlyBytes = 0;
+    this.#earlyItems = 0;
+    for (const message of abandoned) {
+      const id = rpcId(message.id);
+      if (id !== undefined && this.#current && !this.#current.failed)
+        this.#rejectRequest(this.#current, id);
+    }
+  }
   #route(channel: CodexTurnChannel, message: Message): void {
     const params = record(message.params);
     const turnId = text(params.turnId ?? record(params.turn).id);
@@ -435,18 +435,16 @@ export class CodexService {
     }
     if (message.method === "turn/completed") channel.terminal = true;
     if (id !== undefined) {
-      // A nullable elicitation on a reused thread cannot prove which subscription caused it.
+      // 缺少 turn ID 时，只有本调用创建的 thread 能证明归属；resume 不借助历史推断。
       if (
         channel.closed ||
         !channel.turnId ||
         this.#serverRequests.has(id) ||
-        (!turnId && this.#usedThreads.has(channel.threadId!))
+        (!turnId && !channel.freshThread)
       ) {
         this.#rejectRequest(this.#current!, id);
         return;
       }
-      if (this.#serverRequests.size >= 4096)
-        throw codexTransportError("CODEX_SERVICE_INTERACTIONS_EXCEEDED");
       this.#serverRequests.set(id, channel);
     }
     if (!channel.closed) channel.onMessage(message);
@@ -479,7 +477,6 @@ export class CodexService {
     }
     this.#channels.clear();
     this.#threads.clear();
-    this.#usedThreads.clear();
     this.#serverRequests.clear();
     this.#early.clear();
     this.#earlyBytes = 0;
@@ -563,23 +560,30 @@ export class CodexService {
   async #start(timeoutMs: number): Promise<void> {
     if (timeoutMs <= 0) throw codexTransportError("CODEX_SERVICE_RECOVERY_EXHAUSTED");
     const child = this.spawnFn(this.spec.command, this.spec.args, {
-      cwd: this.spec.cwd,
+      ...(this.spec.cwd === undefined ? {} : { cwd: this.spec.cwd }),
       env: this.spec.env
     });
-    // 同预算调用才共享解析边界；仅活动 canonical 图片调用允许有界输入回显。
+    // 连接解析预算取活动调用最大值；路由后各 client 再执行自己的更小预算。
     const removeGuard = watchLineLimit(
       child.stdout,
       () =>
-        [...this.#channels].some((channel) => !channel.closed && channel.allowInputEcho)
-          ? Math.max(this.rawMessageMaxBytes, INVOKE_REQUEST_MAX_BYTES)
-          : this.rawMessageMaxBytes,
+        Math.max(
+          this.#channels.size ? 0 : this.rawMessageMaxBytes,
+          ...[...this.#channels].map((channel) =>
+            channel.allowInputEcho
+              ? Math.max(channel.rawMessageMaxBytes, INVOKE_REQUEST_MAX_BYTES)
+              : channel.rawMessageMaxBytes
+          )
+        ),
       (error) => this.#fault(current, error)
     );
     const current: Incarnation = {
       number: ++this.#generation,
       child,
-      // 共享发送队列沿用 stdin-writer 数据预算与控制预留；128 项只用于启动等待队列。
-      writer: new CodexStdinWriter(child.stdin, (error) => this.#fault(current, error)),
+      // 保留原发送背压；控制条目不按少量并发预留，避免批量取消破坏共享连接。
+      writer: new CodexStdinWriter(child.stdin, (error) => this.#fault(current, error), {
+        controlItems: DEFAULT_STREAM_LIMIT_POLICY.adapterQueueMaxItems
+      }),
       reader: createInterface({ input: child.stdout }),
       removeGuard,
       cleanup: createProcessCleanup(child, {
@@ -679,7 +683,7 @@ const ownedChildren = new WeakSet<ChildProcessWithoutNullStreams>();
 function ownedSpawn(
   command: string,
   args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv }
+  options: { cwd?: string; env: NodeJS.ProcessEnv }
 ): ChildProcessWithoutNullStreams {
   const launch = resolveProcessLaunch(command, args, options);
   const child = spawn(launch.command, [...launch.args], {

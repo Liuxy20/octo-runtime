@@ -15,7 +15,7 @@ Octo Runtime 里所有跨模块边界的数据合同：交给执行器的输入�
 ## 校验一次调用
 
 ```ts
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
@@ -106,7 +106,7 @@ Run 合同 7、Context v3、Adapter protocol 2 各自独立演进。Context sche
 
 ## 导入与分发
 
-这是 private workspace 包：源码和子模块宿主从 `@mininglamp-oss/octo-runtime-protocol` 导入。发行版使用者走 `@mininglamp-oss/octo-runtime/protocol`，该门面只暴露子集，不是所有 workspace 导出都能在那里用到。
+这是 private workspace 包：原生源码宿主从 `@mininglamp-oss/octo-runtime-protocol` 导入。独立应用使用 `@mininglamp-oss/octo-runtime-client/protocol` 的公共类型和校验，不需要依赖私有源码包；该入口不承诺包含所有内部导出。
 
 [protocol.schema.json](schema/protocol.schema.json) 定义共享 wire 数据，[kernel-ipc.schema.json](schema/kernel-ipc.schema.json) 定义 IPC 请求与结果；`schema/` 只放这两个文件。[gen-types.mjs](scripts/gen-types.mjs) 生成 [protocol-types.ts](src/generated/protocol-types.ts)，并从 Schema 定义派生 `KERNEL_IPC_VERSION` 和 `RUN_PROTOCOL_ERRORS`。修改 Schema 后重新生成，不要手改生成结果。
 

@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-Runs one invocation through DeepSeek Harness's official Client SDK over its stdio service: start or resume an explicit native session, send this turn, map the trajectory into `CanonicalEvent`. This is the only Adapter with a public entry, `@mininglamp-oss/octo-runtime/adapters/dsh`. It wraps the unmodified upstream SDK, so treat the integration as experimental rather than a stability guarantee.
+Runs one invocation through DeepSeek Harness's official Client SDK over its stdio service: start or resume an explicit native session, send this turn, map the trajectory into `CanonicalEvent`. Native hosts depend on the private `@mininglamp-oss/octo-runtime-adapter-dsh` workspace package from source; CLI composes its bundled copy. It wraps the unmodified upstream SDK, so treat the integration as experimental rather than a stability guarantee.
 
 ## When to use it
 
@@ -15,9 +15,9 @@ Runs one invocation through DeepSeek Harness's official Client SDK over its stdi
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter);
@@ -47,7 +47,7 @@ const input = InvokeInput.check({
 | ------------ | ------------------------------------------------------------------------------------------- |
 | Adapter type | `dsh`                                                                                       |
 | Exports      | `dshAdapter`, `createDshAdapter`                                                            |
-| Public entry | `@mininglamp-oss/octo-runtime/adapters/dsh`                                                 |
+| Source workspace entry | `@mininglamp-oss/octo-runtime-adapter-dsh`                                       |
 | Executable   | Required host-selected absolute `dshBin` JavaScript entry, launched with `process.execPath` |
 | Output       | canonical events only                                                                       |
 | Approval     | `full_access` only                                                                          |

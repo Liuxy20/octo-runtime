@@ -15,9 +15,9 @@
 ## 发起一次调用
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throws
@@ -60,7 +60,7 @@ try {
 
 应用在调用前准备 `/absolute/prepared/project`。本地执行通过 仅含 path 的 workspace item 显式提供已存在的绝对目录。Core 不继承 cwd、不创建应用目录、不分配随机工作区，也不在续接/fresh recovery 时重建。自行管理工作区的外部/preset Agent 与 `metadata.workspace: false` Adapter 可以省略覆盖。缺失或非法目录返回稳定 `WORKDIR_*` 原因码，分类为 `OH-ADP-3004`；见[输入校验](../../docs/zh-CN/reference/invoke-input.md)。`prepareRunContext` 与 `WorkspaceAssignments` 已删除；Runtime 自有运维状态另行管理。
 
-校验并冻结请求，渲染本轮的模型输入，解析本地执行环境，然后接纳这次 Run。接纳发生在 Provider 启动之前：身份、容量、关闭状态都在这一步检查。业务 Context 只来自本次调用，Core 不会从会话历史里补。
+Core 校验并复制本次输入和 AgentEnv，仅读取 Adapter 路由，将调用方已准备的文本/图片与配置 items 保序交给对应 Adapter。配置语义校验、默认值、环境合并和 Provider 原生映射归 Adapter，Core 不生成 agentConfig 或另一份配置投影，也不渲染业务 Context 或补入会话历史。身份、容量和关闭状态在执行接纳时检查，早于 Provider 启动。
 
 `invokeFrames` 同步校验，请求不合法时在调用点就抛；`invoke` 是异步生成器，它的检查都落在第一次 `next()`。所以要把整个消费循环包进 try，而不是只包一次调用——没有被消费的迭代器不占容量，也不会拉起 Provider。
 
@@ -68,6 +68,7 @@ try {
 
 - `signal`——本次 Run 的取消信号。
 - `executionEnvOverrides`——宿主注入的可信值。
+- `providerOptions`——宿主注入的可信连接选项，由本地 Adapter 绑定消费，不写回 AgentEnv。
 - `streamLimits`——本地流预算；Kernel 会拒绝它（`KERNEL_STREAM_LIMITS_UNSUPPORTED`）。
 
 ## API
@@ -117,7 +118,7 @@ Electron、Node SDK 与 CLI 宿主统一使用 KernelClient 经本地 RPC 调用
 
 ## 导入与分发
 
-private workspace 包：源码和子模块宿主从 `@mininglamp-oss/octo-runtime-executor-core` 导入。发行版使用者走 `@mininglamp-oss/octo-runtime/executor-core`。
+private workspace 包：原生宿主从源码引入 `@mininglamp-oss/octo-runtime-executor-core`，按需依赖所选 Adapter；不需要安装包含所有内置 Adapter 的 CLI 包。独立应用使用 `octo-runtime-client` 连接已有 Kernel。
 
 ## 延伸阅读
 

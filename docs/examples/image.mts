@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { assertModelInputParts, type ModelInputPart } from "@mininglamp-oss/octo-runtime/protocol";
+import {
+  assertModelInputParts,
+  type ModelInputPart
+} from "@mininglamp-oss/octo-runtime-client/protocol";
 
 /** 从调用方选定的本地图片构造 part；Runtime 不替业务下载或转换资源。 */
 export async function imagePart(

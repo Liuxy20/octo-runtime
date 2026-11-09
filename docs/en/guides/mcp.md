@@ -124,7 +124,7 @@ Supply the MCP configuration on every invocation that needs it, including when c
 
 ## How Configuration Takes Effect
 
-Runtime validates the configuration and substitutes environment variables. The Adapter then converts it to the selected Provider's configuration format. For example, the Codex Adapter passes the settings to Codex. The Provider starts the local program or connects to the remote service. Runtime does not download or install MCP servers.
+Core forwards this invocation's AgentEnv to the Adapter. The Adapter reads the MCP bean, validates configuration and substitutes environment variables through SDK helpers, then converts it to the selected Provider's configuration format. For example, the Codex Adapter passes the settings to Codex. The Provider starts the local program or connects to the remote service. Runtime does not download or install MCP servers.
 
 ```mermaid
 flowchart TB

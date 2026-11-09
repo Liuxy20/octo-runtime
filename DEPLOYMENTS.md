@@ -14,4 +14,4 @@ octo-runtime logs --lines 200
 
 Channel Gateway 使用[独立仓库和发行包](https://github.com/Mininglamp-OSS/octo-channel-gateway)，由其 CLI 管理自身服务，并通过指定 endpoint 连接已就绪的 Kernel。
 
-SDK 应用可以携带 Node 和发行包，直接构造 Kernel；只消费执行能力的应用仅安装 client。Windows、Linux 和 macOS 的服务后端保持既有实现；本次实际验收平台及未验范围记录在任务验证文件。
+纯原生 SDK 应用从源码 workspace 构建 Kernel、公共辅助包及所选 Adapter，可以随应用携带 Node；不通过 CLI 聚合包接入。另一种部署是由 octo-runtime CLI 启动服务，独立 App 仅安装 octo-runtime-client。依赖、加载集合与关闭责任见 [SDK 接入](docs/zh-CN/getting-started/sdk.md)。Windows、Linux 和 macOS 的服务后端保持既有实现；本次实际验收平台及未验范围记录在任务验证文件。

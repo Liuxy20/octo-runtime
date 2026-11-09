@@ -15,7 +15,7 @@ It never runs a Provider, chooses business Context, or stores history. This is t
 ## Validate one invocation
 
 ```ts
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
@@ -106,7 +106,7 @@ Run contract 7, Context v3, and Adapter protocol 2 version independently. A new 
 
 ## Import and distribution
 
-This is a private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-protocol`. Published consumers use `@mininglamp-oss/octo-runtime/protocol`, which exposes a subset — not every workspace export is reachable there.
+This is a private workspace package: native source hosts import `@mininglamp-oss/octo-runtime-protocol`. Independent applications use public types and validators from `@mininglamp-oss/octo-runtime-client/protocol` without depending on private source packages; that entry does not promise every internal export.
 
 [protocol.schema.json](schema/protocol.schema.json) defines shared wire data; [kernel-ipc.schema.json](schema/kernel-ipc.schema.json) defines IPC requests and results. These are the only files in `schema/`. [gen-types.mjs](scripts/gen-types.mjs) generates [protocol-types.ts](src/generated/protocol-types.ts), including `KERNEL_IPC_VERSION` and `RUN_PROTOCOL_ERRORS` from their Schema definitions. Change the Schema and regenerate; do not hand-edit the output.
 

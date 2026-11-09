@@ -4,12 +4,12 @@
 
 启动诊断描述组件构造或初始化的失败；即使没有 Run、Session、Task 或 IPC 端点，失败调用也能直接返回诊断。启动后的业务执行错误仍沿原执行域处理，不创建 synthetic failed Run。
 
-从 `@mininglamp-oss/octo-runtime/host` 或 `/executor-kernel` 导入 `describeStartupError`、`formatStartupDiagnostic`、`STARTUP_CATALOG`、`StartupDiagnostic`。`ServiceInitializationError.diagnostic` 直接提供相同结构；原始 `cause` 与 `cleanup` 仍供宿主本地排查。构造和 `initialize()` 都应在捕获边界内。
+纯原生源码宿主从 `@mininglamp-oss/octo-runtime-executor-kernel` 导入 `describeStartupError`、`formatStartupDiagnostic`、`STARTUP_CATALOG`、`StartupDiagnostic`。`ServiceInitializationError.diagnostic` 直接提供相同结构；原始 `cause` 与 `cleanup` 仍供宿主本地排查。构造和 `initialize()` 都应在捕获边界内。
 
 ```ts
 import {
   createKernelService, describeStartupError, formatStartupDiagnostic
-} from "@mininglamp-oss/octo-runtime/executor-kernel";
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 // hostPreparedHome and endpoint are selected/prepared by the host.
 // The host composes Adapter objects; no agent Run is needed for startup.

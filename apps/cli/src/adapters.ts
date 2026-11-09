@@ -13,7 +13,7 @@ import type {
   ServiceProcessSnapshot
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
-/** CLI 工厂可以返回显式自有资源；此约定不限制 SDK Adapter 的构造形式。 */
+/** CLI 默认每种 Harness 一个自有实例；工厂不按调用分池，SDK 自管装配不受此约定限制。 */
 export interface CliAdapterResource {
   adapter: HostedAdapter;
   processes?(): readonly ServiceProcessSnapshot[];
@@ -40,6 +40,7 @@ export async function loadCliAdapters(
   const resources: CliAdapterResource[] = [];
   const pending = new Map<CliAdapterResource, Promise<void>>();
   const completed = new Map<CliAdapterResource, AdapterScopeCleanup>();
+  const types = new Set<string>();
   const assembly: CliAdapters = {
     adapters,
     processes: () => resources.flatMap((r) => [...(r.processes?.() ?? [])]),
@@ -116,8 +117,15 @@ export async function loadCliAdapters(
     }
   };
   // 解析也在诊断边界内；仍先解析整个所选集合，再导入/构造，保持 CLI 原顺序。
+  const declaredTypes = new Set<string>();
   const selected = entries.map((entry) => {
     try {
+      // 已声明类型在任何工厂运行前拒绝重复，避免先创建第二个受管 Harness。
+      if (entry.type) {
+        if (declaredTypes.has(entry.type))
+          throw new Error(`CLI_HARNESS_TYPE_DUPLICATE: ${entry.type}`);
+        declaredTypes.add(entry.type);
+      }
       return { entry, specifier: resolveModuleSpecifier(entry.module, entry.sourceManifest) };
     } catch (error) {
       throw adapterStartupFailure(error, entry);
@@ -150,6 +158,9 @@ export async function loadCliAdapters(
           throw new Error(
             `manifest type ${entry.type} does not match adapter ${instance.metadata.type}`
           );
+        if (types.has(instance.metadata.type))
+          throw new Error(`CLI_HARNESS_TYPE_DUPLICATE: ${instance.metadata.type}`);
+        types.add(instance.metadata.type);
         adapters.push(instance);
       } catch (error) {
         throw adapterStartupFailure(error, entry);

@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { randomUUID } from "node:crypto";
@@ -183,7 +183,7 @@ async function eventually(predicate) {
 }
 for (const command of ["./codex", "bin/codex"])
   test(
-    `replacing ${command} selects a new service with caller-provided absolute cwd`,
+    `replacing relative ${command} keeps the owner process across calls`,
     { skip: process.platform === "win32" && "POSIX executable fixture" },
     async (t) => {
       const temporaryRoot = join(process.cwd(), ".tmp");
@@ -194,7 +194,8 @@ for (const command of ["./codex", "bin/codex"])
       const program = "#!/usr/bin/env node\n" + (await readFile(fixture, "utf8"));
       const owner = createManagedCodexEngine({
         codexHome: directory,
-        command,
+        // 相对可执行文件从宿主目录解析，不再把 CODEX_HOME 或本轮 cwd 作为启动目录。
+        command: `./${relative(process.cwd(), binary)}`,
         appServerArgs: []
       });
       const local = createCodexAdapter({ engine: owner.provider }).createExecutionScope({
@@ -233,14 +234,9 @@ for (const command of ["./codex", "bin/codex"])
       await rename(replacement, binary);
       assert.equal((await invoke()).at(-1).type, "run.completed");
       const processes = scope.processes();
-      assert.equal(processes.length, 2);
-      const next = processes.find((entry) => entry.service_id !== original.service_id);
-      assert.equal(next.state, "ready");
-      assert.notEqual(next.pid, original.pid);
-      assert.equal(
-        processes.find((entry) => entry.service_id === original.service_id).state,
-        "ready"
-      );
+      assert.equal(processes.length, 1);
+      assert.equal(processes[0].service_id, original.service_id);
+      assert.equal(processes[0].pid, original.pid);
     }
   );
 test("stdout enforces the effective budget before parsing an unterminated line", async (t) => {
@@ -302,7 +298,7 @@ test("doctor keeps an exited cleanup resource separate from a reused live PID", 
   assert.equal(processes.find((p) => p.service_id === "old").observation, "exited");
   assert.equal(processes.find((p) => p.roles.includes("webui")).observation, "alive");
 });
-test("thread history capacity rejects before writing and preserves the healthy service", async () => {
+test("thread history does not impose a lifetime request quota on the shared service", async () => {
   const service = new CodexService("history-capacity", {
     command: process.execPath,
     args: [fixture],
@@ -329,8 +325,7 @@ test("thread history capacity rejects before writing and preserves the healthy s
   try {
     const sibling = await start();
     const before = service.snapshot();
-    for (let i = 1; i < 4096; i++) await (await start()).close();
-    await assert.rejects(start(), /CODEX_SERVICE_THREAD_HISTORY_EXCEEDED/);
+    for (let i = 1; i < 5000; i++) await (await start()).close();
     assert.equal(service.snapshot().state, "ready");
     assert.equal(service.snapshot().pid, before.pid);
     assert.equal(service.snapshot().incarnation, before.incarnation);
@@ -397,25 +392,30 @@ test("idle death proactively restores a new PID without invoke", async (t) => {
   );
   assert.notEqual(scope.processes()[0].pid, before.pid);
 });
-test("config revisions isolate processes; normal turns share", async (t) => {
+test("per-call revision cannot create another host-owned process", async (t) => {
   const { scope } = await setup(t);
+  await Array.fromAsync(scope.invoke(request()));
+  const pid = scope.processes()[0].pid;
   for (const revision of ["a", "b", "a"]) {
-    await Array.fromAsync(
-      scope.invoke(
-        request("hello", {
-          agentEnv: withAgentEnvItems(undefined, [
-            {
-              namespace: "adapter.codex",
-              name: "options",
-              payload: { ...{ codexServiceRevision: revision } }
-            }
-          ])
-        })
-      )
+    await assert.rejects(
+      Array.fromAsync(
+        scope.invoke(
+          request("hello", {
+            agentEnv: withAgentEnvItems(undefined, [
+              {
+                namespace: "adapter.codex",
+                name: "options",
+                payload: { ...{ codexServiceRevision: revision } }
+              }
+            ])
+          })
+        )
+      ),
+      /CODEX_SERVICE_REVISION_UNSUPPORTED/
     );
   }
-  assert.equal(scope.processes().length, 2);
-  assert.notEqual(scope.processes()[0].pid, scope.processes()[1].pid);
+  assert.equal(scope.processes().length, 1);
+  assert.equal(scope.processes()[0].pid, pid);
 });
 test("two Core registrations borrow the same host-owned process", async (t) => {
   const { adapter, owner } = await setup(t);
@@ -484,7 +484,7 @@ test("doctor lists resident ownership and merges same PID without turn fields", 
     webui: { service: { state: "running" }, runtime: { pid: 123 } }
   });
   assert.equal(view.length, 2);
-  assert.deepEqual(view[0].roles, ["Host/Kernel", "webui"]);
+  assert.deepEqual(view[0].roles, ["CLI Host", "Kernel", "webui"]);
   assert.match(formatResidentProcesses(view), /PID 456.*incarnation 2/);
   assert.doesNotMatch(JSON.stringify(view), /turn|thread|invocation|argv|env/);
 });
@@ -573,43 +573,51 @@ test("nullable elicitation routes to its sole confirmed active thread", async (t
   assert.equal(count, 1);
   assert.equal(events.at(-1).type, "run.completed");
 });
-test("service configuration capacity rejects a ninth configuration without evicting healthy services", async (t) => {
+for (const known of [true, false]) {
+  test(`nullable elicitation on a resumed thread is rejected without completed-thread history: ${known ? "same owner" : "other owner"}`, async (t) => {
+    const { scope, log } = await setup(t);
+    let sessionId = "externally-owned-thread";
+    if (known) {
+      const first = await Array.fromAsync(scope.invoke(request()));
+      sessionId = first.find((e) => e.type === "session.update").payload.providerSession.sessionId;
+    }
+    const events = await Array.fromAsync(
+      scope.invoke(
+        request("elicitation", {
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+          ]),
+          providerSession: { sessionId, resumable: true, requireResume: true }
+        })
+      )
+    );
+    assert.equal(
+      events.some((event) => event.type === "interaction.requested"),
+      false
+    );
+    assert.equal(events.at(-1).type, "run.failed");
+    const writes = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
+    assert.equal(writes.filter((message) => message.method === "thread/resume").length, 1);
+    assert.equal(scope.processes()[0].state, "ready");
+  });
+}
+test("different workdirs do not allocate a service configuration pool", async (t) => {
   const { scope } = await setup(t);
-  for (let revision = 0; revision < 8; revision++)
+  for (let index = 0; index < 12; index++)
     await Array.fromAsync(
       scope.invoke(
         request("hello", {
           agentEnv: withAgentEnvItems(undefined, [
             {
-              namespace: "adapter.codex",
-              name: "options",
-              payload: { ...{ codexServiceRevision: String(revision) } }
+              namespace: "octo.execution",
+              name: "workspace",
+              payload: { path: index % 2 ? tmpdir() : process.cwd() }
             }
           ])
         })
       )
     );
-  const before = scope.processes().map((value) => value.pid);
-  await assert.rejects(
-    Array.fromAsync(
-      scope.invoke(
-        request("hello", {
-          agentEnv: withAgentEnvItems(undefined, [
-            {
-              namespace: "adapter.codex",
-              name: "options",
-              payload: { ...{ codexServiceRevision: "ninth" } }
-            }
-          ])
-        })
-      )
-    ),
-    /CODEX_SERVICE_CONFIGURATIONS_EXCEEDED/
-  );
-  assert.deepEqual(
-    scope.processes().map((value) => value.pid),
-    before
-  );
+  assert.equal(scope.processes().length, 1);
 });
 test("active process death fails the original turn and recovers without replay", async (t) => {
   const { scope, log } = await setup(t);

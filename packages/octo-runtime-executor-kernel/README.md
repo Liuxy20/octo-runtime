@@ -2,7 +2,7 @@
 
 Hosts may supply serviceProcesses as a read-only callback for safe Engine snapshots. Kernel validates and copies them without acquiring process-control rights. Codex borrows a host provider: kernel.close cleans local Core scopes and leases; the host finally closes its owned Engine, including initialization rollback. Shared business owners remain running when borrowers close. See [architecture](../../docs/en/concepts/architecture.md).
 
-Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package retains compatible client exports and uses that same implementation. The full published Runtime bundles client/protocol internally; constructing Kernel services still requires the full SDK. Separate installed distributions may have different error/function identities even at matching versions.
+Client-only applications can install [@mininglamp-oss/octo-runtime-client](../octo-runtime-client/README.md) and call `attachKernel({ endpoint })`. This package uses that same client implementation. The full Runtime bundles client/protocol internally; native Kernel hosts instead depend on this package and selected Adapters from source workspace. Separate installed distributions may have different error/function identities even at matching versions.
 
 [简体中文](README.zh.md) | [Package index](../README.md)
 
@@ -15,9 +15,9 @@ Kernel is the shared execution entry for Electron SDK hosts and CLI. It owns Age
 The host imports and constructs Adapters, then supplies a local `endpoint` and `adapters`. The endpoint is a Unix socket / Named Pipe address; Home is a host-owned directory. `componentEndpoint(home)` derives the address. Module manifests, resolution, dynamic imports, and factories belong entirely to hosts such as CLI.
 
 ```ts
-import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 import { mkdir } from "node:fs/promises";
 
@@ -45,7 +45,7 @@ Construction performs no I/O. The selection array is copied while Adapter identi
 | Electron                                                      | Main-process imports/factories, endpoint, applications, exit coordination           | Registration, RPC, admission, execution lifecycle |
 | CLI                                                           | Manifest reading/merging, module resolution/imports/factories, OpenClaw preparation | The same service factory using actual objects     |
 | Independent cross-process application (including CLI clients) | attachKernel, its client, and its own Runs; native SDK hosts use kernel.client      | Shared service and original execution             |
-| Provider subprocess                                           | Adapter native launch/control/cleanup                                               | Core invocation and truthful cleanup reporting    |
+| Provider subprocess                                           | Actual owner launches and confirms cleanup: host Engine for Codex, Adapter for its per-turn owned children | Core invocation and truthful cleanup reporting    |
 
 Kernel accepts no workerEntrypoint, adapterModules, manifest, or subprocess env. It launches no execution workers and provides no worker heartbeat/restart. Status contains ipc_version, kernel_instance_id, host pid, and execution_ready without worker state. Configure logs explicitly with logging.directory; SDK does not read CLI log environment variables.
 
@@ -54,7 +54,7 @@ Kernel accepts no workerEntrypoint, adapterModules, manifest, or subprocess env.
 The standard path is `KernelClient -> local RPC -> Kernel/HostRunService -> AgentExecutor -> Adapter`. Adapter objects remain in the service process; RPC carries invocation, control, and event data. Direct Core does not replace standard SDK integration.
 
 - invoke submits when consumption starts; ACK confirms admission only.
-- Abort before submission prevents it; abort after submission requests cancellation and continues observing the tail.
+- `client.interrupt(run.invocationId)` prevents submission before it starts; after submission it requests cancellation of the original execution while observation continues. Public invoke accepts no signal.
 - iterator.return, subscription disconnect, and client.close only stop observation; admitted execution continues.
 - get/subscribe use the original identity and cursor. A lost ACK triggers lookup, never repeat invocation.
 - respond/respondNative target valid interactions of the original Run. Cancellation ACK is not a terminal outcome.
@@ -67,7 +67,7 @@ Shutdown stops admission and closes connections, then cancels Core, awaits Adapt
 
 The ownership record is not a module manifest. After abnormal host exit, nativeOwner/cleanupIncomplete evidence is retained rather than treating the host PID as a child to kill. Operators stop remaining resources and use the existing orphan-cleanup acknowledgement flow. Legacy worker formats and malformed records fail with ORPHAN_RECORD_UNSUPPORTED and remain untouched. No legacy compatibility, upgrade, or automatic cleanup is provided.
 
-Kernel and Adapters share the host event loop, memory, and failure domain. RPC does not isolate blocking code, process.exit, or OOM; deadlines require a schedulable event loop. Reconstruction creates a new kernel_instance_id and never replays old Runs. Adapters remain responsible for Provider subprocess cleanup.
+Kernel and Adapters share the host event loop, memory, and failure domain. RPC does not isolate blocking code, process.exit, or OOM; deadlines require a schedulable event loop. Reconstruction creates a new kernel_instance_id and never replays old Runs. The actual owner cleans up Provider processes: the host Engine manages Codex's shared process, while Adapter scopes release only their own invocations and leases.
 
 Default windows retain 4096 frames / 32 MiB per Run, 128 MiB / 128 Runs globally, for 120 seconds, with at most 64 connections and 16 subscriptions. These are bounded replay records, not durable history or RSS limits. Run deadlines default to 24 hours and allow up to seven days.
 

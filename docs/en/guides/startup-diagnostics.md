@@ -4,12 +4,12 @@
 
 Startup diagnostics describe a component's failed construction or initialization, before any Run, Session, Task or IPC endpoint needs to exist. They do not create a failed agent Run. After startup, execution failures remain in the execution domain.
 
-Import `describeStartupError`, `formatStartupDiagnostic`, `STARTUP_CATALOG` and the `StartupDiagnostic` type from either `@mininglamp-oss/octo-runtime/host` or `/executor-kernel`. `ServiceInitializationError.diagnostic` directly contains the same projection; the original `cause` and `cleanup` remain available locally. Catch construction as well as `initialize()`.
+Native source hosts import `describeStartupError`, `formatStartupDiagnostic`, `STARTUP_CATALOG` and the `StartupDiagnostic` type from `@mininglamp-oss/octo-runtime-executor-kernel`. `ServiceInitializationError.diagnostic` directly contains the same projection; the original `cause` and `cleanup` remain available locally. Catch construction as well as `initialize()`.
 
 ```ts
 import {
   createKernelService, describeStartupError, formatStartupDiagnostic
-} from "@mininglamp-oss/octo-runtime/executor-kernel";
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
 
 // hostPreparedHome and endpoint are selected/prepared by the host.
 // The host composes Adapter objects; no agent Run is needed for startup.

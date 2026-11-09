@@ -1,5 +1,5 @@
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime-protocol";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";

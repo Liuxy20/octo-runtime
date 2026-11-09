@@ -14,8 +14,8 @@ Binds MiniMax Code (`mcode acp`) to Runtime through the shared ACP Adapter. Mini
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { mcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
 
 const executor = new AgentExecutor();
