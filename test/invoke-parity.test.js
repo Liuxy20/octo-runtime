@@ -26,6 +26,7 @@ async function fixture(t, invoke) {
 const input = (mode = "canonical") => ({
   inputs: [{ type: "text", text: "only this turn" }],
   agentEnv: {
+    workdir: process.cwd(),
     schema: "octo.context-envelope/v3",
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },

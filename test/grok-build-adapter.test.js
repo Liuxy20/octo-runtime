@@ -19,7 +19,6 @@ const fixturePath = fileURLToPath(new URL("./fixtures/grok-build-acp-host.mjs", 
 const base = () =>
   invokeRequest({
     approvalMode: "ask",
-    controlInstructions: "CONTROL_95",
     modelInput: "hello",
     agentConfig: {}
   });
@@ -126,7 +125,7 @@ test("Grok canonical registration, streaming, native tools, usage, cwd, environm
   );
   assert.equal(trace[1].params.methodId, "cached_token");
   assert.equal(trace[1].params._meta.headless, true);
-  assert.equal(trace[2].params._meta.rules, "CONTROL_95");
+  assert.equal(Object.hasOwn(trace[2].params._meta, "rules"), false);
   assert.equal(trace[2].params._meta.yoloMode, false);
   assert.equal(trace[2].params._meta.autoMode, false);
   assert.equal(trace[2].fixtureCwd, await realpath(f.directory));
@@ -252,7 +251,7 @@ test("Grok explicit resume preserves rules and missing session applies frozen re
   const recovery = await missing.trace();
   assert.equal(
     recovery.find((entry) => entry.method === "session/new").params._meta.rules,
-    "CONTROL_95"
+    undefined
   );
   assert.equal(
     recovery.find((entry) => entry.method === "session/prompt").params.prompt[0].text,

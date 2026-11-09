@@ -87,6 +87,16 @@ async function execute(
     cleanupFailure
   } = {}
 ) {
+  // 测试调用方已创建目录，显式提交它；CLI/Kernel 不再补 cwd。
+  if (
+    typeof value === "object" &&
+    value?.agentEnv &&
+    !value.agentEnv.items?.some(
+      (item) =>
+        item.name === "workspace" || (item.name === "adapter" && item.payload.type === "openclaw")
+    )
+  )
+    value = { ...value, agentEnv: { workdir: directory, ...value.agentEnv } };
   const consoleControl =
     signalOnFrame || signalOnImport || signalOnFailure ? await createWindowsConsole() : undefined;
   return new Promise((resolve, reject) => {
@@ -270,7 +280,7 @@ test("OpenClaw shorthand selects an existing agent without injecting a caller wo
   });
   assert.equal(explicit.request.agentSource, "provisioned");
   assert.equal(explicit.request.agentConfig.providerAgentId, "researcher");
-  assert.equal(explicit.request.workdir, process.cwd());
+  assert.equal(explicit.request.workdir, "");
   for (const provider_agent_id of [null, undefined, "", " ", "../main", 42]) {
     assert.throws(
       () =>
@@ -305,12 +315,7 @@ test("invalid input, old context, and invalid continuity fail before execution",
 
 test("temporary Kernel preserves caller-prepared business input and leaves no identity or process state", async (t) => {
   const settings = await fixture(t);
-  const contexts = [
-    item("octo.control", "instructions", {
-      entries: [{ text: "control-only" }]
-    }),
-    item("octo.execution", "model", { selection: { id: "test-model" } })
-  ];
+  const contexts = [item("octo.execution", "model", { selection: { id: "test-model" } })];
   const request = {
     ...echoInput("business-b\nbusiness-a\nhello", contexts),
     sessionId: "same-session"
@@ -320,9 +325,9 @@ test("temporary Kernel preserves caller-prepared business input and leaves no id
   terminal(result, "completed");
   const wire = observed(result);
   assert.equal(wire.agentSessionId, "same-session");
-  assert.equal(wire.workdir, await realpath(settings.directory));
+  assert.equal(wire.workdir, settings.directory);
   assert.equal(wire.agentConfig.model, "test-model");
-  assert.equal(wire.controlInstructions, "control-only");
+  assert.equal(Object.hasOwn(wire, "controlInstructions"), false);
   assert.ok(wire.modelInput.indexOf("business-b") < wire.modelInput.indexOf("business-a"));
   assert.doesNotMatch(wire.modelInput, /control-only|test-model/);
   assert.match(result.stderr, /playboard fixture diagnostic/);
@@ -607,7 +612,9 @@ test("closing the NDJSON consumer cleans up Host and provider execution", async 
       clearTimeout(timer);
       resolve(code);
     });
-    child.stdin.end(JSON.stringify(echoInput("broken-pipe")));
+    const request = echoInput("broken-pipe");
+    request.agentEnv.workdir = settings.directory;
+    child.stdin.end(JSON.stringify(request));
   });
   assert.equal(code, 1);
   assert.equal(typeof hostPid, "number");

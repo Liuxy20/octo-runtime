@@ -9,7 +9,11 @@ import {
   createClaudeCodeAdapter,
   ClaudeEventNormalizer
 } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
-import { assertHostFrame, isHostTerminal } from "@mininglamp-oss/octo-runtime-protocol";
+import {
+  assertHostFrame,
+  isHostTerminal,
+  invocationInput
+} from "@mininglamp-oss/octo-runtime-protocol";
 
 // Print evidence metadata only. Provider payloads stay in this process.
 const report = [];
@@ -31,7 +35,6 @@ for (const [type, create, Normalizer] of [
       sessionGeneration: 0,
       prompt: "Reply exactly " + marker + ". Do not call tools.",
       modelInput: "Reply exactly " + marker + ". Do not call tools.",
-      controlInstructions: "",
       context: { schema: "octo.context-envelope/v3", items: [] },
       approvalMode: "full_access",
       agentSource: "provisioned",
@@ -57,7 +60,9 @@ for (const [type, create, Normalizer] of [
             .join("")
       ).includes(marker);
     try {
-      for await (const frame of host.invokeFrames(type, request, { protocolMode })) {
+      for await (const frame of host.invokeFrames(invocationInput(request, protocolMode, type), {
+        signal: request.signal
+      })) {
         assertHostFrame(frame);
         frames.push(frame);
       }

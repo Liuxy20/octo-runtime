@@ -2,6 +2,8 @@
 
 ## 2026-11-09
 
+- [Issue 334/335 调用方责任清理](journal/shared/2026-11-09-334-335-caller-ownership.md)：删除应用提示词注入、工作区 mode 与随机分配；预建目录缺失返回 WORKDIR 原因码。两个方案 96 分后审查实施，全量/专项/双包与 Codex/Claude 本机结果见联合验收；Gateway #23 已取消，不扩 CI。
+
 - [Issue 332 Schema 职责清理](journal/shared/2026-11-09-332-schema-ownership.md)：最新 main 独立 worktree、96 分规划后实施，分离协议/默认值/测试资产并清理 13 个旧定义；全量和双包本地验收通过，独立审查无剩余问题。不扩大 CI，正式 PR/main 状态另按远端确认。
 
 ## 2026-11-08

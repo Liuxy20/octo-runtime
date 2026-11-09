@@ -46,11 +46,17 @@ async function run(
     for await (const event of executor.invoke({
       invocationId,
       protocol_mode: "canonical",
-      workdir,
 
       ...(providerSession ? { providerSession } : {}),
-      inputs: [{ type: "text", text }],
+      inputs: [
+        {
+          type: "text",
+          text: "This is a controlled Runtime verification. Follow the exact requested tool operation and output. Never inspect credentials or unrelated files."
+        },
+        { type: "text", text }
+      ],
       agentEnv: {
+        workdir,
         ...{
           schema: "octo.context-envelope/v3",
           items: [
@@ -79,9 +85,7 @@ async function run(
             }
           ]
         },
-        agentConfig: { model: selectedModel, ...(effort ? { effort } : {}) },
-        controlInstructions:
-          "This is a controlled Runtime verification. Follow the exact requested tool operation and output. Never inspect credentials or unrelated files."
+        agentConfig: { model: selectedModel, ...(effort ? { effort } : {}) }
       }
     })) {
       events.push(event);

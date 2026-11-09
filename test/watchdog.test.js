@@ -674,7 +674,6 @@ const request = {
   runId: "r",
   prompt: "p",
   modelInput: "p",
-  controlInstructions: "",
   approvalMode: "full_access",
   context: { schema: "octo.context-envelope/v3", items: [] },
   agentSource: "provisioned",

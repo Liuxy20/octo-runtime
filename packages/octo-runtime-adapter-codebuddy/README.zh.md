@@ -26,6 +26,7 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codebuddy" } }]
   }
@@ -47,7 +48,7 @@ const input = InvokeInput.check({
 
 - `assisted` 被拒绝，改由 Runtime 的权限桥应答。
 - 图片输入直接拒绝，当前实现也不声明 MCP 支持。
-- prompt 和控制文本走 ACP 的文本载体，不是独立的原生 system role。
+- 调用方准备的提示词走 ACP 输入载体，不附加指令文本，也不提供独立的 system role。
 - 以关联的 `session/prompt` 响应判定完成；update 安静下来不算。
 - 会话回执只包含 Provider 确认的模型；省略模型沿用 Provider 默认，续聊时请求了模型不代表已经应用。
 - Provider 拒绝或明确声明请求失败时返回 `run.failed`，使用 `ACP_MODEL_REQUEST_FAILED`（公共码 `OH-PRV-4010`）。消息为公共目录消息加换行及 `JSON.stringify(原始 _meta)`，不解析、不脱敏、不筛字段；不根据详情另行分类，成功响应也可以携带 metadata。

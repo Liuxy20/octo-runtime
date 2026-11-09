@@ -64,7 +64,7 @@ try {
                 {
                   namespace: "octo.execution",
                   name: "workspace",
-                  payload: { mode: "fixed", path: workdir }
+                  payload: { path: workdir }
                 },
                 ...(type === "claude-code" && process.env.OCTO_ACTMODE_CC_MODEL
                   ? [

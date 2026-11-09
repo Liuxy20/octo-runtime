@@ -376,7 +376,7 @@ test(
       `if(process.argv[2]==="--version"){console.log("2.1.3");process.exit(0)}
 process.stdin.resume();process.stdin.on("end",()=>{
  const config=JSON.parse(process.env.OPENCODE_CONFIG_CONTENT);
- require("node:fs").writeFileSync(require("node:path").join(process.cwd(),"instructions-path"),config.instructions.at(-1));
+ require("node:fs").writeFileSync(require("node:path").join(process.cwd(),"received-config"),JSON.stringify(config));
 });`
     );
     const core = new AgentExecutor();
@@ -398,8 +398,8 @@ process.stdin.resume();process.stdin.on("end",()=>{
       ["run.failed"]
     );
     assert.equal((await core.shutdown()).cleanup, "complete");
-    const instructions = await readFile(join(fixture.directory, "instructions-path"), "utf8");
-    await assert.rejects(readFile(instructions), { code: "ENOENT" });
+    const config = JSON.parse(await readFile(join(fixture.directory, "received-config"), "utf8"));
+    assert.equal(config.instructions, undefined);
   }
 );
 test("OpenCode V2 preserves native config and overlays MCP under servers with execution timeout", async () => {
@@ -410,7 +410,6 @@ test("OpenCode V2 preserves native config and overlays MCP under servers with ex
   };
   const request = invokeRequest({
     approvalMode: "full_access",
-    controlInstructions: "CONTROL",
     executionEnvOverrides: {
       env_variables: [{ key: "OPENCODE_CONFIG_CONTENT", value: JSON.stringify(original) }]
     },
@@ -437,11 +436,11 @@ test("OpenCode V2 preserves native config and overlays MCP under servers with ex
     assert.deepEqual(config.mcp.servers.live.timeout, { execution: 5000 });
     assert.equal(config.mcp.servers.live.disabled, false);
     assert.deepEqual(config.providers, original.providers);
-    assert.equal(await readFile(config.instructions[1], "utf8"), "CONTROL");
+    assert.deepEqual(config.instructions, original.instructions);
   } finally {
     await spec.cleanup();
   }
-  await assert.rejects(readFile(config.instructions[1]), { code: "ENOENT" });
+  assert.deepEqual(original.instructions, ["existing.md"]);
   for (const invalid of ["{", "[]", "null", "42"]) {
     await assert.rejects(
       buildOpenCodeCommand({

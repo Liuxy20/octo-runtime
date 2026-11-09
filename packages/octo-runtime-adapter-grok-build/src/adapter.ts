@@ -16,7 +16,6 @@ import {
   type AcpUpdate
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import {
-  initialControlInstructions,
   actmodeEvidence,
   AcpTurnNormalizer,
   defineAdapter,
@@ -64,7 +63,6 @@ export interface AcpAdapterDefinition {
     request: InvokeRequest
   ) => AsyncIterable<CanonicalEvent>;
   selectActmode?: typeof acpActmodeSelectionRequest;
-  controlInstructions?: "session";
   reasoningLevels?: ReasoningLevelMap;
   clientOptions?: (
     request: InvokeRequest,
@@ -338,28 +336,8 @@ export function createGrokBuildAcpAdapter(
       };
 
       const input = providerInputParts(request, resumeFallback !== undefined);
-      const instructions =
-        definition.controlInstructions === "session"
-          ? ""
-          : initialControlInstructions(
-              request,
-              !requestedSessionId || resumeFallback !== undefined
-            );
       // Preserve the legacy text call while mixed prompts retain every block's position.
-      const prompt =
-        input.length === 1 && input[0]?.type === "text"
-          ? `${input[0].text}${instructions ? `\n\n${instructions}` : ""}`
-          : [
-              ...input,
-              ...(instructions
-                ? [
-                    {
-                      type: "text" as const,
-                      text: instructions
-                    }
-                  ]
-                : [])
-            ];
+      const prompt = input.length === 1 && input[0]?.type === "text" ? input[0].text : input;
       const promptParams = acpPromptParams(sessionId, prompt);
       const promptRequestId = client.reserveRequestId();
       let stopReason: string | undefined;

@@ -85,11 +85,17 @@ HostApp 选择安装与认证方案。Runtime 不隐式登录、刷新业务凭�
 
 ## 人格与 SOUL 的注入归业务方
 
-执行边界采用 inputs 与 agentEnv 分离；业务 extra.* 仅可作为应用自己的格式，Runtime 不定义或渲染。当前 SDK/IPC v2 为用户授权的破坏性变更，保留执行信封结构。
+应用在调用前把人格、SOUL、启动提示词、业务材料和当前文字/图片编译为普通 inputs.parts，并决定顺序及新建、续接和重建时的携带策略。Runtime 不提供 system/developer/受信指令角色，也不按会话状态补提示词、标签或分隔符；主输入和显式 fallback 输入各自完整，冻结重试不重复前置。agentEnv 继续承载 MCP、环境变量及执行配置，不因提示词迁移进入正文。Issue 334 删除旧 octo.control/instructions 和 controlInstructions，旧项/字段即使为空也拒绝；独立 Gateway 须在自己的业务配置和编译边界另行迁移。
 
 ## 资源地址 Context 与按需取材
 
 发起方可以提交资源地址、来源和获取指引，由 Agent 在正常工具循环内按需读取。Host、Core 和 Adapter 不自动预取、摘要、补齐或持久化业务历史。workdir 是工作位置而非操作系统隔离边界；附件交付与工具动作属于业务消费者。
+
+## 应用工作目录归调用方
+
+Issue 335 的执行边界为调用方已成功准备的绝对目录 → Runtime 校验 → Provider 执行。CLI 与 SDK 均须显式传入 workspace.path 或 agentEnv.workdir，不默认取 cwd、Home 或旧会话，不分配随机目录、不在缺失或恢复时重建。workspace payload 仅含 path，删除 fixed/random/none mode、workspace_mode、prepareRunContext 和 WorkspaceAssignments，不保留兼容转换。已有用户目录不删除。
+
+路径在 Provider 操作前检查；缺失、非法、不存在、非目录及不可访问分别返回 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE，公开分类沿用 OH-ADP-3004。续接和 fresh recovery 仍使用本次调用路径，消失就失败；校验不承诺消除文件系统竞态。外部/preset Agent 或 metadata.workspace:false 的 Adapter 可以没有本地覆盖，OpenClaw 的原生工作区归 Provider，不制造或 stat 远端路径。Runtime Home、日志、IPC 及 Provider 自有状态与应用目录分别管理，运维目录的既有创建与清理不因本次删除而扩大。
 
 ## 业务动作归 Agent tool call，Context 约束行为
 

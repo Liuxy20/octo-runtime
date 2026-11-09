@@ -27,6 +27,7 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
@@ -63,7 +64,7 @@ DSH 本身还有原生 runtime 兼容要求。此前本地 macOS arm64 实测中
 ## 会话与限制
 
 - 显式会话**先续接**，再更新工作目录、发送本轮输入。续接失败不会悄悄新开一个会话。
-- 新会话的控制指令是独立的用户文本块，不是原生 system prompt。不重建任何应用历史。
+- 应用提示词作为调用方准备的普通输入 parts 到达；新建、续接和重建会话均不注入提示词，不重建任何应用历史。
 - 上游在预解析输入、stderr、session map 上没有 Runtime 追加的内存边界；上游的 close 只确认直接子进程，不覆盖所有工具后代。Kernel RPC 不消除这些限制。
 - 用宿主自己的 API key 时要显式选 `deepseek-official`。环境变量缺失从来不作为原生登录状态的判断依据。
 

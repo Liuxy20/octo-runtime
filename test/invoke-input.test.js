@@ -24,7 +24,7 @@ test("all prepared fields, primary/recovery images and provider extensions survi
       {
         namespace: "octo.execution",
         name: "workspace",
-        payload: { mode: "fixed", path: process.cwd() }
+        payload: { path: process.cwd() }
       },
       { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
       { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 120000 } }
@@ -122,6 +122,7 @@ test("every ingress can use the same plain JSON and exact model parts reach the 
   const input = {
     inputs: [{ type: "text", text: "hello" }],
     agentEnv: {
+      workdir: process.cwd(),
       schema: "octo.context-envelope/v3",
       items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } }]
     },

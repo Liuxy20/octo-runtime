@@ -52,7 +52,7 @@ test("MCP dynamic keys freeze without entering model input; altered plan is reje
       {
         namespace: "octo.execution",
         name: "workspace",
-        payload: { mode: "fixed", path: process.cwd() }
+        payload: { path: process.cwd() }
       }
     ]
   };

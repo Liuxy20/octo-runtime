@@ -57,7 +57,6 @@ const request = {
   modelInput: "work",
   workdir: process.cwd(),
   context: { schema: "octo.context-envelope/v3", items: [] },
-  controlInstructions: "CONTROL",
   approvalMode: "full_access",
   agentSource: "provisioned",
   agentConfig: {}
@@ -1122,17 +1121,16 @@ test("OpenClaw transcript maps model rounds, public reasoning, tools, and durati
   ]);
 });
 
-test("control instructions use private provider-native carriers", async () => {
+test("ordinary input uses no Runtime system instruction carriers", async () => {
   const claude = await buildClaudeCommand(request);
-  const claudePath = claude.args[claude.args.indexOf("--append-system-prompt-file") + 1];
-  assert.equal(await readFile(claudePath, "utf8"), "CONTROL");
-  assert.equal(claude.args.includes("CONTROL"), false);
+  assert.equal(claude.args.includes("--append-system-prompt-file"), false);
+  assert.match(claude.input, /work/);
   await claude.cleanup();
 
   const opencode = await buildOpenCodeCommand(request);
   const config = JSON.parse(opencode.env.OPENCODE_CONFIG_CONTENT);
-  assert.equal(await readFile(config.instructions.at(-1), "utf8"), "CONTROL");
-  await opencode.cleanup();
+  assert.equal(config.instructions, undefined);
+  await opencode.cleanup?.();
 
   const codex = buildCodexCommand(request, "codex", [], { CODEX_HOME: "/native/codex-home" });
   assert.equal(codex.env.CODEX_HOME, "/native/codex-home");
@@ -1159,7 +1157,7 @@ test("control instructions use private provider-native carriers", async () => {
     }
   });
   assert.equal(openclaw.agentParams.message, "work");
-  assert.equal(openclaw.agentParams.extraSystemPrompt, "CONTROL");
+  assert.equal(Object.hasOwn(openclaw.agentParams, "extraSystemPrompt"), false);
   assert.equal(openclaw.agentParams.cwd, undefined);
   assert.equal(openclaw.agentParams.promptMode, undefined);
   assert.equal(openclaw.createParams.cwd, undefined);
@@ -2360,7 +2358,7 @@ test("generic ACP adapters start fresh when session/load reports a missing sessi
     requests.map((item) => item.method),
     ["session/load", "session/new"]
   );
-  assert.deepEqual(promptInput, { sessionId: "fresh-session", input: "recovery input\n\nCONTROL" });
+  assert.deepEqual(promptInput, { sessionId: "fresh-session", input: "recovery input" });
   assert.deepEqual(
     events.find((event) => event.type === "session.update"),
     {

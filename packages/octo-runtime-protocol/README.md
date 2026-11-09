@@ -20,6 +20,7 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -34,7 +35,7 @@ const input = InvokeInput.check({
 | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
 | `inputs`                             | yes      | This turn's text and image parts, in order. Image bytes go here once.                             |
 | `agentEnv`                           | yes      | Context v3 envelope. Its `octo.execution` / `adapter` item selects the Adapter; empty is legal.   |
-| `agentEnv.workdir`                   | no       | Provider working directory. Defaults to the host workspace; it is not a sandbox.                  |
+| `agentEnv.workdir`                   | local calls | Caller-prepared existing absolute directory, or the same path in the workspace item. No cwd default; not a sandbox. |
 | `protocol_mode`                      | no       | `native` (default) or `canonical`.                                                                |
 | `providerSession`                    | no       | Explicit Provider session to resume. Never rebuilt from `sessionId`.                              |
 | `agentEnv.agentConfig`               | no       | Full Provider configuration, including `providerOptions`. Must agree with the Context selections. |
@@ -123,6 +124,16 @@ Client connection/concurrency limits, timeouts, and retry delays belong to the c
 Issue #332 removes `kernel-client.behavior.json` and the standalone client's `/protocol/behavior.json` export. Stop importing this file; use the client API and its documented defaults. The IPC Schema identifier is now `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`; update registrations or references that used the old v1 identifier. The actual IPC version remains 2. The unused `x-octo-methods` code-generation metadata is removed; RPC methods and their request/result definitions remain.
 
 The following legacy types are removed from the Schema, generated types, and protocol exports: `ContextSelectionEntry`, `ContextResourceEntry`, `ContextContinuityPayload`, `ChannelScope`, `ChannelMessagePart`, `ChannelMessageSender`, `ChannelMessageFlags`, `ChannelMessageFact`, `ChannelContextAppend`, `ContextSyncRequest`, `ContextSyncResult`, `ChannelContextDescriptor`, and `ContextCommitResult`. Their five validators (`assertChannelScope`, `assertChannelMessageFact`, `assertChannelContextAppend`, `assertContextSyncResult`, and `assertChannelContextDescriptor`) are also removed. Use the existing `ContextInlineEntry` and `ContextReferenceEntry` for the retained generic content shapes. Applications own channel history and synchronization contracts. These exports have no compatibility shim; callers must update their imports.
+
+## Workspace migration
+
+Issue #335 makes `octo.execution/workspace` path-only: `{ "path": "/absolute/prepared/project" }`. The caller must create or select an existing absolute directory before local CLI or SDK execution. Runtime does not use an implicit cwd, allocate random directories or recreate missing directories on continuation/recovery. External/preset Agents and Adapters with `metadata.workspace: false` can omit the local override; OpenClaw retains its Provider workspace.
+
+Remove `mode` (`fixed`, `random`, `none`) and update removed `workspace_mode` receipt/projection fields, `prepareRunContext` and `WorkspaceAssignments` imports. Old mode-bearing payloads fail without compatibility conversion. Existing user directories are not deleted. `WORKDIR_REQUIRED`, `WORKDIR_INVALID`, `WORKDIR_NOT_FOUND`, `WORKDIR_NOT_DIRECTORY` and `WORKDIR_UNAVAILABLE` retain public classification `OH-ADP-3004`; see [validation and error details](../../docs/en/reference/invoke-input.md). Runtime operational directories remain distinct. The source package version and Run/Context/IPC/Adapter wire versions are unchanged; the normal release process selects the published version. Independent Gateway must migrate its old fixed-mode payload before adopting this release.
+
+## Caller prompt migration
+
+Issue #334 removes `octo.control/instructions`, `controlInstructions`, `ContextInstructionEntry`, `ContextInstructionsPayload`, `contextControlInstructions()` and `initialControlInstructions()` from Runtime and its public contracts. Old items and fields are rejected even when empty, without a compatibility alias. Callers prepend application prompts to ordinary input parts and decide their inclusion on new, resumed and reconstructed sessions. Primary and explicit fallback inputs must each be complete; Runtime neither adds prompts nor upgrades them to system/developer/trusted roles. MCP, environment variables and execution policy remain in agentEnv. See [session migration guidance](../../docs/en/guides/context-and-sessions.md). Independent Gateway consumers still need their own migration; this change does not claim end-to-end compatibility.
 
 ## Further reading
 

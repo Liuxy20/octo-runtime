@@ -177,7 +177,6 @@
             "namespace": "octo.execution",
             "name": "workspace",
             "payload": {
-              "mode": "fixed",
               "path": "/old"
             }
           }
@@ -195,7 +194,7 @@
           "namespace": "octo.execution",
           "name": "workspace",
           "payload": {
-            "mode": "random"
+            "path": "/new"
           }
         }
       ]
@@ -207,7 +206,7 @@
           "namespace": "octo.execution",
           "name": "workspace",
           "payload": {
-            "mode": "random"
+            "path": "/new"
           }
         }
       ]
@@ -709,18 +708,7 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.execution",
-          "name": "workspace",
-          "payload": {
-            "mode": "random"
-          }
-        }
-      ]
-    }
+    "error": "CONTEXT_SCHEMA_INVALID"
   },
   {
     "name": "ephemeral-default-forbidden",
@@ -1050,22 +1038,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.control",
-          "name": "instructions",
-          "payload": {
-            "entries": [
-              {
-                "text": "我是个人助理"
-              }
-            ]
-          }
-        }
-      ]
-    }
+    "valid": false,
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "system-instructions-default-forbidden",
@@ -1095,7 +1069,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-instructions-cannot-claim-revision",
@@ -1126,7 +1101,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-instructions-rejects-legacy-source",
@@ -1157,7 +1133,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-system-instructions-override",
@@ -1199,21 +1176,7 @@
         }
       ]
     },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.control",
-          "name": "instructions",
-          "payload": {
-            "entries": [
-              {
-                "text": "我是个人助理"
-              }
-            ]
-          }
-        }
-      ]
-    }
+    "valid": false,
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   }
 ]

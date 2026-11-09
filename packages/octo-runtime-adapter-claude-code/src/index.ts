@@ -1,5 +1,4 @@
 import {
-  initialControlInstructions,
   hasImageInput,
   invocationEnvironment,
   invocationMcpServers,
@@ -90,11 +89,8 @@ interface ClaudeNativeEvent {
 }
 
 /**
- * Build the Claude CLI argv and stdin for one invocation.
- *
- * The system/control prompt is written to a private temp file passed via
- * `--append-system-prompt-file`, while the user prompt stays on stdin, so the
- * two never get conflated. Returns a `cleanup` that removes the temp directory.
+ * 构造本轮 Claude CLI 参数和普通输入；临时文件仅承载显式 MCP 配置，
+ * 返回的 cleanup 负责回收该配置目录。
  */
 export async function buildClaudeCommand(
   req: InvokeRequest,
@@ -113,12 +109,9 @@ export async function buildClaudeCommand(
     throw new Error(
       "MCP_LITERAL_UNSUPPORTED: claude-code cannot preserve resolved placeholder text"
     );
-  const directory = await mkdtemp(join(tmpdir(), "octo-runtime-claude-"));
-  const promptFile = join(directory, "system-prompt.txt");
-  // The control prompt goes through Claude's dedicated file argument while the
-  // user prompt is still fed via stdin, so the two never get conflated.
-  await writeFile(promptFile, initialControlInstructions(req), { mode: 0o600 });
+  let directory: string | undefined;
   if (Object.keys(servers).length) {
+    directory = await mkdtemp(join(tmpdir(), "octo-runtime-claude-"));
     const mcpFile = join(directory, "mcp.json");
     const mcpServers = Object.fromEntries(
       Object.entries(servers).map(([name, server]) => [
@@ -133,7 +126,26 @@ export async function buildClaudeCommand(
           : { type: "http", url: server.url, headers: server.headers ?? {} }
       ])
     );
-    await writeFile(mcpFile, JSON.stringify({ mcpServers }), { mode: 0o600 });
+    // 临时文件只承载本轮 MCP；准备失败由本层回收，成功后归命令执行者清理。
+    try {
+      await writeFile(mcpFile, JSON.stringify({ mcpServers }), { mode: 0o600 });
+    } catch (error) {
+      let cleanupFailure: { error: unknown } | undefined;
+      try {
+        await rm(directory, { recursive: true, force: true });
+      } catch (cleanupError) {
+        cleanupFailure = { error: cleanupError };
+      }
+      if (cleanupFailure)
+        throw new AggregateError(
+          [error, cleanupFailure.error],
+          "Claude MCP preparation and cleanup failed",
+          {
+            cause: error
+          }
+        );
+      throw error;
+    }
     commandArgsPrefix = [...commandArgsPrefix, "--mcp-config", mcpFile];
   }
   // Only --include-partial-messages produces thinking/text/input_json deltas;
@@ -147,8 +159,7 @@ export async function buildClaudeCommand(
     "--output-format",
     "stream-json",
     "--verbose",
-    "--include-partial-messages",
-    ...(initialControlInstructions(req) ? ["--append-system-prompt-file", promptFile] : [])
+    "--include-partial-messages"
   ];
   if (req.providerSession?.sessionId) args.push("--resume", req.providerSession.sessionId);
   // --name 是展示标题；不能替换原生 UUID，也不在 resume 时覆盖既有名称。
@@ -164,7 +175,9 @@ export async function buildClaudeCommand(
     command,
     args,
     input,
-    cleanup: () => rm(directory, { recursive: true, force: true })
+    cleanup: async () => {
+      if (directory) await rm(directory, { recursive: true, force: true });
+    }
   };
 }
 

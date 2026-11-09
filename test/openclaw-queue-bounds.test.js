@@ -72,7 +72,6 @@ function fixture({ onWait } = {}) {
     prompt: "p",
     modelInput: "p",
     context: { schema: "octo.context-envelope/v3", items: [] },
-    controlInstructions: "",
     approvalMode: "full_access",
     agentSource: "preset",
     workdir: "",

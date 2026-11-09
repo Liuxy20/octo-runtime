@@ -45,12 +45,11 @@ test("interaction contracts require a stable request id and bounded response out
   );
 });
 
-test("InvokeRequest requires structured Context, control instructions, model input, and explicit approval mode", () => {
+test("InvokeRequest requires Context, model input and approval, and rejects removed instructions", () => {
   const request = invokeRequest();
   assert.doesNotThrow(() => assertInvokeRequest(request));
   for (const [field, error] of [
     ["context", /CONTEXT_REQUIRED/],
-    ["controlInstructions", /controlInstructions must be a string/],
     ["modelInput", /modelInput must be a non-empty string/],
     ["approvalMode", /APPROVAL_MODE_UNSUPPORTED/]
   ]) {
@@ -64,13 +63,13 @@ test("InvokeRequest requires structured Context, control instructions, model inp
       /modelInput must be a non-empty string/
     );
   }
-  for (const controlInstructions of [null, 42]) {
+  for (const controlInstructions of [undefined, null, 42, "", "old prompt"]) {
     assert.throws(
       () => assertInvokeRequest({ ...request, controlInstructions }),
-      /controlInstructions must be a string/
+      /CONTROL_INSTRUCTIONS_REMOVED/
     );
   }
-  assert.doesNotThrow(() => assertInvokeRequest({ ...request, controlInstructions: "" }));
+  assert.doesNotThrow(() => assertInvokeRequest({ ...request }));
   for (const approvalMode of ["ask", "assisted", "full_access"]) {
     assert.doesNotThrow(() => assertInvokeRequest({ ...request, approvalMode }));
   }
@@ -166,7 +165,6 @@ test("execution Context fixtures carry explicit frozen selections and provider d
     type: "codex"
   });
   assert.deepEqual(context.items.find((item) => item.name === "workspace").payload, {
-    mode: "fixed",
     path: "/workspace"
   });
   assert.deepEqual(context.items.find((item) => item.name === "approval_policy").payload, {
@@ -194,17 +192,12 @@ test("execution Context fixtures carry explicit frozen selections and provider d
   }
 });
 
-test("typed content selections, continuity and text-only instructions have bounded entry shapes", () => {
+test("typed content entries remain bounded and removed instructions are rejected", () => {
   const items = [
     {
       namespace: "octo.content",
       name: "inline",
       payload: { entries: [{ resource_ref: "octo://messages/selected", text: "Selected message" }] }
-    },
-    {
-      namespace: "octo.control",
-      name: "instructions",
-      payload: { entries: [{ text: "Keep changes scoped." }] }
     }
   ];
   assert.doesNotThrow(() => assertContextEnvelope(contextEnvelope(items)));
@@ -225,7 +218,7 @@ test("typed content selections, continuity and text-only instructions have bound
             }
           ])
         ),
-      /CONTEXT_SCHEMA_INVALID/
+      /CONTROL_INSTRUCTIONS_REMOVED/
     );
   }
   for (const entry of [{}, { text: 42 }, { resource_ref: "octo://selected", messages: [] }]) {

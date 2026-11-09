@@ -26,6 +26,7 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
@@ -50,7 +51,7 @@ const input = InvokeInput.check({
 
 - `ask` 和 `assisted` 直接失败，不会悄悄升级成 full access。
 - 探测要求能读出至少 1.3.3 的版本；读不到版本就算探测失败。
-- 可信控制指令是用户输入里的标记文本，不是独立的 system role。
+- 应用提示词属于调用方准备的普通输入；Adapter 不添加提示词标记，不提供独立的 system/受信指令角色。
 - 成功需要原生 `SUCCESS` 结果**且**回答非空。退出码为 0 本身不算成功。
 - 每次调用拥有自己的进程；取消和清理都由本次调用负责。
 

@@ -15,6 +15,7 @@ const collect = async (source) => Array.fromAsync(source);
 const input = (id = "one", mode = "native", text = "answer") => ({
   inputs: [{ type: "text", text }],
   agentEnv: {
+    workdir: process.cwd(),
     schema: "octo.context-envelope/v3",
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type: "executor-fixture" } },

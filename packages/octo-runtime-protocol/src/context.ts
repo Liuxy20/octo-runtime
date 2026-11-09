@@ -41,6 +41,10 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
   const keys = new Set<string>();
   for (const item of value.items) {
     object(item, "CONTEXT_SCHEMA_INVALID");
+    if (item.namespace === "octo.control" && item.name === "instructions")
+      throw new TypeError(
+        "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
+      );
     fields(item, ["namespace", "name", "guidance", "data_format", "payload"]);
     for (const property of ["namespace", "name"]) {
       const text = item[property];
@@ -165,18 +169,9 @@ export function assertResolvedExecutionPlan(
     object(value.workspace, "RESOLVED_EXECUTION_PLAN_INVALID");
     executionField("octo.execution", "workspace", value.workspace);
   }
-  if (
-    !value.workdir &&
-    value.agent_source !== "preset" &&
-    (!isObject(value.workspace) || value.workspace.mode !== "random")
-  )
-    throw new TypeError("RESOLVED_EXECUTION_PLAN_INVALID");
-  if (
-    isObject(value.workspace) &&
-    value.workspace.mode === "none" &&
-    (value.agent_source !== "preset" || value.workdir !== "")
-  )
-    throw new TypeError("RESOLVED_EXECUTION_PLAN_INVALID");
+  // 空路径表示未覆盖本地目录；是否必填由实际注册的 Adapter 元数据决定。
+  if (isObject(value.workspace) && value.workspace.path !== value.workdir)
+    throw new TypeError("CONTEXT_PLAN_MISMATCH");
   if (value.agent_source === "preset" && typeof value.provider_agent_id !== "string")
     throw new TypeError("PRESET_AGENT_TARGET_REQUIRED");
   assertApprovalMode(value.approval_mode);
@@ -354,20 +349,14 @@ function publicPayload(namespace: string, name: string, value: Record<string, un
     executionField(namespace, name, value);
     return;
   }
-  if (
-    (namespace === "octo.content" && ["inline", "references"].includes(name)) ||
-    (namespace === "octo.control" && name === "instructions")
-  ) {
+  if (namespace === "octo.content" && ["inline", "references"].includes(name)) {
     fields(value, ["entries"]);
-    if (!Array.isArray(value.entries) || (name !== "instructions" && value.entries.length === 0))
+    if (!Array.isArray(value.entries) || value.entries.length === 0)
       throw new TypeError("CONTEXT_SCHEMA_INVALID");
     const refs = new Set<string>();
     for (const entry of value.entries) {
       object(entry, "CONTEXT_SCHEMA_INVALID");
-      if (name === "instructions") {
-        fields(entry, ["text"]);
-        text(entry.text);
-      } else if (name === "references") {
+      if (name === "references") {
         resource(entry);
         const ref = String(entry.resource_ref);
         if (refs.has(ref)) throw new TypeError("CONTEXT_SCHEMA_INVALID");
@@ -408,14 +397,9 @@ function executionField(namespace: string, name: string, value: Record<string, u
       return;
     }
     if (name === "workspace") {
-      fields(value, ["mode", "path"]);
-      if (value.mode === "none" && value.path === undefined) return;
-      if (value.mode === "fixed") {
-        text(value.path);
-        return;
-      }
-      if (value.mode === "random" && value.path === undefined) return;
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
+      fields(value, ["path"]);
+      text(value.path);
+      return;
     }
     if (name === "limits") {
       limits(value);

@@ -88,6 +88,11 @@ export type RunProtocolErrorCode =
   | "OPERATION_OUTCOME_UNKNOWN"
   | "HOST_EXECUTION_FAILED"
   | "HOST_ENDED_WITHOUT_TERMINAL"
+  | "WORKDIR_REQUIRED"
+  | "WORKDIR_INVALID"
+  | "WORKDIR_NOT_FOUND"
+  | "WORKDIR_NOT_DIRECTORY"
+  | "WORKDIR_UNAVAILABLE"
   | "PROVIDER_MESSAGE_TOO_LARGE"
   | "HOST_FRAME_TOO_LARGE"
   | "STREAM_QUEUE_ITEM_TOO_LARGE"
@@ -175,23 +180,6 @@ export type ContextReasoningPayload = {
 export type ContextReasoningPayload1 = {
   [k: string]: unknown;
 };
-/**
- * fixed uses the supplied path; random creates a workspace on the AgentSession's first run and reuses it for subsequent runs; none delegates workspace ownership to a preset Agent.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextWorkspacePayload".
- */
-export type ContextWorkspacePayload =
-  | {
-      mode: "fixed";
-      path: string;
-    }
-  | {
-      mode: "random";
-    }
-  | {
-      mode: "none";
-    };
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextRuntimeSelectionPayload".
@@ -281,6 +269,13 @@ export type ModelInputPart =
       sha256: string;
     };
 /**
+ * Serializable execution request sent from Core to Adapter Host. AbortSignal is added in src/index.ts because it cannot cross a process boundary.
+ *
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "InvokeRequestWire".
+ */
+export type InvokeRequestWire = InvokeRequestWire1;
+/**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ActivitySubject".
  */
@@ -351,14 +346,9 @@ export type AgentEnv = {
           namespace?: "octo.security";
           name?: "approval_policy";
         }
-      | {
-          namespace?: "octo.control";
-          name?: "instructions";
-        }
     ))[];
   agentSource?: AgentSource;
   workdir?: string;
-  controlInstructions?: string;
   approvalMode?: ApprovalMode;
   agentConfig?: AgentConfig;
   runtimeLimits?: RuntimeLimits;
@@ -2100,7 +2090,7 @@ export interface ContextEnvelope {
   items: ContextItem[];
 }
 /**
- * Agent defaults and mandatory constraints, stored under one external configuration version. Authorized configuration writers may persist system instructions in mandatory with text-only entries. Ephemeral business content and default-layer instructions are forbidden; callers cannot submit trusted control instructions.
+ * Agent defaults and mandatory execution constraints stored under one external configuration version. Application prompts belong to caller-provided ordinary inputs, not execution settings.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextConfiguration".
@@ -2135,11 +2125,10 @@ export interface RunContextProjection {
     model?: string;
     effort?: string;
     approval_mode: "ask" | "assisted" | "full_access";
-    workspace_mode: "fixed" | "random" | "none";
   };
 }
 /**
- * Workspace preparation for the current Run lease and frozen execution Context; it does not prove Provider use of model context.
+ * Preparation facts for the current Run lease and caller-owned workspace path; they do not prove Provider use of model context or transfer directory ownership to Runtime.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextPreparationReceipt".
@@ -2149,7 +2138,6 @@ export interface ContextPreparationReceipt {
   run_id: string;
   lease_id: string;
   fencing_token: number;
-  workspace_mode: "fixed" | "random" | "none";
   workspace_path: string;
   provider_state_dir: string;
   /**
@@ -2179,6 +2167,15 @@ export interface ContextActmodePayload {
 export interface ContextModelPayload {
   selection?: ContextModelSelectionPayload;
   reasoning?: ContextReasoningPayload;
+}
+/**
+ * Caller-owned, already prepared directory. Runtime validates the concrete local execution path and never allocates or recreates an application workspace.
+ *
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ContextWorkspacePayload".
+ */
+export interface ContextWorkspacePayload {
+  path: string;
 }
 /**
  * Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits. Legacy enforcement=observe cannot be combined with v2 settings.
@@ -2211,22 +2208,6 @@ export interface ContextApprovalPolicyPayload {
 export interface ContextMcpLocator {
   server_ref: string;
   tool: string;
-}
-/**
- * Control instruction containing only non-empty text. Authorization belongs to the authenticated upstream boundary, not to a caller-supplied source label.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextInstructionEntry".
- */
-export interface ContextInstructionEntry {
-  text: string;
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextInstructionsPayload".
- */
-export interface ContextInstructionsPayload {
-  entries: ContextInstructionEntry[];
 }
 export interface ResolvedRuntimeSelection1 {
   schema: "octo.runtime-selection/v2";
@@ -2652,13 +2633,7 @@ export interface McpStreamableHttpServer {
   startupTimeoutMs?: number;
   toolTimeoutMs?: number;
 }
-/**
- * Serializable execution request sent from Core to Adapter Host. AbortSignal is added in src/index.ts because it cannot cross a process boundary.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "InvokeRequestWire".
- */
-export interface InvokeRequestWire {
+export interface InvokeRequestWire1 {
   executionEnvOverrides?: ContextEnvsPayload1;
   /**
    * Active Adapter Host invocation identifier and cancellation target.
@@ -2718,10 +2693,6 @@ export interface InvokeRequestWire {
    * Provider process cwd. Sandboxing, containers, or host permissions provide the actual access boundary.
    */
   workdir: string;
-  /**
-   * Trusted session instructions. Adapters inject them only when starting a provider session; resuming an existing session must not inject or clear them.
-   */
-  controlInstructions: string;
   context: ContextEnvelope;
   runMetadata?: Record<string, unknown>;
   approvalMode: ApprovalMode;
@@ -2989,6 +2960,11 @@ export const RUN_PROTOCOL_ERRORS = [
   "OPERATION_OUTCOME_UNKNOWN",
   "HOST_EXECUTION_FAILED",
   "HOST_ENDED_WITHOUT_TERMINAL",
+  "WORKDIR_REQUIRED",
+  "WORKDIR_INVALID",
+  "WORKDIR_NOT_FOUND",
+  "WORKDIR_NOT_DIRECTORY",
+  "WORKDIR_UNAVAILABLE",
   "PROVIDER_MESSAGE_TOO_LARGE",
   "HOST_FRAME_TOO_LARGE",
   "STREAM_QUEUE_ITEM_TOO_LARGE",

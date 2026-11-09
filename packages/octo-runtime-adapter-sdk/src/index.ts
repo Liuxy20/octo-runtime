@@ -45,7 +45,6 @@ import {
 
 export {
   freshFallbackInputText,
-  initialControlInstructions,
   hasImageInput,
   providerInputParts,
   providerInputText

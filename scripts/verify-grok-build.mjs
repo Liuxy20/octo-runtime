@@ -29,10 +29,10 @@ try {
         {
           invocationId,
           protocol_mode: "canonical",
-          workdir,
 
           ...(providerSession ? { providerSession } : {}),
           inputs: [
+            { type: "text", text: "Read-only verification. Do not use tools." },
             {
               type: "text",
               text:
@@ -42,6 +42,7 @@ try {
             }
           ],
           agentEnv: {
+            workdir,
             ...{
               schema: "octo.context-envelope/v3",
               items: [
@@ -49,8 +50,7 @@ try {
                 { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
               ]
             },
-            agentConfig: { effort: "low" },
-            controlInstructions: "Read-only verification. Do not use tools."
+            agentConfig: { effort: "low" }
           }
         },
         { signal: controller.signal }

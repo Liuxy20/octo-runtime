@@ -1,7 +1,6 @@
 import { GrokBuildRpcError, spawnGrokBuildAcpClient } from "./client.js";
 import { createGrokBuildAcpAdapter } from "./adapter.js";
 import {
-  initialControlInstructions,
   invocationEnvironment,
   invocationMcpServers,
   probeCommand,
@@ -31,7 +30,6 @@ export function createGrokBuildAdapter({
       provider: "grok-build",
       command,
       args: ["--no-auto-update", "agent", "--no-leader", "stdio"],
-      controlInstructions: "session",
       reasoningLevels: levels,
       async probe() {
         const result = await probeCommand(command);
@@ -77,14 +75,13 @@ export function createGrokBuildAdapter({
         }
       },
       sessionParams(params, request, fresh) {
-        // 原生 rules 仅用于新会话；恢复不改系统指令，也不恢复工作区文件快照。
-        const rules = initialControlInstructions(request, fresh);
+        // 应用提示词只来自普通输入；会话元数据仅保留执行策略和恢复行为。
         return {
           ...params,
           _meta: {
             yoloMode: request.approvalMode === "full_access",
             autoMode: false,
-            ...(fresh ? (rules ? { rules } : {}) : { "x.ai/restore_code": false })
+            ...(!fresh ? { "x.ai/restore_code": false } : {})
           }
         };
       },

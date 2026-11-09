@@ -42,7 +42,7 @@ Omitting actmode leaves mode behavior to the Provider without actively resetting
 
 OpenClaw uses an existing Gateway Agent and requires an explicit `provider_agent_id`, such as `main`. That Gateway manages the working directory. Nonempty environment variables passed through individual invocations are rejected.
 
-Other Providers whose execution settings are prepared by Runtime normally use the local workdir resolved for the current invocation. A working directory does not restrict filesystem or network permissions.
+Local execution requires the caller's existing absolute workdir on each invocation; Runtime neither defaults to cwd nor creates or recovers a directory. External/preset Agents and Adapters with `metadata.workspace: false` can omit a local override. A working directory does not restrict filesystem or network permissions. See [workdir validation](invoke-input.md).
 
 Image input, sandbox, and session resume support also depend on the Adapter and Provider version; see the [Adapter READMEs](../../../packages/README.md). Documentation tests use a test Adapter. See [Maintenance and Validation](../maintenance.md) for real Provider integration coverage.
 

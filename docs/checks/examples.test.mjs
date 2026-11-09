@@ -16,6 +16,7 @@ const input = (text = "documentation example") =>
   InvokeInput.check({
     inputs: [{ type: "text", text }],
     agentEnv: {
+      workdir: root,
       schema: "octo.context-envelope/v3",
       items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "test" } }]
     }

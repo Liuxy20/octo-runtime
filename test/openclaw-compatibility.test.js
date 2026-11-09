@@ -50,7 +50,6 @@ function request(overrides = {}) {
     runId: "run",
     prompt: "hello",
     modelInput: "hello",
-    controlInstructions: "trusted system instruction",
     context: { schema: "octo.context-envelope/v3", items: [] },
     approvalMode: "ask",
     agentSource: "preset",
@@ -325,7 +324,7 @@ for (const { tag, schemas } of contracts.versions)
       const agent = f.calls.find((call) => call.method === "agent").params;
       assert.equal(agent.thinking, "high");
       assert.equal(agent.model, "fixture/model");
-      assert.match(agent.extraSystemPrompt, /trusted system instruction/);
+      assert.equal(Object.hasOwn(agent, "extraSystemPrompt"), false);
       assert.match(agent.idempotencyKey, /^octo-runtime-run-/);
       assert.equal(create.thinkingLevel, legacy ? undefined : "high");
       assert.equal(create.permissionMode, legacy ? undefined : mode === "ask" ? "guarded" : "full");

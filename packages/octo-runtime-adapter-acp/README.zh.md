@@ -25,6 +25,7 @@ executor.register(
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "hermes" } }]
   }

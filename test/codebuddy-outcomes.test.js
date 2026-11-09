@@ -86,7 +86,11 @@ for (const [name, updates] of Object.entries(scenarios)) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "who are you" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: {
+            schema: "octo.context-envelope/v3",
+            items: selection,
+            workdir: process.cwd()
+          },
           protocol_mode: "canonical"
         })
       );
@@ -204,7 +208,11 @@ for (const stopReason of [42, {}, null]) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: {
+            schema: "octo.context-envelope/v3",
+            items: selection,
+            workdir: process.cwd()
+          },
           protocol_mode: "canonical"
         })
       );
@@ -249,7 +257,11 @@ test("CodeBuddy Core keeps raw metadata strings and unknown fields byte-for-byte
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: {
+            schema: "octo.context-envelope/v3",
+            items: selection,
+            workdir: process.cwd()
+          },
           protocol_mode: "canonical"
         })
       );
@@ -358,7 +370,7 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
       ...kernelInput(`fixture:${scenario}`),
       inputs: [{ type: "text", text: `fixture:${scenario}` }],
       modelInput: `fixture:${scenario}`,
-      agentEnv: { schema: "octo.context-envelope/v3", items: selection }
+      agentEnv: { schema: "octo.context-envelope/v3", items: selection, workdir: process.cwd() }
     });
     const { ref } = await client.submit(makeInput());
     const source = await frames(client, ref);
@@ -417,7 +429,12 @@ test("CodeBuddy public default/empty/explicit model requests reach the prompt", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection, ...config },
+          agentEnv: {
+            schema: "octo.context-envelope/v3",
+            items: selection,
+            workdir: process.cwd(),
+            ...config
+          },
           protocol_mode: "canonical"
         })
       );
@@ -451,7 +468,11 @@ test("CodeBuddy 429 and quota metadata use the same explicit ACP failure code", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: {
+            schema: "octo.context-envelope/v3",
+            items: selection,
+            workdir: process.cwd()
+          },
           protocol_mode: "canonical"
         })
       );

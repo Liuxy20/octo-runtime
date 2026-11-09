@@ -28,7 +28,6 @@ const request = {
   modelInput: "actual user input",
   workdir: process.cwd(),
   context: { schema: "octo.context-envelope/v3", items: [] },
-  controlInstructions: "CONTROL",
   approvalMode: "full_access",
   agentSource: "provisioned",
   agentConfig: {}
@@ -89,15 +88,7 @@ test("Antigravity builds an isolated stdin carrier, exact model and explicit yol
   assert.ok(!spec.args.includes("--continue"));
   assert.deepEqual(JSON.parse(spec.input), {
     event: "user",
-    message: {
-      content: [
-        {
-          type: "text",
-          text: "Runtime control instructions (apply throughout this session):\nCONTROL"
-        },
-        { type: "text", text: "User input:\nactual user input" }
-      ]
-    }
+    message: { content: "actual user input" }
   });
   const resumed = buildAntigravityCommand({
     ...request,

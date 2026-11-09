@@ -27,6 +27,7 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
@@ -67,7 +68,7 @@ DSH also has native runtime compatibility requirements. A previous local macOS a
 ## Sessions and limits
 
 - An explicit session is resumed **before** the working directory is updated and the turn is sent. A failed resume does not silently start a new session.
-- New-session control instructions are separate user text blocks, not a native system prompt. No application history is reconstructed.
+- Application prompts arrive as caller-prepared ordinary input parts. No prompt is injected for new, resumed or reconstructed sessions, and no application history is reconstructed.
 - Upstream pre-parse input, stderr, and session maps have no Runtime-added memory bounds, and upstream close confirms the direct child only — not every tool descendant. Kernel RPC does not remove these limits.
 - Using a host-owned API key means selecting `deepseek-official` explicitly. Missing environment variables never decide native login state.
 

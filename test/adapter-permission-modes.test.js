@@ -14,7 +14,6 @@ const request = {
   runId: "run",
   prompt: "fixture",
   modelInput: "fixture",
-  controlInstructions: "",
   workdir: process.cwd(),
   approvalMode: "ask",
   agentSource: "provisioned",

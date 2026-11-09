@@ -11,7 +11,6 @@ const request = {
   runId: "run-1",
   prompt: "hello",
   modelInput: "hello",
-  controlInstructions: "",
   approvalMode: "ask",
   context: { schema: "octo.context-envelope/v3", items: [] },
   agentSource: "provisioned",

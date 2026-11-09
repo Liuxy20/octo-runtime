@@ -344,7 +344,6 @@ test("native Kernel hosts probe each Runtime connection and use only the Context
     workdir: "",
     prompt: "work",
     modelInput: "work",
-    controlInstructions: "",
     approvalMode: "full_access",
     agentSource: "preset",
     context: { schema: "octo.context-envelope/v3", items: [] },

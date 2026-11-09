@@ -1,5 +1,4 @@
 import {
-  initialControlInstructions,
   hasImageInput,
   AcpApprovalBridge,
   DriverQueue,
@@ -79,7 +78,7 @@ function requiredOption(req: InvokeRequest, key: string): string {
   return value;
 }
 
-/** The Gateway has a real system-prompt channel, so user content and Runtime instructions remain separate. */
+/** 应用在调用前组装正文；Adapter 不添加原生 system prompt 或业务前缀。 */
 export function composeOpenClawPrompt(req: InvokeRequest): string {
   return providerInputText(req);
 }
@@ -132,9 +131,6 @@ export function buildOpenClawGatewayInvocation(req: InvokeRequest): OpenClawGate
     deliver: false,
 
     idempotencyKey: requestId,
-    ...(initialControlInstructions(req)
-      ? { extraSystemPrompt: initialControlInstructions(req) }
-      : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(timeout === undefined ? {} : { timeout: Math.max(0, Math.floor(timeout)) })

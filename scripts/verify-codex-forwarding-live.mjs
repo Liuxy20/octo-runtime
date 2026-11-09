@@ -100,7 +100,7 @@ if (args[0] === "--check-endpoint") {
             {
               namespace: "octo.execution",
               name: "workspace",
-              payload: { mode: "fixed", path: directory }
+              payload: { path: directory }
             },
             {
               namespace: "octo.security",

@@ -48,7 +48,6 @@ test("host emits activity without persisting private analysis and closes every a
       modelInput: "p",
       workdir: process.cwd(),
       context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
       approvalMode: "full_access",
       agentSource: "provisioned",
       agentConfig: {}

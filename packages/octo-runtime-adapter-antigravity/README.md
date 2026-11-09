@@ -26,6 +26,7 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
@@ -50,7 +51,7 @@ const input = InvokeInput.check({
 
 - `ask` and `assisted` fail instead of escalating to full access.
 - Probe requires a detected version of at least 1.3.3; a missing version fails the probe.
-- Trusted control instructions travel as tagged text inside the user input, not as a separate system role.
+- Application prompts are ordinary caller-prepared input. The Adapter does not add prompt tags or expose a separate system/trusted instruction role.
 - Success needs a native `SUCCESS` result **and** a non-empty answer. Exit code zero alone is not success.
 - Each invocation owns its process; cancellation and cleanup are the invocation's responsibility.
 

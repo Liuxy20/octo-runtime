@@ -22,6 +22,7 @@ This example connects to a service that uses Bearer Token authentication. Replac
   "protocol_mode": "canonical",
   "inputs": [{ "type": "text", "text": "Use the project tools to summarize the current task." }],
   "agentEnv": {
+    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
       { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
@@ -56,6 +57,7 @@ Install the MCP server on the machine running Runtime, then replace `command` be
   "protocol_mode": "canonical",
   "inputs": [{ "type": "text", "text": "List the available project documents." }],
   "agentEnv": {
+    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
       { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },

@@ -465,8 +465,26 @@
     }
   },
   {
-    "name": "fixed-workspace",
+    "name": "caller-owned-workspace",
     "valid": true,
+    "context": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.execution",
+          "name": "workspace",
+          "payload": {
+            "path": "/workspace/project"
+          }
+        }
+      ]
+    },
+    "expected_canonical": "{\"items\":[{\"name\":\"workspace\",\"namespace\":\"octo.execution\",\"payload\":{\"path\":\"/workspace/project\"}}],\"schema\":\"octo.context-envelope/v3\"}",
+    "expected_hash": "sha256:c31b32140d6727af23c86294f3ef54ab355e6a106c346c4deda2a225d1c90605"
+  },
+  {
+    "name": "fixed-workspace",
+    "valid": false,
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -480,8 +498,7 @@
         }
       ]
     },
-    "expected_canonical": "{\"items\":[{\"name\":\"workspace\",\"namespace\":\"octo.execution\",\"payload\":{\"mode\":\"fixed\",\"path\":\"/workspace/project\"}}],\"schema\":\"octo.context-envelope/v3\"}",
-    "expected_hash": "sha256:6d2cde1e0ad2b8b52cce5e9f7c3d54cd00d7ad7eb3b04cbf999be3a315630f02"
+    "error": "CONTEXT_SCHEMA_INVALID"
   },
   {
     "name": "binding-device",
@@ -523,7 +540,7 @@
   },
   {
     "name": "random-workspace",
-    "valid": true,
+    "valid": false,
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -536,8 +553,7 @@
         }
       ]
     },
-    "expected_canonical": "{\"items\":[{\"name\":\"workspace\",\"namespace\":\"octo.execution\",\"payload\":{\"mode\":\"random\"}}],\"schema\":\"octo.context-envelope/v3\"}",
-    "expected_hash": "sha256:a0f70efda619eedfaee0cb1b67aad508398054458d5e6e583bb71b8a8d7566bf"
+    "error": "CONTEXT_SCHEMA_INVALID"
   },
   {
     "name": "workspace-scope-removed",
@@ -559,7 +575,7 @@
   },
   {
     "name": "plan-random-workspace",
-    "valid": true,
+    "valid": false,
     "resolved_execution_plan": {
       "agent_source": "provisioned",
       "adapter_type": "codex",
@@ -568,7 +584,8 @@
       "workspace": {
         "mode": "random"
       }
-    }
+    },
+    "error": "CONTEXT_SCHEMA_INVALID"
   },
   {
     "name": "plan-workspace-scope-removed",
@@ -918,7 +935,7 @@
   },
   {
     "name": "instruction-text-only",
-    "valid": true,
+    "valid": false,
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -935,8 +952,7 @@
         }
       ]
     },
-    "expected_canonical": "{\"items\":[{\"name\":\"instructions\",\"namespace\":\"octo.control\",\"payload\":{\"entries\":[{\"text\":\"Keep changes scoped.\"}]}}],\"schema\":\"octo.context-envelope/v3\"}",
-    "expected_hash": "sha256:51ea457ebede0145a9fd2217a62584e9bbabeb81aee840e924e7659ea7fc7157"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "instruction-rejects-legacy-source",
@@ -958,11 +974,11 @@
         }
       ]
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "empty-instructions",
-    "valid": true,
+    "valid": false,
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -975,8 +991,7 @@
         }
       ]
     },
-    "expected_canonical": "{\"items\":[{\"name\":\"instructions\",\"namespace\":\"octo.control\",\"payload\":{\"entries\":[]}}],\"schema\":\"octo.context-envelope/v3\"}",
-    "expected_hash": "sha256:009df4d196faa7c25cab6562164f8af886d48925611487d056037f1f18121e60"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "resource-mcp",
@@ -1319,7 +1334,7 @@
   },
   {
     "name": "instruction-text-preserves-whitespace",
-    "valid": true,
+    "valid": false,
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -1336,13 +1351,12 @@
         }
       ]
     },
-    "expected_canonical": "{\"items\":[{\"name\":\"instructions\",\"namespace\":\"octo.control\",\"payload\":{\"entries\":[{\"text\":\"  我是明略科技的Octo助理\\n\"}]}}],\"schema\":\"octo.context-envelope/v3\"}",
-    "expected_hash": "sha256:2ac49e43506ac01b12993f4c1eef572374fbd4d26620a2073c92c847597fda40"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "instruction-unknown-source",
     "valid": false,
-    "error": "CONTEXT_SCHEMA_INVALID",
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -1364,7 +1378,7 @@
   {
     "name": "instruction-object-source",
     "valid": false,
-    "error": "CONTEXT_SCHEMA_INVALID",
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -1388,7 +1402,7 @@
   {
     "name": "instruction-missing-text",
     "valid": false,
-    "error": "CONTEXT_SCHEMA_INVALID",
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -1409,7 +1423,7 @@
   {
     "name": "instruction-unknown-field",
     "valid": false,
-    "error": "CONTEXT_SCHEMA_INVALID",
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
     "context": {
       "schema": "octo.context-envelope/v3",
       "items": [
@@ -5984,5 +5998,15 @@
       "required_capabilities": ["react"]
     },
     "error": "CONTEXT_SCHEMA_INVALID"
+  },
+  {
+    "name": "plan-no-workspace-override",
+    "valid": true,
+    "resolved_execution_plan": {
+      "agent_source": "provisioned",
+      "adapter_type": "codex",
+      "workdir": "",
+      "approval_mode": "ask"
+    }
   }
 ]

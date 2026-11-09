@@ -211,7 +211,6 @@ for (const fallback of [false, true]) {
       adapter.invoke(
         invokeRequest({
           modelInputParts: mixed,
-          controlInstructions: "CONTROL",
           ...(fallback
             ? {
                 providerSession: { sessionId: "missing" },
@@ -221,11 +220,7 @@ for (const fallback of [false, true]) {
         })
       )
     );
-    const expected = [
-      ...mixed,
-      ...(fallback ? [images[2]] : []),
-      { type: "text", text: "CONTROL" }
-    ];
+    const expected = [...mixed, ...(fallback ? [images[2]] : [])];
     assert.deepEqual(
       fixture.frames.find((frame) => frame.method === "session/prompt").params,
       acpPromptParams("acp-fixture", expected)
@@ -270,7 +265,7 @@ test("Codex and ACP accept a pure-image turn without inventing user text", async
     { acpClientFactory: () => fixture.client }
   );
   const acpEvents = await collect(
-    acp.invoke(invokeRequest({ modelInput: "", modelInputParts: images, controlInstructions: "" }))
+    acp.invoke(invokeRequest({ modelInput: "", modelInputParts: images }))
   );
   assert.equal(acpEvents.at(-1).type, "run.completed");
   assert.deepEqual(
@@ -406,12 +401,14 @@ test(
             modelInputParts: [
               {
                 type: "text",
+                text: "Only answer the image question. Do not read files or run commands."
+              },
+              {
+                type: "text",
                 text: 'Identify the main shape and its color in each supplied image, in order. Reply with only a JSON array of three objects using keys "shape" and "color" and English lowercase values. Inspect the images directly and do not call tools.'
               },
               ...images
             ],
-            controlInstructions:
-              "Only answer the image question. Do not read files or run commands.",
             approvalMode: "ask",
             agentSource: "provisioned",
             agentConfig: {
@@ -451,13 +448,21 @@ test(
 );
 
 for (const scenario of ["first", "resume", "reset", "missing-session"]) {
-  test(`Codex injects mandatory instructions only at session start: ${scenario}`, async () => {
+  test(`Codex forwards caller prompts as ordinary parts without injection: ${scenario}`, async () => {
     const server = codexFixture({ fallback: scenario === "missing-session" });
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
     const events = await collect(
       adapter.invoke(
         invokeRequest({
-          controlInstructions: "我是个人助理",
+          modelInputParts: [{ type: "text", text: "Caller startup prompt" }, ...mixed],
+          ...(scenario === "missing-session"
+            ? {
+                freshFallbackModelInputParts: [
+                  { type: "text", text: "Caller recovery prompt" },
+                  ...mixed
+                ]
+              }
+            : {}),
           ...(scenario === "resume" || scenario === "missing-session"
             ? { providerSession: { sessionId: "previous" } }
             : {})
@@ -469,10 +474,12 @@ for (const scenario of ["first", "resume", "reset", "missing-session"]) {
     if (resume) assert.equal(Object.hasOwn(resume.params, "developerInstructions"), false);
     const start = server.frames.find((frame) => frame.method === "thread/start");
     if (scenario === "resume") assert.equal(start, undefined);
-    else assert.equal(start.params.developerInstructions, "我是个人助理");
-    assert.doesNotMatch(
-      JSON.stringify(server.frames.find((frame) => frame.method === "turn/start").params.input),
-      /我是个人助理/
+    else assert.equal(Object.hasOwn(start.params, "developerInstructions"), false);
+    const input = server.frames.find((frame) => frame.method === "turn/start").params.input;
+    assert.equal(
+      input[0].text,
+      scenario === "missing-session" ? "Caller recovery prompt" : "Caller startup prompt"
     );
+    assert.equal(input.length, mixed.length + 1);
   });
 }

@@ -66,7 +66,6 @@ test("OpenClaw Gateway preserves new thought phases, native answer IDs and comme
     modelInput: "p",
     workdir: process.cwd(),
     context: { schema: "octo.context-envelope/v3", items: [] },
-    controlInstructions: "",
     approvalMode: "full_access",
     agentSource: "provisioned",
     agentConfig: {

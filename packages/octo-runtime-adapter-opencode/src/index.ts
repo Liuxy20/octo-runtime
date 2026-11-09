@@ -1,5 +1,4 @@
 import {
-  initialControlInstructions,
   hasImageInput,
   mapReasoningEffort,
   invocationEnvironment,
@@ -24,9 +23,7 @@ import {
   type InvokeRequest,
   type ProbeResult
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { delimiter, join, parse, resolve } from "node:path";
+import { delimiter, parse, resolve } from "node:path";
 
 export const MINIMUM_OPENCODE_VERSION = "2.1.3";
 
@@ -139,90 +136,69 @@ interface OpenCodeNativeEvent extends OpenCodePart {
 }
 
 /**
- * Build the OpenCode CLI argv/env for one invocation.
- *
- * Runtime context is injected as an extra entry in OpenCode's `instructions`
- * config (a temp markdown file) delivered through OPENCODE_CONFIG_CONTENT,
- * merged onto any inline config so the user's existing OpenCode config is not
- * overwritten. Returns a `cleanup` that removes the temp directory.
- *
+ * 构造本轮 OpenCode 命令、普通输入和执行配置；原生 inline config 保持，
+ * 仅合并本轮 MCP 设置，不生成应用指令文件或追加系统提示词。
  */
-export async function buildOpenCodeCommand(req: InvokeRequest, command = "opencode") {
-  if (hasImageInput(req))
-    throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
-  if (req.approvalMode !== "full_access")
-    throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode permission transport is not qualified");
-  const runEnv = invocationEnvironment(req);
-  const servers = invocationMcpServers(req, runEnv);
-  assertMcpOptions(servers, "opencode", ["toolTimeoutMs"]);
-  const inline = inlineConfig(req);
-  const configuredInstructions = Array.isArray(inline.instructions)
-    ? inline.instructions.filter((value): value is string => typeof value === "string")
-    : [];
-  if (Object.keys(servers).length) {
-    const existing = isRecord(inline.mcp) ? inline.mcp : {};
-    inline.mcp = {
-      ...existing,
-      servers: {
-        ...(isRecord(existing.servers) ? existing.servers : {}),
-        ...Object.fromEntries(
-          Object.entries(servers).map(([name, server]) => [
-            name,
-            {
-              ...(server.type === "stdio"
-                ? {
-                    type: "local",
-                    command: [server.command, ...(server.args ?? [])],
-                    environment: server.env ?? {}
-                  }
-                : { type: "remote", url: server.url, headers: server.headers ?? {} }),
-              disabled: false,
-              ...(server.toolTimeoutMs !== undefined
-                ? { timeout: { execution: server.toolTimeoutMs } }
-                : {})
-            }
-          ])
-        )
-      }
+export function buildOpenCodeCommand(req: InvokeRequest, command = "opencode") {
+  return Promise.resolve().then(() => {
+    if (hasImageInput(req))
+      throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
+    if (req.approvalMode !== "full_access")
+      throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode permission transport is not qualified");
+    const runEnv = invocationEnvironment(req);
+    const servers = invocationMcpServers(req, runEnv);
+    assertMcpOptions(servers, "opencode", ["toolTimeoutMs"]);
+    const inline = inlineConfig(req);
+    if (Object.keys(servers).length) {
+      const existing = isRecord(inline.mcp) ? inline.mcp : {};
+      inline.mcp = {
+        ...existing,
+        servers: {
+          ...(isRecord(existing.servers) ? existing.servers : {}),
+          ...Object.fromEntries(
+            Object.entries(servers).map(([name, server]) => [
+              name,
+              {
+                ...(server.type === "stdio"
+                  ? {
+                      type: "local",
+                      command: [server.command, ...(server.args ?? [])],
+                      environment: server.env ?? {}
+                    }
+                  : { type: "remote", url: server.url, headers: server.headers ?? {} }),
+                disabled: false,
+                ...(server.toolTimeoutMs !== undefined
+                  ? { timeout: { execution: server.toolTimeoutMs } }
+                  : {})
+              }
+            ])
+          )
+        }
+      };
+    }
+    // Reasoning output and non-interactive tool approval are mandatory parts of
+    // this adapter's provider contract.
+    const args = ["run", "--format", "json", "--thinking", "--auto", "--standalone"];
+    if (req.providerSession?.sessionId) args.push("--session", req.providerSession.sessionId);
+    const variant = mapReasoningEffort("opencode", req.agentConfig?.effort);
+    if (req.agentConfig?.model) {
+      const model = req.agentConfig.model;
+      args.push("--model", variant ? `${model.split("#")[0]}#${variant}` : model);
+    }
+    return {
+      command,
+      args,
+      input: providerInputText(req),
+      env: {
+        OPENCODE_CONFIG_CONTENT: JSON.stringify(inline),
+        OPENCODE_CLIENT: "octo-runtime",
+        PWD: req.workdir
+      },
+      rpcMethod: "process.stdin",
+      providerSessionId: req.providerSession?.sessionId,
+      cleanup: () => undefined
     };
-  }
-  // Reasoning output and non-interactive tool approval are mandatory parts of
-  // this adapter's provider contract.
-  const args = ["run", "--format", "json", "--thinking", "--auto", "--standalone"];
-  if (req.providerSession?.sessionId) args.push("--session", req.providerSession.sessionId);
-  const variant = mapReasoningEffort("opencode", req.agentConfig?.effort);
-  if (req.agentConfig?.model) {
-    const model = req.agentConfig.model;
-    args.push("--model", variant ? `${model.split("#")[0]}#${variant}` : model);
-  }
-  // 先校验和转换，再创建资源；写入失败由本层回收，返回后交给 CLI helper。
-  let directory: string | undefined;
-  try {
-    if (initialControlInstructions(req)) {
-      directory = await mkdtemp(join(tmpdir(), "octo-runtime-opencode-"));
-      const instructions = join(directory, "instructions.md");
-      await writeFile(instructions, initialControlInstructions(req), { mode: 0o600 });
-      inline.instructions = [...configuredInstructions, instructions];
-    }
-  } catch (error) {
-    if (directory) await rm(directory, { recursive: true, force: true });
-    throw error;
-  }
-  return {
-    command,
-    args,
-    input: providerInputText(req),
-    env: {
-      OPENCODE_CONFIG_CONTENT: JSON.stringify(inline),
-      OPENCODE_CLIENT: "octo-runtime",
-      PWD: req.workdir
-    },
-    rpcMethod: "process.stdin",
-    providerSessionId: req.providerSession?.sessionId,
-    cleanup: async () => {
-      if (directory) await rm(directory, { recursive: true, force: true });
-    }
-  };
+  });
 }
 
 /** Translate one OpenCode native event/part into canonical events; unrelated events yield an empty list. */

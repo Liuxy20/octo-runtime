@@ -4,7 +4,6 @@ import {
   defineAdapter,
   invocationEnvironment,
   providerInputParts,
-  initialControlInstructions,
   DriverQueue,
   noopRuntimeLog,
   type RuntimeLog,
@@ -278,8 +277,6 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
                       ? { type: "image", mimeType: part.mimeType, data: part.data }
                       : { type: "text", text: part.text }
                 );
-                const instructions = initialControlInstructions(request);
-                if (instructions) contentBlocks.unshift({ type: "text", text: instructions });
                 phase = "prompt";
                 const receipt = await owned.prompt(sessionId, contentBlocks);
                 if (!receipt || receipt.length > 191) throw new DshError("DSH_PROTOCOL_ERROR");

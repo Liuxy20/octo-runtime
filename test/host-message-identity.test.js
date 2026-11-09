@@ -41,7 +41,6 @@ test("Host scopes anonymous segments to tool boundaries and closes every channel
       modelInput: "p",
       workdir: process.cwd(),
       context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
       approvalMode: "full_access",
       agentSource: "provisioned",
       agentConfig: {}

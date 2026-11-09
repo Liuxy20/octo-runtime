@@ -49,7 +49,6 @@ for await (const event of adapter.invoke({
   agentSessionId: randomUUID(),
   prompt: "Reply exactly QUEUE_BOUNDS_OK. Do not call tools.",
   modelInput: "Reply exactly QUEUE_BOUNDS_OK. Do not call tools.",
-  controlInstructions: "",
   context: { schema: "octo.context-envelope/v3", items: [] },
   approvalMode: "full_access",
   agentSource: "preset",

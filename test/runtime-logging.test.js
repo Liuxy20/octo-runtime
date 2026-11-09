@@ -46,6 +46,7 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   const input = {
     inputs: [{ type: "text", text: "SECRET_INPUT" }],
     agentEnv: {
+      workdir: process.cwd(),
       ...{
         schema: "octo.context-envelope/v3",
         items: [

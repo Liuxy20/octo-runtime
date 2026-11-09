@@ -49,7 +49,6 @@ async function fixture(t, mode = "success") {
     workdir: directory,
     approvalMode: "full_access",
     modelInput: "hello",
-    controlInstructions: "control-only",
     agentConfig: {
       providerOptions: {
         dshBin: fixturePath,
@@ -223,7 +222,7 @@ test("DSH canonical contract: committed stream, Unicode, CRLF, usage and indepen
   );
   assert.equal(trace[0].permission, "danger-full-access");
   assert.equal(trace[0].value, f.canary);
-  assert.equal(trace[1].params.contentBlocks[0].text, "control-only");
+  assert.deepEqual(trace[1].params.contentBlocks, [{ type: "text", text: "hello" }]);
   assert.equal(JSON.stringify(events).includes(f.canary), false);
   assert.equal(process.env.OCTO_DSH_VALUE, undefined);
   assert.throws(() => process.kill(trace[0].pid, 0), /ESRCH/);

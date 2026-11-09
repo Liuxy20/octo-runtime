@@ -25,7 +25,6 @@ test(
           workdir: directory,
           providerSession,
           signal: AbortSignal.timeout(80_000),
-          controlInstructions: "Answer the question directly. Do not call tools.",
           agentConfig: { providerOptions: { finalizationTimeoutMs: timeoutMs } }
         })
       ))

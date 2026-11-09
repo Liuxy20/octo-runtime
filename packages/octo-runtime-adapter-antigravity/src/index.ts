@@ -1,5 +1,4 @@
 import {
-  initialControlInstructions,
   defineAdapter,
   hasImageInput,
   invocationEnvironment,
@@ -382,16 +381,7 @@ export function buildAntigravityCommand(
     args.push("--conversation", request.providerSession.sessionId);
   if (request.agentConfig.model) args.push("--model", request.agentConfig.model);
   if (effort) args.push("--effort", effort);
-  // agy has no system-prompt flag. Keep the documented user-channel degradation explicit and never rewrite AGENTS.md.
-  const content = initialControlInstructions(request)
-    ? [
-        {
-          type: "text",
-          text: `Runtime control instructions (apply throughout this session):\n${initialControlInstructions(request)}`
-        },
-        { type: "text", text: `User input:\n${providerInputText(request)}` }
-      ]
-    : providerInputText(request);
+  const content = providerInputText(request);
   const input = `${JSON.stringify({ event: "user", message: { content } })}\n`;
   return { command, args, input, cwd: request.workdir };
 }

@@ -1,0 +1,30 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/334
+baseline: 3f83ecf4607c658fba7664caa6ccb2787ab92baa
+branch: refactor/334-caller-owned-prompts
+phase: implementation-verified
+implementation_commit: 7a76a454
+joint_workspace_commit: b645a474
+review_fix_commit: df754e94
+validation: validation.md
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/session-reset.md
+workflow_read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .github/PULL_REQUEST_TEMPLATE.md
+skills_read:
+  - /Users/lvsijia/.agents/skills/super-dev/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+authorization: 用户要求实施前审查、实施、英文提交和正式 PR 并合并 main；不发布、不扩大 CI。
+scope: Runtime 与独立 client；只读审计 Gateway；不用管 Work App。

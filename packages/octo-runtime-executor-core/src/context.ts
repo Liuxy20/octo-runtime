@@ -1,4 +1,3 @@
-import { isAbsolute } from "node:path";
 import {
   assertAgentSource,
   assertContextEnvelope,
@@ -72,11 +71,6 @@ export function resolveLocalContext(
   const workdir = workspace?.path ?? "";
   if (typeof adapter !== "string" || !adapter)
     throw new TypeError("LOCAL_ADAPTER_CONTEXT_REQUIRED");
-  if (
-    (agentSource !== "preset" || workdir) &&
-    (typeof workdir !== "string" || !isAbsolute(workdir))
-  )
-    throw new TypeError("LOCAL_ABSOLUTE_WORKSPACE_REQUIRED");
   const choices = contextItem(effectiveContext, "octo.execution", "model")?.payload;
   const model = (choices?.selection as Record<string, unknown> | undefined)?.id;
   const effort = (choices?.reasoning as Record<string, unknown> | undefined)?.effort;

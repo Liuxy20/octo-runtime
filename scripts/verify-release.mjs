@@ -341,7 +341,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         adapters: [testAdapter]
       }, {
         inputs: [{type: "text", text: "documentation package example"}],
-        agentEnv: {schema: "octo.context-envelope/v3", items: [
+        agentEnv: {workdir: process.cwd(), schema: "octo.context-envelope/v3", items: [
           {namespace: "octo.execution", name: "adapter", payload: {type: "test"}}
         ]}
       }, event => { if (event.type === "run.completed") completed = true; });

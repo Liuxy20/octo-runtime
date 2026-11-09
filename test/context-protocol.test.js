@@ -109,7 +109,7 @@ ajv.addKeyword("x-octo-unique-header-names", {
 });
 ajv.addSchema(schema);
 const validateContextSchema = ajv.compile({ $ref: `${schema.$id}#/definitions/ContextEnvelope` });
-test("configuration schema permits system instructions only in mandatory with text-only entries", () => {
+test("configuration schema rejects removed instructions in every layer", () => {
   const validate = ajv.compile({ $ref: `${schema.$id}#/definitions/ContextConfiguration` });
   const empty = { schema: "octo.context-envelope/v3", items: [] };
   const item = {
@@ -118,7 +118,7 @@ test("configuration schema permits system instructions only in mandatory with te
     payload: { entries: [{ text: "我是个人助理" }] }
   };
   const mandatory = { ...empty, items: [item] };
-  assert.equal(validate({ defaults: empty, mandatory }), true, JSON.stringify(validate.errors));
+  assert.equal(validate({ defaults: empty, mandatory }), false);
   assert.equal(validate({ defaults: mandatory, mandatory: empty }), false);
   for (const source of ["revision", "platform_policy"]) {
     const invalid = structuredClone(mandatory);
@@ -613,7 +613,6 @@ test("InvokeRequest rejects legacy execution contracts before provider dispatch"
     prompt: "hello",
     workdir: "/tmp",
     modelInput: "hello",
-    controlInstructions: "",
     context: { schema: "octo.context-envelope/v3", items: [] },
     approvalMode: "ask",
     agentSource: "provisioned",

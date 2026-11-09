@@ -2124,8 +2124,7 @@ function threadParams(
     // Dynamic MCP tools are untrusted until Codex asks the client to approve them. `never`
     // rejects those calls before the existing reverse-request handler can answer them.
     approvalPolicy: request.approvalMode === "assisted" ? "on-request" : "untrusted",
-    ...(environmentConfig ? { config: environmentConfig } : {}),
-    ...(extra.threadId ? {} : { developerInstructions: request.controlInstructions })
+    ...(environmentConfig ? { config: environmentConfig } : {})
   };
 }
 

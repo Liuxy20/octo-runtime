@@ -413,7 +413,7 @@ test(
       assert.equal(
         server.writes.find((message) => message.method === "thread/start").params
           .developerInstructions,
-        request.controlInstructions
+        undefined
       );
       assert.equal(
         server.writes.find((message) => message.method === "turn/start").params.input[0].text,

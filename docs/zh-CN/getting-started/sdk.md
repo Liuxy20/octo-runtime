@@ -77,6 +77,29 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 服务接入完成后，业务需要主动执行 AgentRun 时再阅读[调用、事件与控制](../guides/agent-runs.md)。`invoke`、事件消费、交互和取消不属于接入必做步骤；Gateway 会按收到的消息发起调用。
 
+## 调用前准备工作目录
+
+本地 AgentRun 必须由调用方先成功创建绝对工作目录，再通过 `agentEnv.workdir` 或仅含 path 的 `octo.execution/workspace` 传入。SDK 不默认取 cwd，不创建目录，也不在续接/恢复时重建。Runtime Home 是独立的运维目录；OpenClaw 等自行管理工作区的 Agent 可以省略本地覆盖。见[输入校验与 workdir 错误码](../reference/invoke-input.md)。
+
+```ts
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// 应用先创建目录，再提交普通输入；目录复用和最终清理由应用决定。
+const workdir = await mkdtemp(join(tmpdir(), "my-agent-"));
+const agentEnv = {
+  schema: "octo.context-envelope/v3" as const,
+  workdir,
+  items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+};
+for await (const event of client.invoke([{ type: "text", text: "Summarize this directory." }], undefined, undefined, agentEnv)) {
+  console.log(event);
+}
+```
+
+所有使用该目录的执行结束并确认自有资源释放后，应用再决定清理。[DSH 示例](../../examples/dsh-invoke.mts) 展示调用方创建临时目录、消费终态并检查清理的过程。独立 Channel Gateway 仍输出已删除的 fixed-mode payload，且另有提示词迁移要求；采用本次发行前须另行升级该消费者。
+
 ## 启动失败
 
 稳定码分支、安全资源 context、清理事实及 CLI JSON 兼容方式见[启动诊断合同与目录](../guides/startup-diagnostics.md)。

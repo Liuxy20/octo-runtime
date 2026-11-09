@@ -67,6 +67,7 @@ export async function verifyExecutorCore(): Promise<void> {
   const input = {
     inputs: [{ type: "text", text: "public" }],
     agentEnv: {
+      workdir: process.cwd(),
       schema: "octo.context-envelope/v3",
       items: [
         { namespace: "octo.execution", name: "adapter", payload: { type: "release-fixture" } },

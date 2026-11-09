@@ -25,6 +25,7 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
@@ -50,6 +51,8 @@ try {
 两个容易踩的点：Adapter 由 `octo.execution` / `adapter` 这个 Context 项决定，不是构造参数；显式要 `canonical` 才会拿到 `CanonicalEvent`，默认是 Provider 原始帧。
 
 ## 它对你的输入做了什么
+
+应用在调用前准备 `/absolute/prepared/project`。本地执行通过 `agentEnv.workdir` 或仅含 path 的 workspace item 显式提供已存在的绝对目录。Core 不继承 cwd、不创建应用目录、不分配随机工作区，也不在续接/fresh recovery 时重建。自行管理工作区的外部/preset Agent 与 `metadata.workspace: false` Adapter 可以省略覆盖。缺失或非法目录返回稳定 `WORKDIR_*` 原因码，分类为 `OH-ADP-3004`；见[输入校验](../../docs/zh-CN/reference/invoke-input.md)。`prepareRunContext` 与 `WorkspaceAssignments` 已删除；Runtime 自有运维状态另行管理。
 
 校验并冻结请求，渲染本轮的模型输入，解析本地执行环境，然后接纳这次 Run。接纳发生在 Provider 启动之前：身份、容量、关闭状态都在这一步检查。业务 Context 只来自本次调用，Core 不会从会话历史里补。
 

@@ -130,7 +130,7 @@ After checking readiness, submit once on a new connection (optionally include th
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
       "inputs": [{ "type": "text", "text": "Say hello." }],
-      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
+      "agentEnv": { "schema": "octo.context-envelope/v3", "workdir": "/absolute/prepared/project", "items": [] }
     }
   }
 }

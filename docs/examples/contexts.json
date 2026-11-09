@@ -14,7 +14,7 @@
     {
       "namespace": "octo.execution",
       "name": "workspace",
-      "payload": { "mode": "fixed", "path": "/example/project" }
+      "payload": { "path": "/example/project" }
     },
     {
       "namespace": "octo.execution",
@@ -55,11 +55,6 @@
           }
         ]
       }
-    },
-    {
-      "namespace": "octo.control",
-      "name": "instructions",
-      "payload": { "entries": [{ "text": "Answer concisely." }] }
     }
   ]
 }

@@ -111,7 +111,6 @@ for (const scenario of probeOnly ? [] : scenarios) {
       runId: randomUUID(),
       prompt,
       modelInput: prompt,
-      controlInstructions: "",
       context: { schema: "octo.context-envelope/v3", items: [] },
       approvalMode: requestedPermission,
       agentSource: "preset",

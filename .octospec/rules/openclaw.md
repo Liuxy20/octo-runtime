@@ -34,7 +34,7 @@ supersedes: []
 | 目标 Agent | Provider 内的执行目标，由 Context 的 `provider_agent_id` 指定。多个 Agent 可共享一个 Runtime 的同一连接。 |
 | Agent 来源 | `preset` 表示调用已有 Agent；`provisioned` 表示按该来源合同执行。来源与传输方式、连接配置相互独立；来源声明不意味着 Runtime 可以隐式安装 Runtime 或创建 OpenClaw Agent。 |
 
-Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。
+Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。Issue 335 删除公共 workspace.mode；调用 OpenClaw 不需要为 Runtime 制造本地目录。metadata.workspace:false 不把 Provider 工作区当本地路径校验，不覆盖远端工作区，不恢复随机分配或缺失补建，也不新增忽略告警。
 
 ## 本地初始化与连接配置
 
@@ -110,7 +110,7 @@ probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同�
 
 标准 `openclaw` Adapter 只维护标准 Gateway 协议和功能 stage，不叠加 LobsterAI 等 fork 的产品私有协议、版本名单或特殊分支。非标准版本元数据不作为拒绝理由，仅表示尝试现有标准合同，不代表已适配该 fork。确有协议差异时单独新建 Provider Adapter，复用通用能力并独立验证，不混入标准实现。FDE 固定版本部署可对所选 Provider/版本定制开发和验收，固定版本由该交付配置与独立实现负责，不要求通用 Adapter 为此维护每日版本名单或兼容所有未来版本。
 
-创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model、可信系统指令和 deliver:false。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
+创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model 和 deliver:false。应用提示词已由调用方放入普通输入，不通过额外系统提示字段注入。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
 
 权限按业务意图兼容：可用的新版 ask 使用 guarded，ask 通道／授权不可用时直接采用已授权的 full_access；旧版会话参数无法确认人工 reviewer，当前按此原因回退 full/off。回退通过一次 run.notice/provider_diagnostic 告知实际版本、requested、effective 和原因；不额外询问、不改原请求／Context hash，审批桥单独按 effective full 处理本次 allow-once。full 不代表绕过宿主禁止、sandbox 或 harness 限制，不改全局策略；全部已知权限路径不可用时返回真实错误。assisted 仍不支持。
 
@@ -155,11 +155,11 @@ octo-runtime --home /path/to/runtime --profile work adapter probe openclaw
 
 2026-10-16 起，单次调用在生产回调中按真实 runId/sessionKey/审批 ID 过滤广播，再进入有界 DriverQueue：最多 4096 项、累计 4 MiB、单项 256 KiB。溢出清空积压并立即取消所属请求/订阅和关闭客户端，不等待消费者恢复，不重启共享 Host，不将容量失败对账为成功。正常结束保序，提前停止消费取消未完成调用。实现与真实 Gateway 时序证据见[队列容量交付](../journal/shared/2026-10-16-openclaw-queue-bounds-delivery.md)。
 
-[连接解析与私密文件](../../packages/octo-runtime-adapter-openclaw/src/local-gateway.ts)、[Gateway 执行](../../packages/octo-runtime-adapter-openclaw/src/index.ts)、[公共输入默认值](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[目录准备](../../packages/octo-runtime-executor-core/src/execution-preparation.ts)、[连接测试](../../test/openclaw-runtime-connection.test.js)。
+[连接解析与私密文件](../../packages/octo-runtime-adapter-openclaw/src/local-gateway.ts)、[Gateway 执行](../../packages/octo-runtime-adapter-openclaw/src/index.ts)、[公共输入解析](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[目录检查与执行](../../packages/octo-runtime-executor-core/src/index.ts)、[连接测试](../../test/openclaw-runtime-connection.test.js)。
 
 新逻辑会话创建可读 `agent:{agentId}:{encoded-sessionName}-{uuid}` key，独立随机后缀防止同名合并；Provider 包装保留冒号。缺省名称仅由 Core 生成 UUID，Adapter 不决定渠道命名策略。
 
-续聊必须原样复用 `providerSession.sessionId`，先校验 Agent 前缀与扩展归属，再用 hello 实际广告的 `sessions.describe({key})` 只读确认存在及 key，按版本 patch 本轮权限并确认后订阅、执行；不得逐 Run 新建。旧版 patch full/off，新版 patch permissionMode full/guarded。缺失、错归属或 RPC 失败明确失败，不隐式新建、不自动重发；旧 `resumable:false` 的已存在 key 可被显式续接。新回执 resumable:true，续接回执 resumeOutcome:resumed。系统指令仅在实际新建时发送。
+续聊必须原样复用 `providerSession.sessionId`，先校验 Agent 前缀与扩展归属，再用 hello 实际广告的 `sessions.describe({key})` 只读确认存在及 key，按版本 patch 本轮权限并确认后订阅、执行；不得逐 Run 新建。旧版 patch full/off，新版 patch permissionMode full/guarded。缺失、错归属或 RPC 失败明确失败，不隐式新建、不自动重发；旧 `resumable:false` 的已存在 key 可被显式续接。新回执 resumable:true，续接回执 resumeOutcome:resumed。新建和续接均只使用本次调用方准备的普通输入，不另行注入系统指令。
 
 每轮仍独立生成 run/idempotency key，通过 `sessions.messages.subscribe` 取流、`agent.wait` 确认终态、`sessions.abort` 取消，不能因共享 session 而接受前一轮广播。连接验证、执行完成和渠道投递分别判断；`deliver: false` 的本地验证不证明 IM 发消息成功。27 版本新增请求投影与 9.4 真实续接见 [Issue 224](../tasks/224-session-names/validation.md)。
 

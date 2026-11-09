@@ -20,6 +20,7 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
   }
@@ -34,7 +35,7 @@ const input = InvokeInput.check({
 | ------------------------------------ | ---- | --------------------------------------------------------------------------------------- |
 | `inputs`                             | 是   | 本轮按顺序排列的文本与图片分片，图片字节只放这里一次。                                  |
 | `agentEnv`                           | 是   | Context v3 envelope，其中 `octo.execution` / `adapter` 项决定用哪个 Adapter；为空合法。 |
-| `agentEnv.workdir`                   | 否   | Provider 工作目录，默认取宿主工作区；它不是沙箱。                                       |
+| `agentEnv.workdir`                   | 本地调用必需 | 调用方已准备的现有绝对目录，也可在 workspace item 中提供同一路径。无 cwd 默认值，不是沙箱。 |
 | `protocol_mode`                      | 否   | `native`（默认）或 `canonical`。                                                        |
 | `providerSession`                    | 否   | 显式续接的 Provider 会话，绝不会从 `sessionId` 反推重建。                               |
 | `agentEnv.agentConfig`               | 否   | 完整 Provider 配置，含 `providerOptions`，须与 Context 中的选择一致。                   |
@@ -123,6 +124,16 @@ pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 Issue #332 删除 `kernel-client.behavior.json` 及独立 client 的 `/protocol/behavior.json` 导出。调用方停止导入此文件，使用客户端 API 及其文档默认值。IPC Schema 标识改为 `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`，使用旧 v1 标识的注册或引用需要更新；实际 IPC 版本仍为 2。删除无人消费的 `x-octo-methods` 生成元数据，RPC 方法及其请求/结果定义保持。
 
 以下遗留类型从 Schema、生成类型与协议导出中删除：`ContextSelectionEntry`、`ContextResourceEntry`、`ContextContinuityPayload`、`ChannelScope`、`ChannelMessagePart`、`ChannelMessageSender`、`ChannelMessageFlags`、`ChannelMessageFact`、`ChannelContextAppend`、`ContextSyncRequest`、`ContextSyncResult`、`ChannelContextDescriptor`、`ContextCommitResult`。对应的五个校验器 `assertChannelScope`、`assertChannelMessageFact`、`assertChannelContextAppend`、`assertContextSyncResult`、`assertChannelContextDescriptor` 也删除。保留的通用材料结构使用现有 `ContextInlineEntry`、`ContextReferenceEntry`；渠道历史及同步合同归应用。这些导出不提供兼容层，调用方须相应调整导入。
+
+## 工作目录迁移
+
+Issue #335 将 `octo.execution/workspace` 简化为仅含路径的 `{ "path": "/absolute/prepared/project" }`。本地 CLI 与 SDK 执行前，由调用方选择或创建已有绝对目录。Runtime 不隐式取 cwd、不分配随机目录，也不在续接/恢复时重建。外部/preset Agent 与声明 `metadata.workspace: false` 的 Adapter 可不传本地覆盖；OpenClaw 保持 Provider 自有工作区。
+
+删除 `mode`（`fixed`、`random`、`none`），并更新已删除的 `workspace_mode` 回执/投影字段、`prepareRunContext` 和 `WorkspaceAssignments` 导入。旧 mode payload 明确失败，没有兼容转换；已有用户目录不删除。`WORKDIR_REQUIRED`、`WORKDIR_INVALID`、`WORKDIR_NOT_FOUND`、`WORKDIR_NOT_DIRECTORY`、`WORKDIR_UNAVAILABLE` 沿用公开分类 `OH-ADP-3004`，详见[校验与错误说明](../../docs/zh-CN/reference/invoke-input.md)。Runtime 运维目录继续独立管理。源码包版本及 Run/Context/IPC/Adapter wire 版本不变，由既有发行流程选择发布版本。独立 Gateway 采用本次发行前须迁移旧 fixed-mode payload。
+
+## 应用提示词迁移
+
+Issue #334 从 Runtime 及公开合同删除 `octo.control/instructions`、`controlInstructions`、`ContextInstructionEntry`、`ContextInstructionsPayload`、`contextControlInstructions()`、`initialControlInstructions()`。旧项和字段即使为空也拒绝，不保留兼容别名。调用方将应用提示词前置到普通输入 parts，自行决定新建、续接和重建时是否携带；主输入和显式 fallback 输入各自完整。Runtime 不补提示词，也不将其提升为 system/developer/受信角色。MCP、环境变量和执行策略继续放在 agentEnv。详见[会话迁移指南](../../docs/zh-CN/guides/context-and-sessions.md)。独立 Gateway 的消费者仍须另行迁移，本次不声称端到端兼容。
 
 ## 延伸阅读
 

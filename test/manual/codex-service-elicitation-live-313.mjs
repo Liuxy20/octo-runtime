@@ -13,10 +13,8 @@ try {
     workdir: process.cwd(),
     approvalMode: "full_access",
     signal: AbortSignal.timeout(90000),
-    controlInstructions:
-      "Use only the supplied consent_echo MCP tool. Never use shell or edit files.",
     modelInput:
-      "Call the consent_echo tool once, wait for its elicitation response, then report only the tool result.",
+      "Use only the supplied consent_echo MCP tool. Never use shell or edit files.\nCall the consent_echo tool once, wait for its elicitation response, then report only the tool result.",
     context: {
       schema: "octo.context-envelope/v3",
       items: [

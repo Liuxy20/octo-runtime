@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 const input = () => ({
   inputs: [{ type: "text", text: "test" }],
   agentEnv: {
+    workdir: process.cwd(),
     ...{
       schema: "octo.context-envelope/v3",
       items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "size-fixture" } }]

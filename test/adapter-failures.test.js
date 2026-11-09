@@ -62,12 +62,11 @@ for (const [name, create] of [
   test(`${name}: missing cwd reports the directory problem instead of requesting CLI installation`, async () => {
     const cwd = join("/tmp", `octo-missing-${randomUUID()}`);
     const event = await failed(create({ command: process.execPath }), cwd);
-    assert.match(event.payload.message, /工作目录不存在/);
-    assert.ok(event.payload.message.includes(cwd));
-    assert.match(event.payload.message, /ENOENT/);
+    assert.match(event.payload.message, /Working directory does not exist/);
+    assert.equal(event.payload.code, "WORKDIR_NOT_FOUND");
+    assert.equal(event.payload.failure.reasonCode, "WORKDIR_NOT_FOUND");
     assert.equal(event.payload.failure.action.type, "contact_admin");
     assert.notEqual(event.payload.failure.code, "OH-ADP-3002");
-    assert.equal(event.payload.error.code, "ENOENT");
   });
   test(`${name}: missing command in an existing cwd keeps the actual spawn error`, async () => {
     const command = join("/tmp", `octo-no-command-${randomUUID()}`);

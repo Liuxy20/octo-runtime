@@ -85,6 +85,29 @@ if (!cleanup.complete) throw new Error("KERNEL_CLEANUP_INCOMPLETE");
 
 After integration, read [invocation, events, and control](../guides/agent-runs.md) when business code needs to invoke AgentRun. Invocation, event consumption, interaction, and cancellation are not required integration steps; Gateway invokes in response to incoming messages.
 
+## Prepare The Working Directory
+
+Before a local AgentRun, the caller must successfully prepare an absolute working directory and pass it through `agentEnv.workdir` or path-only `octo.execution/workspace`. SDK does not default to cwd, create a directory, or restore a missing one during continuation/recovery. Runtime Home is a separate operational directory. OpenClaw and other Agents that own their workspace can omit the local override. See [input validation and workdir error codes](../reference/invoke-input.md).
+
+```ts
+import { mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+// 应用先创建目录，再提交普通输入；目录复用和最终清理由应用决定。
+const workdir = await mkdtemp(join(tmpdir(), "my-agent-"));
+const agentEnv = {
+  schema: "octo.context-envelope/v3" as const,
+  workdir,
+  items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+};
+for await (const event of client.invoke([{ type: "text", text: "Summarize this directory." }], undefined, undefined, agentEnv)) {
+  console.log(event);
+}
+```
+
+Keep the directory until all executions using it have finished and owned resources have been released. The [DSH example](../../examples/dsh-invoke.mts) shows caller-created temporary storage with terminal consumption and cleanup checks. The independent Channel Gateway still emits the removed fixed-mode payload and has an additional prompt migration requirement; update that consumer separately before adopting this release.
+
 ## Startup failures
 
 See the [startup diagnostic contract and catalog](../guides/startup-diagnostics.md) for stable code branching, safe resource context, cleanup and CLI JSON compatibility.

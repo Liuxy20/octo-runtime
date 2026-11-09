@@ -49,7 +49,7 @@ export class InvokeInput {
   declare providerEpoch?: number;
   /** Display-safe description; defaults to the textual summary of inputs. */
   declare prompt?: string;
-  /** Exact textual provider turn when distinct from the multipart inputs summary. */
+  /** 显式值替换纯文本 inputs 的 Provider 正文；有图片时保留原有有序 parts。 */
   declare modelInput?: string;
   /** JSON metadata for tracing/business identity; not model text or authorization evidence. */
   declare runMetadata?: Record<string, unknown>;
@@ -57,9 +57,9 @@ export class InvokeInput {
   declare providerSession?: ProviderSession;
   /** Fresh/continue intent; defaults to continue with providerSession, fresh otherwise. */
   declare continuityMode?: "fresh" | "continue";
-  /** Caller-provided exact recovery text; no automatic history reconstruction. */
+  /** 调用方完整恢复文本；无显式恢复 parts 时优先于主输入，不自动补历史。 */
   declare freshFallbackModelInput?: string;
-  /** Caller-provided recovery text/image parts; recovery images must be supplied explicitly. */
+  /** 显式恢复 parts 优先于恢复文本和主输入；须保留当前图片及其顺序。 */
   declare freshFallbackModelInputParts?: ModelInputPart[];
   /** Explicitly fail fresh fallback when historical image bytes cannot be supplied. */
   declare freshFallbackImagesUnavailable?: boolean;
@@ -75,10 +75,8 @@ export class InvokeInput {
 export interface AgentEnv extends ContextEnvelope {
   /** Agent ownership: preset for OpenClaw by default, provisioned otherwise. */
   agentSource?: AgentSource;
-  /** Provider cwd; defaults to the resolved workspace (local cwd when omitted). */
+  /** 调用方已准备的明确目录；不从本进程 cwd 或旧会话补默认路径。 */
   workdir?: string;
-  /** Trusted instructions, separate from model business context; derived if omitted. */
-  controlInstructions?: string;
   /** Execution approval policy, normally resolved from contexts; defaults to ask. */
   approvalMode?: ApprovalMode;
   /** Full provider configuration, including providerOptions; context selections must agree. */
@@ -144,6 +142,18 @@ export interface InputInvoke {
 }
 
 export function assertInvokeInput(value: unknown): asserts value is InvokeInput {
+  if (
+    value &&
+    typeof value === "object" &&
+    ("controlInstructions" in value ||
+      ("agentEnv" in value &&
+        value.agentEnv &&
+        typeof value.agentEnv === "object" &&
+        "controlInstructions" in value.agentEnv))
+  )
+    throw new TypeError(
+      "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
+    );
   assertJsonByteLimit(
     value instanceof InvokeInput ? { ...value } : value,
     INVOKE_REQUEST_MAX_BYTES,
@@ -162,7 +172,6 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
       "contexts",
       "agentSource",
       "workdir",
-      "controlInstructions",
       "approvalMode",
       "agentConfig",
       "runtimeLimits"
@@ -271,7 +280,6 @@ export function invocationInput(
     context,
     agentSource,
     workdir,
-    controlInstructions,
     approvalMode,
     agentConfig,
     runtimeLimits,
@@ -308,7 +316,6 @@ export function invocationInput(
         ...contexts,
         agentSource,
         workdir,
-        controlInstructions,
         approvalMode,
         agentConfig,
         runtimeLimits
@@ -319,8 +326,12 @@ export function invocationInput(
   });
 }
 
-/** 执行环境只接受执行/审批/受信指令，绝不解释业务命名空间或将其渲染成提示词。 */
+/** 执行环境只接受执行/审批设置，应用提示词由调用方放入普通输入。 */
 export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
+  if (value && typeof value === "object" && "controlInstructions" in value)
+    throw new TypeError(
+      "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
+    );
   assertJsonByteLimit(value, INVOKE_REQUEST_MAX_BYTES, "INVOKE_REQUEST_TOO_LARGE");
   assertJsonValue(value);
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -332,7 +343,6 @@ export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
     "items",
     "agentSource",
     "workdir",
-    "controlInstructions",
     "approvalMode",
     "agentConfig",
     "runtimeLimits"
@@ -342,15 +352,13 @@ export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
   for (const item of env.items)
     if (!(
       item.namespace === "octo.execution" ||
-      (item.namespace === "octo.security" && item.name === "approval_policy") ||
-      (item.namespace === "octo.control" && item.name === "instructions")
+      (item.namespace === "octo.security" && item.name === "approval_policy")
     ))
       throw new TypeError(
         "agentEnv cannot contain business context; prepare inputs in the application"
       );
-  for (const key of ["workdir", "controlInstructions"] as const)
-    if (env[key] !== undefined && typeof env[key] !== "string")
-      throw new TypeError(`agentEnv.${key} must be a string`);
+  if (env.workdir !== undefined && typeof env.workdir !== "string")
+    throw new TypeError("agentEnv.workdir must be a string");
   if (env.agentSource !== undefined) assertAgentSource(env.agentSource);
   if (env.approvalMode !== undefined) assertApprovalMode(env.approvalMode);
   if (env.runtimeLimits !== undefined) assertRuntimeLimits(env.runtimeLimits);
@@ -385,4 +393,11 @@ export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
     )
       throw new TypeError("agentConfig.providerOptions must be a JSON object");
   }
+  const paths = [
+    env.workdir,
+    env.agentConfig?.workdir,
+    env.items.find((item) => item.namespace === "octo.execution" && item.name === "workspace")
+      ?.payload.path
+  ].filter((path) => path !== undefined);
+  if (paths.some((path) => path !== paths[0])) throw new TypeError("CONTEXT_PLAN_MISMATCH");
 }

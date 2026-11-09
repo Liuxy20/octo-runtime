@@ -45,22 +45,11 @@ export function assertFrozenContextPlan(
   match("adapter", "type", plan.adapter_type);
   match("adapter", "provider_agent_id", plan.provider_agent_id);
   const workspace = execution.workspace;
-  if (!workspace) throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  if (workspace.mode === "fixed") {
+  if (workspace) {
     match("workspace", "path", plan.workdir);
-    if (
-      plan.workspace &&
-      (plan.workspace.mode !== "fixed" || plan.workspace.path !== workspace.path)
-    )
+    if (plan.workspace && plan.workspace.path !== workspace.path)
       throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  }
-  if (workspace.mode === "random" && (plan.workdir !== "" || plan.workspace?.mode !== "random"))
-    throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  if (
-    workspace.mode === "none" &&
-    (plan.agent_source !== "preset" || plan.workdir || plan.workspace?.mode !== "none")
-  )
-    throw new TypeError("CONTEXT_PLAN_MISMATCH");
+  } else if (plan.workspace) throw new TypeError("CONTEXT_PLAN_MISMATCH");
   match("approval_policy", "mode", plan.approval_mode);
   match("model", "id", plan.model);
   match("reasoning", "effort", plan.effort);

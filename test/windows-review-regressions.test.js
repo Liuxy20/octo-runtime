@@ -83,7 +83,6 @@ for (const platform of ["win32", "linux"]) {
     });
     const req = request({ OPENCODE_CONFIG_CONTENT: JSON.stringify(config("context")) });
     req.approvalMode = "full_access";
-    req.controlInstructions = "Runtime instructions";
     req.executionEnvOverrides = payload({
       opencode_config_content: JSON.stringify(config("override"))
     });
@@ -94,9 +93,7 @@ for (const platform of ["win32", "linux"]) {
     const expected = config(platform === "win32" ? "override" : "context");
     assert.deepEqual(actual.provider, expected.provider);
     assert.deepEqual(actual.mcp, expected.mcp);
-    assert.equal(actual.instructions[0], expected.instructions[0]);
-    assert.equal(actual.instructions.length, 2);
-    assert.equal(await readFile(actual.instructions[1], "utf8"), "Runtime instructions");
+    assert.deepEqual(actual.instructions, expected.instructions);
     assert.deepEqual(req, before);
 
     req.executionEnvOverrides = payload({ opencode_config_content: "invalid-json" });

@@ -155,7 +155,6 @@ function fixture({
     runId: "r",
     modelInput: "test",
     prompt: "test",
-    controlInstructions: "",
     context: { schema: "octo.context-envelope/v3", items: [] },
     approvalMode,
     agentSource: "preset",

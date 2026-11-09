@@ -331,6 +331,27 @@ export function isCodexLocalFailureReason(value: unknown): value is string {
   return typeof value === "string" && Object.hasOwn(CODEX_LOCAL_FAILURES, value);
 }
 
+/** 执行目录检查的封闭原因码；native 帧与公开失败分类共用。 */
+export function isWorkdirFailureReason(
+  value: unknown
+): value is
+  | "WORKDIR_REQUIRED"
+  | "WORKDIR_INVALID"
+  | "WORKDIR_NOT_FOUND"
+  | "WORKDIR_NOT_DIRECTORY"
+  | "WORKDIR_UNAVAILABLE" {
+  return (
+    typeof value === "string" &&
+    [
+      "WORKDIR_REQUIRED",
+      "WORKDIR_INVALID",
+      "WORKDIR_NOT_FOUND",
+      "WORKDIR_NOT_DIRECTORY",
+      "WORKDIR_UNAVAILABLE"
+    ].includes(value)
+  );
+}
+
 /** native 仅允许中央目录的本地失败；不开放任意 params 或 Provider 自报错误提升。 */
 export function isCodexLocalFailure(failure: FailureEnvelope): boolean {
   const reason = failure.reasonCode;
@@ -676,6 +697,8 @@ function classify(
     return result(CODEX_LOCAL_FAILURES[explicit], explicit);
   // ACP 已明确声明失败；meta 仅作诊断，不从其中的状态码或文字猜测其他类别。
   if (explicit === "ACP_MODEL_REQUEST_FAILED") return result("OH-PRV-4010", explicit);
+  // 目录失败属于既有调用配置分类，具体原因先于 errno/正文启发式保留。
+  if (isWorkdirFailureReason(explicit)) return result("OH-ADP-3004", explicit);
   for (const [reason, code] of Object.entries({
     UNSUPPORTED_INPUT_MODALITY: "OH-INP-5001",
     IMAGE_RECOVERY_INPUT_REQUIRED: "OH-INP-5001",

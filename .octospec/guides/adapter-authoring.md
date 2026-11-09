@@ -48,9 +48,10 @@ CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json
 4. 在可能的情况下，先发出 create 事件，再发出对应的 delta；Host 的补齐逻辑只用于安全兜底。
 5. 每次调用只产生一个终态事件；Host 会等异步生成器清理完成后再向上游转发该事件。
 6. 必须响应 `request.signal`，把取消请求传给 Provider，并 await 自有资源清理。[SDK 清理工具](../../packages/octo-runtime-adapter-sdk/src/process-cleanup.ts) 已提供有界 TERM/KILL 升级及确认；实际范围由 spawn 所有权和调用参数决定。`spawnJsonLines` 与 Codex 默认 spawn 在 POSIX 创建并清理独立组，leader 退出不代表组内后代退出；Codex 注入的 child 不推定拥有组。当前 Codex/Claude Windows 路径未启用工具的 `processTree`，只确认直接子进程，不承诺全部后代退出。宿主崩溃或进程脱离受管组的限制仍在，不按进程名全机扫描。具体边界见 [Codex](../../packages/octo-runtime-adapter-codex/README.zh.md) 与 [Claude Code](../../packages/octo-runtime-adapter-claude-code/README.zh.md)。
-7. 控制指令应优先通过 Provider 原生的 system、developer 或配置通道传递。Provider 没有独立载体时，必须明确记录所用载体；例如 Antigravity 将控制指令和用户输入放入同一 user 消息的不同 text block，不得宣称为原生 system role。OpenClaw 使用原生额外系统提示载体。
+7. 应用启动提示词只作为调用方准备的普通输入传递；Adapter 不按首轮、续接或 fallback 添加提示词，不提升为 system/developer/受信角色，不新增等价字段或注入 helper。Provider 私有提示词能力不构成 Runtime 公共抽象。保留调用方文本/图片次序，原生映射不得加入空指令块或额外分隔符。
 8. Token 和其他敏感值不得出现在命令行参数、prompt、事件 payload 或工作目录中。
 9. 会话、审批、图片等行为在 Adapter 中按具体合同实现，由宿主管理功能支持范围；不得新增 `executionFeatures` 标签、自有 capabilities、能力字段表或 AbilityProvider 注册体系。当前输出模式仍使用 `protocolSupport`，其简化不在本次文档决定中实施。单独记录真实 Provider 验证范围，不将静态声明当作执行证据。
+10. 本地工作目录由调用方显式提供且已成功创建；Core 在 Provider 操作前检查，Adapter 不默认取 cwd、不分配随机目录、不在续接/fallback 时重建。公共 workspace 仅含 path，没有 mode 或分配回执；外部/preset Agent 与 metadata.workspace:false 的本地覆盖缺省按合同处理，不制造远端 Agent 的本地工作区。Runtime 运维状态和 Provider 自有状态不等于应用目录。
 
 上例演示 canonical 事件生成；公共 `invoke` 的 `InvokeInput` 须显式指定 `{ protocol_mode: "canonical" }`。Adapter 内部通过 `context.protocolMode` 读取已选模式，不能把该内部字段当作公共输入。需要 native 时实现 Driver 与独立控制帧，不能直接声明支持后继续只返回 canonical 事件。native-only Adapter 无须生成 canonical 事件；上述 canonical 事件规则只作用于 canonical 模式。详情见 [模式合同](../rules/output-protocol.md)。
 
@@ -61,7 +62,7 @@ CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json
 - 使用固定样例覆盖文本和 provider 错误；provider 能输出分析过程、工具调用或用量统计时，再覆盖对应事件。
 - 覆盖成功退出、非零退出码、缺少终态事件、清理失败和取消调用。
 - Provider 支持恢复 session 时，校验新建 session 与恢复 session 两种命令形态。
-- 使用文件承载私密 prompt 或控制配置时，文件权限必须是 `0600`，并在调用结束后删除。
+- 使用临时文件承载 MCP 等执行配置时，文件权限必须是 `0600`，并在调用结束后删除；不为已删除的应用指令合同保留临时文件或 system-prompt 参数。
 - 针对固定版本的 provider 执行独立真实验收，遵循[执行责任、专项入口与证据格式](provider-live-acceptance.md)。默认 CI 保留 fake Provider 回归，真实调用为 non-gating；未运行或缺环境明确记录。
 
 [`test/adapters.test.js`](../../test/adapters.test.js) 和 [`test/host.test.js`](../../test/host.test.js) 是基础契约的参考测试套件，并未自动覆盖上述每一种 provider 行为。新增或修改 adapter 时，需要在对应 package 测试、公共契约测试和固定版本在线冒烟测试之间补齐整张验收清单。

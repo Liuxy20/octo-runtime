@@ -6,7 +6,6 @@ import {
   assertAgentSource,
   assertContextEnvelope,
   assertInvokeRequest,
-  contextControlInstructions,
   contextItem,
   InvokeInput,
   type ContextEnvelope,
@@ -109,12 +108,12 @@ export function prepareInvokeInput(value: unknown): {
     schema: CONTEXT_SCHEMA,
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
-      ...(agentSource === "provisioned"
+      ...(env.workdir
         ? [
             {
               namespace: "octo.execution",
               name: "workspace",
-              payload: { mode: "fixed", path: env.workdir ?? process.cwd() }
+              payload: { path: env.workdir }
             }
           ]
         : []),
@@ -144,6 +143,11 @@ export function prepareInvokeInput(value: unknown): {
     agentSource
   );
   const context = structuredClone(contexts);
+  if (
+    (env.workdir !== undefined && env.workdir !== plan.workdir) ||
+    (env.agentConfig?.workdir !== undefined && env.agentConfig.workdir !== plan.workdir)
+  )
+    throw new TypeError("CONTEXT_PLAN_MISMATCH");
   const prompt = input.inputs
     .map((part) => (part.type === "text" ? part.text : "[Image]"))
     .join("\n\n");
@@ -174,10 +178,13 @@ export function prepareInvokeInput(value: unknown): {
       : {}),
     prompt: input.prompt ?? prompt,
     modelInput: input.modelInput ?? prompt,
-    modelInputParts: structuredClone(input.inputs),
+    // 高级调用显式选择的纯文本作为普通内容提交；有图片时始终保留完整有序 parts。
+    modelInputParts:
+      input.modelInput !== undefined && input.inputs.every((part) => part.type === "text")
+        ? [{ type: "text", text: input.modelInput }]
+        : structuredClone(input.inputs),
     context,
-    controlInstructions: env.controlInstructions ?? contextControlInstructions(context),
-    workdir: env.workdir ?? plan.workdir,
+    workdir: plan.workdir,
     approvalMode: env.approvalMode ?? plan.approval_mode,
     runtimeLimits: env.runtimeLimits ?? localRuntimeLimits(plan),
     agentConfig: {

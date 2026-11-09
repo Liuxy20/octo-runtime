@@ -73,6 +73,14 @@ export function providerInputParts(
   if (freshFallback && request.freshFallbackImagesUnavailable)
     throw new TypeError("ARTIFACT_UNAVAILABLE: historical images cannot be restored");
   assertImageRecoveryParts(request);
+  // 显式恢复文本属于调用方完整输入；不能被 Core 保留的当前轮 parts 覆盖。
+  // 图片恢复已由上面的检查保证，禁止用纯文本悄悄丢弃当前图片。
+  if (
+    freshFallback &&
+    request.freshFallbackModelInputParts === undefined &&
+    request.freshFallbackModelInput !== undefined
+  )
+    return [{ type: "text", text: request.freshFallbackModelInput }];
   const parts = freshFallback
     ? (request.freshFallbackModelInputParts ?? request.modelInputParts)
     : request.modelInputParts;

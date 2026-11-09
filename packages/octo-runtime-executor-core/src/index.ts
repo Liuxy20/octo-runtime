@@ -2,14 +2,10 @@ import { prepareInvokeInput } from "./invoke-input.js";
 import { randomUUID } from "node:crypto";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { sanitizePublicValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export { prepareInvokeInput } from "./invoke-input.js";
 export { resolveLocalContext, localRuntimeLimits } from "./context.js";
-export {
-  prepareRunContext,
-  type PreparedRunContext,
-  type WorkspaceAssignments
-} from "./execution-preparation.js";
 import type {
   AdapterInvocationContext,
   AdapterProbeOptions,
@@ -917,6 +913,9 @@ export class AgentExecutor {
 
     try {
       controller.signal.throwIfAborted();
+      // 工作目录由调用方预先创建；启动 Provider 前仅校验，不分配或修复目录。
+      await assertExecutionWorkdir(request, adapter.metadata);
+      controller.signal.throwIfAborted();
       const invocation = adapter.invoke({ ...request, signal: controller.signal }, context);
       iterator = invocation[Symbol.asyncIterator]();
       while (true) {
@@ -1093,11 +1092,12 @@ export class AgentExecutor {
               code:
                 nativeFailureCode === "HOST_ENDED_WITHOUT_TERMINAL"
                   ? "HOST_ENDED_WITHOUT_TERMINAL"
-                  : isStreamCapacityReason(nativeFailureCode)
+                  : isStreamCapacityReason(nativeFailureCode) || isWorkdirFailure(nativeFailureCode)
                     ? nativeFailureCode
                     : "HOST_EXECUTION_FAILED",
               message: String(failure.message),
               ...(isStreamCapacityReason(nativeFailureCode) ||
+              isWorkdirFailure(nativeFailureCode) ||
               (adapterType === "codex" && isCodexLocalFailure(failure.failure))
                 ? { failure: failure.failure }
                 : {})
@@ -1297,6 +1297,51 @@ export class AgentExecutor {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+const WORKDIR_FAILURE_MESSAGES = {
+  WORKDIR_REQUIRED:
+    "A prepared working directory is required; create it and provide its absolute path.",
+  WORKDIR_INVALID: "Working directory must be an absolute path without NUL characters.",
+  WORKDIR_NOT_FOUND: "Working directory does not exist; create it before invoking Runtime.",
+  WORKDIR_NOT_DIRECTORY: "Working directory must point to an existing directory.",
+  WORKDIR_UNAVAILABLE: "Working directory is not accessible; check directory access permissions."
+} as const;
+type WorkdirFailureCode = keyof typeof WORKDIR_FAILURE_MESSAGES;
+
+function isWorkdirFailure(code: unknown): code is WorkdirFailureCode {
+  return typeof code === "string" && Object.hasOwn(WORKDIR_FAILURE_MESSAGES, code);
+}
+
+function workdirFailure(code: WorkdirFailureCode): Error & { code: WorkdirFailureCode } {
+  return Object.assign(new TypeError(`${code}: ${WORKDIR_FAILURE_MESSAGES[code]}`), { code });
+}
+
+/** 外部 Agent 无覆盖时不检查本机目录；本地覆盖始终保留调用方的路径写法。 */
+async function assertExecutionWorkdir(
+  request: InvokeRequest,
+  metadata: HostedAdapterMetadata
+): Promise<void> {
+  if (metadata.workspace === false || (request.agentSource === "preset" && !request.workdir))
+    return;
+  const path = request.workdir;
+  if (!path) throw workdirFailure("WORKDIR_REQUIRED");
+  if (!isAbsolute(path) || path.includes("\0")) throw workdirFailure("WORKDIR_INVALID");
+  let directory: boolean;
+  try {
+    directory = (await stat(path)).isDirectory();
+    if (directory) await access(path, constants.X_OK);
+  } catch (error) {
+    const code = errorCode(error);
+    throw workdirFailure(
+      code === "ENOENT"
+        ? "WORKDIR_NOT_FOUND"
+        : code === "ENOTDIR"
+          ? "WORKDIR_NOT_DIRECTORY"
+          : "WORKDIR_UNAVAILABLE"
+    );
+  }
+  if (!directory) throw workdirFailure("WORKDIR_NOT_DIRECTORY");
 }
 
 /** Keep the Adapter's failure detail; catalog normalization only adds classification. */

@@ -80,6 +80,7 @@ for (const mode of ["native", "canonical"]) {
       const collecting = Array.fromAsync(source).then((value) => {
         frames = value;
       });
+      while (!reads) await nextTurn();
       await nextTurn();
       if (scenario === "split-budget") {
         await advance(t, 80);
@@ -112,10 +113,12 @@ for (const mode of ["native", "canonical"]) {
   for (const abort of [false, true]) {
     test(`${mode}: late next rejection after ${abort ? "cancel" : "deadline"} is observed`, async () => {
       const blocked = Promise.withResolvers();
+      const started = Promise.withResolvers();
       const core = new AgentExecutor();
       core.register({
         ...createExecutorFixture(),
         async *invoke() {
+          started.resolve();
           yield abort ? progress(mode) : terminal(mode);
           await blocked.promise;
         }
@@ -128,6 +131,7 @@ for (const mode of ["native", "canonical"]) {
       );
       await source.next();
       const collecting = Array.fromAsync(source);
+      await started.promise;
       await nextTurn();
       if (abort) core.cancel("late");
       assert.equal((await collecting).at(-1).control.state, abort ? "cancelled" : "failed");

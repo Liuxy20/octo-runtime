@@ -1,5 +1,4 @@
-import { preparedFrames } from "./runtime-fixture.js";
-import { preparedTestInvoke } from "./runtime-fixture.js";
+import { deferred, preparedFrames, preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -15,7 +14,6 @@ const request = {
   modelInput: "p",
   workdir: process.cwd(),
   context: { schema: "octo.context-envelope/v3", items: [] },
-  controlInstructions: "",
   approvalMode: "full_access",
   agentSource: "provisioned",
   agentConfig: {}
@@ -42,7 +40,6 @@ test("host rejects missing mandatory invocation inputs and untyped context befor
   for (const [field, reason] of [
     ["context", /CONTEXT_REQUIRED/],
     ["modelInput", /modelInput must be a non-empty string/],
-    ["controlInstructions", /controlInstructions must be a string/],
     ["approvalMode", /APPROVAL_MODE_UNSUPPORTED/]
   ]) {
     const invalid = { ...request };
@@ -66,6 +63,16 @@ test("host rejects missing mandatory invocation inputs and untyped context befor
         assert.fail(`unexpected ${event.type}`);
     }, /CONTEXT_SCHEMA_INVALID|CONTEXT_UNKNOWN_FIELD/);
   }
+  const events = [];
+  for await (const event of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
+    "contract",
+    { ...request, workdir: "" },
+    { protocolMode: "canonical" }
+  ))
+    events.push(event);
+  const failure = events.find((event) => event.type === "run.failed");
+  assert.equal(failure?.payload.code, "WORKDIR_REQUIRED");
+  assert.equal(failure?.payload.failure.reasonCode, "WORKDIR_REQUIRED");
   assert.equal(invoked, false);
 });
 
@@ -503,6 +510,8 @@ test("host watchdog uses the tool budget while a canonical tool call is open", a
 test("host shutdown aborts every active provider invocation before returning", async () => {
   const host = new AgentExecutor();
   let aborted = 0;
+  let active = 0;
+  const started = deferred();
   host.register({
     metadata: {
       protocolSupport: { protocol: "slow" + ".canonical", modes: ["canonical"], nativeMethods: [] },
@@ -511,7 +520,7 @@ test("host shutdown aborts every active provider invocation before returning", a
     },
     async *invoke(req) {
       yield { protocolVersion: 2, type: "message.create", payload: {} };
-      await new Promise((_, reject) =>
+      await new Promise((_, reject) => {
         req.signal.addEventListener(
           "abort",
           () => {
@@ -519,8 +528,9 @@ test("host shutdown aborts every active provider invocation before returning", a
             reject(new Error("aborted"));
           },
           { once: true }
-        )
-      );
+        );
+        if (++active === 2) started.resolve();
+      });
     }
   });
   const invocations = ["shutdown-1", "shutdown-2"].map((invocationId) =>
@@ -536,7 +546,7 @@ test("host shutdown aborts every active provider invocation before returning", a
       return events;
     })()
   );
-  await new Promise((resolve) => setImmediate(resolve));
+  await started.promise;
 
   await host.shutdown("parent disconnected");
   const results = await Promise.all(invocations);

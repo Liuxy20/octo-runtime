@@ -225,6 +225,11 @@
         "OPERATION_OUTCOME_UNKNOWN",
         "HOST_EXECUTION_FAILED",
         "HOST_ENDED_WITHOUT_TERMINAL",
+        "WORKDIR_REQUIRED",
+        "WORKDIR_INVALID",
+        "WORKDIR_NOT_FOUND",
+        "WORKDIR_NOT_DIRECTORY",
+        "WORKDIR_UNAVAILABLE",
         "PROVIDER_MESSAGE_TOO_LARGE",
         "HOST_FRAME_TOO_LARGE",
         "STREAM_QUEUE_ITEM_TOO_LARGE",
@@ -1206,25 +1211,6 @@
           "if": {
             "properties": {
               "namespace": {
-                "const": "octo.control"
-              },
-              "name": {
-                "const": "instructions"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextInstructionsPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
                 "const": "octo.execution"
               },
               "name": {
@@ -1272,6 +1258,19 @@
               }
             }
           }
+        },
+        {
+          "not": {
+            "required": ["namespace", "name"],
+            "properties": {
+              "namespace": {
+                "const": "octo.control"
+              },
+              "name": {
+                "const": "instructions"
+              }
+            }
+          }
         }
       ],
       "not": {
@@ -1308,32 +1307,13 @@
     },
     "ContextConfiguration": {
       "title": "ContextConfiguration",
-      "description": "Agent defaults and mandatory constraints, stored under one external configuration version. Authorized configuration writers may persist system instructions in mandatory with text-only entries. Ephemeral business content and default-layer instructions are forbidden; callers cannot submit trusted control instructions.",
+      "description": "Agent defaults and mandatory execution constraints stored under one external configuration version. Application prompts belong to caller-provided ordinary inputs, not execution settings.",
       "type": "object",
       "additionalProperties": false,
       "required": ["defaults", "mandatory"],
       "properties": {
         "defaults": {
-          "allOf": [
-            {
-              "$ref": "#/definitions/PersistentContextEnvelope"
-            },
-            {
-              "properties": {
-                "items": {
-                  "items": {
-                    "not": {
-                      "properties": {
-                        "namespace": {
-                          "const": "octo.control"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          ],
+          "$ref": "#/definitions/PersistentContextEnvelope",
           "tsType": "ContextEnvelope"
         },
         "mandatory": {
@@ -1395,7 +1375,7 @@
         "execution": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["adapter_type", "approval_mode", "workspace_mode"],
+          "required": ["adapter_type", "approval_mode"],
           "properties": {
             "adapter_type": {
               "type": "string",
@@ -1411,9 +1391,6 @@
             },
             "approval_mode": {
               "enum": ["ask", "assisted", "full_access"]
-            },
-            "workspace_mode": {
-              "enum": ["fixed", "random", "none"]
             }
           }
         }
@@ -1515,7 +1492,7 @@
     },
     "ContextPreparationReceipt": {
       "title": "ContextPreparationReceipt",
-      "description": "Workspace preparation for the current Run lease and frozen execution Context; it does not prove Provider use of model context.",
+      "description": "Preparation facts for the current Run lease and caller-owned workspace path; they do not prove Provider use of model context or transfer directory ownership to Runtime.",
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -1523,7 +1500,6 @@
         "run_id",
         "lease_id",
         "fencing_token",
-        "workspace_mode",
         "workspace_path",
         "provider_state_dir",
         "warnings"
@@ -1545,9 +1521,6 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
-        },
-        "workspace_mode": {
-          "enum": ["fixed", "random", "none"]
         },
         "workspace_path": {
           "type": "string"
@@ -1666,16 +1639,6 @@
                           },
                           "name": {
                             "const": "references"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.control"
-                          },
-                          "name": {
-                            "const": "instructions"
                           }
                         }
                       }
@@ -1800,43 +1763,16 @@
       ]
     },
     "ContextWorkspacePayload": {
-      "description": "fixed uses the supplied path; random creates a workspace on the AgentSession's first run and reuses it for subsequent runs; none delegates workspace ownership to a preset Agent.",
-      "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode", "path"],
-          "properties": {
-            "mode": {
-              "const": "fixed"
-            },
-            "path": {
-              "type": "string",
-              "minLength": 1
-            }
-          }
-        },
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode"],
-          "properties": {
-            "mode": {
-              "const": "random"
-            }
-          }
-        },
-        {
-          "type": "object",
-          "required": ["mode"],
-          "additionalProperties": false,
-          "properties": {
-            "mode": {
-              "const": "none"
-            }
-          }
+      "description": "Caller-owned, already prepared directory. Runtime validates the concrete local execution path and never allocates or recreates an application workspace.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
         }
-      ]
+      }
     },
     "ContextLimitsPayload": {
       "description": "Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits. Legacy enforcement=observe cannot be combined with v2 settings.",
@@ -1998,31 +1934,6 @@
         }
       }
     },
-    "ContextInstructionEntry": {
-      "description": "Control instruction containing only non-empty text. Authorization belongs to the authenticated upstream boundary, not to a caller-supplied source label.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["text"],
-      "properties": {
-        "text": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "ContextInstructionsPayload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["entries"],
-      "properties": {
-        "entries": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/ContextInstructionEntry"
-          }
-        }
-      }
-    },
     "ResolvedRuntimeSelection": {
       "title": "ResolvedRuntimeSelection",
       "description": "Worker-frozen Context runtime candidates. Explicit selection cannot fail over.",
@@ -2160,29 +2071,6 @@
         },
         "mcp": {
           "$ref": "#/definitions/ContextMcpPayload"
-        }
-      },
-      "if": {
-        "properties": {
-          "agent_source": {
-            "const": "provisioned"
-          },
-          "workdir": {
-            "const": ""
-          }
-        },
-        "required": ["agent_source", "workdir"]
-      },
-      "then": {
-        "required": ["workspace"],
-        "properties": {
-          "workspace": {
-            "properties": {
-              "mode": {
-                "const": "random"
-              }
-            }
-          }
         }
       },
       "allOf": [
@@ -3321,7 +3209,6 @@
         "runId",
         "prompt",
         "workdir",
-        "controlInstructions",
         "context",
         "agentConfig",
         "modelInput",
@@ -3415,10 +3302,6 @@
           "description": "Provider process cwd. Sandboxing, containers, or host permissions provide the actual access boundary.",
           "type": "string"
         },
-        "controlInstructions": {
-          "description": "Trusted session instructions. Adapters inject them only when starting a provider session; resuming an existing session must not inject or clear them.",
-          "type": "string"
-        },
         "context": {
           "$ref": "#/definitions/ContextEnvelope"
         },
@@ -3445,7 +3328,14 @@
         "agentSource": {
           "$ref": "#/definitions/AgentSource"
         }
-      }
+      },
+      "allOf": [
+        {
+          "not": {
+            "required": ["controlInstructions"]
+          }
+        }
+      ]
     },
     "ActivityInfo": {
       "type": "object",
@@ -4260,16 +4150,6 @@
                         "const": "approval_policy"
                       }
                     }
-                  },
-                  {
-                    "properties": {
-                      "namespace": {
-                        "const": "octo.control"
-                      },
-                      "name": {
-                        "const": "instructions"
-                      }
-                    }
                   }
                 ]
               }
@@ -4280,9 +4160,6 @@
           "$ref": "#/definitions/AgentSource"
         },
         "workdir": {
-          "type": "string"
-        },
-        "controlInstructions": {
           "type": "string"
         },
         "approvalMode": {
@@ -4308,6 +4185,11 @@
                 }
               }
             }
+          }
+        },
+        {
+          "not": {
+            "required": ["controlInstructions"]
           }
         }
       ]

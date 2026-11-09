@@ -42,7 +42,7 @@ Claude Code 目前支持 `can_use_tool` 相关交互，其他控制方法需要�
 
 OpenClaw 使用 Gateway 中已有的 Agent，需要显式提供 `provider_agent_id`，例如 `main`。工作目录由该 Gateway 管理，不接受通过本轮调用传入非空环境变量。
 
-其他由 Runtime 准备执行配置的 Provider，通常使用本轮解析出的本地 workdir。工作目录本身不限制文件系统或网络权限。
+本地执行每次都要求调用方传入已存在的绝对 workdir；Runtime 不默认取 cwd，不创建或恢复目录。外部/preset Agent 与 `metadata.workspace: false` Adapter 可以省略本地覆盖。工作目录本身不限制文件系统或网络权限，见[工作目录校验](invoke-input.md)。
 
 图片输入、sandbox 和会话恢复还取决于具体 Adapter 和 Provider 版本，详见[各 Adapter README](../../../packages/README.md)。文档测试使用测试用 Adapter；真实 Provider 的联调范围见[维护与验证](../maintenance.md)。
 

@@ -14,6 +14,7 @@ try {
   await verifyKernelInvoke(endpoint, {
     inputs: [{ type: "text", text: "public SDK" }],
     agentEnv: {
+      workdir: process.cwd(),
       schema: "octo.context-envelope/v3",
       items: [
         { namespace: "octo.execution", name: "adapter", payload: { type: "release-fixture" } },

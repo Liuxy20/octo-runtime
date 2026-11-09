@@ -3,12 +3,16 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 import { randomUUID } from "node:crypto";
 import { invokeOnce } from "./invoke.mts";
 
-const [endpoint, adapterType = "codex"] = process.argv.slice(2);
-if (!endpoint) throw new Error("Usage: node attach.mts <endpoint> [adapter-type]");
+const [endpoint, adapterType = "codex", workdir] = process.argv.slice(2);
+if (!endpoint || (adapterType !== "openclaw" && !workdir))
+  throw new Error(
+    "Usage: node attach.mts <endpoint> <adapter-type> <absolute-existing-workdir>; omit workdir for openclaw"
+  );
 const input = InvokeInput.check({
   invocationId: randomUUID(),
   inputs: [{ type: "text", text: "Reply with a short greeting." }],
   agentEnv: {
+    ...(workdir ? { workdir } : {}),
     schema: "octo.context-envelope/v3",
     items: [
       {

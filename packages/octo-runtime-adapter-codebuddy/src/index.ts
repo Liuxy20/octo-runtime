@@ -1,7 +1,4 @@
-import {
-  initialControlInstructions,
-  invocationEnvironment
-} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { invocationEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
   failureMessage,
@@ -320,7 +317,7 @@ export function createCodeBuddyAdapter({
               }
             }
           };
-          const prompt = `${providerInputText(req)}\n\n${initialControlInstructions(req)}`;
+          const prompt = providerInputText(req);
           const promptParams = acpPromptParams(session.id, prompt);
           const promptRequestId = client.reserveRequestId();
 

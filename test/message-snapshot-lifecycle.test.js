@@ -76,7 +76,6 @@ test("Host closes a still-streaming snapshot on root completion", async () => {
       modelInput: "p",
       workdir: process.cwd(),
       context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
       approvalMode: "full_access",
       agentSource: "provisioned",
       agentConfig: {}

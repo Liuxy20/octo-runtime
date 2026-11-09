@@ -23,6 +23,7 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
+    workdir: "/absolute/prepared/project",
     approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
     items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
@@ -48,6 +49,8 @@ try {
 Two details that trip people up: the Adapter is chosen by the `octo.execution` / `adapter` Context item, not by a constructor option; and asking for `canonical` gives you `CanonicalEvent` instead of Provider frames.
 
 ## What the executor does with your input
+
+The application prepares `/absolute/prepared/project` before calling. Local execution requires an explicit existing absolute directory through `agentEnv.workdir` or a path-only workspace item. Core does not inherit cwd, create application directories, allocate random workspaces or restore a missing directory during resume/fresh recovery. Workspace-owning external/preset Agents and `metadata.workspace: false` Adapters may omit the override. Missing/invalid paths produce stable `WORKDIR_*` reasons classified as `OH-ADP-3004`; see [input validation](../../docs/en/reference/invoke-input.md). `prepareRunContext` and `WorkspaceAssignments` are removed; Runtime operational state is separate.
 
 It validates and freezes the request, renders this turn's model input, resolves the local environment, and admits the run. Admission happens before any Provider starts: identity, capacity, and closed-state checks all run there. Business Context comes from this invocation only — Core never fills a gap from session history.
 

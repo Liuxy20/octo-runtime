@@ -163,7 +163,7 @@ export function executionContext(plan, items = []) {
     {
       namespace: "octo.execution",
       name: "workspace",
-      payload: plan.workspace ?? { mode: "fixed", path: plan.workdir }
+      payload: plan.workspace ?? { path: plan.workdir }
     },
     {
       namespace: "octo.execution",
@@ -235,7 +235,6 @@ export function invokeRequest(overrides = {}) {
     runId: "run-test",
     prompt: "Display-safe input",
     modelInput: "Provider model input",
-    controlInstructions: "Keep changes scoped.",
     context: contextEnvelope(),
     runMetadata: { namespace: "test", triggerOccurrenceId: "test/invoke" },
     approvalMode: "ask",

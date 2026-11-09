@@ -9,7 +9,7 @@ import { codexMcpConfig } from "./mcp.js";
  * Assembly entry point for the Codex adapter.
  *
  * 描述对象注册时创建独立 scope；按兼容配置选择常驻服务，再绑定本轮 channel。
- * scope 负责最终关闭，逐轮 developer instructions 仍放在原生 thread 参数中。
+ * scope 负责最终关闭；应用提示词随普通 turn 输入传递，不写入 thread 指令参数。
  */
 import {
   defineAdapter,
@@ -60,10 +60,9 @@ export {
  * Convert an Octo Runtime InvokeRequest into a launchable app-server process spec.
  *
  * The user prompt never appears in argv; it is written to stdin later via
- * turn/start. The parent process environment is inherited whole and only
- * The complete real CODEX_HOME is reused. Per-run instructions are sent through
- * thread/start or thread/resume `developerInstructions`, never written to the
- * user's config.toml.
+ * turn/start. The parent process environment and the complete real CODEX_HOME
+ * are reused without writing the user's config.toml. Application prompts remain
+ * ordinary turn input and are not promoted to developer instructions.
  */
 export function buildCodexCommand(
   req: InvokeRequest,

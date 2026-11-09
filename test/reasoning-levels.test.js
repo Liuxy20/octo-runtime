@@ -20,7 +20,6 @@ const request = {
   agentSource: "provisioned",
   context: { schema: "octo.context-envelope/v3", items: [] },
   workdir: process.cwd(),
-  controlInstructions: "",
   modelInput: "hello",
   prompt: "hello",
   approvalMode: "full_access",

@@ -22,6 +22,7 @@ MCP 让 Agent 通过工具访问外部系统，例如查询项目资料、读取
   "protocol_mode": "canonical",
   "inputs": [{ "type": "text", "text": "Use the project tools to summarize the current task." }],
   "agentEnv": {
+    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
       { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
@@ -56,6 +57,7 @@ MCP 让 Agent 通过工具访问外部系统，例如查询项目资料、读取
   "protocol_mode": "canonical",
   "inputs": [{ "type": "text", "text": "List the available project documents." }],
   "agentEnv": {
+    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
       { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },

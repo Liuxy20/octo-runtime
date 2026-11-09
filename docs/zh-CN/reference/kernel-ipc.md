@@ -130,7 +130,7 @@ macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
       "inputs": [{ "type": "text", "text": "Say hello." }],
-      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
+      "agentEnv": { "schema": "octo.context-envelope/v3", "workdir": "/absolute/prepared/project", "items": [] }
     }
   }
 }

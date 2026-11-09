@@ -71,7 +71,6 @@ try {
     sessionGeneration: 0,
     prompt,
     modelInput: prompt,
-    controlInstructions: "",
     context: { schema: "octo.context-envelope/v3", items: [] },
     approvalMode: "full_access",
     agentSource: "provisioned",
