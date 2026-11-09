@@ -22,7 +22,7 @@ test("sessionName validators and wire schemas agree on bounded caller-owned disp
   const cases = JSON.parse(
     readFileSync(
       new URL(
-        "../packages/octo-runtime-protocol/schema/session-name-fixtures.json",
+        "../packages/octo-runtime-protocol/test/fixtures/session-name-fixtures.json",
         import.meta.url
       )
     )

@@ -30,7 +30,7 @@ export async function execute(endpoint: string, input: InvokeInput) {
 
 两个包从同一 tag 同版本发布。runtime 内置自己的 client/protocol，任一 tgz 均可单独离线安装；完整 SDK 原有 `/executor-kernel`、`/protocol` 路径保持。应用同时安装两种发行物时可能有两个模块副本：错误判断使用产生错误的 API 对应的类，或公开 code，不依赖跨发行物的函数 ===、instanceof 或内部拒绝证据互认。
 
-npm 版本与 IPC v2、Run 7、Context v3 分别管理。同次发行组合属于支持范围；其他组合需要按相同 wire 合同明确验证。status 在提交前拒绝不支持的 IPC 版本，不增加协商、降级或自动重放。原始 schema 位于 `/protocol/schema.json`、`/protocol/ipc-schema.json`、`/protocol/ipc-fixtures.json`、`/protocol/behavior.json`。传输仍限定本地 Unix socket/Windows named pipe 和现有系统账号信任边界。
+npm 版本与 IPC v2、Run 7、Context v3 分别管理。同次发行组合属于支持范围；其他组合需要按相同 wire 合同明确验证。status 在提交前拒绝不支持的 IPC 版本，不增加协商、降级或自动重放。独立 client 在 `/protocol/schema.json` 和 `/protocol/ipc-schema.json` 提供两个 Draft-07 Schema，另在原有 `/protocol/ipc-fixtures.json` 路径提供一致性样本。`/protocol/behavior.json` 已删除，默认值归客户端实现。IPC Schema 标识改为 `kernel-ipc:v2`，实际 wire 版本不变。扩展语义检查及闲置导出删除清单见[校验边界与升级说明](../../../packages/octo-runtime-protocol/README.zh.md)。传输仍限定本地 Unix socket/Windows named pipe 和现有系统账号信任边界。
 
 ## 1. 快速接入 KernelService
 

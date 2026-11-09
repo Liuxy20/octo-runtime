@@ -7,6 +7,19 @@ import { parseNpmPackResult } from "./parse-npm-pack-result.mjs";
 export const clientPackageName = "@mininglamp-oss/octo-runtime-client";
 export const protocolPackageName = "@mininglamp-oss/octo-runtime-protocol";
 
+/** 只交付两份协议定义与已公开的 IPC 一致性样本，不递归收集测试或客户端配置。 */
+export async function copyClientProtocolAssets(root, target) {
+  const source = join(root, "packages/octo-runtime-protocol");
+  await mkdir(join(target, "schema"), { recursive: true });
+  for (const name of ["protocol.schema.json", "kernel-ipc.schema.json"])
+    await cp(join(source, "schema", name), join(target, "schema", name));
+  await mkdir(join(target, "fixtures"), { recursive: true });
+  await cp(
+    join(source, "test/fixtures/kernel-ipc-fixtures.json"),
+    join(target, "fixtures/kernel-ipc-fixtures.json")
+  );
+}
+
 /** 同一构建/版本打包轻量客户端；仅收集唯一共享协议，不包含服务端依赖。 */
 export async function packClientRelease({ root, releaseVersion, output, npm }) {
   const temporary = await mkdtemp(join(tmpdir(), "octo-client-release-"));
@@ -22,7 +35,7 @@ export async function packClientRelease({ root, releaseVersion, output, npm }) {
     const protocolTarget = join(temporary, "node_modules", protocolPackageName);
     await mkdir(protocolTarget, { recursive: true });
     await cp(join(protocolSource, "dist"), join(protocolTarget, "dist"), { recursive: true });
-    await cp(join(protocolSource, "schema"), join(temporary, "schema"), { recursive: true });
+    await copyClientProtocolAssets(root, temporary);
     const protocol = JSON.parse(await readFile(join(protocolSource, "package.json"), "utf8"));
     if (Object.keys(protocol.dependencies ?? {}).length)
       throw new Error("Review new protocol runtime dependencies before packing the client");

@@ -14,7 +14,7 @@
       "types": "./dist/public/dsh.d.ts",
       "import": "./dist/public/dsh.js"
     },
-    "./executor-kernel/ipc-fixtures.json": "./packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json",
+    "./executor-kernel/ipc-fixtures.json": "./packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json",
     "./protocol/schema.json": "./packages/octo-runtime-protocol/schema/protocol.schema.json",
     "./executor-kernel/ipc-schema.json": "./packages/octo-runtime-protocol/schema/kernel-ipc.schema.json",
     "./executor-kernel": {
@@ -38,7 +38,8 @@
     "octo-runtime": "apps/cli/dist/index.js"
   },
   "files": [
-    "packages/octo-runtime-protocol/schema/*.json",
+    "packages/octo-runtime-protocol/schema/*.schema.json",
+    "packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json",
     "dist/public",
     "apps/cli/dist/**/*.js",
     "apps/cli/dist/build-info.json",

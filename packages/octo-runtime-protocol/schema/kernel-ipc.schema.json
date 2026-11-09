@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "urn:mininglamp-oss:octo-runtime:kernel-ipc:v1",
-  "title": "Kernel IPC v1",
+  "$id": "urn:mininglamp-oss:octo-runtime:kernel-ipc:v2",
+  "title": "Kernel IPC v2",
   "description": "One UTF-8 LF-terminated JSON-RPC request per local connection. No batches. Closing a connection never cancels execution. Source sequence numbers belong to the Kernel instance. Receipts and events retain the original Run protocol identities.",
   "definitions": {
     "Request": {
@@ -433,106 +433,5 @@
       "description": "Open error namespace; preserve unknown codes and data."
     }
   },
-  "$ref": "#/definitions/Request",
-  "x-octo-methods": [
-    {
-      "method": "status",
-      "name": "Status",
-      "params": {
-        "$ref": "#/definitions/EmptyParams"
-      },
-      "result": {
-        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelStatus"
-      },
-      "stream": false,
-      "sideEffect": false
-    },
-    {
-      "method": "adapter.list",
-      "name": "List",
-      "params": {
-        "$ref": "#/definitions/EmptyParams"
-      },
-      "result": {
-        "type": "array",
-        "items": {
-          "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/HostedAdapterMetadataWire"
-        }
-      },
-      "stream": false,
-      "sideEffect": false
-    },
-    {
-      "method": "agent_run.invoke",
-      "name": "Submit",
-      "params": {
-        "$ref": "#/definitions/InvokeParams"
-      },
-      "result": {
-        "$ref": "#/definitions/InvokeResult"
-      },
-      "stream": false,
-      "sideEffect": true
-    },
-    {
-      "method": "agent_run.get",
-      "name": "Get",
-      "params": {
-        "$ref": "#/definitions/GetParams"
-      },
-      "result": {
-        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunSnapshot"
-      },
-      "stream": false,
-      "sideEffect": false
-    },
-    {
-      "method": "agent_run.subscribe",
-      "name": "Subscribe",
-      "params": {
-        "$ref": "#/definitions/SubscribeParams"
-      },
-      "result": {
-        "$ref": "urn:mininglamp-oss:octo-runtime:protocol-schema#/definitions/KernelRunSnapshot"
-      },
-      "stream": true,
-      "sideEffect": false
-    },
-    {
-      "method": "agent_run.cancel",
-      "name": "Cancel",
-      "params": {
-        "$ref": "#/definitions/CancelParams"
-      },
-      "result": {
-        "$ref": "#/definitions/CancelResult"
-      },
-      "stream": false,
-      "sideEffect": true
-    },
-    {
-      "method": "agent_run.respond",
-      "name": "Respond",
-      "params": {
-        "$ref": "#/definitions/RespondParams"
-      },
-      "result": {
-        "$ref": "#/definitions/EmptyResult"
-      },
-      "stream": false,
-      "sideEffect": true
-    },
-    {
-      "method": "agent_run.native.respond",
-      "name": "RespondNative",
-      "params": {
-        "$ref": "#/definitions/RespondNativeParams"
-      },
-      "result": {
-        "$ref": "#/definitions/EmptyResult"
-      },
-      "stream": false,
-      "sideEffect": true
-    }
-  ]
+  "$ref": "#/definitions/Request"
 }

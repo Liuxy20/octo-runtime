@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 332：Schema 职责清理](tasks/332-schema-ownership/brief.md)：最新 main 独立 worktree、96 分规划后实施；协议/默认值/测试分离，13 个闲置定义清理，双包验收与审查见[验证](tasks/332-schema-ownership/validation.md)。不扩大 CI；正式 PR/main 状态以远端为准。
+
 - [CLI 生命周期命令平铺](tasks/flatten-runtime-cli/brief.md)：删除 executor-kernel 前缀，[实施前可执行性 96 分](tasks/flatten-runtime-cli/assessment.md)，实际验证单独记录。
 
 - [Runtime/client 当前发行版本](tasks/client-release-version/brief.md)：[1.1.12 候选验证与发布边界](tasks/client-release-version/validation.md)。npm 按 1.1.12 继续发行，不由 IPC 版本决定主版本。

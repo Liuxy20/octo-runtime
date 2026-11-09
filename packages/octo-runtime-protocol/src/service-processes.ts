@@ -1,4 +1,5 @@
 import type { KernelStatus, ServiceProcessSnapshot } from "./generated/protocol-types.js";
+import { KERNEL_IPC_VERSION } from "./generated/protocol-types.js";
 
 const record = (value: unknown): Record<string, unknown> => {
   if (!value || typeof value !== "object" || Array.isArray(value))
@@ -68,7 +69,7 @@ export function assertKernelStatus(value: unknown): asserts value is KernelStatu
           "service_processes"
         ].includes(key)
     ) ||
-    item.ipc_version !== 2 ||
+    item.ipc_version !== KERNEL_IPC_VERSION ||
     typeof item.kernel_instance_id !== "string" ||
     !item.kernel_instance_id ||
     !positive(item.pid) ||

@@ -16,11 +16,15 @@ Start with the [SDK quickstart](../getting-started/sdk.md) for a first integrati
 | `/protocol`                          | InvokeInput, output/context types and public validators                                  |
 | `/protocol/schema.json`              | Shared protocol schema                                                                   |
 | `/executor-kernel/ipc-schema.json`   | IPC v2 schema                                                                            |
-| `/executor-kernel/ipc-fixtures.json` | Test samples of valid and invalid IPC messages                                           |
+| `/executor-kernel/ipc-fixtures.json` | Published conformance samples, separate from protocol definitions                        |
 
 All paths are under `@mininglamp-oss/octo-runtime`. For example, import the client from `@mininglamp-oss/octo-runtime/executor-kernel`. Internal workspace packages are private; applications use the public paths above.
 
 Applications consuming an existing Kernel can install only `@mininglamp-oss/octo-runtime-client` and import `attachKernel` from its root. They do not need the full Runtime package or a Runtime checkout.
+
+The standalone client publishes the same two schemas at `/protocol/schema.json` and `/protocol/ipc-schema.json`, and preserves `/protocol/ipc-fixtures.json` for conformance samples. Repository fixtures live in `packages/octo-runtime-protocol/test/fixtures/`; only the IPC samples are shipped. Client defaults are maintained by the client implementation; `/protocol/behavior.json` has been removed.
+
+Both schemas use Draft-07. Standard validators enforce the standard keywords, while `x-octo-*` semantics require explicit support. Runtime validators additionally enforce byte/depth budgets, Unicode scalar strings, uniqueness, cross-field consistency and execution state rules. Passing standard structural validation alone is insufficient for a complete IPC implementation.
 
 ## Create a Service
 
@@ -78,6 +82,8 @@ Applications that create Kernel normally use the service's `close()`. An applica
 ## IPC Message Format
 
 IPC protocol version is 2. It is numbered independently from Run schema version 7, Context `octo.context-envelope/v3`, and internal Adapter transport version 2.
+
+The IPC Schema `$id` is `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`. Registrations and references using the former v1 identifier must be updated; the wire version remains 2. The unused `x-octo-methods` generator metadata and legacy channel/history types and validators have been removed. See the [upgrade notes](../../../packages/octo-runtime-protocol/README.md) for the explicit deletion list. RPC methods below remain unchanged.
 
 Use a Unix domain socket on macOS/Linux or a Named Pipe on Windows. Each connection sends one UTF-8 JSON-RPC 2.0 request ending with LF. Its `id` must be a nonempty string. Numeric IDs, batch requests, and top-level or params fields undefined by the schema are rejected.
 
@@ -178,4 +184,4 @@ Byte limits count serialized data, rather than total process memory. Trusted Ada
 
 Kernel host restart does not restore old output or rerun old executions. Applications decide how to proceed when a result is `lost` or unknown. See [Output and Control](output-and-control.md).
 
-Sources: [IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json), [fixtures](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json), [client types](../../../packages/octo-runtime-client/src/types.ts), [client](../../../packages/octo-runtime-client/src/client.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts).
+Sources: [IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json), [conformance fixtures](../../../packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json), [client types](../../../packages/octo-runtime-client/src/types.ts), [client](../../../packages/octo-runtime-client/src/client.ts), [server](../../../packages/octo-runtime-executor-kernel/src/server.ts).

@@ -216,28 +216,6 @@ export type ContextRuntimeSelectionPayload1 =
       mode?: "explicit";
     };
 /**
- * A channel continuity descriptor. The x-octo-matching-trigger-fields keyword requires trigger_fact.message_id == trigger_message_id and matching presence/value of trigger_fact.message_seq and trigger_seq.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextContinuityPayload".
- */
-export type ContextContinuityPayload = ChannelContextDescriptor & {
-  session_generation?: {
-    [k: string]: unknown;
-  };
-  trigger_seq?: {
-    [k: string]: unknown;
-  };
-  trigger_fact?: {
-    message_seq?: {
-      [k: string]: unknown;
-    };
-    occurred_at_ms?: {
-      [k: string]: unknown;
-    };
-  };
-};
-/**
  * Worker-frozen Context runtime candidates. Explicit selection cannot fail over.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -275,13 +253,6 @@ export type InteractionRequestedPayload = InteractionRequestedPayload1;
  * via the `definition` "ApprovalDisplayDetails".
  */
 export type ApprovalDisplayDetails = Record<string, unknown>;
-/**
- * Bounded history result. complete means only that the requested window was returned, not that the local journal is authoritative.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextSyncResult".
- */
-export type ContextSyncResult = ContextSyncResult1;
 /**
  * Provider-neutral per-invocation MCP server definition.
  *
@@ -2234,39 +2205,12 @@ export interface ContextApprovalPolicyPayload {
   mode: ApprovalMode;
 }
 /**
- * Untrusted inline selection text with optional resource reference, source metadata and summary. Source metadata is not an authorization claim.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextSelectionEntry".
- */
-export interface ContextSelectionEntry {
-  text: string;
-  resource_ref?: string;
-  source?:
-    | {
-        [k: string]: unknown;
-      }
-    | string;
-  summary?: string;
-}
-/**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextMcpLocator".
  */
 export interface ContextMcpLocator {
   server_ref: string;
   tool: string;
-}
-export interface ContextResourceEntry {
-  resource_ref: string;
-  resolver: "mcp";
-  locator: {};
-  /**
-   * Frozen non-secret JSON parameters supplied by the authenticated resolver plan, not model-generated commands.
-   */
-  params?: Record<string, unknown>;
-  authorization_ref?: string;
-  revision?: string;
 }
 /**
  * Control instruction containing only non-empty text. Authorization belongs to the authenticated upstream boundary, not to a caller-supplied source label.
@@ -2283,84 +2227,6 @@ export interface ContextInstructionEntry {
  */
 export interface ContextInstructionsPayload {
   entries: ContextInstructionEntry[];
-}
-/**
- * Snapshot selection descriptor in ExecutionEnvelope. Scope, consumer_key, and session_generation isolate the consumption cursor.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelContextDescriptor".
- */
-export interface ChannelContextDescriptor {
-  scope: ChannelScope;
-  consumer_key: string;
-  session_generation: number;
-  trigger_message_id: string;
-  trigger_seq?: number;
-  trigger_fact: ChannelMessageFact;
-}
-/**
- * Platform-neutral channel isolation key. account_id may be null but remains explicit; an absent thread_id selects the conversation root.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelScope".
- */
-export interface ChannelScope {
-  tenant_id: string;
-  endpoint_id: string;
-  channel: string;
-  account_id: string | null;
-  bot_id: string;
-  conversation_id: string;
-  thread_id?: string | null;
-}
-/**
- * A platform-neutral message fact in the rebuildable channel journal. Message content is always untrusted external input.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelMessageFact".
- */
-export interface ChannelMessageFact {
-  message_id: string;
-  message_seq?: number;
-  sender: ChannelMessageSender;
-  occurred_at_ms: number;
-  /**
-   * @minItems 1
-   */
-  parts: [ChannelMessagePart, ...ChannelMessagePart[]];
-  flags?: ChannelMessageFlags;
-}
-/**
- * Normalized sender fact without platform credentials.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelMessageSender".
- */
-export interface ChannelMessageSender {
-  id: string;
-  label?: string;
-  kind: string;
-}
-/**
- * Normalized platform message part. type and text are common fields; connector extensions remain untrusted external data.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelMessagePart".
- */
-export interface ChannelMessagePart {
-  type: string;
-  text?: string;
-  [k: string]: unknown;
-}
-/**
- * Common message flags that affect context projection. Self and control messages are excluded from provider-visible context.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelMessageFlags".
- */
-export interface ChannelMessageFlags {
-  self?: boolean;
-  control?: boolean;
 }
 export interface ResolvedRuntimeSelection1 {
   schema: "octo.runtime-selection/v2";
@@ -2751,59 +2617,6 @@ export interface RunIdentity {
   agentSessionId: string;
 }
 /**
- * Idempotent context-only batch appended by agent-worker to its bound daemon.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ChannelContextAppend".
- */
-export interface ChannelContextAppend {
-  agent_id: string;
-  scope: ChannelScope;
-  /**
-   * @minItems 1
-   * @maxItems 100
-   */
-  facts: [ChannelMessageFact, ...ChannelMessageFact[]];
-  gap_after_seq?: number;
-}
-/**
- * Bounded backfill requested by the daemon after cold start or gap detection. It never carries platform tokens.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextSyncRequest".
- */
-export interface ContextSyncRequest {
-  request_id: string;
-  run_id: string;
-  scope: ChannelScope;
-  trigger_message_id: string;
-  trigger_seq?: number;
-  after_seq?: number;
-  limit: number;
-}
-export interface ContextSyncResult1 {
-  request_id: string;
-  scope: ChannelScope;
-  /**
-   * @maxItems 100
-   */
-  facts: ChannelMessageFact[];
-  completeness: "complete" | "partial" | "unavailable";
-  through_seq?: number;
-}
-/**
- * Result of advancing the consumer cursor with version CAS after terminal durability.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextCommitResult".
- */
-export interface ContextCommitResult {
-  snapshot_id: string;
-  committed: boolean;
-  reason?:
-    "already_committed" | "snapshot_not_found" | "snapshot_not_submitted" | "consumer_advanced" | "snapshot_failed";
-}
-/**
  * A per-invocation MCP server launched as a child process by the provider.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -3160,3 +2973,32 @@ export interface HostedAdapterMetadataWire {
   unavailableReason?: string | null;
   [k: string]: unknown;
 }
+
+export const KERNEL_IPC_VERSION = 2 as const satisfies KernelStatus["ipc_version"];
+
+export const RUN_PROTOCOL_ERRORS = [
+  "PROTOCOL_MODE_INVALID",
+  "PROTOCOL_MODE_UNSUPPORTED",
+  "EXECUTION_PROTOCOL_MISMATCH",
+  "EXECUTION_IDENTITY_CONFLICT",
+  "NATIVE_METHOD_UNSUPPORTED",
+  "NATIVE_RESPONSE_INVALID",
+  "INTERACTION_NOT_ACTIVE",
+  "INVALID_QUESTION_RESPONSE",
+  "ASYNC_ANSWER_REJECTED",
+  "OPERATION_OUTCOME_UNKNOWN",
+  "HOST_EXECUTION_FAILED",
+  "HOST_ENDED_WITHOUT_TERMINAL",
+  "PROVIDER_MESSAGE_TOO_LARGE",
+  "HOST_FRAME_TOO_LARGE",
+  "STREAM_QUEUE_ITEM_TOO_LARGE",
+  "STREAM_QUEUE_BYTES_EXCEEDED",
+  "STREAM_QUEUE_ITEMS_EXCEEDED",
+  "STREAM_GAP",
+  "STREAM_EXPIRED",
+  "REMOTE_NATIVE_UNSUPPORTED",
+  "HOST_FRAME_INVALID",
+  "HOST_CONTROL_INVALID",
+  "HOST_RECEIPT_INVALID",
+  "PROTOCOL_SUPPORT_INVALID"
+] as const satisfies readonly RunProtocolErrorCode[];

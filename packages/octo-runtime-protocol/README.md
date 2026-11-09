@@ -103,12 +103,26 @@ Run contract 7, Context v3, and Adapter protocol 2 version independently. A new 
 
 This is a private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-protocol`. Published consumers use `@mininglamp-oss/octo-runtime/protocol`, which exposes a subset — not every workspace export is reachable there.
 
-[protocol.schema.json](schema/protocol.schema.json) is the wire source of truth. [gen-types.mjs](scripts/gen-types.mjs) generates [protocol-types.ts](src/generated/protocol-types.ts): change the schema, regenerate, and never hand-edit the generated types.
+[protocol.schema.json](schema/protocol.schema.json) defines shared wire data; [kernel-ipc.schema.json](schema/kernel-ipc.schema.json) defines IPC requests and results. These are the only files in `schema/`. [gen-types.mjs](scripts/gen-types.mjs) generates [protocol-types.ts](src/generated/protocol-types.ts), including `KERNEL_IPC_VERSION` and `RUN_PROTOCOL_ERRORS` from their Schema definitions. Change the Schema and regenerate; do not hand-edit the output.
 
 ```sh
 pnpm --filter @mininglamp-oss/octo-runtime-protocol gen
 pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 ```
+
+## Validation and asset ownership
+
+Both schemas use JSON Schema Draft-07. A standard Draft-07 validator checks standard structural constraints. The `x-octo-*` keywords describe additional semantics; a validator must implement them explicitly to enforce them. Accepting the standard keywords alone does not prove protocol conformance. Existing runtime validators also check JSON byte/depth budgets, Unicode scalar strings, uniqueness, cross-field consistency, identities, and lifecycle rules. Generated TypeScript types do not validate runtime input, and the handwritten validators remain necessary.
+
+The seven positive/negative fixture files live in [test/fixtures](test/fixtures). They test implementations against the contract; they are not protocol definitions. Only the IPC conformance samples are intentionally published: the existing full Runtime `/executor-kernel/ipc-fixtures.json` and standalone client `/protocol/ipc-fixtures.json` imports remain available. Other fixtures stay out of release packages.
+
+Client connection/concurrency limits, timeouts, and retry delays belong to the client implementation. They are not a shared behavior protocol or another JSON configuration source. Shared wire byte limits remain protocol constants.
+
+## Schema cleanup upgrade notes
+
+Issue #332 removes `kernel-client.behavior.json` and the standalone client's `/protocol/behavior.json` export. Stop importing this file; use the client API and its documented defaults. The IPC Schema identifier is now `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`; update registrations or references that used the old v1 identifier. The actual IPC version remains 2. The unused `x-octo-methods` code-generation metadata is removed; RPC methods and their request/result definitions remain.
+
+The following legacy types are removed from the Schema, generated types, and protocol exports: `ContextSelectionEntry`, `ContextResourceEntry`, `ContextContinuityPayload`, `ChannelScope`, `ChannelMessagePart`, `ChannelMessageSender`, `ChannelMessageFlags`, `ChannelMessageFact`, `ChannelContextAppend`, `ContextSyncRequest`, `ContextSyncResult`, `ChannelContextDescriptor`, and `ContextCommitResult`. Their five validators (`assertChannelScope`, `assertChannelMessageFact`, `assertChannelContextAppend`, `assertContextSyncResult`, and `assertChannelContextDescriptor`) are also removed. Use the existing `ContextInlineEntry` and `ContextReferenceEntry` for the retained generic content shapes. Applications own channel history and synchronization contracts. These exports have no compatibility shim; callers must update their imports.
 
 ## Further reading
 

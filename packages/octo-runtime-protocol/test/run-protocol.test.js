@@ -18,7 +18,7 @@ import {
 } from "../dist/index.js";
 
 const fixtures = JSON.parse(
-  readFileSync(new URL("../schema/run-protocol-fixtures.json", import.meta.url), "utf8")
+  readFileSync(new URL("./fixtures/run-protocol-fixtures.json", import.meta.url), "utf8")
 );
 const schema = JSON.parse(
   readFileSync(new URL("../schema/protocol.schema.json", import.meta.url), "utf8")

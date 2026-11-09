@@ -1,0 +1,30 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/332
+baseline: 86b3379cc9b426255dabc85c1450dfd530ac1c94
+branch: refactor/332-schema-ownership
+phase: verified
+implementation_commit: 15d0b815
+review: 独立规范/需求审查及修复后复审均无未关闭问题，详见 review.md。
+validation: 本地全量、双包、手动清理和文档检查通过；详见 validation.md。
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+workflow_read:
+  - .claude/commands/octospec-plan.md
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/tasks/_brief.template.md
+  - CONTRIBUTING.md
+  - .github/PULL_REQUEST_TEMPLATE.md
+skills_read:
+  - /Users/lvsijia/.agents/skills/super-dev/SKILL.md
+authorization: 用户要求实施、提交正式 PR 并合并 main；公开提交与 PR 使用英文；不发布、不扩大 CI。
+scope_update: 用户追加“不用管workapp”；不保留 Runtime 闲置类型来兼容 Work App，不修改或验证 Work App。

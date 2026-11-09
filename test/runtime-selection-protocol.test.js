@@ -12,7 +12,7 @@ import { resolvedRuntimeSelection } from "./runtime-fixture.js";
 const fixtures = JSON.parse(
   readFileSync(
     new URL(
-      "../packages/octo-runtime-protocol/schema/runtime-selection-fixtures.json",
+      "../packages/octo-runtime-protocol/test/fixtures/runtime-selection-fixtures.json",
       import.meta.url
     ),
     "utf8"

@@ -13,7 +13,9 @@ test("shared Kernel schemas validate real receipts, snapshots, status and strict
   ajv.addSchema(protocol);
   const validateRequest = ajv.compile(wire);
   const { client, endpoint } = await kernelFixture(t);
-  const fixtures = await read("../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json");
+  const fixtures = await read(
+    "../packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json"
+  );
   for (const fixture of fixtures.cases) {
     assert.equal(validateRequest(fixture.request), fixture.valid, fixture.name);
     const response = await new Promise((resolve, reject) => {

@@ -75,17 +75,18 @@ test("client artifact contains only its implementation/protocol, without server 
     typeof value === "string" ? [value] : Object.values(value).flatMap(targets);
   for (const target of targets(manifest.exports))
     assert.ok((await stat(join(path, "package", target))).isFile(), target);
-  for (const name of [
-    "protocol.schema.json",
-    "kernel-ipc.schema.json",
-    "kernel-ipc-fixtures.json",
-    "kernel-client.behavior.json"
-  ]) {
+  for (const name of ["protocol.schema.json", "kernel-ipc.schema.json"]) {
     assert.deepEqual(
       await readFile(join(path, "package/schema", name)),
       await readFile(join(root, "packages/octo-runtime-protocol/schema", name))
     );
   }
+  assert.deepEqual(
+    await readFile(join(path, "package/fixtures/kernel-ipc-fixtures.json")),
+    await readFile(
+      join(root, "packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json")
+    )
+  );
   const fullMetadata = await run(
     "tar",
     ["-xOf", archive(), "package/apps/cli/dist/build-info.json"],
@@ -201,7 +202,7 @@ for (const manager of ["npm", "pnpm"]) {
 }
 
 test(
-  "standalone artifact interoperates with the pre-extraction de3ff37a Kernel",
+  "standalone artifact rejects the pre-IPC-v2 de3ff37a Kernel without execution",
   { timeout: 180_000 },
   async (t) => {
     const path = await mkdtemp(
@@ -272,7 +273,20 @@ test(
       process.platform === "win32"
         ? `\\\\.\\pipe\\oc309-baseline-${process.pid}`
         : join(path, "baseline.sock");
-    service = createKernelService({ home: path, endpoint, adapters: [testAdapter] });
+    let invocations = 0;
+    service = createKernelService({
+      home: path,
+      endpoint,
+      adapters: [
+        {
+          ...testAdapter,
+          invoke: (...args) => {
+            invocations += 1;
+            return testAdapter.invoke(...args);
+          }
+        }
+      ]
+    });
     await service.initialize();
     await run(
       process.execPath,
@@ -294,8 +308,15 @@ test(
       join(path, "consumer.mjs")
     );
     await writeFile(join(path, "input.json"), JSON.stringify(kernelInput("baseline server")));
-    await run(process.execPath, ["consumer.mjs", endpoint, join(path, "input.json")], path);
-    assert.equal((await service.client.status()).execution_ready, true);
+    await run(
+      process.execPath,
+      ["consumer.mjs", endpoint, join(path, "input.json"), "--expect-unsupported-ipc"],
+      path
+    );
+    const oldStatus = await service.client.status();
+    assert.equal(oldStatus.ipc_version, 1);
+    assert.equal(oldStatus.execution_ready, true);
+    assert.equal(invocations, 0);
   }
 );
 
@@ -313,7 +334,7 @@ const serviceProcess = {
 const statusCases = [
   {
     name: "unsupported IPC version",
-    status: { ipc_version: 2 },
+    status: { ipc_version: 1 },
     code: "KERNEL_IPC_VERSION_UNSUPPORTED"
   },
   { name: "missing IPC version", status: { ipc_version: undefined }, code: "INVALID_RESPONSE" },

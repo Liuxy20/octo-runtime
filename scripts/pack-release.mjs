@@ -5,7 +5,11 @@ import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 import { bundleDshClient, dshAdapterName, dshClientName } from "./bundle-dsh-client.mjs";
 import { parseNpmPackResult } from "./parse-npm-pack-result.mjs";
-import { packClientRelease, clientPackageName } from "./pack-client-release.mjs";
+import {
+  packClientRelease,
+  clientPackageName,
+  copyClientProtocolAssets
+} from "./pack-client-release.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const readManifest = async (directory) =>
@@ -80,9 +84,7 @@ try {
     if (workspaces.has(source.name)) {
       await cp(join(path, "dist"), join(target, "dist"), { recursive: true });
       if (source.name === clientPackageName) {
-        await cp(join(root, "packages/octo-runtime-protocol/schema"), join(target, "schema"), {
-          recursive: true
-        });
+        await copyClientProtocolAssets(root, target);
         await cp(join(root, "apps/cli/dist/build-info.json"), join(target, "build-info.json"));
       }
       if (source.name === dshAdapterName) await bundleDshClient(path, target);
@@ -159,7 +161,8 @@ try {
         files: [
           "apps",
           "dist/public",
-          "packages/octo-runtime-protocol/schema/*.json",
+          "packages/octo-runtime-protocol/schema/*.schema.json",
+          "packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json",
           "LICENSE",
           "NOTICE"
         ],

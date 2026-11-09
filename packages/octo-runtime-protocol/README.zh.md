@@ -103,12 +103,26 @@ Run 合同 7、Context v3、Adapter protocol 2 各自独立演进。Context sche
 
 这是 private workspace 包：源码和子模块宿主从 `@mininglamp-oss/octo-runtime-protocol` 导入。发行版使用者走 `@mininglamp-oss/octo-runtime/protocol`，该门面只暴露子集，不是所有 workspace 导出都能在那里用到。
 
-[protocol.schema.json](schema/protocol.schema.json) 是 wire 层的唯一事实来源。[gen-types.mjs](scripts/gen-types.mjs) 生成 [protocol-types.ts](src/generated/protocol-types.ts)：改 schema，重新生成，不要手改生成结果。
+[protocol.schema.json](schema/protocol.schema.json) 定义共享 wire 数据，[kernel-ipc.schema.json](schema/kernel-ipc.schema.json) 定义 IPC 请求与结果；`schema/` 只放这两个文件。[gen-types.mjs](scripts/gen-types.mjs) 生成 [protocol-types.ts](src/generated/protocol-types.ts)，并从 Schema 定义派生 `KERNEL_IPC_VERSION` 和 `RUN_PROTOCOL_ERRORS`。修改 Schema 后重新生成，不要手改生成结果。
 
 ```sh
 pnpm --filter @mininglamp-oss/octo-runtime-protocol gen
 pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 ```
+
+## 校验与资产归属
+
+两个 Schema 使用 JSON Schema Draft-07。标准 Draft-07 校验器检查标准结构约束；`x-octo-*` 关键字描述额外语义，校验器必须显式实现后才能执行。只通过标准关键字校验不代表完整符合协议。现有运行时校验器还检查 JSON 字节/深度预算、Unicode 标量字符串、唯一性、跨字段一致性、身份和生命周期规则。生成 TypeScript 类型不能校验运行时输入，手写校验器仍有职责。
+
+七份正反样本位于 [test/fixtures](test/fixtures)，用于验证实现是否符合合同，不属于协议定义。只有 IPC 一致性样本刻意对外发布：完整 Runtime 的 `/executor-kernel/ipc-fixtures.json` 和独立 client 的 `/protocol/ipc-fixtures.json` 原有导入路径保持，其他样本不进入发行包。
+
+客户端连接/并发上限、超时和重试间隔由客户端实现维护，不属于共享行为协议，也不再另存一份 JSON 配置。共享 wire 字节限制继续使用协议常量。
+
+## Schema 清理升级说明
+
+Issue #332 删除 `kernel-client.behavior.json` 及独立 client 的 `/protocol/behavior.json` 导出。调用方停止导入此文件，使用客户端 API 及其文档默认值。IPC Schema 标识改为 `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`，使用旧 v1 标识的注册或引用需要更新；实际 IPC 版本仍为 2。删除无人消费的 `x-octo-methods` 生成元数据，RPC 方法及其请求/结果定义保持。
+
+以下遗留类型从 Schema、生成类型与协议导出中删除：`ContextSelectionEntry`、`ContextResourceEntry`、`ContextContinuityPayload`、`ChannelScope`、`ChannelMessagePart`、`ChannelMessageSender`、`ChannelMessageFlags`、`ChannelMessageFact`、`ChannelContextAppend`、`ContextSyncRequest`、`ContextSyncResult`、`ChannelContextDescriptor`、`ContextCommitResult`。对应的五个校验器 `assertChannelScope`、`assertChannelMessageFact`、`assertChannelContextAppend`、`assertContextSyncResult`、`assertChannelContextDescriptor` 也删除。保留的通用材料结构使用现有 `ContextInlineEntry`、`ContextReferenceEntry`；渠道历史及同步合同归应用。这些导出不提供兼容层，调用方须相应调整导入。
 
 ## 延伸阅读
 

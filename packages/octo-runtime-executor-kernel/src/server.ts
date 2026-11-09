@@ -16,6 +16,7 @@ import {
   contextItem,
   INVOKE_REQUEST_MAX_BYTES,
   HOST_RPC_MAX_LINE_BYTES,
+  KERNEL_IPC_VERSION,
   resolveStreamLimitPolicy,
   type InvokeInput,
   type InvokeEnvironment
@@ -158,7 +159,7 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   let listening = false;
   let releaseEndpoint: (() => Promise<void>) | undefined;
   const status = (): KernelStatus => ({
-    ipc_version: 2,
+    ipc_version: KERNEL_IPC_VERSION,
     kernel_instance_id: instance,
     pid: process.pid,
     execution_ready: !closing && ready,

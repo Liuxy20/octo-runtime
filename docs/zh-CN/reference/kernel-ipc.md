@@ -16,11 +16,15 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 | `/protocol`                          | InvokeInput、输出/Context 类型与公开校验器                      |
 | `/protocol/schema.json`              | 共享协议 Schema                                                 |
 | `/executor-kernel/ipc-schema.json`   | IPC v2 Schema                                                   |
-| `/executor-kernel/ipc-fixtures.json` | IPC 合法与非法消息的测试样本                                    |
+| `/executor-kernel/ipc-fixtures.json` | 刻意公开的一致性样本，与协议定义分开                            |
 
 上述路径都位于 `@mininglamp-oss/octo-runtime` 下。例如，导入客户端使用 `@mininglamp-oss/octo-runtime/executor-kernel`。仓库内部的 workspace 包是私有包，应用使用上表中的公开路径。
 
 仅消费已有 Kernel 的应用可只安装 `@mininglamp-oss/octo-runtime-client`，从包根导入 `attachKernel`，无需完整 Runtime 包或 Runtime checkout。
+
+独立 client 在 `/protocol/schema.json` 和 `/protocol/ipc-schema.json` 提供相同的两个 Schema，并保留 `/protocol/ipc-fixtures.json` 一致性样本入口。仓库样本位于 `packages/octo-runtime-protocol/test/fixtures/`，仅 IPC 样本进入发行包。客户端默认值由客户端实现维护，`/protocol/behavior.json` 已删除。
+
+两个 Schema 使用 Draft-07。标准校验器执行标准关键字，`x-octo-*` 语义需要显式实现。运行时校验器还检查字节/深度预算、Unicode 标量字符串、唯一性、跨字段一致性和执行状态规则。只通过标准结构校验不足以证明完整符合 IPC 合同。
 
 ## 创建服务
 
@@ -78,6 +82,8 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 ## IPC 消息格式
 
 IPC 协议版本为 2。它与 Run schema 版本 7、Context 版本 `octo.context-envelope/v3`、内部 Adapter 传输版本 2 分别独立编号。
+
+IPC Schema 的 `$id` 为 `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`。使用原 v1 标识的注册和引用需要更新，wire 版本仍为 2。无人消费的 `x-octo-methods` 生成元数据以及遗留渠道/历史类型和校验器已删除，完整清单见[升级说明](../../../packages/octo-runtime-protocol/README.zh.md)。下列 RPC 方法保持不变。
 
 macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接只发送一个 UTF-8 编码的 JSON-RPC 2.0 请求，以换行符 LF 结束。请求 `id` 必须是非空字符串；数字 ID、批量请求、Schema 未定义的顶层或 params 字段都会被拒绝。
 
@@ -178,4 +184,4 @@ Kernel 实例变化、执行标识不匹配、序号非法、输出缺失或过�
 
 Kernel 宿主重启后，不会恢复旧输出或重跑旧执行。结果为 `lost` 或未知时，应由应用决定后续处理。详见[输出与控制](output-and-control.md)。
 
-来源：[IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json)、[fixture](../../../packages/octo-runtime-protocol/schema/kernel-ipc-fixtures.json)、[client 类型](../../../packages/octo-runtime-client/src/types.ts)、[client](../../../packages/octo-runtime-client/src/client.ts)、[server](../../../packages/octo-runtime-executor-kernel/src/server.ts)。
+来源：[IPC schema](../../../packages/octo-runtime-protocol/schema/kernel-ipc.schema.json)、[一致性样本](../../../packages/octo-runtime-protocol/test/fixtures/kernel-ipc-fixtures.json)、[client 类型](../../../packages/octo-runtime-client/src/types.ts)、[client](../../../packages/octo-runtime-client/src/client.ts)、[server](../../../packages/octo-runtime-executor-kernel/src/server.ts)。

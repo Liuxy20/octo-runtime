@@ -25,8 +25,7 @@
     },
     "./protocol/schema.json": "./schema/protocol.schema.json",
     "./protocol/ipc-schema.json": "./schema/kernel-ipc.schema.json",
-    "./protocol/ipc-fixtures.json": "./schema/kernel-ipc-fixtures.json",
-    "./protocol/behavior.json": "./schema/kernel-client.behavior.json",
+    "./protocol/ipc-fixtures.json": "./fixtures/kernel-ipc-fixtures.json",
     "./internal": {
       "types": "./dist/internal.d.ts",
       "import": "./dist/internal.js"
@@ -34,7 +33,8 @@
   },
   "files": [
     "dist",
-    "schema",
+    "schema/*.schema.json",
+    "fixtures/kernel-ipc-fixtures.json",
     "build-info.json"
   ],
   "engines": {

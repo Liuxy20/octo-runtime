@@ -1,5 +1,9 @@
 # 工程知识变更记录
 
+## 2026-11-09
+
+- [Issue 332 Schema 职责清理](journal/shared/2026-11-09-332-schema-ownership.md)：最新 main 独立 worktree、96 分规划后实施，分离协议/默认值/测试资产并清理 13 个旧定义；全量和双包本地验收通过，独立审查无剩余问题。不扩大 CI，正式 PR/main 状态另按远端确认。
+
 ## 2026-11-08
 
 - [Runtime PR 交付授权](journal/shared/2026-11-08-runtime-pr-delivery.md)：用户明确要求提交并合并 main；按既有 CI Gate 与一位批准要求交付，不修改保护规则、不发布。

@@ -19,7 +19,7 @@ const schema = JSON.parse(
 const fixtures = JSON.parse(
   readFileSync(
     new URL(
-      "../packages/octo-runtime-protocol/schema/context-configuration-fixtures.json",
+      "../packages/octo-runtime-protocol/test/fixtures/context-configuration-fixtures.json",
       import.meta.url
     ),
     "utf8"

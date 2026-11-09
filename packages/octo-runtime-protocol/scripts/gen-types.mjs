@@ -10,6 +10,16 @@ const schemaPath = resolve(here, "../schema/protocol.schema.json");
 const outPath = resolve(here, "../src/generated/protocol-types.ts");
 
 const schema = JSON.parse(await readFile(schemaPath, "utf8"));
+const ipcVersion = schema.definitions.KernelStatus.properties.ipc_version.const;
+const runErrors = schema.definitions.RunProtocolErrorCode.enum;
+if (
+  !Number.isSafeInteger(ipcVersion) ||
+  ipcVersion < 1 ||
+  !Array.isArray(runErrors) ||
+  !runErrors.length ||
+  runErrors.some((code) => typeof code !== "string" || !code)
+)
+  throw new Error("Schema must define the Kernel IPC version and Run protocol error codes");
 
 const ts = await compile(schema, schema.title ?? "OctoRuntimeProtocolSchema", {
   // Generate every definition, including definitions not referenced by the root.
@@ -27,5 +37,12 @@ const ts = await compile(schema, schema.title ?? "OctoRuntimeProtocolSchema", {
 });
 
 await mkdir(dirname(outPath), { recursive: true });
-await writeFile(outPath, ts, "utf8");
+// 运行时版本与枚举直接派生自 Schema，客户端与校验器不再维护同值副本。
+await writeFile(
+  outPath,
+  ts +
+    `\nexport const KERNEL_IPC_VERSION = ${ipcVersion} as const satisfies KernelStatus["ipc_version"];\n` +
+    `\nexport const RUN_PROTOCOL_ERRORS = ${JSON.stringify(runErrors, null, 2)} as const satisfies readonly RunProtocolErrorCode[];\n`,
+  "utf8"
+);
 console.error(`generated ${outPath}`);

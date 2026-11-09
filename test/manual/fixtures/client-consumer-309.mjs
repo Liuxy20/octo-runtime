@@ -12,7 +12,6 @@ import * as protocol from "@mininglamp-oss/octo-runtime-client/protocol";
 import schema from "@mininglamp-oss/octo-runtime-client/protocol/schema.json" with { type: "json" };
 import ipcSchema from "@mininglamp-oss/octo-runtime-client/protocol/ipc-schema.json" with { type: "json" };
 import fixtures from "@mininglamp-oss/octo-runtime-client/protocol/ipc-fixtures.json" with { type: "json" };
-import behavior from "@mininglamp-oss/octo-runtime-client/protocol/behavior.json" with { type: "json" };
 
 const [endpoint, inputPath] = process.argv.slice(2);
 const input = {
@@ -20,7 +19,11 @@ const input = {
   runId: randomUUID(),
   invocationId: randomUUID()
 };
-assert.ok(schema && ipcSchema && fixtures && behavior);
+assert.ok(schema && ipcSchema && fixtures);
+assert.throws(
+  () => import.meta.resolve("@mininglamp-oss/octo-runtime-client/protocol/behavior.json"),
+  { code: "ERR_PACKAGE_PATH_NOT_EXPORTED" }
+);
 const invalidEndpoint = `token=${randomUUID()}`;
 let pathDiagnostic;
 assert.throws(
@@ -40,10 +43,14 @@ assert.throws(
 );
 const client = attachKernel({ endpoint });
 try {
-  assert.equal((await client.status()).ipc_version, 2);
-  assert.ok((await client.list()).length > 0);
-  const events = await Array.fromAsync(client.invoke(...args(input)));
-  assert.equal(events.at(-1).type, "run.completed");
+  if (process.argv.includes("--expect-unsupported-ipc")) {
+    await assert.rejects(client.submit(input), { code: "KERNEL_IPC_VERSION_UNSUPPORTED" });
+  } else {
+    assert.equal((await client.status()).ipc_version, 2);
+    assert.ok((await client.list()).length > 0);
+    const events = await Array.fromAsync(client.invoke(...args(input)));
+    assert.equal(events.at(-1).type, "run.completed");
+  }
 } finally {
   client.close();
 }
@@ -52,6 +59,11 @@ await assert.rejects(client.status(), KernelError);
 if (process.argv.includes("--paired")) {
   const full = await import("@mininglamp-oss/octo-runtime/executor-kernel");
   const fullProtocol = await import("@mininglamp-oss/octo-runtime/protocol");
+  const fullFixtures = await import(
+    "@mininglamp-oss/octo-runtime/executor-kernel/ipc-fixtures.json",
+    { with: { type: "json" } }
+  );
+  assert.deepEqual(fullFixtures.default, fixtures);
   const runtimeEntry = import.meta.resolve("@mininglamp-oss/octo-runtime/executor-kernel");
   const internalClient = await import(
     new URL("../../node_modules/@mininglamp-oss/octo-runtime-client/dist/index.js", runtimeEntry)

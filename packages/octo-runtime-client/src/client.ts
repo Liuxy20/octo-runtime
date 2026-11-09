@@ -12,6 +12,7 @@ import {
   isHostTerminal,
   HOST_RPC_MAX_LINE_BYTES,
   INVOKE_REQUEST_MAX_BYTES,
+  KERNEL_IPC_VERSION,
   type HostFrame,
   type InvokeInput,
   type InvokeEnvironment
@@ -271,7 +272,8 @@ export function attachKernel(options: { endpoint: string }): KernelClient {
       if (!value || typeof value !== "object" || typeof value.ipc_version !== "number")
         throw new KernelError("INVALID_RESPONSE");
       // 包版本不参与 wire 兼容判断；submit 复用此既有查询，拒绝后不会发起执行。
-      if (value.ipc_version !== 2) throw new KernelError("KERNEL_IPC_VERSION_UNSUPPORTED");
+      if (value.ipc_version !== KERNEL_IPC_VERSION)
+        throw new KernelError("KERNEL_IPC_VERSION_UNSUPPORTED");
       try {
         // 与服务端/doctor 共用快照白名单；仍保持客户端的受控错误与版本拒绝顺序。
         assertKernelStatus(value);
