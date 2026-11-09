@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
@@ -12,44 +13,44 @@ import { invocationMcpServers } from "../packages/octo-runtime-adapter-sdk/dist/
 import { spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
 import { startMcpHttpServer } from "../test-support/mcp/http-server.mjs";
-
 const enabled = process.env.OCTO_RUN_MCP_LIVE === "1";
 const request = (url, root) =>
   invokeRequest({
-    workdir: root,
-    context: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        {
-          namespace: "octo.execution",
-          name: "mcp",
-          payload: {
-            mcpServers: {
-              business: {
-                type: "streamable_http",
-                url: "${MCP_URL}",
-                headers: {
-                  Authorization: "Bearer ${MCP_TEST_TOKEN}",
-                  "X-Literal": "$${MCP_TEST_TOKEN}"
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          {
+            namespace: "octo.execution",
+            name: "mcp",
+            payload: {
+              mcpServers: {
+                business: {
+                  type: "streamable_http",
+                  url: "${MCP_URL}",
+                  headers: {
+                    Authorization: "Bearer ${MCP_TEST_TOKEN}",
+                    "X-Literal": "$${MCP_TEST_TOKEN}"
+                  }
                 }
               }
             }
+          },
+          {
+            namespace: "octo.execution",
+            name: "envs",
+            payload: {
+              env_variables: [
+                { key: "MCP_URL", value: url },
+                { key: "MCP_TEST_TOKEN", value: "synthetic-run-token" }
+              ]
+            }
           }
-        },
-        {
-          namespace: "octo.execution",
-          name: "envs",
-          payload: {
-            env_variables: [
-              { key: "MCP_URL", value: url },
-              { key: "MCP_TEST_TOKEN", value: "synthetic-run-token" }
-            ]
-          }
-        }
-      ]
-    }
+        ]
+      },
+      [{ namespace: "octo.execution", name: "workspace", payload: { path: root } }]
+    )
   });
-
 test(
   "native Claude connects a Run HTTP MCP before a model turn",
   { skip: !enabled, timeout: 30000 },
@@ -57,7 +58,7 @@ test(
     const root = await mkdtemp(join(tmpdir(), "octo-claude-mcp-"));
     const http = await startMcpHttpServer();
     const req = request(http.url, root);
-    delete req.context.items[0].payload.mcpServers.business.headers["X-Literal"];
+    delete req.agentEnv.items[0].payload.mcpServers.business.headers["X-Literal"];
     const spec = await buildClaudeCommand(req, "claude", ["--strict-mcp-config"]);
     const child = spawn(spec.command, spec.args, {
       cwd: root,
@@ -105,7 +106,6 @@ test(
     }
   }
 );
-
 test(
   "native Codex discovers a Run HTTP MCP with resolved headers without changing config",
   { skip: !enabled, timeout: 30000 },
@@ -185,7 +185,6 @@ test(
     }
   }
 );
-
 for (const command of ["kimi", "mcode"])
   test(
     `native ${command} advertises and connects HTTP MCP through ACP`,

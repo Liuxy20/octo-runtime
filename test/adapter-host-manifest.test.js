@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -10,10 +11,8 @@ import { readModuleManifest } from "../packages/octo-runtime-adapter-sdk/dist/mo
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { resolveModuleSpecifier as resolveAdapterModuleSpecifier } from "../packages/octo-runtime-adapter-sdk/dist/module-manifest.js";
 import { invokeRequest, withTimeout } from "./runtime-fixture.js";
-
 const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const fixture = resolve("test/fixtures/test-adapter.js");
-
 test("manifest module specifiers preserve explicit URLs", () => {
   for (const specifier of [
     "file:///C:/adapter%20dir/adapter.mjs",
@@ -27,7 +26,6 @@ test("manifest module specifiers preserve explicit URLs", () => {
     );
   }
 });
-
 test("manifest module paths resolve relative to the manifest and encode URL characters", () => {
   const manifest = resolve("config/adapters.json");
   const file = resolve("fixtures/插件 空格 #%.mjs");
@@ -42,7 +40,6 @@ test("manifest module paths resolve relative to the manifest and encode URL char
   assert.match(url.pathname, /%20/);
   assert.match(url.pathname, /%23%25/);
 });
-
 test(
   "Windows drive and UNC paths convert without accessing a network share",
   {
@@ -67,7 +64,6 @@ test(
     }
   }
 );
-
 test(
   "POSIX absolute paths retain native separator semantics",
   {
@@ -80,7 +76,6 @@ test(
     );
   }
 );
-
 async function createFixture(t) {
   const root = await mkdtemp(join(tmpdir(), "octo-manifest-"));
   t.after(() => rm(root, { recursive: true, force: true }));
@@ -90,7 +85,6 @@ async function createFixture(t) {
   await copyFile(fixture, modulePath);
   return { root, modulePath, manifest: join(directory, "adapters.json") };
 }
-
 async function writeManifest(manifest, module, exportName = "testAdapter") {
   await writeFile(
     manifest,
@@ -100,7 +94,6 @@ async function writeManifest(manifest, module, exportName = "testAdapter") {
     })
   );
 }
-
 async function startHost(t, root, manifest) {
   const host = await nativeHost(
     (await loadCliAdapters((await readModuleManifest(manifest, { legacy: true })).adapters))
@@ -109,7 +102,6 @@ async function startHost(t, root, manifest) {
   t.after(() => host.close());
   return host;
 }
-
 const forms = [
   ["native absolute path", (path) => path],
   ["forward-slash absolute path", (path) => path.replaceAll("\\", "/")],
@@ -127,11 +119,10 @@ const forms = [
       ]
     : [])
 ];
-
 for (const [name, moduleSpecifier] of forms) {
   test(
     "manifest " + name + " reaches readiness, invokes and closes",
-    { timeout: 15_000 },
+    { timeout: 15000 },
     async (t) => {
       const { root, modulePath, manifest } = await createFixture(t);
       await writeManifest(manifest, moduleSpecifier(modulePath, manifest));
@@ -143,8 +134,14 @@ for (const [name, moduleSpecifier] of forms) {
       const input = invocationInput(
         invokeRequest({
           prompt: "manifest regression",
-          workdir: root,
-          approvalMode: "full_access"
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: root } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
         }),
         "canonical",
         "test"
@@ -156,7 +153,7 @@ for (const [name, moduleSpecifier] of forms) {
           for await (const event of host.client.invoke(input)) events.push(event);
           return events;
         })(),
-        5_000,
+        5000,
         "manifest invocation timed out"
       );
       assert.deepEqual(input, original);
@@ -166,15 +163,14 @@ for (const [name, moduleSpecifier] of forms) {
         events.findLast((event) => event.type === "message.update").payload.text,
         "Handled: manifest regression"
       );
-      await withTimeout(host.close(), 3_000, "manifest Host close timed out");
+      await withTimeout(host.close(), 3000, "manifest Host close timed out");
       assert.equal((await host.kernel.status()).phase, "closed");
     }
   );
 }
-
 test(
   "manifest package import resolves from its own node_modules with import conditions",
-  { timeout: 10_000 },
+  { timeout: 10000 },
   async (t) => {
     const { root, manifest } = await createFixture(t);
     const directory = join(dirname(manifest), "node_modules", "@fixture", "adapter");
@@ -195,10 +191,9 @@ test(
       host.adapters.map((adapter) => adapter.type),
       ["test"]
     );
-    await withTimeout(host.close(), 3_000, "package Host close timed out");
+    await withTimeout(host.close(), 3000, "package Host close timed out");
   }
 );
-
 for (const [name, prepare, pattern] of [
   [
     "missing absolute module",
@@ -232,7 +227,7 @@ for (const [name, prepare, pattern] of [
     /SyntaxError/
   ]
 ]) {
-  test("manifest reports " + name + " during readiness", { timeout: 10_000 }, async (t) => {
+  test("manifest reports " + name + " during readiness", { timeout: 10000 }, async (t) => {
     const paths = await createFixture(t);
     const { module, exportName } = await prepare(paths);
     await writeManifest(paths.manifest, module, exportName);

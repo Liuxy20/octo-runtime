@@ -318,7 +318,12 @@ test(
     assert.equal((await adapter.probe({ providerOptions: f.providerOptions })).available, true);
     const probeCount = factoryLogs.length;
     assert.ok(probeCount > 0);
-    const events = await collect(adapter.invoke(f.request(), { log: logSink(invocationLogs) }));
+    const events = await collect(
+      adapter.invoke(f.request(), {
+        log: logSink(invocationLogs),
+        providerOptions: f.providerOptions
+      })
+    );
     assert.equal(events.at(-1).type, "run.completed");
     assert.equal(factoryLogs.length, probeCount);
     assert.ok(invocationLogs.filter((item) => item.frame_count === 1).length >= 2);

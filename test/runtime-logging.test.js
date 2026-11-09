@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import assert from "node:assert/strict";
@@ -7,7 +8,6 @@ import { join } from "node:path";
 import test from "node:test";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "octo-metadata-log-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -45,22 +45,25 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   });
   const input = {
     inputs: [{ type: "text", text: "SECRET_INPUT" }],
-    agentEnv: {
-      workdir: process.cwd(),
-      ...{
-        schema: "octo.context-envelope/v3",
-        items: [
-          { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
-          {
-            namespace: "octo.execution",
-            name: "envs",
-            payload: { env_variables: [{ key: "SECRET_CONTEXT", value: "SECRET_VALUE" }] }
-          }
-        ]
+    agentEnv: withAgentEnvItems(
+      {
+        ...{
+          schema: "octo.context-envelope/v3",
+          items: [
+            { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
+            {
+              namespace: "octo.execution",
+              name: "envs",
+              payload: { env_variables: [{ key: "SECRET_CONTEXT", value: "SECRET_VALUE" }] }
+            }
+          ]
+        }
       },
-      approvalMode: "full_access"
-    },
-
+      [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ]
+    ),
     sessionId: "session-log",
     invocationId: "invocation-log",
     runId: "run-log",
@@ -76,7 +79,12 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   await logging.close();
   const rows = await records(directory);
   assert.equal(rows.find((row) => row.event === "invoke.received").data.input_count, 1);
-  assert.equal(rows.find((row) => row.event === "invoke.received").data.context_count, 1);
+  assert.equal(
+    rows.find((row) => row.event === "invoke.received").data.context_count,
+    input.agentEnv.items.filter(
+      (item) => !(item.namespace === "octo.execution" && item.name === "adapter")
+    ).length
+  );
   assert.equal(rows.find((row) => row.event === "invoke.finished").data.status, "completed");
   assert.ok(rows.some((row) => row.event === "invoke.rejected"));
   assert.ok(rows.some((row) => row.event === "invoke.started"));
@@ -105,7 +113,6 @@ test("F31 log queue is bounded and filesystem failure does not reach callers", a
   failed.kernel("error", "fixture.failure", { code: "DISK_FAILED" });
   await failed.close();
 });
-
 test("shared runtime diagnostics retain safe process facts and reject provider bodies", async (t) => {
   const directory = await fixture(t);
   const logging = new RuntimeLogging({ directory });
@@ -142,7 +149,6 @@ test("shared runtime diagnostics retain safe process facts and reject provider b
   assert.deepEqual(rows[1].data, {});
   assert.doesNotMatch(JSON.stringify(rows), /SECRET|Bearer/);
 });
-
 test("Core provides the shared adapter log sink and records the canonical failure reason", async () => {
   const logs = [];
   const core = new AgentExecutor({ log: (...entry) => logs.push(entry) });
@@ -164,7 +170,19 @@ test("Core provides the shared adapter log sink and records the canonical failur
   try {
     const events = await Array.fromAsync(
       core.invoke(
-        invocationInput(invokeRequest({ approvalMode: "full_access" }), "canonical", "fixture")
+        invocationInput(
+          invokeRequest({
+            agentEnv: withAgentEnvItems(undefined, [
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
+          }),
+          "canonical",
+          "fixture"
+        )
       )
     );
     const failure = events.at(-1).payload.failure;

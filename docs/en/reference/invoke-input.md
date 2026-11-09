@@ -15,13 +15,13 @@ The public call is `client.invoke(inputs, sessionId, providerSession, agentEnv)`
 
 ## agentEnv
 
-The schema/items envelope is unchanged. Allowed items are octo.execution/* and octo.security/approval_policy; business material is rejected. Use workspace for cwd, adapter for Adapter selection, model for model/effort, envs for variables, mcp for connections, approval_policy for approvals and limits for execution budgets.
+Shared execution beans include workspace, adapter, model, envs, mcp, approval_policy and limits. Private items require no central registration; unrelated Adapters ignore them, and the consuming Adapter validates their semantics. Public validation checks envelope structure, JSON, unique keys and budgets.
 
-Advanced agentEnv fields are agentSource, workdir, approvalMode, agentConfig and runtimeLimits. They are no longer top-level InvokeInput fields and must agree with corresponding item selections. agentConfig.providerOptions belongs to the selected Adapter. OpenClaw adapter items explicitly specify provider_agent_id, commonly main.
+AgentEnv contains only `schema` and `items`. Shared settings use public beans; Harness-specific settings are private items agreed by the host and its Adapter. Core reads the route and forwards the envelope unchanged. The Adapter reads, validates and maps settings with adapter-sdk helpers, without an intermediate configuration object. See the [OpenClaw architecture example](../concepts/architecture.md).
 
 ## Caller-owned working directory
 
-Local execution requires an explicit, existing absolute directory. Supply `octo.execution/workspace` with `payload: { "path": "/absolute/prepared/project" }`, or `agentEnv.workdir`. If both or `agentConfig.workdir` are present, they must agree. The caller selects, creates, reuses and removes the directory; CLI and SDK neither default to cwd nor allocate an application workspace. A caller-created temporary directory follows the same contract.
+Local execution requires an explicit, existing absolute directory. Supply `octo.execution/workspace` with `payload: { "path": "/absolute/prepared/project" }`. The caller selects, creates, reuses and removes the directory; CLI and SDK neither default to cwd nor allocate an application workspace. A caller-created temporary directory follows the same contract.
 
 Runtime checks the local path before Provider execution and never creates or recreates it. Missing input fails with `WORKDIR_REQUIRED`, a relative/invalid path with `WORKDIR_INVALID`, a missing directory with `WORKDIR_NOT_FOUND`, a file with `WORKDIR_NOT_DIRECTORY`, and inaccessible or otherwise unavailable paths with `WORKDIR_UNAVAILABLE`. These reason codes retain the existing public classification `OH-ADP-3004`; inspect the error `.code`, canonical failure `payload.code`/`failure.reasonCode`, or native error control. Validation cannot prevent a filesystem change between the check and the Provider operation; later native errors are reported as observed.
 
@@ -45,7 +45,7 @@ Input selection is explicit: a supplied modelInput replaces the primary Provider
 
 ## Low-level IPC v2
 
-CLI JSON and client.submit use InvokeInput: `{ inputs, sessionId?, providerSession?, agentEnv, ...contentAndTracing }`. InvokeInput.check validates the boundary; Core resolves execution settings. Low-level submit/subscribe users own complete RunRef, cancellation and tail observation; these calls do not join the invoke registry.
+CLI JSON and client.submit use InvokeInput: `{ inputs, sessionId?, providerSession?, agentEnv, ...contentAndTracing }`. InvokeInput.check validates the boundary; the Adapter consumes execution settings directly. Low-level submit/subscribe users own complete RunRef, cancellation and tail observation; these calls do not join the invoke registry.
 
 Old invoke(request, environment), cancelInvocation, contexts and top-level execution settings are incompatible. The client requires IPC v2. The independent Gateway still needs its own prompt migration before using the removed-contract Runtime/client release; changing Runtime alone is not an end-to-end migration. Internal Core/Adapter InvokeEnvironment.signal still carries cancellation; it is not a public invoke argument.
 

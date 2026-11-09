@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -6,7 +7,6 @@ import { join } from "node:path";
 import { createOpenCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-opencode";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { startMcpHttpServer } from "../test-support/mcp/http-server.mjs";
-
 // 手动验收使用宿主已有认证；只输出断言结果，工具仅操作隔离目录。
 const command = process.env.OCTO_OPENCODE_COMMAND ?? "opencode";
 const model = process.env.OCTO_OPENCODE_MODEL ?? "deepseek/deepseek-flash";
@@ -34,7 +34,7 @@ async function run(
   } = {}
 ) {
   const invocationId = randomUUID();
-  const timer = setTimeout(() => executor.cancel(invocationId, "live_timeout"), 120_000);
+  const timer = setTimeout(() => executor.cancel(invocationId, "live_timeout"), 120000);
   const events = [];
   let output = "",
     session,
@@ -46,7 +46,6 @@ async function run(
     for await (const event of executor.invoke({
       invocationId,
       protocol_mode: "canonical",
-
       ...(providerSession ? { providerSession } : {}),
       inputs: [
         {
@@ -55,38 +54,49 @@ async function run(
         },
         { type: "text", text }
       ],
-      agentEnv: {
-        workdir,
-        ...{
-          schema: "octo.context-envelope/v3",
-          items: [
-            { namespace: "octo.execution", name: "adapter", payload: { type: "opencode" } },
-            { namespace: "octo.security", name: "approval_policy", payload: { mode } },
-            ...(mcp
-              ? [{ namespace: "octo.execution", name: "mcp", payload: { mcpServers: mcp } }]
-              : []),
-            {
-              namespace: "octo.execution",
-              name: "envs",
-              payload: {
-                env_variables: [
-                  { key: "OCTO_E2E_VALUE", value: "OPENCODE_ENV_OK" },
-                  {
-                    key: "OPENCODE_CONFIG_CONTENT",
-                    value: invalidConfig
-                      ? "{"
-                      : JSON.stringify({
-                          permissions: [{ action: "*", resource: "*", effect: "ask" }],
-                          ...config
-                        })
-                  }
-                ]
+      agentEnv: withAgentEnvItems(
+        {
+          ...{
+            schema: "octo.context-envelope/v3",
+            items: [
+              { namespace: "octo.execution", name: "adapter", payload: { type: "opencode" } },
+              { namespace: "octo.security", name: "approval_policy", payload: { mode } },
+              ...(mcp
+                ? [{ namespace: "octo.execution", name: "mcp", payload: { mcpServers: mcp } }]
+                : []),
+              {
+                namespace: "octo.execution",
+                name: "envs",
+                payload: {
+                  env_variables: [
+                    { key: "OCTO_E2E_VALUE", value: "OPENCODE_ENV_OK" },
+                    {
+                      key: "OPENCODE_CONFIG_CONTENT",
+                      value: invalidConfig
+                        ? "{"
+                        : JSON.stringify({
+                            permissions: [{ action: "*", resource: "*", effect: "ask" }],
+                            ...config
+                          })
+                    }
+                  ]
+                }
               }
-            }
-          ]
+            ]
+          }
         },
-        agentConfig: { model: selectedModel, ...(effort ? { effort } : {}) }
-      }
+        [
+          { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+          {
+            namespace: "octo.execution",
+            name: "model",
+            payload: {
+              selection: { id: selectedModel },
+              ...(effort ? { reasoning: { effort } } : {})
+            }
+          }
+        ]
+      )
     })) {
       events.push(event);
       if (event.type === "session.update") session = event.payload.providerSession;

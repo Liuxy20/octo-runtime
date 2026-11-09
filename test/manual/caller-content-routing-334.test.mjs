@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 显式本地专项：公开输入准备后执行真实 Adapter 分支，不进入默认测试或 CI glob。
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
@@ -9,7 +10,6 @@ import { createGrokBuildAdapter } from "../../packages/octo-runtime-adapter-grok
 import { GrokBuildRpcError } from "../../packages/octo-runtime-adapter-grok-build/dist/client.js";
 import { createScopedCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import { visualInputImages } from "../../test-support/multimodal-images.mjs";
-
 const [image, historyImage] = visualInputImages();
 const ordinary = [
   { type: "text", text: "Caller startup prompt" },
@@ -20,19 +20,19 @@ const mixed = [ordinary[0], image, ordinary[1], ordinary[2]];
 const explicitPrimary =
   "Explicit caller prompt\nExplicit business material\nExplicit current request";
 const explicitRecovery = "Recovery caller prompt\nRecovery history\nCurrent request";
-
 function publicInput(type, inputs, content = {}) {
   return {
     inputs: structuredClone(inputs),
-    agentEnv: {
-      schema: "octo.context-envelope/v3",
-      workdir: process.cwd(),
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type } }]
-    },
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "adapter", payload: { type } }]
+      },
+      [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+    ),
     ...content
   };
 }
-
 function acpFixture(type, missing) {
   let nextId = 1;
   const frames = [];
@@ -74,7 +74,6 @@ function acpFixture(type, missing) {
         );
   return { adapter, frames };
 }
-
 function codexFixture(missing) {
   const child = new EventEmitter();
   const frames = [];
@@ -139,7 +138,6 @@ function codexFixture(missing) {
     frames
   };
 }
-
 function nativeParts(type, parts) {
   return parts.map((part) =>
     part.type === "image"
@@ -151,7 +149,6 @@ function nativeParts(type, parts) {
         : part
   );
 }
-
 async function assertSubmitted(type, inputs, content, expected, { missing = false } = {}) {
   const fixture = type === "codex" ? codexFixture(missing) : acpFixture(type, missing);
   const value = publicInput(type, inputs, content);
@@ -198,29 +195,24 @@ async function assertSubmitted(type, inputs, content, expected, { missing = fals
     "input preparation and Adapter execution do not modify caller input"
   );
 }
-
 for (const type of ["fixture", "grok-build", "codex"]) {
   for (const resumed of [false, true]) {
     const continuation = resumed ? { providerSession: { sessionId: "previous" } } : {};
     test(`${type}: ordinary ordered text parts stay exact on ${resumed ? "resume" : "initial"}`, () =>
       assertSubmitted(type, ordinary, continuation, ordinary));
-
     test(`${type}: explicit modelInput selects one text carrier on ${resumed ? "resume" : "initial"}`, () =>
       assertSubmitted(type, ordinary, { ...continuation, modelInput: explicitPrimary }, [
         { type: "text", text: explicitPrimary }
       ]));
-
     test(`${type}: mixed input stays ordered despite modelInput on ${resumed ? "resume" : "initial"}`, () =>
       assertSubmitted(type, mixed, { ...continuation, modelInput: explicitPrimary }, mixed));
   }
-
   test(`${type}: explicit modelInput selects its carrier even when equal to the text summary`, () => {
     const summary = ordinary.map((part) => part.text).join("\n\n");
     return assertSubmitted(type, ordinary, { modelInput: summary }, [
       { type: "text", text: summary }
     ]);
   });
-
   test(`${type}: a missing Provider session selects explicit recovery text`, () =>
     assertSubmitted(
       type,
@@ -233,7 +225,6 @@ for (const type of ["fixture", "grok-build", "codex"]) {
       [{ type: "text", text: explicitRecovery }],
       { missing: true }
     ));
-
   test(`${type}: a missing Provider session retains primary parts without explicit recovery`, () =>
     assertSubmitted(
       type,
@@ -244,7 +235,6 @@ for (const type of ["fixture", "grok-build", "codex"]) {
       ordinary,
       { missing: true }
     ));
-
   test(`${type}: explicit recovery parts outrank recovery text without duplicate prompts`, () => {
     const recovery = [{ type: "text", text: "Recovery caller prompt" }, ...ordinary];
     return assertSubmitted(
@@ -259,7 +249,6 @@ for (const type of ["fixture", "grok-build", "codex"]) {
       { missing: true }
     );
   });
-
   test(`${type}: explicit mixed recovery parts preserve history and current image order`, () => {
     const recovery = [{ type: "text", text: "Recovery history" }, historyImage, ...mixed];
     return assertSubmitted(
@@ -275,7 +264,6 @@ for (const type of ["fixture", "grok-build", "codex"]) {
     );
   });
 }
-
 test("public preparation rejects text-only recovery that would discard current images", () => {
   assert.throws(
     () =>
@@ -288,7 +276,6 @@ test("public preparation rejects text-only recovery that would discard current i
     /IMAGE_RECOVERY_INPUT_REQUIRED/
   );
 });
-
 test("public preparation rejects recovery parts missing the current image", () => {
   assert.throws(
     () =>

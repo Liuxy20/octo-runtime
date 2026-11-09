@@ -30,9 +30,9 @@ export async function runDshExample(
       invocationId: randomUUID(),
       inputs: [{ type: "text", text: "Reply with a short greeting without using tools." }],
       agentEnv: {
-        workdir,
         schema: "octo.context-envelope/v3",
         items: [
+          { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
           { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } },
           { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
         ]

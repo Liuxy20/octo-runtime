@@ -23,10 +23,16 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
-    workdir: "/absolute/prepared/project",
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 
@@ -50,7 +56,7 @@ Two details that trip people up: the Adapter is chosen by the `octo.execution` /
 
 ## What the executor does with your input
 
-The application prepares `/absolute/prepared/project` before calling. Local execution requires an explicit existing absolute directory through `agentEnv.workdir` or a path-only workspace item. Core does not inherit cwd, create application directories, allocate random workspaces or restore a missing directory during resume/fresh recovery. Workspace-owning external/preset Agents and `metadata.workspace: false` Adapters may omit the override. Missing/invalid paths produce stable `WORKDIR_*` reasons classified as `OH-ADP-3004`; see [input validation](../../docs/en/reference/invoke-input.md). `prepareRunContext` and `WorkspaceAssignments` are removed; Runtime operational state is separate.
+The application prepares `/absolute/prepared/project` before calling. Local execution requires an explicit existing absolute directory through a path-only workspace item. Core does not inherit cwd, create application directories, allocate random workspaces or restore a missing directory during resume/fresh recovery. Workspace-owning external/preset Agents and `metadata.workspace: false` Adapters may omit the override. Missing/invalid paths produce stable `WORKDIR_*` reasons classified as `OH-ADP-3004`; see [input validation](../../docs/en/reference/invoke-input.md). `prepareRunContext` and `WorkspaceAssignments` are removed; Runtime operational state is separate.
 
 It validates and freezes the request, renders this turn's model input, resolves the local environment, and admits the run. Admission happens before any Provider starts: identity, capacity, and closed-state checks all run there. Business Context comes from this invocation only — Core never fills a gap from session history.
 
@@ -76,7 +82,7 @@ It validates and freezes the request, renders this turn's model input, resolves 
 
 ## What ends a run
 
-The overall deadline defaults to 24 hours and accepts up to seven days. For 72 hours, pass `runtimeLimits: { runTimeoutMs: 259200000 }` or Context `octo.execution/limits` with `run_timeout_ms: 259200000`. First-frame, model-idle and tool-idle detection remain independent. See [input precedence and ranges](../../docs/en/reference/invoke-input.md).
+The overall deadline defaults to 24 hours and accepts up to seven days. For 72 hours, pass Context `octo.execution/limits` with `run_timeout_ms: 259200000`. First-frame, model-idle and tool-idle detection remain independent. See [input precedence and ranges](../../docs/en/reference/invoke-input.md).
 
 In canonical mode only `run.completed` is success. A final message, an accepted cancellation, and an iterator that simply runs out are not.
 

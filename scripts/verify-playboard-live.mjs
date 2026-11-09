@@ -1,10 +1,10 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-
 // Real Providers and the online test environment; no credentials are printed.
 const endpoint = "https://im-test.deepminer.com.cn/";
 assert.equal((await fetch(endpoint)).status, 200);
@@ -20,25 +20,27 @@ try {
           text: `Reply exactly ${marker}. Do not call tools, modify files, or send messages.`
         }
       ],
-      agentEnv: {
-        ...{
-          schema: "octo.context-envelope/v3",
-          items: [
-            { namespace: "octo.execution", name: "adapter", payload: { type } },
-            {
-              namespace: "octo.security",
-              name: "approval_policy",
-              payload: { mode: "full_access" }
-            },
-            {
-              namespace: "octo.execution",
-              name: "limits",
-              payload: { run_timeout_ms: 120000, cancel_grace_ms: 1000 }
-            }
-          ]
+      agentEnv: withAgentEnvItems(
+        {
+          ...{
+            schema: "octo.context-envelope/v3",
+            items: [
+              { namespace: "octo.execution", name: "adapter", payload: { type } },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              },
+              {
+                namespace: "octo.execution",
+                name: "limits",
+                payload: { run_timeout_ms: 120000, cancel_grace_ms: 1000 }
+              }
+            ]
+          }
         },
-        workdir: directory
-      },
+        [{ namespace: "octo.execution", name: "workspace", payload: { path: directory } }]
+      ),
       protocol_mode: "canonical"
     };
     const child = spawn(

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // Explicit non-gating acceptance using only processes owned by this script.
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -41,18 +42,20 @@ try {
             : "Reply exactly READY. Do not call tools or change files."
         }
       ],
-      agentEnv: {
-        ...{
-          schema: "octo.context-envelope/v3",
-          items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+      agentEnv: withAgentEnvItems(
+        {
+          ...{
+            schema: "octo.context-envelope/v3",
+            items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+          }
         },
-        workdir: home,
-        approvalMode: "full_access",
-        runtimeLimits: { runTimeoutMs: 60000 }
-      },
-
+        [
+          { namespace: "octo.execution", name: "workspace", payload: { path: home } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+          { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 60000 } }
+        ]
+      ),
       protocol_mode: "canonical",
-
       ...(providerSession ? { providerSession } : {})
     };
     const environment = { signal: AbortSignal.timeout(65000) };

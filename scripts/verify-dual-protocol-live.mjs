@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -34,12 +35,12 @@ for (const [type, create, Normalizer] of [
       sessionGeneration: 0,
       prompt: "Reply exactly " + marker + ". Do not call tools.",
       modelInput: "Reply exactly " + marker + ". Do not call tools.",
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      approvalMode: "full_access",
-      agentSource: "provisioned",
-      agentConfig: {},
-      workdir: process.cwd(),
-      signal: AbortSignal.timeout(90_000)
+      signal: AbortSignal.timeout(90000),
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ])
     };
     const original = Normalizer.prototype.normalize;
     let conversions = 0;

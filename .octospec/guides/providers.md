@@ -2,7 +2,7 @@
 type: Guide
 title: Provider 实现与验证入口
 description: 按当前适配器声明说明传输、模式及验证边界。
-tags: []
+tags: [adapter, provider, configuration]
 timestamp: 2026-10-15T00:00:00Z
 implementation_baseline: df63c8f
 ---
@@ -32,9 +32,9 @@ Host 公共 `invoke` 默认 native。使用 canonical-only Adapter，或需要�
 
 Codex 使用 `thread/resume`，Claude Code 使用 `--resume`，ACP 使用 Provider 支持的 `session/load`；恢复和 fresh fallback 取决于对应实现。调用方保存并显式回传完整 opaque `providerSession`，包括扩展字段；只复用业务 `sessionId` 不会自动续接，Core 不持久维护业务绑定。存在 Provider session ID 也不保证恢复成功。新会话所需背景由调用方提供，见[会话续接步骤](../../docs/zh-CN/guides/context-and-sessions.md)。
 
-OpenClaw 新会话使用独立 key，续聊显式复用返回的原生句柄；每轮验证 `provider_agent_id` 指向已有 Agent，通过 `sessions.messages.subscribe` 取流、`agent` 执行、`agent.wait` 确认终态、`sessions.abort` 取消。它不创建 Agent、不验证旧 runner 隔离配置、不改写原生工作区，也不传 Harness cwd。见 [连接合同](../rules/openclaw.md)。
+OpenClaw 新会话使用独立 key，续聊显式复用返回的原生句柄；每轮验证 `adapter.openclaw/options.payload.agentId` 指向已有 Agent，通过 `sessions.messages.subscribe` 取流、`agent` 执行、`agent.wait` 确认终态、`sessions.abort` 取消。它不创建 Agent、不验证旧 runner 隔离配置、不改写原生工作区，也不传 Harness cwd。见 [连接合同](../rules/openclaw.md)。
 
-权限使用本轮 `approvalMode`。Adapter 按支持范围映射 ask／assisted／full_access，无法表达时明确拒绝。Claude Code 和 CodeBuddy 只在 full_access 下使用 bypass；OpenCode 只在 full_access 下使用自动执行 CLI，ask 使用交互 ACP。不能把某个引擎的默认权限写成整个 Runtime 的默认权限。
+权限使用本轮 `octo.security/approval_policy.payload.mode`。Adapter 按支持范围映射 ask／assisted／full_access，无法表达时明确拒绝。Claude Code 和 CodeBuddy 只在 full_access 下使用 bypass；OpenCode 只在 full_access 下使用自动执行 CLI，ask 使用交互 ACP。不能把某个引擎的默认权限写成整个 Runtime 的默认权限。
 
 ## Canonical 事件
 
@@ -44,7 +44,7 @@ native 模式保留 Provider 原始消息结构，由独立 Host control 表达�
 
 ## 配置与验证
 
-`agentConfig.effort` 使用统一 `low / medium / high / xhigh`；缺省时保留 Provider 默认值。原生转换、降档及未应用提示见 [思考强度映射](../rules/reasoning.md)。MCP 通过 [本轮 Context 执行配置](../rules/mcp.md) 提供，不触发插件安装。
+`octo.execution/model.payload.reasoning.effort` 使用统一 `low / medium / high / xhigh`；缺省时保留 Provider 默认值。原生转换、降档及未应用提示见 [思考强度映射](../rules/reasoning.md)。MCP 通过 [本轮 Context 执行配置](../rules/mcp.md) 提供，不触发插件安装。
 
 新增 Adapter 按 [开发指南](adapter-authoring.md) 补齐声明、原生事件与成功／失败／取消／恢复测试。代码支持和 fixture 通过不能替代真实 Provider 与 im-test 验收；过往实测范围见 [历史验证摘要](../journal/shared/provider-validation-history.md)；这些记录不是当前版本的新验收。
 

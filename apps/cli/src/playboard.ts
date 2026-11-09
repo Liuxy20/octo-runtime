@@ -70,18 +70,25 @@ export async function runPlayboard(options: PlayboardOptions): Promise<number> {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("playboard stdin must contain one JSON input object");
   const input = identifyInvokeInput(InvokeInput.check(value));
-  // full_access 是本 CLI 宿主的缺省策略；显式策略（包括非法值）交给共享入口校验，
+  // full_access 是本 CLI 宿主的缺省策略；显式策略（包括非法值）保留给 Adapter 校验，
   // 不覆盖 Context，也不改变 SDK 的 ask 默认值。
-  if (
-    !Object.hasOwn(input.agentEnv, "approvalMode") &&
-    !(
-      Array.isArray(input.agentEnv?.items) &&
-      input.agentEnv.items.some(
-        (item) => item?.namespace === "octo.security" && item.name === "approval_policy"
-      )
+  if (!(
+    Array.isArray(input.agentEnv?.items) &&
+    input.agentEnv.items.some(
+      (item) => item?.namespace === "octo.security" && item.name === "approval_policy"
     )
-  )
-    input.agentEnv.approvalMode = "full_access";
+  ))
+    input.agentEnv = {
+      ...input.agentEnv,
+      items: [
+        ...input.agentEnv.items,
+        {
+          namespace: "octo.security",
+          name: "approval_policy",
+          payload: { mode: "full_access" }
+        }
+      ]
+    };
   const profile = options.profile ?? "default";
   const home = options.home ?? defaultRuntimeHome(options.env);
   runtimePaths(home, profile); // Validate the selected profile before starting resources.

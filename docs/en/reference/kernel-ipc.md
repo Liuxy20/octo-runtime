@@ -129,8 +129,24 @@ After checking readiness, submit once on a new connection (optionally include th
       "sessionId": "example-session",
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
-      "inputs": [{ "type": "text", "text": "Say hello." }],
-      "agentEnv": { "schema": "octo.context-envelope/v3", "workdir": "/absolute/prepared/project", "items": [] }
+      "inputs": [
+        {
+          "type": "text",
+          "text": "Say hello."
+        }
+      ],
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": [
+          {
+            "namespace": "octo.execution",
+            "name": "workspace",
+            "payload": {
+              "path": "/absolute/prepared/project"
+            }
+          }
+        ]
+      }
     }
   }
 }

@@ -578,10 +578,8 @@ export class CodexService {
     const current: Incarnation = {
       number: ++this.#generation,
       child,
-      writer: new CodexStdinWriter(child.stdin, (error) => this.#fault(current, error), {
-        maxItems: 128,
-        maxBytes: 32 * 1024 * 1024
-      }),
+      // 共享发送队列沿用 stdin-writer 数据预算与控制预留；128 项只用于启动等待队列。
+      writer: new CodexStdinWriter(child.stdin, (error) => this.#fault(current, error)),
       reader: createInterface({ input: child.stdout }),
       removeGuard,
       cleanup: createProcessCleanup(child, {

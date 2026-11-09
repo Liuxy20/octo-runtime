@@ -51,9 +51,9 @@ Adapter 仍按现有执行合同消费显式模型，完成原生映射及必要
 | `preset` | 调用 Provider 中已有的 Agent；调用方提供有效目标 |
 | `provisioned` | 由基础执行方承载调用方提供的定义及本轮执行配置；不要求持久创建 Provider Agent |
 
-来源与传输、部署位置、权限和工作区相互独立。Adapter 通过 `metadata.agentSources` 声明支持范围；执行计划冻结 `agent_source` 和需要的 `provider_agent_id`，映射到 `InvokeRequest.agentSource` 与 `agentConfig.providerAgentId`。不能根据 Provider 名称猜测来源。
+来源与传输、部署位置、权限和工作区相互独立。Adapter 通过 `metadata.agentSources` 声明支持范围；来源从 octo.execution/agent 的 source 读取；具体 Provider 目标由宿主与 Adapter 约定私有 item，例如 OpenClaw 的 adapter.openclaw/options。Core 不解释或复制这些设置。
 
-OpenClaw 声明两种来源，Adapter 边界都要求有效目标；公共 `InvokeInput` 的准备层在省略目标时补 `main`，不能将此默认值理解为创建 Agent。当前实现验证并调用已有 Agent，不创建受控 runner、不修改 Agent 配置。它声明 `metadata.workspace: false`，使用原生工作区。详见 [OpenClaw 合同](openclaw.md)。
+OpenClaw 声明两种来源，Adapter 在自身边界读取私有 `adapter.openclaw/options.payload.agentId`，省略时由 Adapter 内部采用 `main`；公共协议与 Core 不定义或补入该目标。此默认值不表示创建 Agent；当前实现验证并调用已有 Agent，不创建受控 runner、不修改 Agent 配置。它声明 `metadata.workspace: false`，使用原生工作区。详见 [OpenClaw 合同](openclaw.md)。
 
 ## 执行支持与可用状态
 
@@ -83,19 +83,19 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 产品选择的加载集合也独立于以上状态。CLI 与 SDK 嵌入代码分别决定集合；Host 不因框架支持更多类型或机器上探测到更多 Provider 就自行加载。默认来源拆分已实施，SDK 不读取 CLI 清单，见 [方案及影响](../tasks/adapter-composition-ownership/brief.md)。
 
-Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。公开 `/adapter` authoring 入口仍为[历史待办](../tasks/public-plugin-contracts/brief.md)，不据此恢复 Extra API 或发布 private 包。
+Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。公开 authoring 与通用帮助类由 `@mininglamp-oss/octo-runtime/adapter-sdk` 提供，不恢复 Extra API 或单独发布 private 包。
 
 Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 
 ## 协议删除边界
 
-- 执行计划不再定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知执行计划字段拒绝，不进行改名转换。
-- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。通过既有 adapter 选择执行实现，Provider Agent 目标仍使用 `providerAgentId`。
+- 当前协议不定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知公共字段拒绝，不进行改名转换。
+- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。公共 adapter item 仅选择执行实现；Provider Agent 目标由宿主与目标 Adapter 通过私有 item 约定，例如 OpenClaw 的 `adapter.openclaw/options.payload.agentId`。
 - SDK、宿主加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。
 
-业务材料由 Gateway/应用自行准备 inputs；Host 只解析 agentEnv，模型业务 Context 不由 Host 渲染。
+业务材料由 Gateway/应用自行准备 inputs；Host 透传 agentEnv，Adapter 直接读取，模型业务 Context 不由 Host 渲染。
 
 ## 实现与验证入口
 
@@ -119,7 +119,7 @@ manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点�
 当前开发者入口及 SDK/CLI 边界见 [Adapter 载入](../../docs/zh-CN/concepts/module-loading.md)。早期[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)中的 Extra 示例为历史材料，不属于当前公开合同。
 
 - [Adapter SDK](../../packages/octo-runtime-adapter-sdk/src/index.ts)、[Adapter Host](../../packages/octo-runtime-executor-kernel/src/index.ts)。
-- [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[本地执行配置解析](../../packages/octo-runtime-executor-core/src/context.ts)。
+- [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[Adapter SDK item 读取与校验](../../packages/octo-runtime-adapter-sdk/src/agent-env.ts)。
 - [context-mcp.test.js](../../test/context-mcp.test.js)、[native-host.test.js](../../test/native-host.test.js)。
 
 真实 Provider 与线上测试环境的验收范围以对应验证记录为准，支持声明和 fixture 测试不等于真实调用成功。

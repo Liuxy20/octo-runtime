@@ -1,4 +1,9 @@
 import {
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   spawnGrokBuildAcpClient as spawnAcpClient,
   type SpawnGrokBuildClientOptions as SpawnAcpClientOptions
 } from "./client.js";
@@ -130,7 +135,10 @@ export function createGrokBuildAcpAdapter(
         request: InvokeRequest,
         context?: AdapterInvocationContext
       ): AsyncGenerator<CanonicalEvent> {
-        if (request.approvalMode !== "ask" && request.approvalMode !== "full_access")
+        if (
+          invocationApprovalMode(request) !== "ask" &&
+          invocationApprovalMode(request) !== "full_access"
+        )
           throw new Error("APPROVAL_MODE_UNSUPPORTED: this ACP adapter has no assisted policy");
         if (responders.has(request.invocationId)) throw new Error("INVOCATION_ALREADY_ACTIVE");
         const bridge = new AcpApprovalBridge(request);
@@ -177,7 +185,7 @@ export function createGrokBuildAcpAdapter(
       command,
       args: [...args],
       env: runEnv,
-      cwd: request.workdir,
+      cwd: invocationWorkdir(request),
       ...definition.clientOptions?.(request, bridge),
       permissionHandler: (params) => bridge.requestPermission(params),
       onPermissionResponseWritten: (params) => bridge.responseWritten(params),
@@ -230,8 +238,8 @@ export function createGrokBuildAcpAdapter(
       let resumeFallback: string | undefined;
       let sessionMethod = requestedSessionId ? "session/load" : "session/new";
       let sessionParams = requestedSessionId
-        ? acpLoadSessionParams(requestedSessionId, { cwd: request.workdir })
-        : acpNewSessionParams({ cwd: request.workdir });
+        ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(request) })
+        : acpNewSessionParams({ cwd: invocationWorkdir(request) });
       sessionParams.mcpServers = servers;
       sessionParams =
         definition.sessionParams?.(sessionParams, request, !requestedSessionId) ?? sessionParams;
@@ -259,7 +267,7 @@ export function createGrokBuildAcpAdapter(
       if (missingLoadedSession) {
         resumeFallback = "session_load_not_found";
         sessionMethod = "session/new";
-        sessionParams = acpNewSessionParams({ cwd: request.workdir });
+        sessionParams = acpNewSessionParams({ cwd: invocationWorkdir(request) });
         sessionParams.mcpServers = servers;
         sessionParams = definition.sessionParams?.(sessionParams, request, true) ?? sessionParams;
         sessionRequestId = client.reserveRequestId();
@@ -274,7 +282,7 @@ export function createGrokBuildAcpAdapter(
         ? stringField(sessionResult, "sessionId")
         : (requestedSessionId ?? stringField(sessionResult, "sessionId"));
       if (!sessionId) throw new Error("ACP session/new returned no sessionId");
-      const requestedMode = contextActmode(request.context);
+      const requestedMode = contextActmode(request.agentEnv);
       if (requestedMode !== undefined) {
         const selection = (definition.selectActmode ?? acpActmodeSelectionRequest)(
           sessionResult,
@@ -292,7 +300,7 @@ export function createGrokBuildAcpAdapter(
             : {})
         });
       }
-      const requestedModel = nonEmptyString(request.agentConfig?.model);
+      const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {
         const selection = acpModelSelectionRequest(sessionResult, sessionId, requestedModel);
         if (selection) {

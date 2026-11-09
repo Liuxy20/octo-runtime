@@ -26,9 +26,15 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }
+    ]
   }
 });
 ```

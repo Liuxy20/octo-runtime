@@ -1,3 +1,7 @@
+import {
+  invocationRuntimeLimits,
+  invocationWorkdir
+} from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { spawnJsonLines } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
@@ -44,12 +48,13 @@ export const testAdapter = {
       env: { OCTO_FIXTURE_PIPE_FAULT: ["stdout", "stderr"].includes(mode) ? mode : undefined }
     };
   },
-  async *invoke(request) {
+  async *invoke(request, context) {
+    context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
     let close;
     try {
       for await (const value of spawnJsonLines({
         ...this.buildCommand(request),
-        cwd: request.workdir,
+        cwd: invocationWorkdir(request),
         signal: request.signal,
         parseLine: JSON.parse,
         onSpawn: (cleanup) => {

@@ -1,10 +1,11 @@
+import { invocationRuntimeLimits } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
 import { createExecutorFixture } from "../test-support/executor-adapter.mjs";
 import { invokeRequest, preparedFrames } from "./runtime-fixture.js";
-
 const terminal = (mode) =>
   mode === "native"
     ? { kind: "control", control: { type: "state", state: "completed" } }
@@ -19,7 +20,6 @@ const advance = async (t, ms) => {
   t.mock.timers.tick(0);
   await nextTurn();
 };
-
 for (const mode of ["native", "canonical"]) {
   for (const scenario of [
     "blocked-next",
@@ -36,37 +36,45 @@ for (const mode of ["native", "canonical"]) {
         returns = 0;
       core.register({
         ...createExecutorFixture(),
-        invoke: () => ({
-          [Symbol.asyncIterator]() {
-            return this;
-          },
-          next() {
-            if (++reads === 1)
-              return Promise.resolve({
-                done: false,
-                value: scenario === "paused-cancel" ? progress(mode) : terminal(mode)
-              });
-            if (scenario === "blocked-return") return Promise.resolve({ done: true });
-            if (scenario === "split-budget" || scenario === "within-budget")
-              return new Promise((resolve) =>
-                setTimeout(() => resolve({ done: true }), scenario === "within-budget" ? 40 : 80)
-              );
-            return new Promise(() => {});
-          },
-          return() {
-            returns++;
-            if (scenario === "split-budget" || scenario === "within-budget")
-              return new Promise((resolve) =>
-                setTimeout(() => resolve({ done: true }), scenario === "within-budget" ? 40 : 80)
-              );
-            return new Promise(() => {});
-          }
-        })
+        invoke: (_fixtureRequest, _fixtureContext) => {
+          _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
+          return {
+            [Symbol.asyncIterator]() {
+              return this;
+            },
+            next() {
+              if (++reads === 1)
+                return Promise.resolve({
+                  done: false,
+                  value: scenario === "paused-cancel" ? progress(mode) : terminal(mode)
+                });
+              if (scenario === "blocked-return") return Promise.resolve({ done: true });
+              if (scenario === "split-budget" || scenario === "within-budget")
+                return new Promise((resolve) =>
+                  setTimeout(() => resolve({ done: true }), scenario === "within-budget" ? 40 : 80)
+                );
+              return new Promise(() => {});
+            },
+            return() {
+              returns++;
+              if (scenario === "split-budget" || scenario === "within-budget")
+                return new Promise((resolve) =>
+                  setTimeout(() => resolve({ done: true }), scenario === "within-budget" ? 40 : 80)
+                );
+              return new Promise(() => {});
+            }
+          };
+        }
       });
       const source = preparedFrames(
         core,
         "executor-fixture",
-        invokeRequest({ invocationId: "budget", runtimeLimits: { cancelGraceMs: 100 } }),
+        invokeRequest({
+          invocationId: "budget",
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "limits", payload: { cancel_grace_ms: 100 } }
+          ])
+        }),
         { protocolMode: mode }
       );
       await source.next();
@@ -109,7 +117,6 @@ for (const mode of ["native", "canonical"]) {
       await collecting;
     });
   }
-
   for (const abort of [false, true]) {
     test(`${mode}: late next rejection after ${abort ? "cancel" : "deadline"} is observed`, async () => {
       const blocked = Promise.withResolvers();
@@ -117,7 +124,8 @@ for (const mode of ["native", "canonical"]) {
       const core = new AgentExecutor();
       core.register({
         ...createExecutorFixture(),
-        async *invoke() {
+        async *invoke(_fixtureRequest, _fixtureContext) {
+          _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
           started.resolve();
           yield abort ? progress(mode) : terminal(mode);
           await blocked.promise;
@@ -126,7 +134,12 @@ for (const mode of ["native", "canonical"]) {
       const source = preparedFrames(
         core,
         "executor-fixture",
-        invokeRequest({ invocationId: "late", runtimeLimits: { cancelGraceMs: 100 } }),
+        invokeRequest({
+          invocationId: "late",
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "limits", payload: { cancel_grace_ms: 100 } }
+          ])
+        }),
         { protocolMode: mode }
       );
       await source.next();

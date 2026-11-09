@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 341：AgentEnv 直传 Adapter](tasks/341-adapter-agentenv/brief.md)：移除配置投影，私有配置归宿主与 Adapter，共性 bean 保留公共类型；整合 #339 后双轴及测试/验证 JS 审查通过，[验收](tasks/341-adapter-agentenv/validation.md)记录全量、手动专项和双包验证。仅创建 main PR，禁止自动合并，不扩大 CI。
+
 - [Issue 334：应用提示词归调用方](tasks/334-caller-owned-prompts/brief.md) 与 [Issue 335：调用方预建工作目录](tasks/335-caller-owned-workspace/brief.md)：两个方案准备度 96 分并经实施前审查，直接删除旧抽象，不提供兼容；缺目录返回稳定错误码。[联合验收](tasks/334-caller-owned-prompts/validation.md)记录全量、显式专项、双包和真实 Codex/Claude 结果；Gateway #23 已取消，仅记录消费者升级缺口。
 
 - [Issue 339：常驻 Engine 与 Adapter 生命周期边界细化](tasks/339-engine-lifecycle/brief.md)：独立 worktree、[95 分规划](tasks/339-engine-lifecycle/assessment.md)后按授权实施，无兼容层；默认托管归 CLI，业务 Engine 与 Home 归宿主，Adapter 构造方式不限。模块对象与接口见[方案](tasks/339-engine-lifecycle/design.md)，实际检查见[验证](tasks/339-engine-lifecycle/validation.md)。

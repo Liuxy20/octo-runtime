@@ -1,4 +1,9 @@
 import {
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   acpLoadSessionParams,
   acpNewSessionParams,
   acpPromptParams,
@@ -260,7 +265,10 @@ export function createAcpAdapter(
         request: InvokeRequest,
         context?: AdapterInvocationContext
       ): AsyncGenerator<CanonicalEvent> {
-        if (request.approvalMode !== "ask" && request.approvalMode !== "full_access")
+        if (
+          invocationApprovalMode(request) !== "ask" &&
+          invocationApprovalMode(request) !== "full_access"
+        )
           throw new Error("APPROVAL_MODE_UNSUPPORTED: this ACP adapter has no assisted policy");
         if (responders.has(request.invocationId)) throw new Error("INVOCATION_ALREADY_ACTIVE");
         const bridge = new AcpApprovalBridge(request);
@@ -307,7 +315,7 @@ export function createAcpAdapter(
       command,
       args: [...args],
       env: runEnv,
-      cwd: request.workdir,
+      cwd: invocationWorkdir(request),
       permissionHandler: (params) => bridge.requestPermission(params),
       onPermissionResponseWritten: (params) => bridge.responseWritten(params),
       onPermissionResponseFailed: (params, error) => bridge.responseFailed(params, error),
@@ -355,8 +363,8 @@ export function createAcpAdapter(
       let resumeFallback: string | undefined;
       let sessionMethod = requestedSessionId ? "session/load" : "session/new";
       let sessionParams = requestedSessionId
-        ? acpLoadSessionParams(requestedSessionId, { cwd: request.workdir })
-        : acpNewSessionParams({ cwd: request.workdir });
+        ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(request) })
+        : acpNewSessionParams({ cwd: invocationWorkdir(request) });
       sessionParams.mcpServers = servers;
       let sessionRequestId = client.reserveRequestId();
       let sessionResult: JsonRecord = {};
@@ -377,7 +385,7 @@ export function createAcpAdapter(
       if (missingLoadedSession) {
         resumeFallback = "session_load_not_found";
         sessionMethod = "session/new";
-        sessionParams = acpNewSessionParams({ cwd: request.workdir });
+        sessionParams = acpNewSessionParams({ cwd: invocationWorkdir(request) });
         sessionParams.mcpServers = servers;
         sessionRequestId = client.reserveRequestId();
         result = await client.request<JsonRecord>(sessionMethod, sessionParams, {
@@ -409,7 +417,7 @@ export function createAcpAdapter(
             }
           }
         };
-      const requestedMode = contextActmode(request.context);
+      const requestedMode = contextActmode(request.agentEnv);
       if (requestedMode !== undefined) {
         const selection = acpActmodeSelectionRequest(sessionResult, sessionId, requestedMode);
         if (!selection.unchanged) await client.request(selection.method, selection.params);
@@ -423,7 +431,7 @@ export function createAcpAdapter(
             : {})
         });
       }
-      const requestedModel = nonEmptyString(request.agentConfig?.model);
+      const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {
         const selection = acpModelSelectionRequest(sessionResult, sessionId, requestedModel);
         if (selection) {

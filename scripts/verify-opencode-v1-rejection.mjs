@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createOpenCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-opencode";
 import { invokeRequest } from "../test/runtime-fixture.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 
 // V1 仅解包到临时目录用于拒绝验收，绝不安装到全局或更改宿主 PATH。
 const directory = await mkdtemp(join(tmpdir(), "octo-opencode-v1-"));
@@ -36,7 +37,14 @@ try {
   assert.match(probe.reason, /OpenCode 1 is no longer supported/);
   for (const approvalMode of ["ask", "full_access"]) {
     await assert.rejects(async () => {
-      for await (const _ of adapter.invoke(invokeRequest({ approvalMode }))) {
+      const request = invokeRequest({
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "adapter", payload: { type: "opencode" } },
+          { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+        ])
+      });
+      for await (const _ of adapter.invoke(request)) {
         /* drain */
       }
     }, /OPENCODE_VERSION_UNSUPPORTED.*1\.18\.30/);

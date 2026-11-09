@@ -9,6 +9,7 @@
     "dist"
   ],
   "dependencies": {
+    "@mininglamp-oss/octo-runtime-adapter-sdk": "workspace:*",
     "@mininglamp-oss/octo-runtime-adapter-acp": "workspace:*"
   },
   "scripts": {

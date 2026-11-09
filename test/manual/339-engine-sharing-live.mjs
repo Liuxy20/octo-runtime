@@ -24,10 +24,16 @@ const run = async (core, marker) => {
         protocol_mode: "canonical",
         agentEnv: {
           schema: "octo.context-envelope/v3",
-          items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }],
-          workdir,
-          approvalMode: "full_access",
-          runtimeLimits: { runTimeoutMs: 60000 }
+          items: [
+            { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
+            { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            },
+            { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 60000 } }
+          ]
         }
       },
       { signal: AbortSignal.timeout(65000) }

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { copyFile, link, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -12,12 +13,10 @@ import { spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.j
 import { spawnGrokBuildAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";
 import { invokeRequest } from "./runtime-fixture.js";
 import { resolveProcessLaunch } from "../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
-
 const windows = process.platform === "win32";
 const source = fileURLToPath(new URL("./fixtures/windows-command-provider.mjs", import.meta.url));
 const shimHeader =
   "@ECHO off\r\nGOTO start\r\n:find_dp0\r\nSET dp0=%~dp0\r\nEXIT /b\r\n:start\r\nSETLOCAL\r\nCALL :find_dp0\r\n";
-
 test("POSIX launch keeps the original executable and argv without Windows carrier lookup", () => {
   const original = Object.getOwnPropertyDescriptor(process, "platform");
   try {
@@ -30,7 +29,6 @@ test("POSIX launch keeps the original executable and argv without Windows carrie
     Object.defineProperty(process, "platform", original);
   }
 });
-
 async function fixture(t, name = "provider") {
   const root = await mkdtemp(join(tmpdir(), "octo launch 中文 "));
   t.after(() => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }));
@@ -57,13 +55,11 @@ async function fixture(t, name = "provider") {
   };
   return { root, command, entry, env };
 }
-
 async function lines(command, args, f, extra = {}) {
   return Array.fromAsync(
     spawnJsonLines({ command, args, cwd: f.root, env: f.env, parseLine: JSON.parse, ...extra })
   );
 }
-
 test(
   "Windows shared JSON-lines launches an npm shim with exact argv/env/cwd",
   { skip: !windows },
@@ -79,7 +75,6 @@ test(
     assert.deepEqual(output, { args, cwd: f.root, marker: f.env.FIXTURE_MARKER });
   }
 );
-
 test(
   "Windows probe and subsequent launch agree for bare, cmd and npm Unix entry paths",
   { skip: !windows },
@@ -93,7 +88,6 @@ test(
     }
   }
 );
-
 for (const [name, create] of [
   ["codex", (env) => createCodexAdapter({ env })],
   ["claude", () => createClaudeCodeAdapter()]
@@ -104,14 +98,16 @@ for (const [name, create] of [
     async (t) => {
       const f = await fixture(t, name);
       const request = invokeRequest({
-        workdir: f.root,
-        approvalMode: "full_access",
         signal: AbortSignal.timeout(7000),
         executionEnvOverrides: {
           env_variables: Object.entries(f.env)
             .filter(([, value]) => value !== undefined)
             .map(([key, value]) => ({ key, value }))
-        }
+        },
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: f.root } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
       });
       const events = await Array.fromAsync(create(f.env).invoke(request));
       assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
@@ -121,7 +117,6 @@ for (const [name, create] of [
     }
   );
 }
-
 for (const [label, create] of [
   ["ACP", spawnAcpClient],
   ["Grok ACP", spawnGrokBuildAcpClient]
@@ -153,7 +148,6 @@ for (const [label, create] of [
     }
   );
 }
-
 test(
   "Windows native exe wrapper bypasses Node script parsing and keeps argv",
   { skip: !windows },
@@ -175,7 +169,6 @@ test(
     assert.deepEqual(output, ["a & b", "中文 空格"]);
   }
 );
-
 test(
   "Windows missing, unknown and nonzero commands retain distinct failures",
   { skip: !windows },
@@ -195,7 +188,6 @@ test(
     await assert.rejects(lines(f.command, [], f), { code: "EINVAL" });
   }
 );
-
 test(
   "Windows cancellation through a shim reclaims only its started Provider",
   { skip: !windows, timeout: 8000 },
@@ -222,7 +214,6 @@ test(
     assert.throws(() => process.kill(pid, 0), { code: "ESRCH" });
   }
 );
-
 test(
   "Windows command selection is per-run, immutable and does not fall through a broken first install",
   { skip: !windows },

@@ -39,6 +39,9 @@ export function createScopedCodexAdapter(options = {}) {
   scopes.add(owner);
   return {
     ...adapter,
+    get defaultAgentEnv() {
+      return adapter.defaultAgentEnv;
+    },
     invoke: scope.invoke.bind(scope),
     respondInteraction: scope.respondInteraction.bind(scope),
     respondNative: scope.respondNative.bind(scope),

@@ -1,3 +1,7 @@
+import {
+  invocationRuntimeLimits,
+  invocationApprovalMode
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export function createExecutorFixture() {
   const pending = new Map();
   const respond = async (id, response) => {
@@ -21,6 +25,7 @@ export function createExecutorFixture() {
     respondInteraction: respond,
     respondNative: respond,
     async *invoke(request, context) {
+      context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
       if (request.prompt === "terminate-worker") process.exit(23);
       if (request.prompt === "throw") throw new Error("fixture startup failure");
       if (request.prompt === "invalid") {
@@ -52,7 +57,10 @@ export function createExecutorFixture() {
                 expiresAt: new Date(Date.now() + 60000).toISOString(),
                 request: {
                   schema: "octo.approval-request/v1",
-                  policy: { mode: request.approvalMode, hash: `sha256:${"a".repeat(64)}` },
+                  policy: {
+                    mode: invocationApprovalMode(request),
+                    hash: `sha256:${"a".repeat(64)}`
+                  },
                   operation: { kind: "tool_execution", summary: "Proceed?" },
                   requestedPermissions: [],
                   allowedOutcomes: ["accepted", "declined", "cancelled"],

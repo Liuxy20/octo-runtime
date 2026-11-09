@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test, { afterEach } from "node:test";
@@ -25,7 +26,16 @@ const claude = fileURLToPath(
   new URL("../test-support/claude/fake-permission-cli.js", import.meta.url)
 );
 const input = (scenario = "normal", extras = {}) =>
-  invokeRequest({ modelInput: scenario, approvalMode: "full_access", ...extras });
+  invokeRequest({
+    modelInput: scenario,
+    ...extras,
+    agentEnv: withAgentEnvItems(
+      withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ]),
+      extras.agentEnv?.items ?? []
+    )
+  });
 const collect = async (source) => {
   const values = [];
   for await (const value of source) values.push(value);
@@ -51,7 +61,6 @@ function hostFor(adapter) {
 }
 const codexHost = () =>
   hostFor(createCodexAdapter({ command: process.execPath, appServerArgs: [codex] }));
-
 test("adapter authoring defaults register as canonical-only without granting native support", async () => {
   const host = new AgentExecutor();
   let invokes = 0;
@@ -89,7 +98,6 @@ test("adapter authoring defaults register as canonical-only without granting nat
     assert.equal((await host.shutdown()).cleanup, "complete");
   }
 });
-
 test("default native retains provider response and notification fields and never normalizes", async () => {
   const original = CodexEventNormalizer.prototype.normalize;
   let conversions = 0;
@@ -141,7 +149,6 @@ test("default native retains provider response and notification fields and never
     CodexEventNormalizer.prototype.normalize = original;
   }
 });
-
 test("explicit canonical runs the converter and retains the existing terminal semantics", async () => {
   const frames = await collect(
     preparedFrames(codexHost(), "codex", input(), { protocolMode: "canonical" })
@@ -152,7 +159,6 @@ test("explicit canonical runs the converter and retains the existing terminal se
   assert.equal(frames.at(-1).control.state, "completed");
   assert.ok(frames.every((frame) => frame.kind !== "native"));
 });
-
 test("native raw RPC errors retain numeric codes and nested data before Host failure", async () => {
   const host = codexHost();
   ownedHosts.set(host, "incomplete");
@@ -166,7 +172,6 @@ test("native raw RPC errors retain numeric codes and nested data before Host fai
   assert.equal(frames.at(-1).control.state, "failed");
   assert.equal(frames.filter(isHostTerminal).length, 1);
 });
-
 for (const scenario of ["unknown", "eof"])
   test(`native ${scenario} handles unsupported requests and missing terminal`, async () => {
     const host = codexHost();
@@ -177,11 +182,14 @@ for (const scenario of ["unknown", "eof"])
     assert.equal(frames.at(-1).control.state, scenario === "unknown" ? "completed" : "failed");
     assert.equal(frames.filter(isHostTerminal).length, 1);
   });
-
 test("native pending approvals reject widened grants, duplicates, wrong-mode and late replies", async () => {
   const host = codexHost(),
     frames = [],
-    request = input("approval", { approvalMode: "ask" });
+    request = input("approval", {
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+      ])
+    });
   const reply = {
     requestId: 42,
     payload: { jsonrpc: "2.0", id: 42, result: { decision: "accept" } }
@@ -238,7 +246,6 @@ test("native pending approvals reject widened grants, duplicates, wrong-mode and
   );
   await assert.rejects(host.respondNative(request.invocationId, reply));
 });
-
 test("native cancellation and abandoned consumers converge with one terminal and cleanup", async () => {
   const host = codexHost(),
     controller = new AbortController(),
@@ -263,7 +270,6 @@ test("native cancellation and abandoned consumers converge with one terminal and
   await iterator.return();
   assert.equal(second.cancel("invoke-test"), false);
 });
-
 for (const mode of ["ask", "full_access"])
   test(`Claude native ${mode} preserves control request and result without normalization`, async () => {
     const original = ClaudeEventNormalizer.prototype.normalize;
@@ -275,7 +281,11 @@ for (const mode of ["ask", "full_access"])
     const host = hostFor(
       createClaudeCodeAdapter({ command: process.execPath, commandArgsPrefix: [claude] })
     );
-    const request = input("normal", { approvalMode: mode });
+    const request = input("normal", {
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode } }
+      ])
+    });
     const frames = [];
     try {
       for await (const frame of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
@@ -326,7 +336,6 @@ for (const mode of ["ask", "full_access"])
       ClaudeEventNormalizer.prototype.normalize = original;
     }
   });
-
 test("RPC native admission rejects unsupported mode before ACK; genuine native frames cross RPC with their original payload", async () => {
   const adapters = [createCodexAdapter({ command: process.execPath, appServerArgs: [codex] })];
   let invokes = 0;
@@ -363,7 +372,6 @@ test("RPC native admission rejects unsupported mode before ACK; genuine native f
     await host.close();
   }
 });
-
 test("bounded driver queue fails overflow and rejects pushes after close", async () => {
   const queue = new DriverQueue({
     limits: {
@@ -376,7 +384,6 @@ test("bounded driver queue fails overflow and rejects pushes after close", async
   queue.push({ text: "late" });
   await assert.rejects(collect(queue), /STREAM_QUEUE_ITEM_TOO_LARGE/);
 });
-
 test("failed native response delivery invalidates ownership and cannot be retried", async () => {
   const bridge = new NativeInteractionBridge();
   let writes = 0,
@@ -399,7 +406,6 @@ test("failed native response delivery invalidates ownership and cannot be retrie
   assert.equal(closes, 1);
   assert.ok(bridge.queue.drain().some((value) => value.control?.status === "invalidated"));
 });
-
 test("in-flight automatic native response has exclusive ownership until its write acknowledgement", async () => {
   const bridge = new NativeInteractionBridge();
   let acknowledge;
@@ -423,10 +429,13 @@ test("in-flight automatic native response has exclusive ownership until its writ
   await assert.rejects(bridge.respond({ requestId: 1, payload: {} }), /INTERACTION_NOT_ACTIVE/);
   bridge.close();
 });
-
 test("cancelling a native pending request invalidates it and rejects late replies", async () => {
   const host = codexHost(),
-    request = input("approval", { approvalMode: "ask" }),
+    request = input("approval", {
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+      ])
+    }),
     frames = [];
   for await (const frame of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
     "codex",
@@ -445,7 +454,6 @@ test("cancelling a native pending request invalidates it and rejects late replie
   );
   await host.shutdown();
 });
-
 test("partial JSON lines are bounded before newline and report overflow once", async () => {
   const input = new PassThrough(),
     failures = [];
@@ -462,7 +470,6 @@ test("partial JSON lines are bounded before newline and report overflow once", a
   remove();
   input.destroy();
 });
-
 test("invalid driver frames preserve continuous sequence for failure controls", async () => {
   const host = hostFor({
     metadata: {
@@ -484,7 +491,6 @@ test("invalid driver frames preserve continuous sequence for failure controls", 
   assert.equal(frames.at(-1).control.state, "failed");
   await host.shutdown();
 });
-
 for (const protocolMode of ["native", "canonical"])
   test(`${protocolMode} refuses successful terminal when driver return cleanup fails`, async () => {
     const host = hostFor({

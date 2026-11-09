@@ -27,9 +27,15 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }
+    ]
   }
 });
 ```
@@ -47,11 +53,11 @@ const input = InvokeInput.check({
 
 ## Configuration and session ownership
 
-The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. Public `InvokeInput.agentEnv.approvalMode` is also supported, but must agree with an explicit Context policy. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
+The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
 
 The caller saves and explicitly returns the complete `providerSession` from session updates, including Provider extension fields. Reusing the business `sessionId` alone starts fresh; Core keeps no persistent business-session-to-Provider binding table. See [Context and Sessions](../../docs/en/guides/context-and-sessions.md) for continuation and recovery input.
 
-Compatibility includes the executable identity, argv, cwd, complete effective environment, `CODEX_HOME`, semantic MCP configuration, effective `rawMessageMaxBytes` budget and `agentConfig.providerOptions.codexServiceRevision`. Change that revision or recreate the owner when changing native configuration or credentials in place. Keys and credentials are private; process snapshots expose only ownership, PID, state and incarnation. Raw descriptor invocation requires an explicit execution scope; registering with Core binds it automatically.
+Compatibility includes the executable identity, argv, cwd, complete effective environment, `CODEX_HOME`, semantic MCP configuration, effective `rawMessageMaxBytes` budget and `adapter.codex/options.payload.codexServiceRevision`. Change that revision or recreate the owner when changing native configuration or credentials in place. Keys and credentials are private; process snapshots expose only ownership, PID, state and incarnation. Raw descriptor invocation requires an explicit execution scope; registering with Core binds it automatically.
 
 An idle or active transport failure proactively replaces the owned process, with at most five replacements per recovery episode and a 90-second budget. Original business and control requests are never replayed. Startup errors such as a missing executable fail without repeated retries. Healthy operation for 60 seconds resets the recovery budget.
 
@@ -76,7 +82,7 @@ The singleton, default export and old process constructor options are removed wi
 
 Human approval capacity counts requests awaiting a decision per invocation, up to 256. Request 257 receives an explicit rejection while admitted approvals remain valid. A valid decision releases its slot immediately; automatic approvals consume no human slots. Questions and MCP elicitations retain a separate limit of 16 unfinished requests. `full_access` keeps Codex's `untrusted` policy and lets Runtime handle supported approvals automatically, preserving dynamic MCP behavior.
 
-All stdin frames for one app-server share a bounded writer: 128 normal entries / 32 MiB, including the active frame, plus a reserve of 8 entries / 64 KiB for protocol rejections and interrupts. Human-capacity rejections use the normal queue so an ordinary overflow burst cannot exhaust the small control reserve. It waits for each write callback and, when `write` returns false, for `drain`. Five seconds without write progress or 30 seconds since enqueueing fails delivery. The human decision deadline remains 10 minutes. Resolved confirms a successful local write callback, not Provider receipt or tool completion. Cancellation removes only the invocation's queued responses; bytes already handed to the pipe cannot be recalled.
+All stdin frames for one app-server share a bounded writer: 4096 normal entries / 64 MiB, including the active frame, plus a reserve of 8 entries / 64 KiB for protocol rejections and interrupts. Human-capacity rejections use the normal queue so an ordinary overflow burst cannot exhaust the small control reserve. It waits for each write callback and, when `write` returns false, for `drain`. Five seconds without write progress or 30 seconds since enqueueing fails delivery. The human decision deadline remains 10 minutes. Resolved confirms a successful local write callback, not Provider receipt or tool completion. Cancellation removes only the invocation's queued responses; bytes already handed to the pipe cannot be recalled.
 
 Structured local capacity, write, and timeout causes take precedence over unrelated plugin Unauthorized stderr. Native `HOST_EXECUTION_FAILED.failure` and canonical failures preserve the same cause; actual Provider authentication rejection retains its credential classification.
 

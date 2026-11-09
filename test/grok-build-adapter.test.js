@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
@@ -14,13 +15,13 @@ import {
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { preparedFrames, invokeRequest } from "./runtime-fixture.js";
 import { observeGrokFixture, withGrokOutputPipe } from "../test-support/grok-build-fixture.mjs";
-
 const fixturePath = fileURLToPath(new URL("./fixtures/grok-build-acp-host.mjs", import.meta.url));
 const base = () =>
   invokeRequest({
-    approvalMode: "ask",
     modelInput: "hello",
-    agentConfig: {}
+    agentEnv: withAgentEnvItems(undefined, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+    ])
   });
 async function fixture(t, mode = "success", { cleanupFailure = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "octo-grok-test-"));
@@ -78,18 +79,19 @@ async function collect(adapter, request = base()) {
 }
 const terminal = (events) =>
   events.filter((event) => ["run.completed", "run.failed", "run.cancelled"].includes(event.type));
-
 test("Grok canonical registration, streaming, native tools, usage, cwd, environment and system rules", async (t) => {
   const f = await fixture(t);
   const request = {
     ...base(),
-    workdir: f.directory,
     executionEnvOverrides: {
       env_variables: [
         { key: "OCTO_TEST_VALUE", value: "run-value" },
         { key: "OCTO_TEST_SECRET", value: "secret-canary-95" }
       ]
-    }
+    },
+    agentEnv: withAgentEnvItems(base().agentEnv, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: f.directory } }
+    ])
   };
   const events = await collect(f.adapter, request);
   assert.deepEqual(grokBuildAdapter.metadata.protocolSupport.modes, ["canonical"]);
@@ -136,7 +138,6 @@ test("Grok canonical registration, streaming, native tools, usage, cwd, environm
   assert.equal(JSON.stringify(f.spawns[0].args).includes("secret-canary-95"), false);
   assert.equal(process.env.OCTO_TEST_VALUE, undefined);
 });
-
 for (const [mode, methodId] of [
   ["auth_api_key", "xai.api_key"],
   ["auth_api_key_interactive", "xai.api_key"],
@@ -157,7 +158,6 @@ for (const [mode, methodId] of [
     });
   });
 }
-
 test("Grok authentication rejection does not switch methods or create a session", async (t) => {
   const f = await fixture(t, "auth_api_key_error");
   await assert.rejects(() => collect(f.adapter), /GROK_AUTH_FAILED/);
@@ -168,7 +168,6 @@ test("Grok authentication rejection does not switch methods or create a session"
   );
   assert.equal(trace[1].params.methodId, "xai.api_key");
 });
-
 for (const [mode, expected] of [
   ["auth_missing", /GROK_AUTH_REQUIRED/],
   ["auth_error", /GROK_AUTH_FAILED/],
@@ -227,7 +226,6 @@ for (const [mode, expected] of [
       );
   });
 }
-
 test("Grok explicit resume preserves rules and missing session applies frozen recovery input to a fresh session", async (t) => {
   const resumed = await fixture(t);
   await collect(resumed.adapter, { ...base(), providerSession: { sessionId: "prior" } });
@@ -258,32 +256,45 @@ test("Grok explicit resume preserves rules and missing session applies frozen re
     "RECOVERY_95"
   );
 });
-
 test("Grok maps explicit plan, model, model-specific effort downgrade and both MCP transports", async (t) => {
   const f = await fixture(t);
   const events = await collect(f.adapter, {
     ...base(),
-    agentConfig: { model: "grok-three-level", effort: "xhigh" },
-    context: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        { namespace: "octo.execution", name: "actmode", payload: { mode: "plan" } },
-        {
-          namespace: "octo.execution",
-          name: "mcp",
-          payload: {
-            mcpServers: {
-              local: { type: "stdio", command: "node", args: ["tool.mjs"], env: { KEY: "value" } },
-              remote: {
-                type: "streamable_http",
-                url: "https://example.com/mcp",
-                headers: { Authorization: "Bearer example" }
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          ...base().agentEnv.items,
+          { namespace: "octo.execution", name: "actmode", payload: { mode: "plan" } },
+          {
+            namespace: "octo.execution",
+            name: "mcp",
+            payload: {
+              mcpServers: {
+                local: {
+                  type: "stdio",
+                  command: "node",
+                  args: ["tool.mjs"],
+                  env: { KEY: "value" }
+                },
+                remote: {
+                  type: "streamable_http",
+                  url: "https://example.com/mcp",
+                  headers: { Authorization: "Bearer example" }
+                }
               }
             }
           }
+        ]
+      },
+      [
+        {
+          namespace: "octo.execution",
+          name: "model",
+          payload: { selection: { id: "grok-three-level" }, reasoning: { effort: "xhigh" } }
         }
       ]
-    }
+    )
   });
   const trace = await f.trace();
   assert.equal(trace.find((entry) => entry.method === "session/set_mode").params.modeId, "plan");
@@ -303,7 +314,6 @@ test("Grok maps explicit plan, model, model-specific effort downgrade and both M
   assert.deepEqual(servers[0].env, [{ name: "KEY", value: "value" }]);
   assert.equal(servers[1].type, "http");
 });
-
 for (const mode of ["permission", "question", "plan"]) {
   test(
     `Grok ${mode} responds on the original invocation and rejects stale answers`,
@@ -312,7 +322,18 @@ for (const mode of ["permission", "question", "plan"]) {
       const f = await fixture(t, mode);
       const request = {
         ...base(),
-        ...(mode === "permission" ? {} : { approvalMode: "full_access" })
+        agentEnv: withAgentEnvItems(
+          base().agentEnv,
+          mode === "permission"
+            ? []
+            : [
+                {
+                  namespace: "octo.security",
+                  name: "approval_policy",
+                  payload: { mode: "full_access" }
+                }
+              ]
+        )
       };
       let interactionId;
       const events = [];
@@ -357,7 +378,6 @@ for (const mode of ["permission", "question", "plan"]) {
     }
   );
 }
-
 test(
   "Grok cancellation propagates cancel, invalidates pending questions and cleans the process",
   { timeout: 5000 },
@@ -391,7 +411,6 @@ test(
     );
   }
 );
-
 test("SDK host suppresses success until Grok cleanup completes and reports cleanup failure once", async (t) => {
   const f = await fixture(t, "success", { cleanupFailure: true });
   const host = new AgentExecutor();
@@ -406,7 +425,6 @@ test("SDK host suppresses success until Grok cleanup completes and reports clean
     ["run.failed"]
   );
 });
-
 test("Grok command and version probes give actionable diagnostics; CLI catalog includes its package", async (t) => {
   const missing = await createGrokBuildAdapter({
     command: join(tmpdir(), "missing-grok-95")
@@ -432,19 +450,28 @@ test("Grok command and version probes give actionable diagnostics; CLI catalog i
     )
   );
 });
-
 test("Grok rejects unsupported sandbox and MCP literals before spawning a process", async (t) => {
   const f = await fixture(t);
   await assert.rejects(
-    collect(f.adapter, { ...base(), agentConfig: { sandbox: "workspace-write" } }),
+    collect(f.adapter, {
+      ...base(),
+      agentEnv: withAgentEnvItems(base().agentEnv, [
+        {
+          namespace: "adapter.grok-build",
+          name: "options",
+          payload: { sandbox: "workspace-write" }
+        }
+      ])
+    }),
     /SANDBOX_UNSUPPORTED/
   );
   await assert.rejects(
     collect(f.adapter, {
       ...base(),
-      context: {
+      agentEnv: {
         schema: "octo.context-envelope/v3",
         items: [
+          ...base().agentEnv.items,
           {
             namespace: "octo.execution",
             name: "mcp",
@@ -459,10 +486,9 @@ test("Grok rejects unsupported sandbox and MCP literals before spawning a proces
   );
   assert.equal(f.spawns.length, 0);
 });
-
 test(
   "grok-build isolates concurrent bots from each other and from a standard ACP bot",
-  { timeout: 10_000 },
+  { timeout: 10000 },
   async (t) => {
     const f = await fixture(t, "question");
     const standard = createAcpAdapter(
@@ -487,8 +513,10 @@ test(
     const b = {
       ...base(),
       invocationId: "grok-bot-b",
-      workdir: f.directory,
-      executionEnvOverrides: { env_variables: [{ key: "OCTO_TEST_VALUE", value: "bot-b" }] }
+      executionEnvOverrides: { env_variables: [{ key: "OCTO_TEST_VALUE", value: "bot-b" }] },
+      agentEnv: withAgentEnvItems(base().agentEnv, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: f.directory } }
+      ])
     };
     const c = { ...base(), invocationId: "other-bot-c" };
     async function pending(adapter, request) {
@@ -586,7 +614,6 @@ test(
     );
   }
 );
-
 test("grok-build preserves safe stream-capacity diagnostics without leaking credentials", async (t) => {
   const f = await fixture(t);
   await assert.rejects(

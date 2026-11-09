@@ -52,6 +52,12 @@ Gateway 是独立 Git 仓库和 npm package：https://github.com/Mininglamp-OSS/
 
 执行边界采用 inputs 与 agentEnv 分离；业务 extra.* 仅可作为应用自己的格式，Runtime 不定义或渲染。当前 SDK/IPC v2 为用户授权的破坏性变更，保留执行信封结构。
 
+### AgentEnv 直接由 Adapter 消费
+
+AgentEnv 仅含 schema/items。Core 只读取 Adapter 路由，为本次调用复制快照并保序透传；配置语义校验、默认值和 Provider 原生映射归 Adapter，不生成中间配置对象。adapter-sdk 提供通用 item 读取和组合帮助函数、共性配置 helper；内置 Adapter 暴露独立副本 defaultAgentEnv 供宿主选用，执行时不向原信封追加默认条目。Core 保留执行、取消、watchdog 和清理生命周期；Adapter 解释预算后通过本地上下文配置 watchdog。
+
+只有模型、思考强度等各 Harness 共用概念才定义公共 bean。OpenClaw 是私有扩展的例子：公共 octo.execution/adapter 只含 type: openclaw；宿主另构造 adapter.openclaw/options，OpenClaw Adapter 自己读取其中 agentId。该私有 item 的名称、字段、类型、默认值及校验完全属于宿主和 Adapter，不进入公共 schema、生成类型或通用 SDK 专属配置模型。其他 Adapter 忽略，新增专属参数无须公共登记或协议版本变更。完整示例见[架构文档](../../docs/zh-CN/concepts/architecture.md)。可信连接认证经本地 Adapter 上下文传递，不写回调用方 AgentEnv。
+
 ### agentEnv 不定义会话身份
 
 agentEnv 是每次执行的显式配置，冻结仅保证本次调用不被后续修改影响，不要求同一会话各轮配置相同。Runtime 不对完整 agentEnv 建立跨轮相等性约束，不自动计算绑定签名，也不因配置变化自动递增 providerEpoch 或使旧表单失效。
@@ -82,7 +88,7 @@ Runtime CLI 只管理 executor-kernel，运维命令直接使用顶层 start/run
 
 ## 强制定位：执行基础设施不得代替产品决策
 
-行为模式、模型、思考强度、新建/续接/重置会话和界面选项由产品显式决定。Runtime 只做合同内配置解析、协议校验、完整传递和 Provider 原生映射。省略可选值不授权框架补历史、继承产品状态或重设模式；defaults/mandatory 及权限合同继续有效。降级、重试和其他自动动作必须有已确认合同，不从网络错误或未知状态推导兜底授权。
+行为模式、模型、思考强度、新建/续接/重置会话和界面选项由产品显式决定。Runtime 公共层只做协议校验和完整传递，Adapter 直接读取配置并映射 Provider。省略可选值不授权框架补历史、继承产品状态或重设模式；defaults/mandatory 及权限合同继续有效。降级、重试和其他自动动作必须有已确认合同，不从网络错误或未知状态推导兜底授权。
 
 ## 模型目录归 Provider 与宿主：以 Issue 193 为例
 
@@ -106,7 +112,7 @@ HostApp 选择安装与认证方案。Runtime 不隐式登录、刷新业务凭�
 
 ## 应用工作目录归调用方
 
-Issue 335 的执行边界为调用方已成功准备的绝对目录 → Runtime 校验 → Provider 执行。CLI 与 SDK 均须显式传入 workspace.path 或 agentEnv.workdir，不默认取 cwd、Home 或旧会话，不分配随机目录、不在缺失或恢复时重建。workspace payload 仅含 path，删除 fixed/random/none mode、workspace_mode、prepareRunContext 和 WorkspaceAssignments，不保留兼容转换。已有用户目录不删除。
+Issue 335 的执行边界为调用方已成功准备的绝对目录 → Adapter 校验 → Provider 执行。CLI 与 SDK 均须显式传入 workspace.path，不默认取 cwd、Home 或旧会话，不分配随机目录、不在缺失或恢复时重建。workspace payload 仅含 path，删除 fixed/random/none mode、workspace_mode、prepareRunContext 和 WorkspaceAssignments，不保留兼容转换。已有用户目录不删除。
 
 路径在 Provider 操作前检查；缺失、非法、不存在、非目录及不可访问分别返回 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE，公开分类沿用 OH-ADP-3004。续接和 fresh recovery 仍使用本次调用路径，消失就失败；校验不承诺消除文件系统竞态。外部/preset Agent 或 metadata.workspace:false 的 Adapter 可以没有本地覆盖，OpenClaw 的原生工作区归 Provider，不制造或 stat 远端路径。Runtime Home、日志、IPC 及 Provider 自有状态与应用目录分别管理，运维目录的既有创建与清理不因本次删除而扩大。
 

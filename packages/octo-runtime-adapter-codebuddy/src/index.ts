@@ -1,3 +1,8 @@
+import {
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { invocationEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
@@ -252,9 +257,13 @@ export function createCodeBuddyAdapter({
         const client = await Promise.resolve(
           acpClientFactory({
             command,
-            args: ["--acp", "--permission-mode", codeBuddyPermissionMode(req.approvalMode)],
+            args: [
+              "--acp",
+              "--permission-mode",
+              codeBuddyPermissionMode(invocationApprovalMode(req))
+            ],
             env: invocationEnvironment(req),
-            cwd: req.workdir,
+            cwd: invocationWorkdir(req),
             signal: req.signal,
             permissionHandler: (params) => permissions.requestPermission(params),
             onPermissionResponseWritten: (params) => permissions.responseWritten(params),
@@ -269,8 +278,8 @@ export function createCodeBuddyAdapter({
           const requestedSessionId = req.providerSession?.sessionId;
           const sessionMethod = requestedSessionId ? "session/load" : "session/new";
           const sessionParams = requestedSessionId
-            ? acpLoadSessionParams(requestedSessionId, { cwd: req.workdir })
-            : acpNewSessionParams({ cwd: req.workdir });
+            ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(req) })
+            : acpNewSessionParams({ cwd: invocationWorkdir(req) });
           const sessionRequestId = client.reserveRequestId();
           let session: { id: string };
 
@@ -290,7 +299,7 @@ export function createCodeBuddyAdapter({
             session = { id: sessionId };
           }
           let model = confirmedSessionModel(sessionResult);
-          const requestedModel = req.agentConfig?.model;
+          const requestedModel = invocationModel(req);
           if (requestedModel) {
             const selection = modelSelection(sessionResult, session.id, requestedModel);
             if (selection) {
@@ -430,7 +439,7 @@ export function createCodeBuddyAdapter({
   });
 }
 
-export function codeBuddyPermissionMode(mode: InvokeRequest["approvalMode"]): string {
+export function codeBuddyPermissionMode(mode: "ask" | "assisted" | "full_access"): string {
   switch (mode) {
     case "ask":
       return "default";

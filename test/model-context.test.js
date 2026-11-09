@@ -14,28 +14,24 @@ test("business materials are application inputs with no mandatory namespace conv
     const prepared = prepareInvokeInput(input).request;
     assert.equal(prepared.modelInput, text);
     assert.deepEqual(prepared.modelInputParts, input.inputs);
-    assert.deepEqual(prepared.context, agentEnv);
+    assert.deepEqual(prepared.agentEnv, agentEnv);
   }
 });
-test("old business Context cannot enter the execution environment", () => {
+test("opaque items are forwarded without being rendered into the model input", () => {
   for (const item of [
     { namespace: "extra.im", name: "history", payload: { text: "history" } },
-    {
-      namespace: "octo.content",
-      name: "inline",
-      payload: { entries: [{ text: "business material" }] }
-    }
-  ])
-    assert.throws(
-      () =>
-        InvokeInput.check({
-          inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { ...agentEnv, items: [item] }
-        }),
-      /business context/
-    );
+    { namespace: "custom.harness", name: "settings", payload: { nested: { enabled: true } } }
+  ]) {
+    const env = { ...agentEnv, items: [item] };
+    const request = prepareInvokeInput({
+      inputs: [{ type: "text", text: "hello" }],
+      agentEnv: env
+    }).request;
+    assert.deepEqual(request.agentEnv, env);
+    assert.equal(request.modelInput, "hello");
+  }
   assert.throws(
     () => InvokeInput.check({ inputs: [{ type: "text", text: "hello" }], contexts: agentEnv }),
-    /unified JSON contract/
+    /unknown field/
   );
 });

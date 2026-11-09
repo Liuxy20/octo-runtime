@@ -31,7 +31,12 @@ const input = InvokeInput.check({
       {
         namespace: "octo.execution",
         name: "adapter",
-        payload: { type: "openclaw", provider_agent_id: "main" }
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: { agentId: "main" }
       }
     ]
   }
@@ -40,12 +45,14 @@ const input = InvokeInput.check({
 
 ## 绑定了什么
 
+`adapter.openclaw/options` 是宿主与本 Adapter 的私有约定，其字段、校验和默认值不进入公共协议或生成类型；其他 Adapter 忽略该条目。`defaultAgentEnv` 返回独立信封供调用方组合，执行时不向提交的信封追加默认条目。连接凭据通过可信的本地调用上下文单独传递。
+
 | 项           | 值                                                           |
 | ------------ | ------------------------------------------------------------ |
 | Adapter 类型 | `openclaw`                                                   |
 | 导出         | `openclawAdapter`、`createOpenClawAdapter`                   |
 | 传输         | Gateway WebSocket RPC，走广告的 v4 方法与事件                |
-| 目标         | 通过 `provider_agent_id` 指定已有 Agent；输入准备默认 `main` |
+| 目标         | 通过 `adapter.openclaw/options.payload.agentId` 指定已有 Agent；OpenClaw Adapter 内部默认 `main` |
 | 输出         | 仅 canonical 事件                                            |
 | Workspace    | 关闭——归远端 Agent                                           |
 

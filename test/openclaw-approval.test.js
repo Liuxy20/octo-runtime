@@ -1,8 +1,8 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createOpenClawAdapter } from "../packages/octo-runtime-adapter-openclaw/dist/index.js";
 import { assertApprovalRequest } from "../packages/octo-runtime-protocol/dist/index.js";
-
 function fixture({
   decisions = ["allow-once", "allow-always", "deny"],
   ttl = 60000,
@@ -155,20 +155,30 @@ function fixture({
     runId: "r",
     modelInput: "test",
     prompt: "test",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    approvalMode,
-    agentSource: "preset",
-    workdir: "",
-    agentConfig: {
-      providerAgentId: "main",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://localhost:1",
-        OPENCLAW_GATEWAY_TOKEN: "x",
-        OPENCLAW_GATEWAY_DEVICE_ID: "d",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "main",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://localhost:1",
+            OPENCLAW_GATEWAY_TOKEN: "x",
+            OPENCLAW_GATEWAY_DEVICE_ID: "d",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+          }
+        }
       }
-    }
+    ])
   };
   if (resume) request.providerSession = { sessionId: session, resumable: true };
   const events = [];
@@ -195,7 +205,6 @@ function fixture({
       listener({ event: "exec.approval.resolved", payload: { id: "native-1", decision } })
   };
 }
-
 test(
   "OpenClaw resume ignores known old runless approvals and routes a matching current run",
   { timeout: 3000 },
@@ -222,7 +231,6 @@ test(
     );
   }
 );
-
 for (const approvalMode of ["ask", "full_access"])
   test(
     `OpenClaw ${approvalMode} resume rejects a first-seen delayed runless approval without answering it`,
@@ -248,7 +256,6 @@ for (const approvalMode of ["ask", "full_access"])
       assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 1);
     }
   );
-
 test(
   "OpenClaw resume fails explicitly for a current approval without a run ID",
   { timeout: 3000 },
@@ -272,7 +279,6 @@ test(
     );
   }
 );
-
 test(
   "OpenClaw fresh isolated sessions still route current runless approvals",
   { timeout: 3000 },
@@ -294,7 +300,6 @@ test(
     );
   }
 );
-
 test(
   "OpenClaw full access resume still resolves a matching current-run approval",
   { timeout: 3000 },
@@ -310,7 +315,6 @@ test(
     );
   }
 );
-
 for (const optionId of ["allow-once", "allow-always", "deny"])
   test(`OpenClaw ${optionId} reaches the original approval, once`, { timeout: 3000 }, async () => {
     const f = fixture({ snapshot: optionId === "deny" });
@@ -333,7 +337,6 @@ for (const optionId of ["allow-once", "allow-always", "deny"])
     );
     assert.equal(f.events.at(-1).type, "run.completed");
   });
-
 test(
   "OpenClaw rejects unoffered persistent choices without answering the gateway",
   { timeout: 3000 },
@@ -356,7 +359,6 @@ test(
     assert.equal(f.calls.filter((c) => c.method === "exec.approval.resolve").length, 0);
   }
 );
-
 test(
   "a Dashboard decision retires the Work approval without replaying a decision",
   { timeout: 3000 },
@@ -378,7 +380,6 @@ test(
     assert.equal(f.calls.filter((c) => c.method === "exec.approval.resolve").length, 0);
   }
 );
-
 test(
   "provider expiry retires approval and leaves the model free to handle denial",
   { timeout: 3000 },

@@ -1,3 +1,4 @@
+import { invocationEffort, invocationWorkdir } from "./agent-env.js";
 import { execFile, spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
@@ -18,6 +19,16 @@ import {
   processEnvironmentValue
 } from "./environment.js";
 import { createProcessCleanup } from "./process-cleanup.js";
+import {
+  defaultAgentEnv,
+  assertAdapterAgentEnv,
+  assertAdapterWorkdir,
+  bindInvocationConnection,
+  invocationApprovalMode,
+  invocationAgentSource,
+  invocationRuntimeLimits
+} from "./agent-env.js";
+export * from "./agent-env.js";
 import { resolveProcessLaunch } from "./process-launch.js";
 import { watchLineLimit } from "./line-limit.js";
 import { mapReasoningEffort, reasoningLevelMap, type ReasoningLevelMap } from "./reasoning.js";
@@ -40,6 +51,9 @@ import {
   type HostControl,
   type NativeHostFrame,
   type InvokeRequest,
+  type AgentEnv,
+  type InteractionResponse,
+  type NativeInteractionResponse,
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 
@@ -112,14 +126,16 @@ export interface ProbeResult {
 /** 工厂的编写输入；直接交给 Core 注册时须满足完整的 HostedAdapter 合同。 */
 export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
   metadata: AdapterMetadata;
+  defaultAgentEnv?: AgentEnv;
+  respondInteraction?(invocationId: string, response: InteractionResponse): Promise<void>;
+  respondNative?(invocationId: string, response: NativeInteractionResponse): Promise<void>;
   createExecutionScope?: CreateAdapterExecutionScope;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
   /**
-   * Execute one provider turn, optionally reporting watchdog progress.
-   * Iteration may throw on contract rejection (including defineAdapter's protocol/MCP checks).
-   * Core rejects unsupported approval/protocol before admission; after admission it converts
-   * iteration errors to failure events and independently verifies cleanup. Canonical adapters
-   * should yield a failure terminal after confirmed cleanup for expected execution failures.
+   * 消费本轮请求并输出 Provider 事件，可通过 context 报告 watchdog 进度。
+   * Core 在受理前核对传输模式，配置校验由 Adapter 负责，拒绝时迭代可抛错。
+   * 受理后 Core 将异常转换为失败事件，并独立核实资源回收；预期执行失败应在
+   * Adapter 确认清理完成后输出失败终态，不能把执行终态当成清理完成的证明。
    */
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<TOutput>;
 }
@@ -129,7 +145,8 @@ export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
  * 禁止与允许省略字段的编写输入混用，否则会把注册前的类型错误推迟到运行时。
  */
 export type DefinedAdapter<TAdapter extends Adapter = Adapter> = Readonly<
-  Omit<TAdapter, "metadata"> & {
+  Omit<TAdapter, "metadata" | "defaultAgentEnv"> & {
+    readonly defaultAgentEnv: AgentEnv;
     metadata: Omit<TAdapter["metadata"], "protocolSupport"> & {
       protocolSupport: AdapterProtocolSupport;
     };
@@ -141,6 +158,40 @@ export type DriverFrame =
   | Pick<NativeHostFrame, "kind" | "messageKind" | "payload">
   | { kind: "control"; control: HostControl };
 export type AdapterOutput = CanonicalEvent | DriverFrame;
+
+const preparationFailures = new WeakMap<object, WeakSet<AdapterInvocationContext>>();
+
+/**
+ * 执行尚未启动 Provider 的纯配置/目录校验；返回后才能开始探针或执行。
+ * 回调不得创建 Provider 资源。失败证据只绑定本次 context，供 Core 核对清理责任。
+ */
+export async function runAdapterPreparation(
+  context: AdapterInvocationContext | undefined,
+  prepare: () => void | Promise<void>
+): Promise<void> {
+  try {
+    await prepare();
+  } catch (error) {
+    if (context && error !== null && typeof error === "object") {
+      const contexts = preparationFailures.get(error) ?? new WeakSet<AdapterInvocationContext>();
+      contexts.add(context);
+      preparationFailures.set(error, contexts);
+    }
+    throw error;
+  }
+}
+
+/** SDK 尚未调用 Provider 的准备失败；Core 可确认此路径没有 Provider 资源待回收。 */
+export function isAdapterPreparationFailure(
+  error: unknown,
+  context: AdapterInvocationContext
+): boolean {
+  if (error === null || typeof error !== "object") return false;
+  const contexts = preparationFailures.get(error);
+  if (!contexts?.has(context)) return false;
+  contexts.delete(context);
+  return true;
+}
 
 /** The fully materialized subprocess contract produced immediately before spawn. */
 export interface CommandSpec {
@@ -199,8 +250,18 @@ export function defineAdapter<TAdapter extends Adapter>(
     modes: ["canonical"],
     nativeMethods: []
   };
+  const defaults = structuredClone(
+    adapter.defaultAgentEnv ??
+      defaultAgentEnv(
+        metadata.type,
+        metadata.agentSources.includes("provisioned") ? "provisioned" : "preset"
+      )
+  );
   return Object.freeze({
     ...adapter,
+    get defaultAgentEnv(): AgentEnv {
+      return structuredClone(defaults);
+    },
     metadata: {
       ...metadata,
       protocolSupport
@@ -209,16 +270,42 @@ export function defineAdapter<TAdapter extends Adapter>(
       request: InvokeRequest,
       context?: AdapterInvocationContext
     ): AsyncGenerator<AdapterOutput> {
-      assertProtocolSupport(protocolSupport, {
-        protocolMode: context?.protocolMode ?? "canonical"
+      // 可信连接归本次调用；同一低层请求被并发复用时也不能相互覆盖。
+      if (context?.providerOptions) request = { ...request };
+      bindInvocationConnection(request, context?.providerOptions);
+      let requested: string | undefined;
+      let native: string | undefined;
+      await runAdapterPreparation(context, async () => {
+        assertAdapterAgentEnv(request);
+        context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
+        if (
+          request.agentEnv.items.some(
+            (item) => item.namespace === "octo.execution" && item.name === "agent"
+          ) &&
+          !metadata.agentSources.includes(invocationAgentSource(request))
+        )
+          throw new Error(`AGENT_SOURCE_UNSUPPORTED: ${metadata.type}`);
+        if (
+          invocationApprovalMode(request) !== "full_access" &&
+          (context?.protocolMode === "native"
+            ? !adapter.respondNative
+            : !adapter.respondInteraction)
+        )
+          throw new Error(
+            `APPROVAL_MODE_UNSUPPORTED: ${metadata.type} does not implement execution-time approval responses`
+          );
+        await assertAdapterWorkdir(request, metadata.workspace !== false);
+        assertProtocolSupport(protocolSupport, {
+          protocolMode: context?.protocolMode ?? "canonical"
+        });
+        const mcp = request.agentEnv.items.find(
+          (item) => item.namespace === "octo.execution" && item.name === "mcp"
+        );
+        if (mcp && Object.keys(mcp.payload.mcpServers as object).length && !adapter.metadata.mcp)
+          throw new Error(`MCP_UNSUPPORTED: ${adapter.metadata.type}`);
+        requested = invocationEffort(request);
+        native = mapReasoningEffort(adapter.metadata.type, requested, levels);
       });
-      const mcp = request.context.items.find(
-        (item) => item.namespace === "octo.execution" && item.name === "mcp"
-      );
-      if (mcp && Object.keys(mcp.payload.mcpServers as object).length && !adapter.metadata.mcp)
-        throw new Error(`MCP_UNSUPPORTED: ${adapter.metadata.type}`);
-      const requested = request.agentConfig.effort;
-      const native = mapReasoningEffort(adapter.metadata.type, requested, levels);
       if (requested !== undefined && context?.protocolMode !== "native") {
         if (native === undefined || native !== requested)
           yield {
@@ -421,7 +508,7 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
           };
           for await (const native of spawnJsonLines({
             ...spec,
-            cwd: spec.cwd ?? request.workdir,
+            cwd: spec.cwd ?? invocationWorkdir(request),
             env: invocationEnvironment(request, spec.env),
             signal: request.signal,
             rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,

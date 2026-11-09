@@ -1,9 +1,9 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import Ajv from "ajv";
 import * as protocol from "../../packages/octo-runtime-protocol/dist/index.js";
-
 // Run explicitly after building; this suite is outside the default test/CI glob.
 const schema = JSON.parse(
   await readFile(
@@ -21,13 +21,13 @@ const request = () => ({
   invocationId: "invocation-334",
   runId: "run-334",
   agentSessionId: "session-334",
-  agentSource: "provisioned",
-  context: empty(),
-  approvalMode: "ask",
   modelInput: "Application prompt",
   prompt: "Application prompt",
-  workdir: "/tmp",
-  agentConfig: {}
+  agentEnv: withAgentEnvItems(empty(), [
+    { namespace: "octo.execution", name: "workspace", payload: { path: "/tmp" } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 });
 const removedItem = (payload) => ({
   namespace: "octo.control",
@@ -35,7 +35,6 @@ const removedItem = (payload) => ({
   payload
 });
 const removed = /CONTROL_INSTRUCTIONS_REMOVED:.*inputs\.parts/;
-
 test("removed fields reject presence at all boundaries, including undefined", () => {
   const boundaries = [
     ["InvokeInputWire", input, protocol.assertInvokeInput],
@@ -61,7 +60,6 @@ test("removed fields reject presence at all boundaries, including undefined", ()
     if (value !== undefined) assert.equal(validator("InvokeInputWire")(candidate), false);
   }
 });
-
 test("the exact removed item rejects in Context, configuration, environment and request", () => {
   for (const payload of [{ entries: [] }, { entries: [{ text: "Legacy prompt" }] }, {}, null]) {
     const context = { ...empty(), items: [removedItem(payload)] };
@@ -69,7 +67,7 @@ test("the exact removed item rejects in Context, configuration, environment and 
       ["ContextEnvelope", context, protocol.assertContextEnvelope],
       ["AgentEnv", context, protocol.assertAgentEnv],
       ["InvokeInputWire", { ...input(), agentEnv: context }, protocol.assertInvokeInput],
-      ["InvokeRequestWire", { ...request(), context }, protocol.assertInvokeRequest],
+      ["InvokeRequestWire", { ...request(), agentEnv: context }, protocol.assertInvokeRequest],
       [
         "ContextConfiguration",
         { defaults: context, mandatory: empty() },
@@ -91,7 +89,6 @@ test("the exact removed item rejects in Context, configuration, environment and 
     );
   }
 });
-
 test("other generic context names retain their existing extension behavior", () => {
   for (const [namespace, name] of [
     ["octo.control", "custom"],
@@ -102,7 +99,6 @@ test("other generic context names retain their existing extension behavior", () 
     assert.doesNotThrow(() => protocol.assertContextEnvelope(context));
   }
 });
-
 test("removed helpers and schema types are absent from the protocol surface", () => {
   for (const name of ["contextControlInstructions", "initialControlInstructions"])
     assert.equal(Object.hasOwn(protocol, name), false, name);

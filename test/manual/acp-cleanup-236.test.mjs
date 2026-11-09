@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -13,7 +14,6 @@ import { AcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest, preparedFrames } from "../runtime-fixture.js";
-
 const definition = { type: "broken-acp", provider: "fixture", command: "unused" };
 const spawnError = () =>
   Object.assign(new Error("spawn fixture ENOENT"), { code: "ENOENT", syscall: "spawn fixture" });
@@ -22,11 +22,15 @@ const collect = (core, id) =>
     preparedFrames(
       core,
       "broken-acp",
-      invokeRequest({ invocationId: id, approvalMode: "full_access" }),
+      invokeRequest({
+        invocationId: id,
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
+      }),
       { protocolMode: "canonical" }
     )
   );
-
 test("real ACP spawn ENOENT preserves the error and releases only confirmed Core ownership", async () => {
   const core = new AgentExecutor();
   core.register(createAcpAdapter({ ...definition, command: join(process.cwd(), randomUUID()) }));
@@ -41,10 +45,11 @@ test("real ACP spawn ENOENT preserves the error and releases only confirmed Core
     state: "closed",
     cleanup: "complete",
     unresolvedInvocationIds: [],
-    failedCleanupInvocationIds: []
+    failedCleanupInvocationIds: [],
+    unresolvedServiceIds: [],
+    failedCleanupServiceIds: []
   });
 });
-
 test("spawn failure terminal waits for actual ACP close", async () => {
   const gate = Promise.withResolvers();
   const entered = Promise.withResolvers();
@@ -60,7 +65,13 @@ test("spawn failure terminal waits for actual ACP close", async () => {
       }
     })
   });
-  const iterator = adapter.invoke(invokeRequest({ approvalMode: "full_access" }));
+  const iterator = adapter.invoke(
+    invokeRequest({
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    })
+  );
   let published = false;
   const reading = iterator.next().then((result) => {
     published = true;
@@ -78,7 +89,6 @@ test("spawn failure terminal waits for actual ACP close", async () => {
   assert.equal(result.value.payload.message, error.message);
   assert.equal((await iterator.next()).done, true);
 });
-
 test("failed ACP close is not converted to a clean spawn failure", async () => {
   const cleanupError = Object.assign(new Error("fixture cleanup failed"), {
     code: "PROCESS_TREE_CLEANUP_INCOMPLETE"
@@ -94,7 +104,19 @@ test("failed ACP close is not converted to a clean spawn failure", async () => {
     })
   });
   await assert.rejects(
-    Array.fromAsync(adapter.invoke(invokeRequest({ approvalMode: "full_access" }))),
+    Array.fromAsync(
+      adapter.invoke(
+        invokeRequest({
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
+        })
+      )
+    ),
     (error) => error === cleanupError
   );
   const core = new AgentExecutor();
@@ -107,7 +129,6 @@ test("failed ACP close is not converted to a clean spawn failure", async () => {
   assert.deepEqual(first.failedCleanupInvocationIds, ["cleanup-rejected"]);
   assert.deepEqual(await core.shutdown(), first);
 });
-
 test("non-spawn structured errors still reject with the original object", async () => {
   const error = Object.assign(new Error("fixture capacity exceeded"), {
     code: "STREAM_QUEUE_BYTES_EXCEEDED",
@@ -123,11 +144,22 @@ test("non-spawn structured errors still reject with the original object", async 
     })
   });
   await assert.rejects(
-    Array.fromAsync(adapter.invoke(invokeRequest({ approvalMode: "full_access" }))),
+    Array.fromAsync(
+      adapter.invoke(
+        invokeRequest({
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
+        })
+      )
+    ),
     (caught) => caught === error
   );
 });
-
 test("native ACP spawn failure closes its ChildProcess pipes without creating a provider PID", async (t) => {
   const core = new AgentExecutor();
   const closed = Promise.withResolvers();
@@ -160,7 +192,6 @@ test("native ACP spawn failure closes its ChildProcess pipes without creating a 
     JSON.stringify({ providerCreated: false, childCloseObserved: true, pipesClosed: true })
   );
 });
-
 test("native Kernel closes manifest, endpoint and lease after failed ACP invocation", async (t) => {
   const home = await mkdtemp(join(tmpdir(), "acp236-"));
   const endpoint = componentEndpoint(home);
@@ -183,7 +214,16 @@ test("native Kernel closes manifest, endpoint and lease after failed ACP invocat
     invokeClient(
       service.client,
       invocationInput(
-        invokeRequest({ invocationId: "kernel-missing", approvalMode: "full_access" }),
+        invokeRequest({
+          invocationId: "kernel-missing",
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
+        }),
         "canonical",
         "broken-acp"
       )

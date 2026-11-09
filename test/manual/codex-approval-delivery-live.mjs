@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
@@ -5,7 +6,6 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-
 if (process.env.OCTO_RUN_CODEX_APPROVAL_LIVE !== "1")
   throw new Error("Explicit live opt-in required");
 const directory = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "oa-"));
@@ -57,14 +57,21 @@ try {
           kernel.client,
           {
             inputs: [{ type: "text", text: input }],
-            agentEnv: {
-              ...{ schema: "octo.context-envelope/v3", items },
-              approvalMode: "full_access",
-              workdir: directory,
-              runtimeLimits: { runTimeoutMs: 120000 }
-            },
+            agentEnv: withAgentEnvItems(
+              {
+                ...{ schema: "octo.context-envelope/v3", items }
+              },
+              [
+                { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+                {
+                  namespace: "octo.security",
+                  name: "approval_policy",
+                  payload: { mode: "full_access" }
+                },
+                { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 120000 } }
+              ]
+            ),
             protocol_mode: mode,
-
             invocationId: randomUUID(),
             runId: randomUUID()
           },

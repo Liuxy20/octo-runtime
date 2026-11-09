@@ -2,6 +2,8 @@
 
 ## 2026-11-09
 
+- [Issue 341 AgentEnv 直传](journal/shared/2026-11-09-341-agentenv-direct.md)：95 分规划后移除配置投影，Adapter 直接消费私有 bean；整合最新 Engine 所有权后审查和离线回归通过，仅创建 main PR，禁止自动合并，不扩大 CI。
+
 - [Issue 334/335 调用方责任清理](journal/shared/2026-11-09-334-335-caller-ownership.md)：删除应用提示词注入、工作区 mode 与随机分配；预建目录缺失返回 WORKDIR 原因码。两个方案 96 分后审查实施，全量/专项/双包与 Codex/Claude 本机结果见联合验收；Gateway #23 已取消，不扩 CI。
 
 - [Issue 339 常驻 Engine 生命周期实现](journal/shared/2026-11-09-339-engine-lifecycle-implementation.md)：95分规划后完成所有权拆分、双轴及同类审查/autofix；默认1548通过、专项136通过，真实服务与包外验证见[记录](tasks/339-engine-lifecycle/validation.md)。保留[规划历史](journal/shared/2026-11-09-339-engine-lifecycle-plan.md)，不扩大CI。

@@ -26,15 +26,21 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }
+    ]
   }
 });
 ```
 
-调用前 `approvalMode` 必须已经是 `full_access`——没有 `ask` 这条路。
+调用前 `octo.security/approval_policy.payload.mode` 必须是 `full_access`，不支持 `ask`。
 
 ## 绑定了什么
 

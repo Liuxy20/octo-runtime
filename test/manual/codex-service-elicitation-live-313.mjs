@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { createFixtureCodexHost } from "../../test-support/codex-owner.mjs";
@@ -11,31 +12,35 @@ let elicitations = 0,
   terminal;
 try {
   const request = invokeRequest({
-    workdir: process.cwd(),
-    approvalMode: "full_access",
     signal: AbortSignal.timeout(90000),
     modelInput:
       "Use only the supplied consent_echo MCP tool. Never use shell or edit files.\nCall the consent_echo tool once, wait for its elicitation response, then report only the tool result.",
-    context: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        {
-          namespace: "octo.execution",
-          name: "mcp",
-          payload: {
-            mcpServers: {
-              octo_consent_313: {
-                type: "stdio",
-                command: process.execPath,
-                args: [
-                  fileURLToPath(new URL("./fixtures/codex-elicitation-313.mjs", import.meta.url))
-                ]
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          {
+            namespace: "octo.execution",
+            name: "mcp",
+            payload: {
+              mcpServers: {
+                octo_consent_313: {
+                  type: "stdio",
+                  command: process.execPath,
+                  args: [
+                    fileURLToPath(new URL("./fixtures/codex-elicitation-313.mjs", import.meta.url))
+                  ]
+                }
               }
             }
           }
-        }
+        ]
+      },
+      [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
       ]
-    }
+    )
   });
   for await (const event of scope.invoke(request)) {
     if (event.type === "interaction.requested") {

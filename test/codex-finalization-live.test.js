@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -5,12 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { invokeRequest } from "./runtime-fixture.js";
-
 test(
   "real Codex finalization interruption preserves the answer and resumes the thread",
   {
     skip: process.env.OCTO_CODEX_FINALIZATION_LIVE !== "1",
-    timeout: 180_000
+    timeout: 180000
   },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "octo-codex-finalization-live-"));
@@ -22,10 +22,16 @@ test(
         invokeRequest({
           modelInput: input,
           prompt: input,
-          workdir: directory,
           providerSession,
-          signal: AbortSignal.timeout(80_000),
-          agentConfig: { providerOptions: { finalizationTimeoutMs: timeoutMs } }
+          signal: AbortSignal.timeout(80000),
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+            {
+              namespace: "adapter.codex",
+              name: "options",
+              payload: { ...{ finalizationTimeoutMs: timeoutMs } }
+            }
+          ])
         })
       ))
         events.push(event);
@@ -62,7 +68,7 @@ test(
       const second = await run(
         "What marker did I ask you to remember? Reply with only the marker.",
         session,
-        15_000
+        15000
       );
       assert.equal(second.at(-1).type, "run.completed");
       assert.ok(

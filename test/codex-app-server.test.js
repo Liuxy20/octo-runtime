@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -8,15 +9,13 @@ import { fileURLToPath } from "node:url";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { contextHash } from "../packages/octo-runtime-protocol/dist/index.js";
 import { codexAppServerFixture, invokeRequest, withTimeout } from "./runtime-fixture.js";
-
 const fixture = fileURLToPath(
   new URL("../test-support/fake-codex-cancellation.mjs", import.meta.url)
 );
-
 for (const scenario of ["fresh", "resumed", "resume-fallback", "turn-fallback", "name-unavailable"])
   test(
     `Codex session names apply only to newly created native threads: ${scenario}`,
-    { timeout: 5_000 },
+    { timeout: 5000 },
     async () => {
       const server = codexAppServerFixture({
         ...(scenario === "resume-fallback" ? { resumeError: "thread not found" } : {}),
@@ -27,7 +26,7 @@ for (const scenario of ["fresh", "resumed", "resume-fallback", "turn-fallback", 
       const events = [];
       const req = invokeRequest({
         sessionName: "webui-caller-readable-name",
-        signal: AbortSignal.timeout(4_000),
+        signal: AbortSignal.timeout(4000),
         ...(["resumed", "resume-fallback", "turn-fallback"].includes(scenario)
           ? { providerSession: { sessionId: "thread-fixture", resumable: true } }
           : {})
@@ -72,7 +71,6 @@ for (const scenario of ["fresh", "resumed", "resume-fallback", "turn-fallback", 
       }
     }
   );
-
 for (const mode of ["eof", "nonzero", "malformed", "wait"]) {
   test(
     `Codex diagnostics preserve transport failure/cancellation: ${mode}`,
@@ -104,9 +102,8 @@ for (const mode of ["eof", "nonzero", "malformed", "wait"]) {
     }
   );
 }
-
 for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-tool", "new-work"]) {
-  test(`Codex finalization deadline: ${mode}`, { timeout: 6_000 }, async () => {
+  test(`Codex finalization deadline: ${mode}`, { timeout: 6000 }, async () => {
     const adapter = createCodexAdapter({
       command: process.execPath,
       appServerArgs: [
@@ -119,8 +116,14 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
       for await (const event of adapter.invoke(
         invokeRequest({
           modelInput: mode,
-          signal: AbortSignal.timeout(5_000),
-          agentConfig: { providerOptions: { finalizationTimeoutMs: 60 } }
+          signal: AbortSignal.timeout(5000),
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "adapter.codex",
+              name: "options",
+              payload: { ...{ finalizationTimeoutMs: 60 } }
+            }
+          ])
         })
       )) {
         if (event.type === "message.update" && event.payload.text === "answer preserved")
@@ -145,14 +148,13 @@ for (const mode of ["normal", "stall", "ignore-interrupt", "commentary", "open-t
       // 收尾截止从最终答案开始；子进程启动和协议握手不属于这个预算。
       assert.ok(Number.isFinite(finalAnswerAt));
       const elapsed = performance.now() - finalAnswerAt;
-      assert.ok(elapsed < 4_000, `finalization elapsed=${elapsed}ms`);
+      assert.ok(elapsed < 4000, `finalization elapsed=${elapsed}ms`);
     } else assert.equal(terminals[0].type, "run.completed");
   });
 }
-
 test(
   "Codex reports scoped activity before normalization without retry/duplicate progress",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const adapter = createCodexAdapter({
       command: process.execPath,
@@ -167,7 +169,7 @@ test(
         invocationId: "i",
         agentSessionId: "s",
         runId: "r",
-        signal: AbortSignal.timeout(4_000)
+        signal: AbortSignal.timeout(4000)
       }),
       {
         reportActivity: (a) => activities.push(a)
@@ -198,17 +200,15 @@ test(
     assert.equal(events.at(-1).type, "run.completed");
   }
 );
-
 test(
   "Codex cancellation reaps the whole app-server process group",
-  { skip: process.platform === "win32", timeout: 5_000 },
+  { skip: process.platform === "win32", timeout: 5000 },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "octo-codex-cancel-"));
     const pidFile = join(directory, "grandchild.pid");
     const controller = new AbortController();
     const adapter = createCodexAdapter({ command: process.execPath, appServerArgs: [fixture] });
     const events = [];
-
     try {
       for await (const event of adapter.invoke(
         invokeRequest({
@@ -217,13 +217,12 @@ test(
           runId: "run-cancel-tree",
           prompt: `WAIT_FOR_CANCEL PID_FILE=${pidFile}`,
           modelInput: `WAIT_FOR_CANCEL PID_FILE=${pidFile}`,
-          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4_000)])
+          signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)])
         })
       )) {
         events.push(event);
         if (event.type === "message.delta") controller.abort("test_cancel");
       }
-
       assert.equal(events.at(-1).type, "run.cancelled");
       await adapter.close();
       const grandchildPid = Number(await readFile(pidFile, "utf8"));
@@ -238,11 +237,10 @@ test(
     }
   }
 );
-
 for (const approvalMode of ["ask", "assisted", "full_access"]) {
   test(
     `Codex ${approvalMode} keeps questions and MCP elicitation interactive with scoped requests and resolved events`,
-    { timeout: 5_000 },
+    { timeout: 5000 },
     async () => {
       const adapter = createCodexAdapter({
         command: process.execPath,
@@ -252,8 +250,10 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
       });
       const request = invokeRequest({
         invocationId: `invoke-interaction-${approvalMode}`,
-        approvalMode,
-        signal: AbortSignal.timeout(4_000)
+        signal: AbortSignal.timeout(4000),
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+        ])
       });
       const events = [];
       const outcomes = new Map();
@@ -278,13 +278,13 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
         );
         assert.equal(payload.executionInstanceId, request.invocationId);
         const remainingMs = Date.parse(payload.expiresAt) - Date.now();
-        assert.ok(remainingMs > 590_000 && remainingMs <= 600_000);
+        assert.ok(remainingMs > 590000 && remainingMs <= 600000);
         let response;
         if (payload.kind === "approval") {
           assert.equal(payload.request.schema, "octo.approval-request/v1");
           assert.deepEqual(payload.request.policy, {
             mode: approvalMode,
-            hash: contextHash(request.context)
+            hash: contextHash(request.agentEnv)
           });
           assert.equal(payload.request.operation.kind, "command_execution");
           assert.equal(payload.request.operation.toolCallId, "command-1");
@@ -374,20 +374,19 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
     }
   );
 }
-
 test(
   "Codex resolves an approval only after the native response is written and rejects in-flight duplicates",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
-    const request = invokeRequest({ signal: AbortSignal.timeout(4_000) });
+    const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const events = [];
     const iterator = adapter.invoke(request)[Symbol.asyncIterator]();
     try {
       let interaction;
       while (!interaction) {
-        const next = await withTimeout(iterator.next(), 1_000, "approval request timeout");
+        const next = await withTimeout(iterator.next(), 1000, "approval request timeout");
         assert.equal(next.done, false);
         events.push(next.value);
         if (next.value.type === "interaction.requested") interaction = next.value;
@@ -421,9 +420,9 @@ test(
       );
       assert.doesNotMatch(JSON.stringify(server.writes), /test\/invoke|Display-safe input/);
       server.flushResponseWrites();
-      await withTimeout(responding, 1_000, "native response write timeout");
+      await withTimeout(responding, 1000, "native response write timeout");
       assert.equal(written, true);
-      const next = await withTimeout(nextEvent, 1_000, "resolved event timeout");
+      const next = await withTimeout(nextEvent, 1000, "resolved event timeout");
       assert.equal(next.done, false);
       assert.equal(next.value.type, "interaction.resolved");
       events.push(next.value);
@@ -442,27 +441,24 @@ test(
     assert.equal(events.at(-1).type, "run.completed");
   }
 );
-
 test(
   "Codex full_access audits native approval after write completion without a human response",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
     const request = invokeRequest({
-      approvalMode: "full_access",
-      signal: AbortSignal.timeout(4_000)
+      signal: AbortSignal.timeout(4000),
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
     });
     const iterator = adapter.invoke(request)[Symbol.asyncIterator]();
     const events = [];
     try {
       let requested;
       while (!requested) {
-        const next = await withTimeout(
-          iterator.next(),
-          1_000,
-          "automatic approval request timeout"
-        );
+        const next = await withTimeout(iterator.next(), 1000, "automatic approval request timeout");
         assert.equal(next.done, false);
         events.push(next.value);
         if (next.value.type === "interaction.requested") requested = next.value;
@@ -480,7 +476,7 @@ test(
       await new Promise(setImmediate);
       assert.equal(delivered, false);
       server.flushResponseWrites();
-      const resolved = await withTimeout(nextEvent, 1_000, "automatic approval resolution timeout");
+      const resolved = await withTimeout(nextEvent, 1000, "automatic approval resolution timeout");
       assert.equal(resolved.done, false);
       assert.equal(resolved.value.type, "interaction.resolved");
       assert.deepEqual(resolved.value.payload, {
@@ -509,16 +505,17 @@ test(
     }
   }
 );
-
 test(
   "Codex full_access approval cannot be manually answered while the automatic response is in flight",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
     const request = invokeRequest({
-      approvalMode: "full_access",
-      signal: AbortSignal.timeout(4_000)
+      signal: AbortSignal.timeout(4000),
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
     });
     const events = [];
     try {
@@ -531,7 +528,7 @@ test(
               interactionId: event.payload.interactionId,
               outcome: "declined"
             }),
-            1_000,
+            1000,
             "manual response rejection timeout"
           ),
           /already in flight/
@@ -560,10 +557,9 @@ test(
     assert.equal(events.at(-1).type, "run.completed");
   }
 );
-
 test(
   "Codex native request IDs are isolated across invocations and stale answers cannot target a replacement",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const servers = [];
     const adapter = createCodexAdapter({
@@ -578,7 +574,7 @@ test(
     for (const invocationId of ["invoke-before-restart", "invoke-after-restart"]) {
       const events = [];
       for await (const event of adapter.invoke(
-        invokeRequest({ invocationId, signal: AbortSignal.timeout(4_000) })
+        invokeRequest({ invocationId, signal: AbortSignal.timeout(4000) })
       )) {
         events.push(event);
         if (event.type !== "interaction.requested") continue;
@@ -603,14 +599,13 @@ test(
     assert.equal(new Set(interactionIds).size, 2);
   }
 );
-
 test(
   "Codex repeated native IDs within one invocation get distinct sequence-scoped interactions",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture();
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
-    const request = invokeRequest({ signal: AbortSignal.timeout(4_000) });
+    const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const interactionIds = [];
     const events = [];
     for await (const event of adapter.invoke(request)) {
@@ -658,21 +653,20 @@ test(
     assert.equal(events.at(-1).type, "run.completed");
   }
 );
-
 test(
   "Codex pending interactions expire and cannot be answered after the finite deadline",
-  { timeout: 5_000 },
+  { timeout: 5000 },
   async (testContext) => {
     testContext.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
     const server = codexAppServerFixture();
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
-    const request = invokeRequest({ signal: AbortSignal.timeout(4_000) });
+    const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const events = [];
     for await (const event of adapter.invoke(request)) {
       events.push(event);
       if (event.type !== "interaction.requested") continue;
-      assert.equal(Date.parse(event.payload.expiresAt) - Date.now(), 600_000);
-      testContext.mock.timers.tick(600_000);
+      assert.equal(Date.parse(event.payload.expiresAt) - Date.now(), 600000);
+      testContext.mock.timers.tick(600000);
       await assert.rejects(
         adapter.respondInteraction(request.invocationId, {
           interactionId: event.payload.interactionId,
@@ -695,17 +689,16 @@ test(
     assert.match(events.at(-1).payload.message, /INTERACTION_EXPIRED/);
   }
 );
-
 for (const termination of ["process_death", "cancellation"]) {
   test(
     `Codex ${termination} invalidates pending interactions before the terminal event`,
-    { timeout: 5_000 },
+    { timeout: 5000 },
     async () => {
       const server = codexAppServerFixture();
       const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
       const controller = new AbortController();
       const request = invokeRequest({
-        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4_000)])
+        signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)])
       });
       const events = [];
       for await (const event of adapter.invoke(request)) {
@@ -739,17 +732,21 @@ for (const termination of ["process_death", "cancellation"]) {
     }
   );
 }
-
 for (const approvalMode of ["ask", "assisted", "full_access"]) {
   test(
     `Codex ${approvalMode} rejects native turn-scoped permission grants instead of claiming request scope`,
-    { timeout: 5_000 },
+    { timeout: 5000 },
     async () => {
       const server = codexAppServerFixture({ method: "item/permissions/requestApproval" });
       const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
       const events = [];
       for await (const event of adapter.invoke(
-        invokeRequest({ approvalMode, signal: AbortSignal.timeout(4_000) })
+        invokeRequest({
+          signal: AbortSignal.timeout(4000),
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+          ])
+        })
       ))
         events.push(event);
       assert.equal(

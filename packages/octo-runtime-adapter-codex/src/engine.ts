@@ -5,6 +5,8 @@ import {
   invocationEnvironment,
   invocationEnvs,
   invocationMcpServers,
+  invocationProviderOptions,
+  invocationWorkdir,
   mergeProcessEnvironment,
   processEnvironmentValue,
   probeCommand,
@@ -91,7 +93,7 @@ export function buildCodexCommand(
   return {
     command,
     args: [...appServerArgs, ...nativeCapacityOverrides(req)],
-    cwd: req.workdir,
+    cwd: invocationWorkdir(req),
     env: mergeProcessEnvironment(runEnv, mcp.env),
     ...(Object.keys(mcp.servers).length ? { mcpServers: mcp.servers } : {}),
     cleanup: () => undefined
@@ -129,13 +131,13 @@ export function createManagedCodexEngine({
         ).rawMessageMaxBytes;
         // 按解析语义分池，私有 MCP header 随机环境名不影响服务复用。
         const semantic = stableJson({
-          command: executableIdentity(command, runEnv, request.workdir),
+          command: executableIdentity(command, runEnv, invocationWorkdir(request)),
           args: [...args, ...nativeCapacityOverrides(request)],
-          cwd: request.workdir,
+          cwd: invocationWorkdir(request),
           env: runEnv,
           home: codexHome,
           mcp: invocationMcpServers(request, runEnv),
-          revision: request.agentConfig.providerOptions?.codexServiceRevision ?? "",
+          revision: invocationProviderOptions(request, "codex").codexServiceRevision ?? "",
           rawMessageMaxBytes
         });
         const key = createHmac("sha256", salt).update(semantic).digest("hex");

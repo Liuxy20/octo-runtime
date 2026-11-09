@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式 non-gating：真实 Codex Default，原 Run 结束后由同一表单补答。
 import test from "node:test";
@@ -8,7 +9,6 @@ import { AsyncQuestionReply } from "../../dist/public/executor-kernel.js";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
-
 for (const custom of [false, true])
   test(
     `real Default late ${custom ? "custom" : "selected"} answer starts a new Run`,
@@ -24,10 +24,16 @@ for (const custom of [false, true])
         invokeRequest({
           runId: randomUUID(),
           invocationId: randomUUID(),
-          workdir: f.directory,
           prompt,
           modelInput: prompt,
-          approvalMode: "full_access"
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: f.directory } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
         }),
         "canonical",
         "codex"

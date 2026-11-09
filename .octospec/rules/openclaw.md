@@ -31,7 +31,7 @@ supersedes: []
 | Provider 类型 | 标识执行实现，例如 `openclaw`。当前协议沿用 `adapter_type` / `provider_type`；本次不新增含义重复的 `provider_id`。每个 本地 Runtime 对每个 Provider 类型保存一份连接配置。 |
 | Adapter | 把 Provider 的执行协议转换成统一 Host 事件的实现。OpenClaw 使用认证 WebSocket Gateway RPC，不使用 SSE。 |
 | Provider 连接配置 | 属于 本地 Runtime 的本地信息，包括连接来源、地址、凭据引用和设备身份。由本地宿主管理，不属于 Agent 定义或模型上下文。 |
-| 目标 Agent | Provider 内的执行目标，由 Context 的 `provider_agent_id` 指定。多个 Agent 可共享一个 Runtime 的同一连接。 |
+| 目标 Agent | Provider 内的执行目标，由 Context 的 `adapter.openclaw/options.payload.agentId` 指定。多个 Agent 可共享一个 Runtime 的同一连接。 |
 | Agent 来源 | `preset` 表示调用已有 Agent；`provisioned` 表示按该来源合同执行。来源与传输方式、连接配置相互独立；来源声明不意味着 Runtime 可以隐式安装 Runtime 或创建 OpenClaw Agent。 |
 
 Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。Issue 335 删除公共 workspace.mode；调用 OpenClaw 不需要为 Runtime 制造本地目录。metadata.workspace:false 不把 Provider 工作区当本地路径校验，不覆盖远端工作区，不恢复随机分配或缺失补建，也不新增忽略告警。
@@ -69,7 +69,7 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 该文件属于实例共享环境，所有继承该环境的 Agent/工具使用最后写入的身份，不提供多 Bot 按轮隔离。OpenClaw Gateway 的每轮 Context envs 仍按现有不支持合同处理；CLI 落盘不是对该协议能力的实现，也不将这两个变量回填到 Context 或每轮执行覆盖。
 
 ```text
-业务方提交 Context（Provider 类型 + provider_agent_id）
+业务方提交 AgentEnv（公共路由 item + 私有配置 item）
   → 本地 SDK 或业务扩展提交共享 Host
   → Runtime 读取自己 profile 的 Provider 连接配置
   → Adapter 建立认证连接、验证目标 Agent、发起执行
@@ -84,12 +84,16 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
   "items": [{
     "namespace": "octo.execution",
     "name": "adapter",
-    "payload": { "type": "openclaw", "provider_agent_id": "researcher" }
+    "payload": { "type": "openclaw" }
+  }, {
+    "namespace": "adapter.openclaw",
+    "name": "options",
+    "payload": { "agentId": "researcher" }
   }]
 }
 ```
 
-`provider_agent_id` 随执行计划解析和冻结，不进入模型提示词。本地连接配置不得设置或覆盖目标 Agent。Gateway 探测检查协议与公开执行能力，不要求存在名为 `main` 的 Agent；执行时验证本轮指定的目标。目标缺失必须明确失败，不切换到其他 Agent。
+`adapter.openclaw/options` 的名称、字段、类型和校验完全属于宿主与 OpenClaw Adapter 的私有约定，不进入公共协议、生成类型或通用 SDK 专属配置模型。Core 只保序透传，OpenClaw Adapter 自己读取目标，不进入模型提示词。新增专属字段不需要登记公共 schema 或修改协议版本，无关 Adapter 忽略。可信连接配置由宿主通过本地 Adapter 上下文提供。Gateway 探测不要求存在名为 `main` 的 Agent；执行时验证本轮目标，缺失明确失败，不查找其他 Agent。
 
 统一执行接口不表示各 Provider 能力相同。OpenClaw Adapter 声明 `metadata.workspace: false`，忽略 `octo.execution/workspace` 和 `workdir`，不检查或创建本地工作区、不分配随机目录、不覆盖目标 Agent 的原生工作区。本地调用不增加 Worker 回执门槛。Context 快照不改写，审批模式、环境变量和恢复等能力按实际支持范围校验。业务上下文由每轮发起方决定，显式重复照常传递，不自动补齐、缓存或追加。
 
@@ -149,7 +153,7 @@ octo-runtime --home /path/to/runtime --profile work adapter probe openclaw
 
 ## 目标省略的当前实现
 
-严格 Context adapter 校验和 OpenClaw Adapter 要求目标 Agent。统一公共输入解析在 OpenClaw adapter item 省略 `provider_agent_id` 时补入 `main`；这是当前输入入口的执行默认值，不是本地连接配置自动覆盖目标。需要确定目标的业务方应显式传值，`main` 不存在时执行失败，不查找其他 Agent。
+OpenClaw Adapter 暴露包含私有 `agentId: main` 的 defaultAgentEnv；宿主可据此构造请求。省略目标时由 OpenClaw Adapter 内部读取默认值 `main`，不向原信封追加条目。公共输入解析和 Core 不认识目标字段或该默认值。需要确定目标的宿主显式构造私有 item；`main` 不存在时执行失败，不查找其他 Agent。
 
 ## 核对入口
 

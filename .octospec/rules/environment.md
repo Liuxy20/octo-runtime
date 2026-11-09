@@ -38,7 +38,7 @@ supersedes: []
 }
 ```
 
-`payload.env_variables` 必须是 `{ key, value }` 条目列表。环境变量名放在条目的 `key` 值中，不作为协议 JSON 属性名。字典形状不再接受。业务方使用的 `ContextConfiguration.defaults`、`mandatory` 以及单次 Run 的请求 context 均使用同一格式；Worker 不再保存 Agent 配置。
+`payload.env_variables` 必须是 `{ key, value }` 条目列表。环境变量名放在条目的 `key` 值中，不作为协议 JSON 属性名。字典形状不再接受。业务方使用的 `ContextConfiguration.defaults`、`mandatory` 以及单次 Run 的请求 context 均使用同一格式；Core 不保存业务 Agent 配置。
 
 - key 必须匹配 `[A-Za-z_][A-Za-z0-9_]*`；value 必须是字符串且不含 NUL。
 - 同一列表内的 `key` 不得重复，即使值相同也拒绝。条目不得缺少 `key` 或 `value`，不得增加未知字段。
@@ -49,9 +49,9 @@ supersedes: []
 
 ## 合并与冻结
 
-业务发起方使用 `resolveContextConfiguration` 按 key 依次合并 defaults、request、mandatory。请求中的同名 key 覆盖默认值，mandatory 中的同名 key 最后覆盖请求值；即使请求显式提交不同值，也不因此返回 `CONTEXT_MANDATORY_CONFLICT`。未被覆盖的默认项和请求新增项保留；空列表不删除低优先级变量。例如 defaults `A=base`、request `A=request`、mandatory `A=locked` 得到 `A=locked`。这是 envs 合并规则，不取消其他输入、权限或冻结一致性校验。本地 `resolveLocalContext` 提供 defaults 与 request 的解析；不要据此要求执行层读取业务 Agent 配置。
+业务发起方使用 `resolveContextConfiguration` 按 key 依次合并 defaults、request、mandatory。请求中的同名 key 覆盖默认值，mandatory 中的同名 key 最后覆盖请求值；即使请求显式提交不同值，也不因此返回 `CONTEXT_MANDATORY_CONFLICT`。未被覆盖的默认项和请求新增项保留；空列表不删除低优先级变量。例如 defaults `A=base`、request `A=request`、mandatory `A=locked` 得到 `A=locked`。这是 envs 合并规则，不取消其他输入、权限或冻结一致性校验。业务在提交前完成所需合并；Core 只透传 AgentEnv，Adapter 直接读取 envs。
 
-有效值以同一列表结构进入 `effective_context` 与 `resolved_execution_plan.envs`，参与 context hash。Runtime 在准备阶段检查两份数据是否一致，防止冻结后篡改。会话复用策略由调用方按执行配置决定；不再使用 Compiler 或 compiled hash。
+有效值仅保留在本轮 AgentEnv 的 envs item 列表中；Core 为整份信封复制快照并透传，Adapter 直接消费，不产生另一份执行配置或核对两份投影。会话复用策略由调用方按执行配置决定；不使用 Compiler 或 compiled hash。
 
 ## 运行时范围与优先级
 
@@ -66,7 +66,7 @@ supersedes: []
 
 Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 include 白名单。本地 MCP 保留原有配置，追加变量名白名单；MCP 自己显式配置的同名 `env` 仍按 Provider 原生优先级生效。因此 mandatory 约束的是 Run 注入值，并不改写用户的 MCP 专用配置。不会重新安装、同步或修改 MCP/插件文件。
 
-环境变量中的值不会被编译成模型材料或控制指令。Host 调试日志会剔除 envs payload、执行计划 envs 和 Codex 原生 shell 注入值，不依赖变量名是否包含 token/secret。请求和执行快照仍保存这些值；此能力不是凭据保险库，也不承诺阻止工具主动输出环境变量。
+环境变量中的值不会被编译成模型材料或控制指令。Host 调试日志会剔除 envs payload 和 Codex 原生 shell 注入值，不依赖变量名是否包含 token/secret。请求和执行快照仍保存这些值；此能力不是凭据保险库，也不承诺阻止工具主动输出环境变量。
 
 ## Channel Gateway 的工具环境
 

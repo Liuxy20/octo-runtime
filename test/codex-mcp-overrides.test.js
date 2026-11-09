@@ -1,8 +1,8 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
-
 const context = (servers, envs = {}) => ({
   schema: "octo.context-envelope/v3",
   items: [
@@ -16,7 +16,6 @@ const context = (servers, envs = {}) => ({
     }
   ]
 });
-
 for (const resume of [false, true]) {
   for (const forwardEnv of [false, true]) {
     test(`Codex only overrides new MCP and necessary env names: resume=${resume}, env=${forwardEnv}`, async () => {
@@ -35,24 +34,32 @@ for (const resume of [false, true]) {
       const events = [];
       for await (const event of adapter.invoke(
         invokeRequest({
-          approvalMode: "full_access",
-          signal: AbortSignal.timeout(2_000),
+          signal: AbortSignal.timeout(2000),
           ...(resume ? { providerSession: { sessionId: "old-thread" } } : {}),
-          context: context(
-            {
-              added: {
-                type: "stdio",
-                command: "node",
-                args: ["tool.mjs"],
-                env: { SPECIFIC: "kept" }
+          agentEnv: withAgentEnvItems(
+            context(
+              {
+                added: {
+                  type: "stdio",
+                  command: "node",
+                  args: ["tool.mjs"],
+                  env: { SPECIFIC: "kept" }
+                },
+                business: {
+                  type: "streamable_http",
+                  url: "https://example.invalid/run",
+                  headers: { Auth: "header-value" }
+                }
               },
-              business: {
-                type: "streamable_http",
-                url: "https://example.invalid/run",
-                headers: { Auth: "header-value" }
+              forwardEnv ? { RUN_VALUE: "run-value" } : {}
+            ),
+            [
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
               }
-            },
-            forwardEnv ? { RUN_VALUE: "run-value" } : {}
+            ]
           )
         })
       )) {
@@ -89,7 +96,6 @@ for (const resume of [false, true]) {
     });
   }
 }
-
 const nativeServers = {
   stdio: { command: "node", tool_timeout_sec: null },
   http: { url: "https://example.invalid/native" },
@@ -104,14 +110,17 @@ for (const [name, native] of Object.entries(nativeServers)) {
         const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
         const events = [];
         const request = invokeRequest({
-          signal: AbortSignal.timeout(2_000),
+          signal: AbortSignal.timeout(2000),
           ...(resume ? { providerSession: { sessionId: "old-thread" } } : {}),
-          context: context({
-            [name]:
-              type === "stdio"
-                ? { type, command: "node" }
-                : { type, url: "https://example.invalid/new" }
-          })
+          agentEnv: withAgentEnvItems(
+            context({
+              [name]:
+                type === "stdio"
+                  ? { type, command: "node" }
+                  : { type, url: "https://example.invalid/new" }
+            }),
+            []
+          )
         });
         for await (const event of adapter.invoke(request)) events.push(event);
         assert.equal(events.at(-1).type, "run.failed");
@@ -124,7 +133,6 @@ for (const [name, native] of Object.entries(nativeServers)) {
     }
   }
 }
-
 test("Codex native mode returns the explicit MCP conflict code", async () => {
   const server = codexAppServerFixture({ config: { mcp_servers: nativeServers } });
   const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
@@ -132,8 +140,8 @@ test("Codex native mode returns the explicit MCP conflict code", async () => {
     async () => {
       for await (const _ of adapter.invoke(
         invokeRequest({
-          signal: AbortSignal.timeout(2_000),
-          context: context({ stdio: { type: "stdio", command: "node" } })
+          signal: AbortSignal.timeout(2000),
+          agentEnv: withAgentEnvItems(context({ stdio: { type: "stdio", command: "node" } }), [])
         }),
         { protocolMode: "native" }
       )) {
@@ -146,13 +154,17 @@ test("Codex native mode returns the explicit MCP conflict code", async () => {
     false
   );
 });
-
 test("Codex leaves provider configuration untouched without run MCP or env overrides", async () => {
   const server = codexAppServerFixture({ config: { mcp_servers: nativeServers } });
   const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
   const events = [];
   for await (const event of adapter.invoke(
-    invokeRequest({ approvalMode: "full_access", signal: AbortSignal.timeout(2_000) })
+    invokeRequest({
+      signal: AbortSignal.timeout(2000),
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    })
   )) {
     events.push(event);
     if (event.type === "session.update") server.complete();

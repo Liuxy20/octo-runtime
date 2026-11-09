@@ -1,3 +1,6 @@
+import { defineAdapter } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { agentEnvItem } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import assert from "node:assert/strict";
@@ -7,7 +10,6 @@ import { readFile } from "node:fs/promises";
 import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { loadCliAdapters } from "../apps/cli/dist/adapters.js";
-
 const request = {
   protocolVersion: 2,
   invocationId: "permission-instance",
@@ -15,14 +17,13 @@ const request = {
   runId: "run",
   prompt: "fixture",
   modelInput: "fixture",
-  workdir: process.cwd(),
-  approvalMode: "ask",
-  agentSource: "provisioned",
-  agentConfig: {},
-  context: { schema: "octo.context-envelope/v3", items: [] }
+  agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+    { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 };
-
-test("default adapters reject unsupported approval modes at their execution boundary", async () => {
+test("default adapters reject unsupported approval modes at their execution boundary", async (t) => {
   const manifest = JSON.parse(
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
@@ -34,12 +35,24 @@ test("default adapters reject unsupported approval modes at their execution boun
       sourceManifest: fileURLToPath(new URL("../apps/cli/dist/manifest.json", import.meta.url))
     };
     const assembly = await loadCliAdapters([entry]);
+    t.after(async () => {
+      assert.equal((await assembly.close(performance.now() + 1000)).complete, true);
+    });
     const adapter = assembly.adapters[0];
     if (["antigravity", "dsh"].includes(entry.type)) {
       assert.equal(adapter.respondInteraction, undefined);
       for (const approvalMode of ["ask", "assisted"])
         await assert.rejects(async () => {
-          for await (const event of adapter.invoke({ ...request, approvalMode }))
+          for await (const event of adapter.invoke({
+            ...request,
+            agentEnv: withAgentEnvItems(request.agentEnv, [
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: approvalMode }
+              }
+            ])
+          }))
             assert.fail(event.type);
         }, /APPROVAL_MODE_UNSUPPORTED/);
       continue;
@@ -47,12 +60,16 @@ test("default adapters reject unsupported approval modes at their execution boun
     assert.equal(typeof adapter.respondInteraction, "function", entry.type);
     if (!["codex", "claude-code", "codebuddy"].includes(entry.type))
       await assert.rejects(async () => {
-        for await (const event of adapter.invoke({ ...request, approvalMode: "assisted" }))
+        for await (const event of adapter.invoke({
+          ...request,
+          agentEnv: withAgentEnvItems(request.agentEnv, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: "assisted" } }
+          ])
+        }))
           assert.fail(event.type);
       }, /APPROVAL_MODE_UNSUPPORTED/);
   }
 });
-
 for (const approvalMode of ["ask", "assisted", "full_access"])
   test(`Host admits ${approvalMode} through the actual responder without feature labels`, async () => {
     const host = new AgentExecutor();
@@ -65,49 +82,63 @@ for (const approvalMode of ["ask", "assisted", "full_access"])
       },
       async respondInteraction() {},
       async *invoke(input) {
-        invoked = input.approvalMode;
+        invoked = agentEnvItem(input.agentEnv, "octo.security", "approval_policy").mode;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       }
     });
     const events = [];
     for await (const event of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
       "fixture",
-      { ...request, approvalMode },
+      {
+        ...request,
+        agentEnv: withAgentEnvItems(request.agentEnv, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+        ])
+      },
       { protocolMode: "canonical" }
     ))
       events.push(event);
     assert.equal(invoked, approvalMode);
     assert.equal(events.at(-1).type, "run.completed");
   });
-
 for (const protocolMode of ["canonical", "native"])
   test(`Host requires the actual ${protocolMode} responder for interactive approval`, async () => {
     const host = new AgentExecutor();
     let invoked = false;
-    host.register({
-      metadata: {
-        protocolSupport: {
-          protocol: "fixture.raw",
-          modes: ["native", "canonical"],
-          nativeMethods: []
+    host.register(
+      defineAdapter({
+        metadata: {
+          protocolSupport: {
+            protocol: "fixture.raw",
+            modes: ["native", "canonical"],
+            nativeMethods: []
+          },
+          type: "fixture",
+          agentSources: ["provisioned"]
         },
-        type: "fixture",
-        agentSources: ["provisioned"]
-      },
-      ...(protocolMode === "native"
-        ? { async respondInteraction() {} }
-        : { async respondNative() {} }),
-      async *invoke() {
-        invoked = true;
-      }
-    });
-    await assert.rejects(async () => {
-      for await (const frame of preparedFrames(host, "fixture", request, { protocolMode }))
-        assert.fail(frame.kind);
-    }, /APPROVAL_MODE_UNSUPPORTED/);
+        ...(protocolMode === "native"
+          ? { async respondInteraction() {} }
+          : { async respondNative() {} }),
+        async *invoke() {
+          invoked = true;
+        }
+      })
+    );
+    const frames = await Array.fromAsync(
+      preparedFrames(host, "fixture", request, { protocolMode })
+    );
+    const failure = frames.find(
+      (frame) => frame.kind === "control" && frame.control.type === "error"
+    );
+    const canonical = frames.find(
+      (frame) => frame.kind === "canonical" && frame.event.type === "run.failed"
+    );
+    assert.match(
+      failure?.control.message ?? canonical?.event.payload.message,
+      /APPROVAL_MODE_UNSUPPORTED/
+    );
     assert.equal(invoked, false);
   });
-
 for (const [provider, factory] of [
   [
     "Claude",

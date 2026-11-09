@@ -50,19 +50,8 @@ for (const fixture of fixtures) {
   });
 }
 
-test("catalog covers every schema branch, including grouped capability namespaces", () => {
-  const keys = schema.definitions.ContextItem.allOf
-    // 格式条件仅检查字段存在；目录覆盖只遍历按名称分派的内置类型。
-    .filter((branch) => branch.if?.properties?.name)
-    .flatMap((branch) =>
-      (branch.if.properties.namespace.enum ?? [branch.if.properties.namespace.const]).map(
-        (namespace) => `${namespace}/${branch.if.properties.name.const}`
-      )
-    );
-  assert.deepEqual(
-    CONTEXT_TYPE_CATALOG.map((item) => `${item.namespace}/${item.name}`).sort(),
-    keys.sort()
-  );
+test("built-in helper definitions exist without registering private payloads", () => {
+  assert.equal(schema.definitions.ContextItem.allOf, undefined);
   for (const item of CONTEXT_TYPE_CATALOG) {
     assert.ok(schema.definitions[item.schemaRef.split("/").at(-1)]);
     assert.ok(Object.isFrozen(item));
@@ -95,21 +84,11 @@ test("configuration rejects unknown fields and default-layer trusted controls", 
   }
 });
 
-test("removed resource configuration cannot enter any Agent layer", () => {
+test("caller-owned private defaults do not require a public catalog entry", () => {
+  const empty = { schema: "octo.context-envelope/v3", items: [] };
   const defaults = {
-    schema: "octo.context-envelope/v3",
-    items: ["agent_plugins", "skills", "connectors"].map((name) => ({
-      namespace: "octo.resources",
-      name,
-      payload: { include: [{ resource_id: "ae67cb3e-0d16-4bb2-9a4e-bb563cb707af" }], exclude: [] }
-    }))
+    ...empty,
+    items: [{ namespace: "business.custom", name: "configuration", payload: { enabled: true } }]
   };
-  assert.throws(
-    () =>
-      resolveContextConfiguration(
-        { defaults, mandatory: { ...defaults, items: [] } },
-        { ...defaults, items: [] }
-      ),
-    /CONTEXT_TYPE_REMOVED/
-  );
+  assert.deepEqual(resolveContextConfiguration({ defaults, mandatory: empty }, empty), defaults);
 });

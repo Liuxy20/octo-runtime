@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 显式手动运行：node --experimental-test-module-mocks --test test/manual/claude-preparation-334.test.mjs
 import assert from "node:assert/strict";
 import * as filesystem from "node:fs/promises";
@@ -5,7 +6,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test, { mock } from "node:test";
 import { contextEnvelope, invokeRequest } from "../runtime-fixture.js";
-
 const directory = join(tmpdir(), "claude-preparation-fixture");
 let writeError;
 let cleanupError;
@@ -31,17 +31,19 @@ const { buildClaudeCommand } =
   await import("../../packages/octo-runtime-adapter-claude-code/dist/index.js");
 function request(withMcp = true) {
   return invokeRequest({
-    approvalMode: "full_access",
-    context: contextEnvelope(
-      withMcp
-        ? [
-            {
-              namespace: "octo.execution",
-              name: "mcp",
-              payload: { mcpServers: { fixture: { type: "stdio", command: process.execPath } } }
-            }
-          ]
-        : []
+    agentEnv: withAgentEnvItems(
+      contextEnvelope(
+        withMcp
+          ? [
+              {
+                namespace: "octo.execution",
+                name: "mcp",
+                payload: { mcpServers: { fixture: { type: "stdio", command: process.execPath } } }
+              }
+            ]
+          : []
+      ),
+      [{ namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }]
     )
   });
 }
@@ -50,7 +52,6 @@ function reset() {
   writeError = undefined;
   cleanupError = undefined;
 }
-
 test("MCP write failure retains its original cause after successful cleanup", async () => {
   reset();
   writeError = Object.assign(new Error("fixture write failure"), { code: "EIO" });
@@ -61,7 +62,6 @@ test("MCP write failure retains its original cause after successful cleanup", as
   );
   assert.deepEqual(calls.at(-1), ["rm", directory, { recursive: true, force: true }]);
 });
-
 test("MCP write and cleanup failures both survive, with the write failure as cause", async () => {
   reset();
   writeError = Object.assign(new Error("fixture write failure"), { code: "EIO" });
@@ -74,7 +74,6 @@ test("MCP write and cleanup failures both survive, with the write failure as cau
     return true;
   });
 });
-
 test("successful preparation writes only MCP settings and cleanup owns that directory", async () => {
   reset();
   const command = await buildClaudeCommand(request());
@@ -91,7 +90,6 @@ test("successful preparation writes only MCP settings and cleanup owns that dire
   await command.cleanup();
   assert.deepEqual(calls.at(-1), ["rm", directory, { recursive: true, force: true }]);
 });
-
 test("a request without MCP owns no temporary directory", async () => {
   reset();
   const command = await buildClaudeCommand(request(false));

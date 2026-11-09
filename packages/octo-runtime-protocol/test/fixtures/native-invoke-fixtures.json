@@ -10,13 +10,19 @@
       ],
       "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": [],
-        "agentConfig": {
-          "timeoutSeconds": 0.5
-        }
+        "items": [
+          {
+            "namespace": "adapter.openclaw",
+            "name": "options",
+            "payload": {
+              "timeoutSeconds": 0.5
+            }
+          }
+        ]
       }
     },
-    "valid": true
+    "valid": true,
+    "adapter_valid": true
   },
   {
     "name": "zero timeout",
@@ -29,13 +35,19 @@
       ],
       "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": [],
-        "agentConfig": {
-          "timeoutSeconds": 0
-        }
+        "items": [
+          {
+            "namespace": "adapter.openclaw",
+            "name": "options",
+            "payload": {
+              "timeoutSeconds": 0
+            }
+          }
+        ]
       }
     },
-    "valid": false
+    "valid": true,
+    "adapter_valid": false
   },
   {
     "name": "negative timeout",
@@ -48,13 +60,19 @@
       ],
       "agentEnv": {
         "schema": "octo.context-envelope/v3",
-        "items": [],
-        "agentConfig": {
-          "timeoutSeconds": -1
-        }
+        "items": [
+          {
+            "namespace": "adapter.openclaw",
+            "name": "options",
+            "payload": {
+              "timeoutSeconds": -1
+            }
+          }
+        ]
       }
     },
-    "valid": false
+    "valid": true,
+    "adapter_valid": false
   },
   {
     "name": "nonempty opaque provider session",

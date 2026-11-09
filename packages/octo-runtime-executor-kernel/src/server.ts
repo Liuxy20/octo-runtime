@@ -251,23 +251,9 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
             throw new KernelError("KERNEL_UNAVAILABLE", { invocation_not_submitted: true });
           const input = params.input as InvokeInput;
           const config = configure(input);
-          // 选项先合并再进入 HostRunService 的整请求预算检查；策略沿同一调用传给 Core 和重放窗口。
-          const configuredInput = config
-            ? {
-                ...input,
-                agentEnv: {
-                  ...input.agentEnv,
-                  agentConfig: {
-                    ...input.agentEnv.agentConfig,
-                    providerOptions: {
-                      ...input.agentEnv.agentConfig?.providerOptions,
-                      ...config.providerOptions
-                    }
-                  }
-                }
-              }
-            : input;
-          const receipt = await runs.submit(configuredInput, {
+          // 连接选项走本地调用环境；调用方的 AgentEnv 保序透传。
+          const receipt = await runs.submit(input, {
+            providerOptions: config?.providerOptions,
             streamLimits: config?.streamLimits,
             executionEnvOverrides:
               params.executionEnvOverrides as InvokeEnvironment["executionEnvOverrides"]

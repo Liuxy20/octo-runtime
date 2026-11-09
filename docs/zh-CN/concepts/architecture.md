@@ -81,6 +81,33 @@ Runtime Home 用于 Kernel 自身状态；CODEX_HOME 用于 Codex 数据。Home 
 
 初始化失败只回收本装配已创建的资源；注入的共享 owner 不参与销毁。超时、release 失败和未确认进程退出分别记录，前项失败仍尝试其他独立清理。托管 Engine 由其 owner 恢复，业务 Engine 由业务 owner 恢复；恢复不自动重放 turn、工具动作或交互决定，也不把旧交互发送到新 incarnation。
 
+## AgentEnv 直接交给 Adapter
+
+调用方构造 `inputs` 和 `AgentEnv`。`AgentEnv` 只有 `schema`、`items`；Core 为本次调用复制快照，仅读取 Adapter 路由，按原值和原顺序交给 Adapter。Core 不提取另一套执行配置，也不解释 Harness 私有字段。执行、取消、超时和资源清理由 Runtime 负责；配置读取、校验、默认值及 Provider 原生映射由 Adapter 负责。
+
+只有跨 Harness 共用的概念，例如模型、思考强度和审批策略，才在公共协议中定义 bean。`adapter-sdk` 提供 item 读取、组合及共性配置帮助函数。内置 Adapter 暴露可独立修改的 `defaultAgentEnv`，调用方可据此构造请求；执行时不向原信封追加默认条目。
+
+以 OpenClaw 为例，目标 Agent 是宿主与 OpenClaw Adapter 的私有约定：
+
+```json
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "openclaw" } },
+    {
+      "namespace": "octo.execution",
+      "name": "model",
+      "payload": { "selection": { "id": "provider/model" }, "reasoning": { "effort": "high" } }
+    },
+    { "namespace": "adapter.openclaw", "name": "options", "payload": { "agentId": "researcher" } }
+  ]
+}
+```
+
+公共协议只定义信封和公共 bean；上例 `adapter.openclaw/options` 的名称、字段、类型、默认值及校验均归宿主与 OpenClaw Adapter，不属于公共协议。Core 保序透传，OpenClaw Adapter 自己读取 `agentId`，其他 Adapter 忽略该私有 item。新增 OpenClaw 专属参数或定制 Harness 时，只需宿主构造对应 item、对应 Adapter 消费，无须注册公共 schema、增加公共类型或修改协议版本。私有 item 不会自动进入模型输入。
+
+连接认证等宿主可信配置由本地 Adapter 上下文提供，不写进示例或模型正文；信封仅接受结构、唯一键、JSON 深度及大小等通用检查，已识别配置的语义错误由消费它的 Adapter 报告。
+
 ## 执行配置与会话身份
 
 agentEnv 按次调用冻结，不要求同一会话各轮相等，也不做跨轮全量签名。业务可明确选择下一轮的 effort、环境变量、MCP、权限或工作目录；执行校验和 Provider 的配置/恢复限制仍然有效。

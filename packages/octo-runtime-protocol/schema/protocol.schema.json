@@ -983,7 +983,7 @@
     },
     "ContextItem": {
       "title": "ContextItem",
-      "description": "Open Context item. Built-in types retain their payload contracts; unknown optional types are preserved and ignored by unsupported consumers.",
+      "description": "Opaque ordered item. The envelope validates structure; consuming Adapters validate shared settings and their privately agreed payloads. Private items require no public registration.",
       "tsType": "{ namespace: string; name: string; guidance?: string; data_format?: 'text'; payload: Record<string, unknown> }",
       "type": "object",
       "additionalProperties": false,
@@ -1006,280 +1006,23 @@
         },
         "guidance": {
           "type": "string",
-          "description": "Producer-authored context guidance, rendered as ordinary model input."
+          "description": "Optional producer metadata. Runtime does not render AgentEnv items into model input."
         },
         "data_format": {
           "const": "text",
-          "description": "Explicit extra.* text rendering; payload must contain only a text string. Omit for complete JSON rendering."
+          "description": "Optional producer metadata; it does not request Runtime rendering."
         }
       },
-      "allOf": [
-        {
-          "if": {
-            "required": ["data_format"]
-          },
-          "then": {
-            "properties": {
-              "namespace": {
-                "pattern": "^extra\\."
-              },
-              "payload": {
-                "type": "object",
-                "required": ["text"],
-                "additionalProperties": false,
-                "properties": {
-                  "text": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "actmode"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextActmodePayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "model"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextModelPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "adapter"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextAdapterPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "workspace"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextWorkspacePayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "limits"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextLimitsPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.runtime"
-              },
-              "name": {
-                "const": "selection"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextRuntimeSelectionPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.security"
-              },
-              "name": {
-                "const": "approval_policy"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextApprovalPolicyPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.content"
-              },
-              "name": {
-                "const": "inline"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextInlinePayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.content"
-              },
-              "name": {
-                "const": "references"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextReferencesPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "envs"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextEnvsPayload"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "enum": ["octo.execution", "octo.runtime", "octo.security", "octo.control"]
-              }
-            }
-          },
-          "then": {
-            "not": {
-              "required": ["guidance"]
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "namespace": {
-                "const": "octo.execution"
-              },
-              "name": {
-                "const": "mcp"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "payload": {
-                "$ref": "#/definitions/ContextMcpPayload"
-              }
-            }
-          }
-        },
-        {
-          "not": {
-            "required": ["namespace", "name"],
-            "properties": {
-              "namespace": {
-                "const": "octo.control"
-              },
-              "name": {
-                "const": "instructions"
-              }
-            }
-          }
-        }
-      ],
       "not": {
         "properties": {
           "namespace": {
-            "const": "octo.resources"
+            "const": "octo.control"
+          },
+          "name": {
+            "const": "instructions"
           }
         },
-        "required": ["namespace"]
+        "required": ["namespace", "name"]
       }
     },
     "ContextEnvelope": {
@@ -1539,117 +1282,8 @@
       }
     },
     "PersistentContextEnvelope": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/ContextEnvelope"
-        },
-        {
-          "properties": {
-            "items": {
-              "items": {
-                "allOf": [
-                  {
-                    "not": {
-                      "properties": {
-                        "namespace": {
-                          "const": "octo.content"
-                        },
-                        "name": {
-                          "const": "inline"
-                        }
-                      }
-                    }
-                  },
-                  {
-                    "anyOf": [
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.execution"
-                          },
-                          "name": {
-                            "const": "adapter"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.execution"
-                          },
-                          "name": {
-                            "const": "model"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.execution"
-                          },
-                          "name": {
-                            "const": "workspace"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.execution"
-                          },
-                          "name": {
-                            "const": "limits"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.runtime"
-                          },
-                          "name": {
-                            "const": "selection"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.security"
-                          },
-                          "name": {
-                            "const": "approval_policy"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.content"
-                          },
-                          "name": {
-                            "const": "inline"
-                          }
-                        }
-                      },
-                      {
-                        "properties": {
-                          "namespace": {
-                            "const": "octo.content"
-                          },
-                          "name": {
-                            "const": "references"
-                          }
-                        }
-                      }
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        }
-      ],
+      "title": "PersistentContextEnvelope",
+      "$ref": "#/definitions/ContextEnvelope",
       "tsType": "ContextEnvelope"
     },
     "ContextAdapterPayload": {
@@ -1660,25 +1294,6 @@
         "type": {
           "type": "string",
           "minLength": 1
-        },
-        "provider_agent_id": {
-          "type": "string",
-          "pattern": "^[a-z0-9_][a-z0-9_-]{0,63}$"
-        }
-      },
-      "if": {
-        "properties": {
-          "type": {
-            "const": "openclaw"
-          }
-        }
-      },
-      "then": {
-        "required": ["provider_agent_id"]
-      },
-      "else": {
-        "not": {
-          "required": ["provider_agent_id"]
         }
       }
     },
@@ -2025,87 +1640,6 @@
         }
       ]
     },
-    "ResolvedExecutionPlan": {
-      "title": "ResolvedExecutionPlan",
-      "x-octo-unicode-scalar-strings": true,
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["agent_source", "adapter_type", "workdir", "approval_mode"],
-      "properties": {
-        "actmode": {
-          "enum": ["default", "plan"]
-        },
-        "adapter_type": {
-          "type": "string",
-          "minLength": 1
-        },
-        "workdir": {
-          "type": "string"
-        },
-        "workspace": {
-          "$ref": "#/definitions/ContextWorkspacePayload"
-        },
-        "model": {
-          "type": "string",
-          "minLength": 1
-        },
-        "effort": {
-          "type": "string",
-          "minLength": 1
-        },
-        "approval_mode": {
-          "$ref": "#/definitions/ApprovalMode"
-        },
-        "runtime_limits": {
-          "$ref": "#/definitions/ContextLimitsPayload"
-        },
-        "provider_agent_id": {
-          "type": "string",
-          "pattern": "^[a-z0-9_][a-z0-9_-]{0,63}$"
-        },
-        "agent_source": {
-          "$ref": "#/definitions/AgentSource"
-        },
-        "envs": {
-          "$ref": "#/definitions/ContextEnvsPayload"
-        },
-        "mcp": {
-          "$ref": "#/definitions/ContextMcpPayload"
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "adapter_type": {
-                "const": "openclaw"
-              }
-            }
-          },
-          "then": {
-            "required": ["provider_agent_id"]
-          },
-          "else": {
-            "not": {
-              "required": ["provider_agent_id"]
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "agent_source": {
-                "const": "preset"
-              }
-            },
-            "required": ["agent_source"]
-          },
-          "then": {
-            "required": ["provider_agent_id"]
-          }
-        }
-      ]
-    },
     "MessageChannel": {
       "title": "MessageChannel",
       "description": "Provider-neutral assistant output channel. analysis is reasoning-class content gated by exposure; commentary is public in-run progress; final is answer content delivered only after the Run reaches a completed terminal state.",
@@ -2365,68 +1899,6 @@
         }
       }
     },
-    "AgentConfig": {
-      "title": "AgentConfig",
-      "description": "Adapter-internal configuration derived from the resolved execution plan, not a public source of run model or approval choices. Legacy permission and thinking fields are forbidden.",
-      "type": "object",
-      "additionalProperties": true,
-      "not": {
-        "anyOf": [
-          {
-            "required": ["permissionMode"]
-          },
-          {
-            "required": ["autoApprove"]
-          },
-          {
-            "required": ["dangerouslyBypassPermissions"]
-          },
-          {
-            "required": ["thinking"]
-          }
-        ]
-      },
-      "properties": {
-        "workdir": {
-          "description": "Default provider CLI working directory. It is a cwd, not a filesystem security boundary.",
-          "type": "string"
-        },
-        "model": {
-          "description": "Model identifier.",
-          "type": "string"
-        },
-        "sandbox": {
-          "description": "Provider sandbox mode identifier.",
-          "type": "string"
-        },
-        "providerAgentId": {
-          "description": "Provider-side agent identifier.",
-          "type": "string"
-        },
-        "effort": {
-          "description": "Optional provider reasoning effort identifier. Provider adapters may define an explicit default.",
-          "type": "string"
-        },
-        "timeoutSeconds": {
-          "description": "Invocation timeout in seconds.",
-          "type": "number"
-        },
-        "openclawConfigPath": {
-          "description": "OpenClaw configuration path.",
-          "type": "string"
-        },
-        "openclawStateDir": {
-          "description": "OpenClaw state directory.",
-          "type": "string"
-        },
-        "providerOptions": {
-          "description": "Provider-specific extension options passed through unchanged by Core.",
-          "type": "object",
-          "additionalProperties": true,
-          "tsType": "Record<string, unknown>"
-        }
-      }
-    },
     "AsyncUserInputQuestion": {
       "type": "object",
       "additionalProperties": false,
@@ -2436,7 +1908,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 4096,
-          "pattern": "[^\t-\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+          "pattern": "[^\t-\r    -     　﻿]"
         },
         "options": {
           "type": ["array", "null"],
@@ -2445,7 +1917,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 4096,
-            "pattern": "[^\t-\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+            "pattern": "[^\t-\r    -     　﻿]"
           }
         }
       }
@@ -2481,7 +1953,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 4096,
-                "pattern": "[^\t-\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+                "pattern": "[^\t-\r    -     　﻿]"
               },
               "options": {
                 "type": ["array", "null"],
@@ -2490,7 +1962,7 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 4096,
-                  "pattern": "[^\t-\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+                  "pattern": "[^\t-\r    -     　﻿]"
                 }
               },
               "allowCustom": {
@@ -2528,7 +2000,7 @@
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 4096,
-                "pattern": "[^\t-\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+                "pattern": "[^\t-\r    -     　﻿]"
               }
             }
           }
@@ -3208,13 +2680,9 @@
         "agentSessionId",
         "runId",
         "prompt",
-        "workdir",
-        "context",
-        "agentConfig",
         "modelInput",
-        "approvalMode",
         "protocolVersion",
-        "agentSource"
+        "agentEnv"
       ],
       "properties": {
         "executionEnvOverrides": {
@@ -3240,7 +2708,7 @@
                 "pattern": "[\\x00-\\x1f\\x7f-\\x9f]"
               },
               {
-                "pattern": "^[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$"
+                "pattern": "^[    -     　﻿]*$"
               }
             ]
           }
@@ -3298,35 +2766,19 @@
           "description": "Frozen alternate user turn for the first turn of a fresh provider session after resume fails.",
           "type": "string"
         },
-        "workdir": {
-          "description": "Provider process cwd. Sandboxing, containers, or host permissions provide the actual access boundary.",
-          "type": "string"
-        },
-        "context": {
-          "$ref": "#/definitions/ContextEnvelope"
-        },
         "runMetadata": {
           "type": "object",
           "additionalProperties": true,
           "tsType": "Record<string, unknown>"
         },
-        "approvalMode": {
-          "$ref": "#/definitions/ApprovalMode"
-        },
         "providerSession": {
           "$ref": "#/definitions/ProviderSession"
-        },
-        "runtimeLimits": {
-          "$ref": "#/definitions/RuntimeLimits"
-        },
-        "agentConfig": {
-          "$ref": "#/definitions/AgentConfig"
         },
         "protocolVersion": {
           "const": 2
         },
-        "agentSource": {
-          "$ref": "#/definitions/AgentSource"
+        "agentEnv": {
+          "$ref": "#/definitions/AgentEnv"
         }
       },
       "allOf": [
@@ -3841,7 +3293,7 @@
     },
     "ContextEnvsPayload": {
       "title": "ContextEnvsPayload",
-      "description": "Run \u7ea7\u73af\u5883\u53d8\u91cf\u5217\u8868\uff1b\u4ee5 key \u6807\u8bc6\u53d8\u91cf\uff0c\u6309 key \u5408\u5e76\uff0c\u4e0d\u8fdb\u5165\u6a21\u578b\u8f93\u5165\u3002",
+      "description": "Run 级环境变量列表；以 key 标识变量，按 key 合并，不进入模型输入。",
       "type": "object",
       "additionalProperties": false,
       "required": ["env_variables"],
@@ -3890,7 +3342,7 @@
     },
     "InvokeInputWire": {
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "required": ["inputs", "agentEnv"],
       "properties": {
         "sessionName": {
@@ -3904,7 +3356,7 @@
                 "pattern": "[\\x00-\\x1f\\x7f-\\x9f]"
               },
               {
-                "pattern": "^[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]*$"
+                "pattern": "^[    -     　﻿]*$"
               }
             ]
           }
@@ -4005,7 +3457,7 @@
             "providerSession": {
               "properties": {
                 "sessionId": {
-                  "pattern": "[^\\t\\n\\r\\f\\v \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]"
+                  "pattern": "[^\\t\\n\\r\\f\\v    -     　﻿]"
                 }
               }
             }
@@ -4034,11 +3486,6 @@
         {
           "not": {
             "required": ["approvalMode"]
-          }
-        },
-        {
-          "not": {
-            "required": ["agentConfig"]
           }
         },
         {
@@ -4118,7 +3565,14 @@
       }
     },
     "AgentEnv": {
+      "title": "AgentEnv",
+      "description": "Execution envelope forwarded unchanged to the Adapter. Only shared bean types belong to the public protocol; Harness-specific payloads are private agreements between the caller and its Adapter.",
       "type": "object",
+      "additionalProperties": false,
+      "x-octo-unique-type-keys": true,
+      "x-octo-max-json-bytes": 65536,
+      "x-octo-max-json-depth": 32,
+      "x-octo-unicode-scalar-strings": true,
       "required": ["schema", "items"],
       "properties": {
         "schema": {
@@ -4128,71 +3582,10 @@
           "type": "array",
           "maxItems": 32,
           "items": {
-            "allOf": [
-              {
-                "$ref": "#/definitions/ContextItem"
-              },
-              {
-                "anyOf": [
-                  {
-                    "properties": {
-                      "namespace": {
-                        "const": "octo.execution"
-                      }
-                    }
-                  },
-                  {
-                    "properties": {
-                      "namespace": {
-                        "const": "octo.security"
-                      },
-                      "name": {
-                        "const": "approval_policy"
-                      }
-                    }
-                  }
-                ]
-              }
-            ]
-          }
-        },
-        "agentSource": {
-          "$ref": "#/definitions/AgentSource"
-        },
-        "workdir": {
-          "type": "string"
-        },
-        "approvalMode": {
-          "$ref": "#/definitions/ApprovalMode"
-        },
-        "agentConfig": {
-          "$ref": "#/definitions/AgentConfig"
-        },
-        "runtimeLimits": {
-          "$ref": "#/definitions/RuntimeLimits"
-        }
-      },
-      "additionalProperties": false,
-      "allOf": [
-        {
-          "properties": {
-            "agentConfig": {
-              "properties": {
-                "timeoutSeconds": {
-                  "not": {
-                    "maximum": 0
-                  }
-                }
-              }
-            }
-          }
-        },
-        {
-          "not": {
-            "required": ["controlInstructions"]
+            "$ref": "#/definitions/ContextItem"
           }
         }
-      ]
+      }
     }
   }
 }

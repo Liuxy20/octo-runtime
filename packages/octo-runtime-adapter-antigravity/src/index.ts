@@ -1,4 +1,10 @@
 import {
+  invocationEffort,
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   defineAdapter,
   hasImageInput,
   invocationEnvironment,
@@ -355,7 +361,7 @@ export function buildAntigravityCommand(
   commandArgsPrefix: string[] = [],
   logPath?: string
 ): CommandSpec {
-  if (request.approvalMode !== "full_access")
+  if (invocationApprovalMode(request) !== "full_access")
     throw new Error("APPROVAL_MODE_UNSUPPORTED: antigravity only supports full_access");
   if (request.signal?.aborted) throw new Error("ANTIGRAVITY_CANCELLED_BEFORE_START");
   if (hasImageInput(request)) throw new Error("ANTIGRAVITY_IMAGE_INPUT_UNSUPPORTED");
@@ -363,7 +369,7 @@ export function buildAntigravityCommand(
     if (managedFlags.has(arg.split("=")[0]) || /^-[pic].+/.test(arg))
       throw new Error(`ANTIGRAVITY_MANAGED_ARGUMENT: ${arg.split("=")[0]}`);
   }
-  const effort = mapReasoningEffort("antigravity", request.agentConfig.effort);
+  const effort = mapReasoningEffort("antigravity", invocationEffort(request));
   const args = [
     ...commandArgsPrefix,
     "--input-format",
@@ -379,11 +385,12 @@ export function buildAntigravityCommand(
   if (logPath) args.push("--log-file", logPath);
   if (request.providerSession?.sessionId)
     args.push("--conversation", request.providerSession.sessionId);
-  if (request.agentConfig.model) args.push("--model", request.agentConfig.model);
+  const model = invocationModel(request);
+  if (model) args.push("--model", model);
   if (effort) args.push("--effort", effort);
   const content = providerInputText(request);
   const input = `${JSON.stringify({ event: "user", message: { content } })}\n`;
-  return { command, args, input, cwd: request.workdir };
+  return { command, args, input, cwd: invocationWorkdir(request) };
 }
 
 export function antigravityLogError(log: string): string | undefined {

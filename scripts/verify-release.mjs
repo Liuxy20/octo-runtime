@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  withAgentEnvItems
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { access, cp, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
@@ -10,13 +14,12 @@ import {
   stopReleaseProcess,
   withReleaseDirectory
 } from "./release-process.mjs";
-
 export async function verifyRelease(archiveInput, { expectedCommit, requireClean = false } = {}) {
   if (expectedCommit !== undefined && !/^[a-f0-9]{40,64}$/.test(expectedCommit))
     throw new Error("Invalid expected commit");
   const archive = resolve(archiveInput);
   // Windows 外层验收须覆盖 40 秒身份查询、后续 15 秒就绪与资源关闭，不能提前杀掉 owner。
-  const runtimeCheckTimeout = process.platform === "win32" ? 60_000 : 30_000;
+  const runtimeCheckTimeout = process.platform === "win32" ? 60000 : 30000;
   const root = resolve(import.meta.dirname, "..");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "orc-"));
   const npm = join(
@@ -41,7 +44,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--no-audit",
         "--no-fund"
       ],
-      { cwd: directory, timeout: 60_000, label: `Offline npm ${args[0]}` }
+      { cwd: directory, timeout: 60000, label: `Offline npm ${args[0]}` }
     );
   await withReleaseDirectory(directory, async () => {
     await npmRun(["install", archive]);
@@ -156,9 +159,15 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const dshEvents = await Array.fromAsync(
       dshModule.createDshAdapter().invoke(
         invokeRequest({
-          workdir: directory,
-          approvalMode: "full_access",
-          agentConfig: { providerOptions: { dshBin: dshFixture } }
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            },
+            { namespace: "adapter.dsh", name: "options", payload: { ...{ dshBin: dshFixture } } }
+          ])
         })
       )
     );
@@ -175,23 +184,25 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     );
     const dshRequest = (mode, extraEnv = []) =>
       invokeRequest({
-        workdir: directory,
-        approvalMode: "full_access",
-        agentConfig: { providerOptions: { dshBin: dshFixture } },
         executionEnvOverrides: {
           env_variables: [{ key: "OCTO_DSH_FIXTURE", value: mode }, ...extraEnv]
-        }
+        },
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+          { namespace: "adapter.dsh", name: "options", payload: { ...{ dshBin: dshFixture } } }
+        ])
       });
     for (const [change, expected] of [
       [
         (request) => {
-          request.agentConfig.sandbox = "read-only";
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").sandbox = "read-only";
         },
         "DSH_CONFIG_INVALID"
       ],
       [
         (request) => {
-          request.context.items.push({
+          request.agentEnv.items.push({
             namespace: "octo.execution",
             name: "actmode",
             payload: { mode: "plan" }
@@ -201,13 +212,13 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       ],
       [
         (request) => {
-          request.agentConfig.providerOptions.requestTimeoutMs = 0;
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").requestTimeoutMs = 0;
         },
         "DSH_CONFIG_INVALID"
       ],
       [
         (request) => {
-          request.agentConfig.providerOptions.args = ["界".repeat(1366)];
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").args = ["界".repeat(1366)];
         },
         "DSH_CONFIG_INVALID"
       ]
@@ -254,7 +265,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       execute(process.execPath, [cli, ...args, "--home", home], {
         cwd: consumer,
         // Windows service inspection can issue two sequential 30-second native queries.
-        timeout: process.platform === "win32" ? 75_000 : 10_000,
+        timeout: process.platform === "win32" ? 75000 : 10000,
         label: `CLI ${args.join(" ") || "help"}`
       });
     const version = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;
@@ -318,7 +329,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--typeRoots",
         join(root, "node_modules/@types")
       ],
-      { cwd: consumer, timeout: 30_000, label: "Compile documentation examples" }
+      { cwd: consumer, timeout: 30000, label: "Compile documentation examples" }
     );
     await cp(join(root, "test/fixtures/invoke-adapter.js"), join(consumer, "docs-adapter.mjs"));
     await execute(
@@ -341,7 +352,8 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         adapters: [testAdapter]
       }, {
         inputs: [{type: "text", text: "documentation package example"}],
-        agentEnv: {workdir: process.cwd(), schema: "octo.context-envelope/v3", items: [
+        agentEnv: {schema: "octo.context-envelope/v3", items: [
+          {namespace: "octo.execution", name: "workspace", payload: {path: process.cwd()}},
           {namespace: "octo.execution", name: "adapter", payload: {type: "test"}}
         ]}
       }, event => { if (event.type === "run.completed") completed = true; });
@@ -378,7 +390,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--outDir",
         "compiled"
       ],
-      { cwd: consumer, timeout: 30_000, label: "Compile public SDK fixtures" }
+      { cwd: consumer, timeout: 30000, label: "Compile public SDK fixtures" }
     );
     await execute(
       process.execPath,
@@ -427,7 +439,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       await Promise.race([
         exited,
         new Promise((_, reject) => {
-          const timer = setTimeout(() => reject(new Error("CLI shutdown timeout")), 10_000);
+          const timer = setTimeout(() => reject(new Error("CLI shutdown timeout")), 10000);
           timer.unref();
         })
       ]);

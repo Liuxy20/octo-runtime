@@ -40,7 +40,7 @@ Omitting actmode leaves mode behavior to the Provider without actively resetting
 
 ## OpenClaw Configuration Differences
 
-OpenClaw uses an existing Gateway Agent and requires an explicit `provider_agent_id`, such as `main`. That Gateway manages the working directory. Nonempty environment variables passed through individual invocations are rejected.
+OpenClaw uses an existing Gateway Agent and requires an explicit `adapter.openclaw/options.payload.agentId`, such as `main`. That Gateway manages the working directory. Nonempty environment variables passed through individual invocations are rejected.
 
 Local execution requires the caller's existing absolute workdir on each invocation; Runtime neither defaults to cwd nor creates or recovers a directory. External/preset Agents and Adapters with `metadata.workspace: false` can omit a local override. A working directory does not restrict filesystem or network permissions. See [workdir validation](invoke-input.md).
 

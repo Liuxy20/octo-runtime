@@ -1,11 +1,10 @@
 import { prepareInvokeInput } from "./invoke-input.js";
 import { randomUUID } from "node:crypto";
-import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
-import { sanitizePublicValue } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  sanitizePublicValue,
+  isAdapterPreparationFailure
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export { prepareInvokeInput } from "./invoke-input.js";
-export { resolveLocalContext, localRuntimeLimits } from "./context.js";
 import type {
   AdapterInvocationContext,
   AdapterProbeOptions,
@@ -105,6 +104,7 @@ export type InvocationCleanupState = "complete" | "pending" | "failed" | "unknow
 
 interface InvocationOwner {
   streamId: string;
+  providerOptions?: Record<string, string>;
   controller: AbortController;
   detach: () => void;
   close?: () => Promise<unknown>;
@@ -313,18 +313,6 @@ export class AgentExecutor {
     if (!registered) throw new Error(`unknown adapter: ${adapterType}`);
     const support = this.#support(registered);
     assertProtocolSupport(support, resolved);
-    if (
-      request.approvalMode !== "full_access" &&
-      (resolved.protocolMode === "native"
-        ? typeof registered.respondNative !== "function"
-        : typeof registered.respondInteraction !== "function")
-    ) {
-      throw new Error(
-        `APPROVAL_MODE_UNSUPPORTED: ${adapterType} does not implement execution-time approval responses`
-      );
-    }
-    if (!registered?.metadata.agentSources.includes(request.agentSource))
-      throw new Error("AGENT_SOURCE_UNSUPPORTED: " + adapterType);
     if (this.#runs.has(request.invocationId))
       throw protocolError(
         "EXECUTION_IDENTITY_CONFLICT",
@@ -388,7 +376,14 @@ export class AgentExecutor {
       const streamLimits = resolveStreamLimitPolicy(environment.streamLimits);
       const { signal, ...wire } = request;
       const frozenRequest = { ...structuredClone(wire), signal };
-      return this.#admit(adapterType, frozenRequest, protocolMode, streamLimits, received);
+      return this.#admit(
+        adapterType,
+        frozenRequest,
+        protocolMode,
+        streamLimits,
+        received,
+        environment.providerOptions && structuredClone(environment.providerOptions)
+      );
     } catch (error) {
       this.#log("warn", "invoke.rejected", {
         code: errorCode(error) ?? "INVOKE_REJECTED",
@@ -407,7 +402,8 @@ export class AgentExecutor {
     request: InvokeRequest,
     protocolMode: "native" | "canonical",
     streamLimits: Readonly<StreamLimitPolicy>,
-    received: number
+    received: number,
+    providerOptions?: Record<string, string>
   ): AsyncGenerator<HostFrame> {
     // 延迟到消费时再次检查关闭/取消，防止创建生成器后、开始迭代前 shutdown 的竞态。
     this.#assertOpen();
@@ -421,6 +417,7 @@ export class AgentExecutor {
     };
     const owner: InvocationOwner = {
       streamId: receipt.stream_id,
+      providerOptions,
       controller,
       detach: () => {
         signal?.removeEventListener("abort", callerAbort);
@@ -439,7 +436,6 @@ export class AgentExecutor {
       invocation_id: request.invocationId,
       session_id: request.agentSessionId,
       adapter_type: adapterType,
-      model: request.agentConfig?.model,
       duration_ms: Date.now() - received
     });
     yield* this.#streamInvocation(adapterType, request, receipt, streamLimits, owner);
@@ -745,7 +741,7 @@ export class AgentExecutor {
       session_id: request.agentSessionId,
       adapter_type: adapterType
     };
-    const watchdog = new InvocationWatchdog(request.runtimeLimits, controller, (diagnostic) =>
+    const watchdog = new InvocationWatchdog(undefined, controller, (diagnostic) =>
       this.#log("warn", "invoke.watchdog", {
         ...identity,
         code: diagnostic.event
@@ -775,7 +771,7 @@ export class AgentExecutor {
         if (result.done) iteratorDone = true;
         return result;
       } catch (error) {
-        nextFailed = true;
+        nextFailed = !isAdapterPreparationFailure(error, context);
         throw error;
       }
     };
@@ -796,6 +792,8 @@ export class AgentExecutor {
     const context: AdapterInvocationContext = {
       protocolMode,
       streamLimits,
+      providerOptions: owner.providerOptions,
+      configureRuntimeLimits: (limits) => watchdog.configure(limits),
       log: this.#log,
       reportConversion: () => {
         if (protocolMode === "native")
@@ -913,9 +911,6 @@ export class AgentExecutor {
 
     try {
       controller.signal.throwIfAborted();
-      // 工作目录由调用方预先创建；启动 Provider 前仅校验，不分配或修复目录。
-      await assertExecutionWorkdir(request, adapter.metadata);
-      controller.signal.throwIfAborted();
       const invocation = adapter.invoke({ ...request, signal: controller.signal }, context);
       iterator = invocation[Symbol.asyncIterator]();
       while (true) {
@@ -959,7 +954,7 @@ export class AgentExecutor {
             ? {
                 protocolVersion: 2,
                 type: "run.failed",
-                payload: await adapterFailurePayload(adapterEvent.payload, request.workdir, {
+                payload: adapterFailurePayload(adapterEvent.payload, {
                   stage: "provider.invoke",
                   defaultDomain: "provider",
                   runId: request.runId,
@@ -1033,7 +1028,7 @@ export class AgentExecutor {
         controller.signal.reason instanceof AdapterWatchdogTimeoutError
           ? controller.signal.reason
           : caught;
-      const failure = await adapterFailurePayload(
+      const failure = adapterFailurePayload(
         {
           message: errorMessage(error),
           adapterType,
@@ -1041,7 +1036,6 @@ export class AgentExecutor {
           ...capacityFailureDetails(error),
           ...watchdogFailureDetails(error)
         },
-        request.workdir,
         {
           stage: "adapter.invoke",
           defaultDomain: "adapter",
@@ -1313,68 +1307,13 @@ function isWorkdirFailure(code: unknown): code is WorkdirFailureCode {
   return typeof code === "string" && Object.hasOwn(WORKDIR_FAILURE_MESSAGES, code);
 }
 
-function workdirFailure(code: WorkdirFailureCode): Error & { code: WorkdirFailureCode } {
-  return Object.assign(new TypeError(`${code}: ${WORKDIR_FAILURE_MESSAGES[code]}`), { code });
-}
-
-/** 外部 Agent 无覆盖时不检查本机目录；本地覆盖始终保留调用方的路径写法。 */
-async function assertExecutionWorkdir(
-  request: InvokeRequest,
-  metadata: HostedAdapterMetadata
-): Promise<void> {
-  if (metadata.workspace === false || (request.agentSource === "preset" && !request.workdir))
-    return;
-  const path = request.workdir;
-  if (!path) throw workdirFailure("WORKDIR_REQUIRED");
-  if (!isAbsolute(path) || path.includes("\0")) throw workdirFailure("WORKDIR_INVALID");
-  let directory: boolean;
-  try {
-    directory = (await stat(path)).isDirectory();
-    if (directory) await access(path, constants.X_OK);
-  } catch (error) {
-    const code = errorCode(error);
-    throw workdirFailure(
-      code === "ENOENT"
-        ? "WORKDIR_NOT_FOUND"
-        : code === "ENOTDIR"
-          ? "WORKDIR_NOT_DIRECTORY"
-          : "WORKDIR_UNAVAILABLE"
-    );
-  }
-  if (!directory) throw workdirFailure("WORKDIR_NOT_DIRECTORY");
-}
-
 /** Keep the Adapter's failure detail; catalog normalization only adds classification. */
-async function adapterFailurePayload(
+function adapterFailurePayload(
   input: Record<string, unknown>,
-  workdir: string,
   context: Parameters<typeof failurePayload>[1]
-): Promise<ReturnType<typeof failurePayload>> {
-  let detail = input;
-  // Node reports the same spawn errno for a missing command and a missing cwd.
-  if (["ENOENT", "ENOTDIR", "EACCES", "EPERM"].includes(String(input.code)) && workdir) {
-    let problem: string | undefined;
-    try {
-      if (!(await stat(workdir)).isDirectory()) problem = "配置的工作目录不是文件夹";
-      else await access(workdir, constants.X_OK);
-    } catch (error) {
-      const code = errorCode(error);
-      if (code === "ENOENT") problem = "配置的工作目录不存在";
-      else if (code === "ENOTDIR") problem = "配置的工作目录路径中包含非文件夹项";
-      else if (code === "EACCES" || code === "EPERM") problem = "没有进入配置工作目录的权限";
-    }
-    if (problem)
-      detail = {
-        ...input,
-        code: "ADAPTER_INVOCATION_FAILED",
-        message: `${problem}（adapter.workdir=${workdir}）。${typeof input.message === "string" ? input.message : ""}`,
-        error: input.error ?? { code: input.code, message: input.message }
-      };
-  }
-  const normalized = failurePayload(detail, {
-    ...context,
-    ...(detail !== input ? { defaultDomain: "adapter" as const } : {})
-  });
+): ReturnType<typeof failurePayload> {
+  const detail = input;
+  const normalized = failurePayload(detail, context);
   // 仅 ACP 消息保留原始 _meta；外层字段仍按公共错误规则脱敏，不能凭错误码整体绕过。
   const { message: originalMessage, ...outerDetail } = detail;
   const safe = sanitizePublicValue(outerDetail) as Record<string, unknown>;

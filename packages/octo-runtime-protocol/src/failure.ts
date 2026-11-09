@@ -412,7 +412,7 @@ export function classifyFailure(
       ? {}
       : classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
         ? {
-            configParameter: "execution_profile.agent_config.providerOptions.finalizationTimeoutMs"
+            configParameter: "adapter.codex/options.finalizationTimeoutMs"
           }
         : timeoutConfiguration(classification.code, context.source?.adapter),
     retryable:
@@ -528,10 +528,10 @@ function timeoutConfiguration(code: string, adapter?: string): Record<string, st
     "OH-ADP-3011": "run_timeout_ms",
     "OH-ADP-3012": "cancel_grace_ms"
   };
-  if (fields[code]) return { configParameter: `execution_profile.runtime_limits.${fields[code]}` };
+  if (fields[code]) return { configParameter: `octo.execution/limits.${fields[code]}` };
   if (code === "OH-ADP-3013" && adapter === "codex")
     return {
-      configParameter: "execution_profile.agent_config.providerOptions.appServerRequestTimeoutMs"
+      configParameter: "adapter.codex/options.appServerRequestTimeoutMs"
     };
   return {};
 }

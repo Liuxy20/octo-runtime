@@ -20,9 +20,15 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
-    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 ```
@@ -35,14 +41,12 @@ const input = InvokeInput.check({
 | ------------------------------------ | ---- | --------------------------------------------------------------------------------------- |
 | `inputs`                             | 是   | 本轮按顺序排列的文本与图片分片，图片字节只放这里一次。                                  |
 | `agentEnv`                           | 是   | Context v3 envelope，其中 `octo.execution` / `adapter` 项决定用哪个 Adapter；为空合法。 |
-| `agentEnv.workdir`                   | 本地调用必需 | 调用方已准备的现有绝对目录，也可在 workspace item 中提供同一路径。无 cwd 默认值，不是沙箱。 |
+| `octo.execution/workspace.payload.path`                   | 本地调用必需 | workspace item 中的调用方已准备的现有绝对目录。无 cwd 默认值，不是沙箱。 |
 | `protocol_mode`                      | 否   | `native`（默认）或 `canonical`。                                                        |
 | `providerSession`                    | 否   | 显式续接的 Provider 会话，绝不会从 `sessionId` 反推重建。                               |
-| `agentEnv.agentConfig`               | 否   | 完整 Provider 配置，含 `providerOptions`，须与 Context 中的选择一致。                   |
-| `agentEnv.runtimeLimits`             | 否   | 本轮的超时与执行约束；省略时套用执行默认值。                                            |
 | `sessionId`、`invocationId`、`runId` | 否   | 关联标识，省略时自动生成。不是 Provider 历史。                                          |
 
-只有 `inputs` 和 `agentEnv` 是必填。但缺少 `octo.execution` / `adapter` 项的请求会在 Provider 启动前就失败。
+只有 `inputs` 和 `agentEnv` 是必填。未显式提供 Adapter item 时，Core 路由到 `codex`，配置默认值由该 Adapter 解释。Core 为 AgentEnv 复制快照并按原顺序透传所有 item；私有 item 由宿主和消费它的 Adapter 约定，无须登记公共 schema。
 
 ## 怎么读输出
 

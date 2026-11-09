@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
@@ -28,7 +29,6 @@ import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import { acpPromptParams } from "@mininglamp-oss/octo-runtime-acp-client";
 import { invokeRequest, preparedFrames, preparedTestInvoke } from "./runtime-fixture.js";
 import { visualInputImages } from "../test-support/multimodal-images.mjs";
-
 const images = visualInputImages();
 const mixed = [
   { type: "text", text: "first" },
@@ -41,7 +41,6 @@ const collect = async (iterable) => {
   for await (const event of iterable) events.push(event);
   return events;
 };
-
 function codexFixture({ fallback = false } = {}) {
   const child = new EventEmitter();
   const frames = [];
@@ -104,7 +103,6 @@ function codexFixture({ fallback = false } = {}) {
   };
   return { spawnFn: () => child, frames };
 }
-
 for (const [approvalMode, approvalPolicy, sandbox] of [
   ["ask", "untrusted", "workspace-write"],
   ["assisted", "on-request", "workspace-write"],
@@ -113,14 +111,21 @@ for (const [approvalMode, approvalPolicy, sandbox] of [
   test(`Codex maps ${approvalMode} to native approval and sandbox parameters`, async () => {
     const server = codexFixture();
     const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
-    const events = await collect(adapter.invoke(invokeRequest({ approvalMode })));
+    const events = await collect(
+      adapter.invoke(
+        invokeRequest({
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+          ])
+        })
+      )
+    );
     const thread = server.frames.find((frame) => frame.method === "thread/start");
     assert.equal(thread.params.approvalPolicy, approvalPolicy);
     assert.equal(thread.params.sandbox, sandbox);
     assert.equal(events.at(-1).type, "run.completed");
   });
 }
-
 for (const fallback of [false, true]) {
   test(`Codex preserves mixed native input order and redacts image captures${fallback ? " after resume fallback" : ""}`, async () => {
     const server = codexFixture({ fallback });
@@ -153,7 +158,6 @@ for (const fallback of [false, true]) {
       );
   });
 }
-
 function acpFixture({ imageCapability = true, fallback = false } = {}) {
   let nextId = 1;
   const frames = [];
@@ -186,7 +190,6 @@ function acpFixture({ imageCapability = true, fallback = false } = {}) {
     }
   };
 }
-
 test("ACP transport accepts image blocks and retains its text-only API", () => {
   assert.deepEqual(acpPromptParams("s", "hello"), {
     sessionId: "s",
@@ -199,7 +202,6 @@ test("ACP transport accepts image blocks and retains its text-only API", () => {
     )
   });
 });
-
 for (const fallback of [false, true]) {
   test(`ACP maps mixed native blocks and strips image captures${fallback ? " after load fallback" : ""}`, async () => {
     const fixture = acpFixture({ fallback });
@@ -229,7 +231,6 @@ for (const fallback of [false, true]) {
     assert.equal(fixture.closed, true);
   });
 }
-
 for (const imageCapability of [false, null, "true", "missing"]) {
   test(`ACP rejects unadvertised image support (${imageCapability}) before session or prompt`, async () => {
     const fixture = acpFixture({ imageCapability });
@@ -245,7 +246,6 @@ for (const imageCapability of [false, null, "true", "missing"]) {
     assert.equal(fixture.closed, true);
   });
 }
-
 test("Codex and ACP accept a pure-image turn without inventing user text", async () => {
   const server = codexFixture();
   const codex = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
@@ -275,7 +275,6 @@ test("Codex and ACP accept a pure-image turn without inventing user text", async
     ["image", "image", "image"]
   );
 });
-
 test("ACP rejects recovery-only image input when the agent lacks image capability", async () => {
   const fixture = acpFixture({ imageCapability: false });
   const adapter = createAcpAdapter(
@@ -295,17 +294,21 @@ test("ACP rejects recovery-only image input when the agent lacks image capabilit
   );
   assert.deepEqual(fixture.frames, []);
 });
-
 for (const recoveryOnly of [false, true]) {
   const imageRequest = () =>
     invokeRequest({
-      approvalMode: "full_access",
       ...(recoveryOnly
         ? { providerSession: { sessionId: "old" }, freshFallbackModelInputParts: mixed }
-        : { modelInputParts: mixed })
+        : { modelInputParts: mixed }),
+      agentEnv: withAgentEnvItems(
+        (recoveryOnly
+          ? { providerSession: { sessionId: "old" }, freshFallbackModelInputParts: mixed }
+          : { modelInputParts: mixed }
+        ).agentEnv,
+        [{ namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }]
+      )
     });
   const variant = recoveryOnly ? "recovery-only" : "current-turn";
-
   for (const [name, build] of [
     ["Claude", buildClaudeCommand],
     ["OpenCode", buildOpenCodeCommand],
@@ -314,18 +317,12 @@ for (const recoveryOnly of [false, true]) {
   ]) {
     test(`${name} direct command construction rejects ${variant} images`, async () => {
       const request = imageRequest();
-      Object.defineProperty(request, "agentConfig", {
-        get() {
-          assert.fail("image rejection must precede native configuration access");
-        }
-      });
       await assert.rejects(
         async () => build(request),
         /UNSUPPORTED_INPUT_MODALITY|ANTIGRAVITY_IMAGE_INPUT_UNSUPPORTED/
       );
     });
   }
-
   for (const [name, factory] of [
     ["Claude", () => createClaudeCodeAdapter({ command: "/provider-must-not-start" })],
     ["CodeBuddy", (mustNotStart) => createCodeBuddyAdapter({ acpClientFactory: mustNotStart })],
@@ -340,11 +337,6 @@ for (const recoveryOnly of [false, true]) {
         assert.fail("Provider must not start");
       });
       const request = imageRequest();
-      Object.defineProperty(request.agentConfig, "providerOptions", {
-        get() {
-          assert.fail("image rejection must precede native connection configuration access");
-        }
-      });
       await assert.rejects(
         collect(adapter.invoke(request)),
         /UNSUPPORTED_INPUT_MODALITY|ANTIGRAVITY_IMAGE_INPUT_UNSUPPORTED/
@@ -352,16 +344,21 @@ for (const recoveryOnly of [false, true]) {
       assert.equal(starts, 0);
     });
   }
-
   test(`OpenCode ask rejects ${variant} images before its ACP path`, async () => {
     const adapter = createOpenCodeAdapter({ command: "/provider-must-not-start" });
     await assert.rejects(
-      collect(adapter.invoke({ ...imageRequest(), approvalMode: "ask" })),
+      collect(
+        adapter.invoke({
+          ...imageRequest(),
+          agentEnv: withAgentEnvItems(imageRequest().agentEnv, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+          ])
+        })
+      ),
       /UNSUPPORTED_INPUT_MODALITY/
     );
   });
 }
-
 test("Host forwards image blocks to an implementing Adapter without feature labels", async () => {
   const host = new AgentExecutor();
   let received;
@@ -379,17 +376,21 @@ test("Host forwards image blocks to an implementing Adapter without feature labe
   const events = await collect(
     preparedTestInvoke((...args) => preparedFrames(host, ...args))(
       "fixture",
-      invokeRequest({ modelInputParts: mixed, approvalMode: "full_access" }),
+      invokeRequest({
+        modelInputParts: mixed,
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
+      }),
       { protocolMode: "canonical" }
     )
   );
   assert.deepEqual(received, mixed);
   assert.equal(events.at(-1).type, "run.completed");
 });
-
 test(
   "Codex real app-server identifies three native images in supplied order",
-  { skip: process.env.OCTO_CODEX_MULTIMODAL_LIVE !== "1", timeout: 180_000 },
+  { skip: process.env.OCTO_CODEX_MULTIMODAL_LIVE !== "1", timeout: 180000 },
   async () => {
     const workdir = await mkdtemp(join(tmpdir(), "octo-mm-live-"));
     try {
@@ -397,7 +398,6 @@ test(
       const events = await collect(
         adapter.invoke(
           invokeRequest({
-            workdir,
             modelInputParts: [
               {
                 type: "text",
@@ -409,15 +409,13 @@ test(
               },
               ...images
             ],
-            approvalMode: "ask",
-            agentSource: "provisioned",
-            agentConfig: {
-              sandbox: "read-only",
-              ...(process.env.OCTO_CODEX_MULTIMODAL_MODEL
-                ? { model: process.env.OCTO_CODEX_MULTIMODAL_MODEL }
-                : {})
-            },
-            signal: AbortSignal.timeout(170_000)
+            signal: AbortSignal.timeout(170000),
+            agentEnv: withAgentEnvItems(undefined, [
+              { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+              { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+              { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } },
+              { namespace: "adapter.codex", name: "options", payload: { sandbox: "read-only" } }
+            ])
           })
         )
       );
@@ -446,7 +444,6 @@ test(
     }
   }
 );
-
 for (const scenario of ["first", "resume", "reset", "missing-session"]) {
   test(`Codex forwards caller prompts as ordinary parts without injection: ${scenario}`, async () => {
     const server = codexFixture({ fallback: scenario === "missing-session" });

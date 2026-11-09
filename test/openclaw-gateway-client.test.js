@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { once, getEventListeners } from "node:events";
 import test from "node:test";
@@ -9,7 +10,6 @@ import {
 } from "../packages/octo-runtime-adapter-openclaw/dist/gateway.js";
 import { createOpenClawAdapter } from "../packages/octo-runtime-adapter-openclaw/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 const intermediate = ["accepted", "queued", "in_flight", "pending", "running"];
 const hello = {
   type: "hello-ok",
@@ -31,17 +31,28 @@ const hello = {
 function adapterRequest(signal) {
   return invokeRequest({
     signal,
-    approvalMode: "full_access",
-    agentConfig: {
-      providerAgentId: "main",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://localhost:1",
-        OPENCLAW_GATEWAY_TOKEN: "fixture",
-        OPENCLAW_GATEWAY_DEVICE_ID: "d",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+    agentEnv: withAgentEnvItems(undefined, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "main",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://localhost:1",
+            OPENCLAW_GATEWAY_TOKEN: "fixture",
+            OPENCLAW_GATEWAY_DEVICE_ID: "d",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+          }
+        }
       }
-    }
+    ])
   });
 }
 function sessionReply(frame, reply) {
@@ -52,7 +63,6 @@ function sessionReply(frame, reply) {
     return reply({ ok: true, key: frame.params.key, entry: frame.params });
   return reply({});
 }
-
 async function fixture(t, respond) {
   const server = new WebSocketServer({ host: "127.0.0.1", port: 0 });
   await once(server, "listening");
@@ -91,7 +101,6 @@ async function fixture(t, respond) {
   t.after(() => client.close());
   return client;
 }
-
 test(
   "Gateway client retains all intermediate acknowledgements until an actual final response",
   { timeout: 2000 },
@@ -125,7 +134,6 @@ test(
     assert.deepEqual(accepted, [...intermediate, "error"]);
   }
 );
-
 for (const status of ["pending", "running"])
   test(
     `adapter preserves final-only answer and usage after ${status}`,
@@ -172,7 +180,6 @@ for (const status of ["pending", "running"])
       assert.equal(methods.includes("agent.wait"), false);
     }
   );
-
 for (const stopReason of ["aborted", "rpc"])
   test(
     `confirmed ${stopReason} cancellation survives closing an older wait`,
@@ -220,7 +227,6 @@ for (const stopReason of ["aborted", "rpc"])
       assert.equal((await closed)[0], 1000);
     }
   );
-
 test(
   "Gateway RPC errors retain method and native code without retaining arbitrary details",
   { timeout: 2000 },
@@ -244,7 +250,6 @@ test(
     });
   }
 );
-
 test(
   "invalid hello rejects promptly instead of leaving an unhandled callback rejection",
   { timeout: 2000 },
@@ -253,7 +258,6 @@ test(
     await assert.rejects(client.connect(), /invalid hello response/);
   }
 );
-
 test(
   "already aborted RPCs settle without sending, and timeout releases the signal listener",
   { timeout: 2000 },

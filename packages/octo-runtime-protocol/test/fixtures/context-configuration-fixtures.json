@@ -222,8 +222,7 @@
             "namespace": "octo.execution",
             "name": "adapter",
             "payload": {
-              "type": "openclaw",
-              "provider_agent_id": "main"
+              "type": "openclaw"
             }
           }
         ]
@@ -259,7 +258,7 @@
     }
   },
   {
-    "name": "persistent-inline-forbidden",
+    "name": "caller-inline-default-is-opaque",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -286,7 +285,22 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "inline",
+          "payload": {
+            "entries": [
+              {
+                "text": "request only"
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
     "name": "reference-request-replaces-default-by-identity",
@@ -344,10 +358,33 @@
         }
       ]
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "references",
+          "payload": {
+            "entries": [
+              {
+                "resource_ref": "task:1",
+                "resolver": "mcp",
+                "locator": {
+                  "server_ref": "octo_task",
+                  "tool": "task_get_materials"
+                },
+                "params": {
+                  "expected_version": 2
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
-    "name": "mandatory-reference-conflict",
+    "name": "mandatory-reference-overrides-request",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -402,7 +439,30 @@
         }
       ]
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "references",
+          "payload": {
+            "entries": [
+              {
+                "resource_ref": "task:1",
+                "resolver": "mcp",
+                "locator": {
+                  "server_ref": "octo_task",
+                  "tool": "task_get_materials"
+                },
+                "params": {
+                  "expected_version": 1
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
     "name": "empty",
@@ -685,7 +745,7 @@
     }
   },
   {
-    "name": "random-workspace",
+    "name": "workspace-payload-semantics-belong-to-adapter",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -708,10 +768,21 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.execution",
+          "name": "workspace",
+          "payload": {
+            "mode": "random"
+          }
+        }
+      ]
+    }
   },
   {
-    "name": "ephemeral-default-forbidden",
+    "name": "caller-content-default-is-opaque",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -738,7 +809,22 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "inline",
+          "payload": {
+            "entries": [
+              {
+                "text": "ephemeral"
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
     "name": "envs-merge-per-key",

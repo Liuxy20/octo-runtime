@@ -1,3 +1,12 @@
+import {
+  assertAdapterAgentEnv,
+  assertAdapterWorkdir,
+  runAdapterPreparation,
+  isAdapterPreparationFailure,
+  invocationEffort,
+  invocationOption,
+  invocationApprovalMode
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { GrokBuildRpcError, spawnGrokBuildAcpClient } from "./client.js";
 import { createGrokBuildAcpAdapter } from "./adapter.js";
 import {
@@ -79,7 +88,7 @@ export function createGrokBuildAdapter({
         return {
           ...params,
           _meta: {
-            yoloMode: request.approvalMode === "full_access",
+            yoloMode: invocationApprovalMode(request) === "full_access",
             autoMode: false,
             ...(!fresh ? { "x.ai/restore_code": false } : {})
           }
@@ -100,7 +109,7 @@ export function createGrokBuildAdapter({
         };
       },
       async *configureSession(client, session, sessionId, request) {
-        const requested = request.agentConfig.effort;
+        const requested = invocationEffort(request);
         if (requested === undefined) return;
         const option = (Array.isArray(session.configOptions) ? session.configOptions : [])
           .map(record)
@@ -207,18 +216,34 @@ export function createGrokBuildAdapter({
 
   return Object.freeze({
     ...adapter,
+    get defaultAgentEnv() {
+      return adapter.defaultAgentEnv;
+    },
     async *invoke(request: InvokeRequest, context?: Parameters<typeof adapter.invoke>[1]) {
-      if (request.agentConfig.sandbox !== undefined)
-        throw new Error("SANDBOX_UNSUPPORTED: grok-build ACP has no per-session sandbox override");
-      // Grok 的 MCP 配置会展开模板；拒绝不能可靠保留的最终字面量，不改写用户配置。
-      const env = invocationEnvironment(request);
-      const mcp = invocationMcpServers(request, env);
-      if (JSON.stringify(mcp).includes("${"))
-        throw new Error("MCP_LITERAL_UNSUPPORTED: grok-build");
+      let env: NodeJS.ProcessEnv = {};
+      await runAdapterPreparation(context, async () => {
+        assertAdapterAgentEnv(request);
+        await assertAdapterWorkdir(request);
+        if (invocationOption(request, "sandbox", "grok-build") !== undefined)
+          throw new Error(
+            "SANDBOX_UNSUPPORTED: grok-build ACP has no per-session sandbox override"
+          );
+        // 纯模板校验在 Provider 操作前完成；预算和 notice 仍只由内层 SDK 应用一次。
+        env = invocationEnvironment(request);
+        const mcp = invocationMcpServers(request, env);
+        if (JSON.stringify(mcp).includes("${"))
+          throw new Error("MCP_LITERAL_UNSUPPORTED: grok-build");
+      });
       try {
         yield* adapter.invoke(request, context);
       } catch (error) {
-        throw publicFailure(error, env);
+        const failure = publicFailure(error, env);
+        // 脱敏会创建新 Error；仅转移原错误已经确认的本轮准备证据。
+        if (context && isAdapterPreparationFailure(error, context))
+          await runAdapterPreparation(context, () => {
+            throw failure;
+          });
+        throw failure;
       }
     }
   });

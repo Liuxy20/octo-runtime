@@ -1,9 +1,9 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildClaudeCommand } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 import { buildOpenCodeCommand } from "@mininglamp-oss/octo-runtime-adapter-opencode";
 import { invokeRequest } from "./runtime-fixture.js";
-
 for (const resumed of [false, true]) {
   test(`Claude forwards caller startup text without a system prompt file: resumed=${resumed}`, async () => {
     const command = await buildClaudeCommand(
@@ -22,14 +22,22 @@ for (const resumed of [false, true]) {
     }
   });
 }
-
 for (const resumed of [false, true]) {
   test(`OpenCode forwards caller startup text as ordinary input: resumed=${resumed}`, async () => {
     const command = await buildOpenCodeCommand(
       invokeRequest({
         modelInput: "Caller startup\nBusiness context\nCurrent input",
-        approvalMode: "full_access",
-        ...(resumed ? { providerSession: { sessionId: "session" } } : {})
+        ...(resumed ? { providerSession: { sessionId: "session" } } : {}),
+        agentEnv: withAgentEnvItems(
+          (resumed ? { providerSession: { sessionId: "session" } } : {}).agentEnv,
+          [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ]
+        )
       })
     );
     try {

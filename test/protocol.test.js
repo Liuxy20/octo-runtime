@@ -1,3 +1,7 @@
+import {
+  withAgentEnvItems,
+  assertAdapterAgentEnv
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -5,17 +9,14 @@ import {
   assertInteractionResponse,
   assertContextEnvelope,
   assertInvokeRequest,
-  assertResolvedExecutionPlan,
   messageExposure
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import {
   approvalPayload,
   contextEnvelope,
   continuityItem,
-  executionContext,
   invokeRequest
 } from "./runtime-fixture.js";
-
 test("interaction contracts require a stable request id and bounded response outcome", () => {
   assert.doesNotThrow(() =>
     assertCanonicalEvent({
@@ -44,14 +45,12 @@ test("interaction contracts require a stable request id and bounded response out
     /outcome is unsupported/
   );
 });
-
-test("InvokeRequest requires Context, model input and approval, and rejects removed instructions", () => {
+test("InvokeRequest requires AgentEnv and model input; Adapter validates approval", () => {
   const request = invokeRequest();
   assert.doesNotThrow(() => assertInvokeRequest(request));
   for (const [field, error] of [
-    ["context", /CONTEXT_REQUIRED/],
-    ["modelInput", /modelInput must be a non-empty string/],
-    ["approvalMode", /APPROVAL_MODE_UNSUPPORTED/]
+    ["agentEnv", /CONTEXT_REQUIRED/],
+    ["modelInput", /modelInput must be a non-empty string/]
   ]) {
     const incomplete = { ...request };
     delete incomplete[field];
@@ -71,16 +70,28 @@ test("InvokeRequest requires Context, model input and approval, and rejects remo
   }
   assert.doesNotThrow(() => assertInvokeRequest({ ...request }));
   for (const approvalMode of ["ask", "assisted", "full_access"]) {
-    assert.doesNotThrow(() => assertInvokeRequest({ ...request, approvalMode }));
+    assert.doesNotThrow(() =>
+      assertInvokeRequest({
+        ...request,
+        agentEnv: withAgentEnvItems(request.agentEnv, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+        ])
+      })
+    );
   }
   for (const approvalMode of ["auto", "never", "", null]) {
     assert.throws(
-      () => assertInvokeRequest({ ...request, approvalMode }),
+      () =>
+        assertAdapterAgentEnv({
+          ...request,
+          agentEnv: withAgentEnvItems(request.agentEnv, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+          ])
+        }),
       /APPROVAL_MODE_UNSUPPORTED/
     );
   }
 });
-
 test("InvokeRequest rejects legacy instruction and permission fields rather than falling back", () => {
   const request = invokeRequest();
   for (const appendInstructions of ["legacy", "", undefined]) {
@@ -89,19 +100,10 @@ test("InvokeRequest rejects legacy instruction and permission fields rather than
       /LEGACY_RUN_CONTRACT_REJECTED/
     );
   }
-  for (const agentConfig of [
-    { autoApprove: true },
-    { autoApprove: false },
-    { dangerouslyBypassPermissions: true },
-    { permissionMode: "default" }
-  ]) {
-    assert.throws(
-      () => assertInvokeRequest({ ...request, agentConfig }),
-      /LEGACY_PERMISSION_CONFIG_REJECTED/
-    );
+  for (const key of ["autoApprove", "dangerouslyBypassPermissions", "permissionMode"]) {
+    assert.throws(() => assertInvokeRequest({ ...request, [key]: true }), /unknown field/);
   }
 });
-
 test("audit metadata belongs in runMetadata and is not an alternate Context contract", () => {
   const runMetadata = {
     namespace: "im",
@@ -110,89 +112,18 @@ test("audit metadata belongs in runMetadata and is not an alternate Context cont
     runtimeId: "runtime-1"
   };
   assert.doesNotThrow(() =>
-    assertInvokeRequest(invokeRequest({ context: contextEnvelope(), runMetadata }))
+    assertInvokeRequest(
+      invokeRequest({ runMetadata, agentEnv: withAgentEnvItems(contextEnvelope(), []) })
+    )
   );
   for (const context of [{}, runMetadata, { ...contextEnvelope(), ...runMetadata }]) {
-    assert.throws(() => assertInvokeRequest(invokeRequest({ context })), /CONTEXT_SCHEMA_INVALID/);
+    assert.throws(
+      () => assertInvokeRequest(invokeRequest({ agentEnv: withAgentEnvItems(context, []) })),
+      /CONTEXT_SCHEMA_INVALID/
+    );
   }
 });
-
-test("resolved execution plan requires frozen execution selection and rejects revision-shaped fallbacks", () => {
-  const plan = {
-    agent_source: "provisioned",
-    adapter_type: "codex",
-    workdir: "/workspace",
-    approval_mode: "ask",
-    model: "frozen-model"
-  };
-  assert.doesNotThrow(() => assertResolvedExecutionPlan(plan));
-  for (const value of [undefined, null]) {
-    assert.throws(() => assertResolvedExecutionPlan(value), /RESOLVED_EXECUTION_PLAN_REQUIRED/);
-  }
-  assert.throws(
-    () =>
-      assertResolvedExecutionPlan({
-        default_adapter: "codex",
-        workdir: "/workspace",
-        approval_mode: "ask"
-      }),
-    /CONTEXT_SCHEMA_INVALID/
-  );
-  assert.throws(
-    () => assertResolvedExecutionPlan({ ...plan, agent_config: { model: "legacy" } }),
-    /CONTEXT_SCHEMA_INVALID/
-  );
-  const { approval_mode, ...withoutApprovalMode } = plan;
-  assert.throws(
-    () => assertResolvedExecutionPlan(withoutApprovalMode),
-    /APPROVAL_MODE_UNSUPPORTED/
-  );
-});
-
-test("execution Context fixtures carry explicit frozen selections and provider defaults without sharing plan objects", () => {
-  const plan = {
-    agent_source: "provisioned",
-    adapter_type: "codex",
-    workdir: "/workspace",
-    approval_mode: "ask",
-    model: "frozen-model",
-    effort: "high",
-    runtime_limits: { run_timeout_ms: 60_000 }
-  };
-  const context = executionContext(plan);
-  assert.doesNotThrow(() => assertContextEnvelope(context));
-  assert.deepEqual(context.items.find((item) => item.name === "adapter").payload, {
-    type: "codex"
-  });
-  assert.deepEqual(context.items.find((item) => item.name === "workspace").payload, {
-    path: "/workspace"
-  });
-  assert.deepEqual(context.items.find((item) => item.name === "approval_policy").payload, {
-    mode: "ask"
-  });
-  assert.deepEqual(context.items.find((item) => item.name === "model").payload.selection, {
-    id: "frozen-model"
-  });
-  assert.deepEqual(context.items.find((item) => item.name === "model").payload.reasoning, {
-    effort: "high"
-  });
-  context.items.find((item) => item.name === "limits").payload.run_timeout_ms = 120_000;
-  assert.equal(plan.runtime_limits.run_timeout_ms, 60_000);
-  const providerDefaults = executionContext({
-    agent_source: "provisioned",
-    adapter_type: "codex",
-    workdir: "/workspace",
-    approval_mode: "ask"
-  });
-  assert.doesNotThrow(() => assertContextEnvelope(providerDefaults));
-  for (const name of ["selection", "reasoning"]) {
-    assert.deepEqual(providerDefaults.items.find((item) => item.name === "model").payload[name], {
-      use_provider_default: true
-    });
-  }
-});
-
-test("typed content entries remain bounded and removed instructions are rejected", () => {
+test("opaque payloads pass envelope checks while removed instructions reject", () => {
   const items = [
     {
       namespace: "octo.content",
@@ -222,22 +153,19 @@ test("typed content entries remain bounded and removed instructions are rejected
     );
   }
   for (const entry of [{}, { text: 42 }, { resource_ref: "octo://selected", messages: [] }]) {
-    assert.throws(
-      () =>
-        assertContextEnvelope(
-          contextEnvelope([
-            {
-              namespace: "octo.content",
-              name: "references",
-              payload: { entries: [entry] }
-            }
-          ])
-        ),
-      /CONTEXT_SCHEMA_INVALID/
+    assert.doesNotThrow(() =>
+      assertContextEnvelope(
+        contextEnvelope([
+          {
+            namespace: "octo.content",
+            name: "references",
+            payload: { entries: [entry] }
+          }
+        ])
+      )
     );
   }
 });
-
 test("canonical interactions carry instance-scoped expiry and distinct resolved lifecycle events", () => {
   const payload = approvalPayload("invoke-approval");
   assert.doesNotThrow(() =>
@@ -260,7 +188,6 @@ test("canonical interactions carry instance-scoped expiry and distinct resolved 
     );
   }
 });
-
 test("every requested interaction requires a bounded execution instance and finite expiry", () => {
   for (const kind of ["approval", "question", "elicitation"]) {
     const payload = { ...approvalPayload("invoke-contract"), kind };
@@ -322,7 +249,6 @@ test("every requested interaction requires a bounded execution instance and fini
     }
   }
 });
-
 test("approval requests reject legacy flat objects and incomplete typed requests", () => {
   const payload = approvalPayload("invoke-contract");
   assert.throws(
@@ -361,7 +287,6 @@ test("approval requests reject legacy flat objects and incomplete typed requests
     );
   }
 });
-
 test("provider approval options require string identifiers and kinds", () => {
   const payload = approvalPayload("invoke-provider-options");
   payload.request.grantScope = "provider";
@@ -386,7 +311,6 @@ test("provider approval options require string identifiers and kinds", () => {
     assert.throws(() => assertCanonicalEvent(event), /APPROVAL_GRANT_SCOPE_UNSUPPORTED/);
   }
 });
-
 test("resolved interactions require instance identity and either an outcome or an invalidation reason", () => {
   const payload = {
     interactionId: "interaction-contract",
@@ -441,7 +365,6 @@ test("resolved interactions require instance identity and either an outcome or a
     );
   }
 });
-
 test("analysis exposure defaults closed and public classifications require provenance", () => {
   const legacy = {
     protocolVersion: 2,
@@ -450,7 +373,6 @@ test("analysis exposure defaults closed and public classifications require prove
   };
   assert.doesNotThrow(() => assertCanonicalEvent(legacy));
   assert.equal(messageExposure(legacy), "unknown");
-
   const summary = {
     protocolVersion: 2,
     type: "message.delta",
@@ -463,7 +385,6 @@ test("analysis exposure defaults closed and public classifications require prove
   };
   assert.doesNotThrow(() => assertCanonicalEvent(summary));
   assert.equal(messageExposure(summary), "public_summary");
-
   const publicReasoning = {
     protocolVersion: 2,
     type: "message.delta",
@@ -476,7 +397,6 @@ test("analysis exposure defaults closed and public classifications require prove
   };
   assert.doesNotThrow(() => assertCanonicalEvent(publicReasoning));
   assert.equal(messageExposure(publicReasoning), "public_reasoning");
-
   assert.throws(
     () =>
       assertCanonicalEvent({
@@ -501,7 +421,6 @@ test("analysis exposure defaults closed and public classifications require prove
     /payload\.exposure is invalid/
   );
 });
-
 test("canonical message channels distinguish reasoning, progress, and answer content", () => {
   for (const channel of ["analysis", "commentary", "final"]) {
     const payload =
@@ -526,13 +445,12 @@ test("canonical message channels distinguish reasoning, progress, and answer con
     /payload\.channel/
   );
 });
-
 test("model step lifecycle requires stable identity and valid timestamps", () => {
   assert.doesNotThrow(() =>
     assertCanonicalEvent({
       protocolVersion: 2,
       type: "model_step.started",
-      payload: { stepId: "message-1", startedAtMs: 1_788_793_000_000 }
+      payload: { stepId: "message-1", startedAtMs: 1788793000000 }
     })
   );
   assert.doesNotThrow(() =>
@@ -543,7 +461,7 @@ test("model step lifecycle requires stable identity and valid timestamps", () =>
         stepId: "message-1",
         status: "completed",
         finishReason: "tool-calls",
-        endedAtMs: 1_788_793_002_000
+        endedAtMs: 1788793002000
       }
     })
   );
@@ -570,7 +488,6 @@ test("model step lifecycle requires stable identity and valid timestamps", () =>
     /payload\.publicText/
   );
 });
-
 test("tool call protocol preserves complete and streamed command inputs", () => {
   const codex = {
     protocolVersion: 2,
@@ -584,7 +501,6 @@ test("tool call protocol preserves complete and streamed command inputs", () => 
   };
   assert.doesNotThrow(() => assertCanonicalEvent(codex));
   assert.equal(codex.payload.args.command, "pwd");
-
   const claude = [
     {
       protocolVersion: 2,
@@ -614,7 +530,6 @@ test("tool call protocol preserves complete and streamed command inputs", () => 
     .join("");
   assert.equal(JSON.parse(streamedArgs).command, "printf octo-runtime-ok");
 });
-
 test("tool call protocol rejects events that cannot reconstruct a command lifecycle", () => {
   assert.throws(
     () =>
@@ -644,7 +559,6 @@ test("tool call protocol rejects events that cannot reconstruct a command lifecy
     /payload\.status must be a non-empty string/
   );
 });
-
 test("protocol v2 rejects old roots and validates experience frames", () => {
   assert.throws(
     () => assertCanonicalEvent({ protocolVersion: 1, type: "run.completed", payload: {} }),

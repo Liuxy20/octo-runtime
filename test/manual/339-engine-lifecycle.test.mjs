@@ -13,17 +13,25 @@ import { loadCliAdapters } from "../../apps/cli/dist/adapters.js";
 import { createCliKernelService } from "../../apps/cli/dist/kernel.js";
 import { residentProcesses, formatResidentProcesses } from "../../apps/cli/dist/output.js";
 import { invokeRequest, preparedFrames } from "../runtime-fixture.js";
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 
 const fixture = fileURLToPath(new URL("./fixtures/codex-service-313.mjs", import.meta.url));
-const request = (text = "hello", extra = {}) =>
-  invokeRequest({
+const request = (text = "hello", extra = {}) => {
+  if (extra.agentEnv !== undefined) withAgentEnvItems(extra.agentEnv, []);
+  return invokeRequest({
     invocationId: randomUUID(),
     runId: randomUUID(),
-    workdir: process.cwd(),
     modelInput: text,
-    approvalMode: "full_access",
-    ...extra
+    ...extra,
+    agentEnv: withAgentEnvItems(
+      withAgentEnvItems(undefined, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ]),
+      extra.agentEnv?.items ?? []
+    )
   });
+};
 async function setup(t) {
   const home = await mkdtemp(join(tmpdir(), "octo339-"));
   const marker = join(home, "auth-marker");
@@ -58,7 +66,7 @@ test("explicit SDK Home, removed singleton and conflicting per-call Home", async
   const { owner, adapter, home } = await setup(t);
   const local = scope(adapter);
   const conflict = request("hello", {
-    context: {
+    agentEnv: {
       schema: "octo.context-envelope/v3",
       items: [
         {
@@ -101,7 +109,11 @@ test("shared provider routes concurrent approvals to their original Runtime scop
     b = scope(adapter);
   await Promise.all(
     [a, b].map(async (local, index) => {
-      const req = request(`approval-${index}`, { approvalMode: "ask" });
+      const req = request(`approval-${index}`, {
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+        ])
+      });
       const events = await Array.fromAsync(local.invoke(req), async (event) => {
         if (event.type === "interaction.requested") {
           const response = { interactionId: event.payload.interactionId, outcome: "accepted" };
@@ -125,16 +137,19 @@ test("late acquire after cancellation or scope shutdown is released exactly once
   for (const mode of ["abort", "shutdown"]) {
     let deliver,
       releases = 0;
+    const acquired = Promise.withResolvers();
     const engine = {
       codexHome: process.cwd(),
       acquire: () =>
         new Promise((resolve) => {
           deliver = resolve;
+          acquired.resolve();
         })
     };
     const local = scope(createCodexAdapter({ engine }));
     const controller = new AbortController();
     const done = Array.fromAsync(local.invoke(request("hello", { signal: controller.signal })));
+    await acquired.promise;
     if (mode === "abort") controller.abort(new Error("CANCELLED"));
     else local.beginShutdown("test");
     deliver({

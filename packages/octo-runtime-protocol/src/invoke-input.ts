@@ -1,20 +1,13 @@
 import {
-  assertAgentSource,
-  assertApprovalMode,
   assertContextEnvelope,
   assertModelInputParts,
-  assertRuntimeLimits,
-  type AgentConfig,
-  type AgentSource,
-  type ApprovalMode,
   type CanonicalEvent,
   type ContextEnvelope,
   type ContextEnvsPayload,
   type HostFrame,
   type InvokeRequest,
   type ModelInputPart,
-  type ProviderSession,
-  type RuntimeLimits
+  type ProviderSession
 } from "./index.js";
 import { assertJsonValue } from "./context.js";
 import { canonicalEvents } from "./run-protocol.js";
@@ -72,18 +65,7 @@ export class InvokeInput {
 }
 
 /** 可复用执行配置；信封格式保持 v3，业务材料必须由调用方放入 inputs。 */
-export interface AgentEnv extends ContextEnvelope {
-  /** Agent ownership: preset for OpenClaw by default, provisioned otherwise. */
-  agentSource?: AgentSource;
-  /** 调用方已准备的明确目录；不从本进程 cwd 或旧会话补默认路径。 */
-  workdir?: string;
-  /** Execution approval policy, normally resolved from contexts; defaults to ask. */
-  approvalMode?: ApprovalMode;
-  /** Full provider configuration, including providerOptions; context selections must agree. */
-  agentConfig?: AgentConfig;
-  /** Complete timeout/enforcement settings; execution defaults apply when omitted. */
-  runtimeLimits?: RuntimeLimits;
-}
+export type AgentEnv = ContextEnvelope;
 
 /** 高级调用的内容与追踪信息；不包含执行环境、会话参数或本地 signal。 */
 export type InvocationContent = Omit<
@@ -97,6 +79,8 @@ export type InvocationInputs = ModelInputPart[] | InvocationContent;
 /** Local ingress execution settings, outside caller-owned JSON and Context. */
 export interface InvokeEnvironment {
   signal?: AbortSignal;
+  /** 宿主连接配置独立于调用方信封，仅由目标 Adapter 消费。 */
+  providerOptions?: Record<string, string>;
   /** Trusted per-invocation values; forwarded privately across the Host process boundary. */
   executionEnvOverrides?: ContextEnvsPayload;
   /** Trusted transport and replay budgets; never sourced from caller Context. */
@@ -163,6 +147,29 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new TypeError("InvokeInput must be a JSON object");
   const input = value as Record<string, unknown>;
+  const allowed = new Set([
+    "inputs",
+    "agentEnv",
+    "sessionId",
+    "sessionName",
+    "protocol_mode",
+    "invocationId",
+    "runId",
+    "sessionGeneration",
+    "providerEpoch",
+    "prompt",
+    "modelInput",
+    "runMetadata",
+    "providerSession",
+    "continuityMode",
+    "freshFallbackModelInput",
+    "freshFallbackModelInputParts",
+    "freshFallbackImagesUnavailable"
+  ]);
+  if (Object.keys(input).some((key) => !allowed.has(key)))
+    throw new TypeError(
+      "InvokeInput contains an unknown field; use AgentEnv items for execution settings"
+    );
   if (
     [
       "protocolMode",
@@ -173,7 +180,6 @@ export function assertInvokeInput(value: unknown): asserts value is InvokeInput 
       "agentSource",
       "workdir",
       "approvalMode",
-      "agentConfig",
       "runtimeLimits"
     ].some((key) => Object.hasOwn(input, key))
   )
@@ -277,19 +283,14 @@ export function invocationInput(
     signal: _signal,
     executionEnvOverrides: _executionEnvOverrides,
     agentSessionId,
-    context,
-    agentSource,
-    workdir,
-    approvalMode,
-    agentConfig,
-    runtimeLimits,
+    agentEnv,
     modelInputParts,
     ...fields
   } = request;
   void _version;
   void _signal;
   void _executionEnvOverrides;
-  const contexts = structuredClone(context);
+  const contexts = structuredClone(agentEnv);
   if (adapterType) {
     const adapter = contexts.items.find(
       (item) => item.namespace === "octo.execution" && item.name === "adapter"
@@ -300,104 +301,23 @@ export function invocationInput(
       contexts.items.push({
         namespace: "octo.execution",
         name: "adapter",
-        payload: {
-          type: adapterType,
-          ...(adapterType === "openclaw"
-            ? { provider_agent_id: request.agentConfig.providerAgentId ?? "main" }
-            : {})
-        }
+        payload: { type: adapterType }
       });
   }
   return InvokeInput.check({
     ...fields,
     sessionId: agentSessionId,
-    agentEnv: Object.fromEntries(
-      Object.entries({
-        ...contexts,
-        agentSource,
-        workdir,
-        approvalMode,
-        agentConfig,
-        runtimeLimits
-      }).filter(([, value]) => value !== undefined)
-    ),
+    agentEnv: contexts,
     protocol_mode,
     inputs: modelInputParts ?? [{ type: "text", text: request.modelInput }]
   });
 }
 
-/** 执行环境只接受执行/审批设置，应用提示词由调用方放入普通输入。 */
+/** 公共层只校验信封；共性与私有 payload 由消费它的 Adapter 校验。 */
 export function assertAgentEnv(value: unknown): asserts value is AgentEnv {
   if (value && typeof value === "object" && "controlInstructions" in value)
     throw new TypeError(
       "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
     );
-  assertJsonByteLimit(value, INVOKE_REQUEST_MAX_BYTES, "INVOKE_REQUEST_TOO_LARGE");
-  assertJsonValue(value);
-  if (!value || typeof value !== "object" || Array.isArray(value))
-    throw new TypeError("agentEnv must be an execution envelope");
-  const env = value as AgentEnv;
-  assertContextEnvelope({ schema: env.schema, items: env.items });
-  const allowed = new Set([
-    "schema",
-    "items",
-    "agentSource",
-    "workdir",
-    "approvalMode",
-    "agentConfig",
-    "runtimeLimits"
-  ]);
-  if (Object.keys(env).some((key) => !allowed.has(key)))
-    throw new TypeError("agentEnv contains an unknown execution setting");
-  for (const item of env.items)
-    if (!(
-      item.namespace === "octo.execution" ||
-      (item.namespace === "octo.security" && item.name === "approval_policy")
-    ))
-      throw new TypeError(
-        "agentEnv cannot contain business context; prepare inputs in the application"
-      );
-  if (env.workdir !== undefined && typeof env.workdir !== "string")
-    throw new TypeError("agentEnv.workdir must be a string");
-  if (env.agentSource !== undefined) assertAgentSource(env.agentSource);
-  if (env.approvalMode !== undefined) assertApprovalMode(env.approvalMode);
-  if (env.runtimeLimits !== undefined) assertRuntimeLimits(env.runtimeLimits);
-  if (
-    env.agentConfig !== undefined &&
-    (!env.agentConfig || typeof env.agentConfig !== "object" || Array.isArray(env.agentConfig))
-  )
-    throw new TypeError("agentEnv.agentConfig must be a JSON object");
-  if (env.agentConfig) {
-    const config = env.agentConfig as Record<string, unknown>;
-    for (const key of [
-      "workdir",
-      "model",
-      "sandbox",
-      "providerAgentId",
-      "effort",
-      "openclawConfigPath",
-      "openclawStateDir"
-    ])
-      if (config[key] !== undefined && typeof config[key] !== "string")
-        throw new TypeError(`agentConfig.${key} must be a string`);
-    if (
-      config.timeoutSeconds !== undefined &&
-      (typeof config.timeoutSeconds !== "number" || config.timeoutSeconds <= 0)
-    )
-      throw new TypeError("agentConfig.timeoutSeconds must be positive");
-    if (
-      config.providerOptions !== undefined &&
-      (!config.providerOptions ||
-        typeof config.providerOptions !== "object" ||
-        Array.isArray(config.providerOptions))
-    )
-      throw new TypeError("agentConfig.providerOptions must be a JSON object");
-  }
-  const paths = [
-    env.workdir,
-    env.agentConfig?.workdir,
-    env.items.find((item) => item.namespace === "octo.execution" && item.name === "workspace")
-      ?.payload.path
-  ].filter((path) => path !== undefined);
-  if (paths.some((path) => path !== paths[0])) throw new TypeError("CONTEXT_PLAN_MISMATCH");
+  assertContextEnvelope(value);
 }

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../test-support/invoke-client.js";
 import { adapters } from "./fixtures/dsh-worker.mjs";
 import test from "node:test";
@@ -12,14 +13,11 @@ import { resolveDshLaunch } from "../packages/octo-runtime-adapter-dsh/dist/laun
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { kernelFixture } from "./kernel-fixture.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 const fixture = fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url));
-
 test("DSH exposes a minimum version while preserving the original constant", () => {
   assert.equal(DSH_MIN_VERSION, "0.2.1-rc.4");
   assert.equal(DSH_VERSION, DSH_MIN_VERSION);
 });
-
 for (const version of [
   "0.2.1-rc.4",
   "0.2.1-rc.4+build.1",
@@ -36,7 +34,6 @@ for (const version of [
     );
     assert.equal(launch.version, version);
   });
-
 for (const version of [
   "0.2.0",
   "0.2.1-alpha.10",
@@ -63,14 +60,12 @@ for (const version of [
       }
     );
   });
-
 test("DSH requires host configuration regardless of PATH", async () => {
   await assert.rejects(resolveDshLaunch({}, { PATH: process.env.PATH }), {
     code: "DSH_CONFIG_INVALID"
   });
   assert.equal((await dshAdapter.probe()).reason, "DSH_CONFIG_INVALID");
 });
-
 test("DSH rejects a symlink into Desktop instead of launching the embedded module", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "dsh-link-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -83,7 +78,6 @@ test("DSH rejects a symlink into Desktop instead of launching the embedded modul
     code: "DSH_CONFIG_INVALID"
   });
 });
-
 test("DSH pins the validated npm target when the host link changes before launch", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "dsh-swap-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -119,7 +113,6 @@ test("DSH pins the validated npm target when the host link changes before launch
   assert.deepEqual(launch.args, [physicalPath]);
   assert.equal(launch.dshBin, physicalPath);
 });
-
 test("DSH launches the exact host module with spaces and Unicode, without mutating its environment", async (t) => {
   const directory = await mkdtemp(join(tmpdir(), "dsh host 空格 "));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -143,7 +136,6 @@ test("DSH launches the exact host module with spaces and Unicode, without mutati
     code: "DSH_EXECUTABLE_NOT_FOUND"
   });
 });
-
 for (const [mode, reason] of [
   ["success", null],
   ["version", "DSH_VERSION_UNSUPPORTED"],
@@ -168,7 +160,17 @@ for (const [mode, reason] of [
       invokeClient(
         client,
         invocationInput(
-          invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
+          invokeRequest({
+            modelInput: "hello",
+            agentEnv: withAgentEnvItems(undefined, [
+              { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
+          }),
           "canonical",
           "dsh"
         )

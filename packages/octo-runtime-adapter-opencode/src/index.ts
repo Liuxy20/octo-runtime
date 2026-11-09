@@ -1,4 +1,14 @@
 import {
+  assertAdapterAgentEnv,
+  assertAdapterWorkdir,
+  runAdapterPreparation,
+  invocationEffort,
+  invocationModel,
+  invocationRuntimeLimits,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   hasImageInput,
   mapReasoningEffort,
   invocationEnvironment,
@@ -143,7 +153,7 @@ export function buildOpenCodeCommand(req: InvokeRequest, command = "opencode") {
   return Promise.resolve().then(() => {
     if (hasImageInput(req))
       throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
-    if (req.approvalMode !== "full_access")
+    if (invocationApprovalMode(req) !== "full_access")
       throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode permission transport is not qualified");
     const runEnv = invocationEnvironment(req);
     const servers = invocationMcpServers(req, runEnv);
@@ -180,9 +190,9 @@ export function buildOpenCodeCommand(req: InvokeRequest, command = "opencode") {
     // this adapter's provider contract.
     const args = ["run", "--format", "json", "--thinking", "--auto", "--standalone"];
     if (req.providerSession?.sessionId) args.push("--session", req.providerSession.sessionId);
-    const variant = mapReasoningEffort("opencode", req.agentConfig?.effort);
-    if (req.agentConfig?.model) {
-      const model = req.agentConfig.model;
+    const variant = mapReasoningEffort("opencode", invocationEffort(req));
+    const model = invocationModel(req);
+    if (model) {
       args.push("--model", variant ? `${model.split("#")[0]}#${variant}` : model);
     }
     return {
@@ -192,7 +202,7 @@ export function buildOpenCodeCommand(req: InvokeRequest, command = "opencode") {
       env: {
         OPENCODE_CONFIG_CONTENT: JSON.stringify(inline),
         OPENCODE_CLIENT: "octo-runtime",
-        PWD: req.workdir
+        PWD: invocationWorkdir(req)
       },
       rpcMethod: "process.stdin",
       providerSessionId: req.providerSession?.sessionId,
@@ -418,7 +428,7 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
       // ACP 原生权限策略决定何时请求审批；桥接层逐次处理，不覆盖用户的 deny。
       env: (request) => ({
         OPENCODE_CLIENT: "octo-runtime",
-        PWD: request.workdir,
+        PWD: invocationWorkdir(request),
         OPENCODE_CONFIG_CONTENT: JSON.stringify(inlineConfig(request))
       })
     });
@@ -443,6 +453,9 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
   const adapter = createJsonCliAdapter<OpenCodeNativeEvent>(options);
   return {
     ...adapter,
+    get defaultAgentEnv() {
+      return adapter.defaultAgentEnv;
+    },
     async respondInteraction(
       ...args: Parameters<ReturnType<typeof createAcpAdapter>["respondInteraction"]>
     ) {
@@ -454,30 +467,27 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
       request: InvokeRequest,
       context?: AdapterInvocationContext
     ): AsyncGenerator<CanonicalEvent> {
-      if (hasImageInput(request))
-        throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
-      if (request.approvalMode === "assisted")
-        throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode has no qualified assisted policy");
+      await runAdapterPreparation(context, async () => {
+        assertAdapterAgentEnv(request);
+        // 探针属于本轮执行预算；内层再次配置同值不会重置 Core 的计时起点。
+        context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
+        await assertAdapterWorkdir(request);
+        if (hasImageInput(request))
+          throw new Error("UNSUPPORTED_INPUT_MODALITY: opencode does not encode image input");
+        if (invocationApprovalMode(request) === "assisted")
+          throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode has no qualified assisted policy");
+        // 目录与纯配置检查先于版本探针；启动进程后的失败不借用准备阶段清理证据。
+        inlineConfig(request);
+      });
       request.signal?.throwIfAborted();
       const selected = await probeOpenCode(
         command,
         invocationEnvironment(request),
-        request.workdir
+        invocationWorkdir(request)
       );
       if (!selected.available) throw new Error(selected.reason ?? "OpenCode is unavailable");
       request.signal?.throwIfAborted();
-      try {
-        inlineConfig(request);
-      } catch (error) {
-        if (!(error instanceof OpenCodeInputError)) throw error;
-        yield {
-          protocolVersion: 2,
-          type: "run.failed",
-          payload: { code: "OPENCODE_CONFIG_INVALID", message: error.message }
-        };
-        return;
-      }
-      if (request.approvalMode === "ask") {
+      if (invocationApprovalMode(request) === "ask") {
         if (interactiveAdapters.has(request.invocationId))
           throw new Error("INVOCATION_ALREADY_ACTIVE");
         const interactive = createInteractive(selected.command);
@@ -498,7 +508,7 @@ export function createOpenCodeAdapter({ command = "opencode" }: { command?: stri
       try {
         yield* createJsonCliAdapter<OpenCodeNativeEvent>({
           ...options,
-          reasoningLevels: request.agentConfig.model ? undefined : null,
+          reasoningLevels: invocationModel(request) ? undefined : null,
           buildCommand: (req) => buildOpenCodeCommand(req, selected.command),
           normalize: (native) => {
             const part = native.part ?? native;

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -12,10 +13,8 @@ import {
   canonicalContext,
   contextHash,
   mergeContext,
-  assertInvokeRequest,
-  assertResolvedExecutionPlan
+  assertInvokeRequest
 } from "../packages/octo-runtime-protocol/dist/index.js";
-
 const fixtures = JSON.parse(
   readFileSync(
     new URL(
@@ -126,17 +125,12 @@ test("configuration schema rejects removed instructions in every layer", () => {
     assert.equal(validate({ defaults: empty, mandatory: invalid }), false);
   }
 });
-const validatePlanSchema = ajv.compile({
-  $ref: `${schema.$id}#/definitions/ResolvedExecutionPlan`
-});
-
 function withinDepth(value, maximum, depth = 0) {
   if (depth > maximum) return false;
   if (value !== null && typeof value === "object")
     return Object.values(value).every((item) => withinDepth(item, maximum, depth + 1));
   return true;
 }
-
 function scalarStrings(value) {
   if (typeof value === "string") return value.isWellFormed();
   if (Array.isArray(value)) return value.every(scalarStrings);
@@ -144,33 +138,10 @@ function scalarStrings(value) {
     return Object.entries(value).every(([key, item]) => key.isWellFormed() && scalarStrings(item));
   return true;
 }
-
 function validateDefinition(name, value) {
   return ajv.validate({ $ref: `${schema.$id}#/definitions/${name}` }, value);
 }
-
 for (const fixture of fixtures) {
-  if (Object.hasOwn(fixture, "resolved_execution_plan")) {
-    test(`shared resolved plan fixture: ${fixture.name}`, () => {
-      const plan = fixture.resolved_execution_plan;
-      assert.equal(
-        validatePlanSchema(plan),
-        fixture.valid,
-        JSON.stringify(validatePlanSchema.errors)
-      );
-      if (fixture.valid) {
-        assert.doesNotThrow(() => assertResolvedExecutionPlan(plan));
-        if (plan.mcp_servers !== undefined)
-          assert.doesNotThrow(() => assertMcpServers(plan.mcp_servers));
-      } else {
-        assert.throws(
-          () => assertResolvedExecutionPlan(plan),
-          (error) => error instanceof TypeError && error.message === fixture.error
-        );
-      }
-    });
-    continue;
-  }
   test(`shared Context fixture: ${fixture.name}`, () => {
     assert.equal(
       validateContextSchema(fixture.context),
@@ -189,32 +160,15 @@ for (const fixture of fixtures) {
       assert.equal(contextHash(fixture.context), fixture.expected_hash);
   });
 }
-
-test("Context schema constants and registered handlers stay aligned", () => {
+test("Context schema constants stay aligned without a payload dispatch registry", () => {
   assert.equal(schema.definitions.ContextEnvelope.properties.items.maxItems, CONTEXT_MAX_ITEMS);
   assert.equal(schema.definitions.ContextEnvelope["x-octo-max-json-bytes"], CONTEXT_MAX_BYTES);
   assert.equal(schema.definitions.ContextEnvelope["x-octo-max-json-depth"], 32);
   assert.equal(schema["x-octo-unicode-scalar-strings"], true);
   assert.equal(schema.definitions.ContextEnvelope["x-octo-unicode-scalar-strings"], true);
   assert.deepEqual(schema.definitions.ApprovalMode.enum, APPROVAL_MODES);
-  const registered = schema.definitions.ContextItem.allOf
-    .filter((branch) => branch.if?.properties?.name)
-    .flatMap((branch) =>
-      (branch.if.properties.namespace.enum ?? [branch.if.properties.namespace.const]).map(
-        (namespace) => JSON.stringify([namespace, branch.if.properties.name.const])
-      )
-    );
-  const covered = new Set(
-    fixtures
-      .filter((fixture) => fixture.valid && fixture.context)
-      .flatMap((fixture) =>
-        fixture.context.items.map((item) => JSON.stringify([item.namespace, item.name]))
-      )
-      .filter((key) => registered.includes(key))
-  );
-  assert.deepEqual([...covered].sort(), registered.sort());
+  assert.equal(schema.definitions.ContextItem.allOf, undefined);
 });
-
 test("Shared Unicode and number fixtures preserve ECMAScript canonical bytes", () => {
   const zero = fixtures.find((fixture) => fixture.name === "canonical-negative-zero");
   zero.context.items[0].payload.entries[0].source.negative_zero = -0;
@@ -250,24 +204,6 @@ test("Shared Unicode and number fixtures preserve ECMAScript canonical bytes", (
     true
   );
 });
-
-test("Resolved plans reject malformed Unicode strings", () => {
-  const plan = {
-    agent_source: "provisioned",
-    adapter_type: "codex",
-    workdir: "/tmp",
-    approval_mode: "ask",
-    model: "😀\u2028\u2029"
-  };
-  assert.equal(validateDefinition("ResolvedExecutionPlan", plan), true);
-  assert.doesNotThrow(() => assertResolvedExecutionPlan(plan));
-  for (const model of ["\uD800", "\uDC00", "\uDFFF"]) {
-    const invalid = { ...plan, model };
-    assert.equal(validateDefinition("ResolvedExecutionPlan", invalid), false);
-    assert.throws(() => assertResolvedExecutionPlan(invalid), /CONTEXT_SCHEMA_INVALID/);
-  }
-});
-
 test("Context and host watchdog limit schemas share bounds and enums", () => {
   const limits = schema.definitions.ContextLimitsPayload.properties;
   const host = schema.definitions.RuntimeLimits.properties;
@@ -277,27 +213,6 @@ test("Context and host watchdog limit schemas share bounds and enums", () => {
     else assert.deepEqual([...value.enum].sort(), [...host[hostKey].enum].sort());
   }
 });
-
-test("Resolved plan limits use the same Context payload acceptance set", () => {
-  for (const fixture of fixtures.filter((fixture) =>
-    fixture.context?.items?.some(
-      (item) => item.namespace === "octo.execution" && item.name === "limits"
-    )
-  )) {
-    const runtime_limits = fixture.context.items.find((item) => item.name === "limits").payload;
-    const plan = {
-      agent_source: "provisioned",
-      adapter_type: "codex",
-      workdir: "/tmp",
-      approval_mode: "ask",
-      runtime_limits
-    };
-    assert.equal(validateDefinition("ResolvedExecutionPlan", plan), fixture.valid, fixture.name);
-    if (fixture.valid) assert.doesNotThrow(() => assertResolvedExecutionPlan(plan));
-    else assert.throws(() => assertResolvedExecutionPlan(plan), /CONTEXT_SCHEMA_INVALID/);
-  }
-});
-
 test("Context budgets reject excessive UTF-8 bytes, item counts and nesting in both validators", () => {
   const base = {
     schema: "octo.context-envelope/v3",
@@ -330,21 +245,6 @@ test("Context budgets reject excessive UTF-8 bytes, item counts and nesting in b
   assert.equal(validateContextSchema(nested), false);
   assert.throws(() => assertContextEnvelope(nested), /CONTEXT_SCHEMA_INVALID/);
 });
-
-test("AgentConfig only retains adapter-internal model options and rejects removed legacy fields", () => {
-  const config = {
-    model: "resolved-model",
-    effort: "high",
-    workdir: "/tmp",
-    providerOptions: { localOption: true }
-  };
-  assert.equal(validateDefinition("AgentConfig", config), true);
-  for (const key of ["permissionMode", "autoApprove", "dangerouslyBypassPermissions", "thinking"]) {
-    assert.equal(Object.hasOwn(schema.definitions.AgentConfig.properties, key), false);
-    assert.equal(validateDefinition("AgentConfig", { ...config, [key]: true }), false, key);
-  }
-});
-
 test("Approval requests share the supported zero-permission profile and display allowlist", () => {
   const request = {
     schema: "octo.approval-request/v1",
@@ -467,7 +367,6 @@ test("Approval requests share the supported zero-permission profile and display 
       );
   }
 });
-
 test("Resolved interactions distinguish successful outcomes from expiry and invalidation", () => {
   const identity = { interactionId: "interaction-1", executionInstanceId: "invoke-1" };
   for (const character of ["x", "😀"]) {
@@ -538,7 +437,6 @@ test("Resolved interactions distinguish successful outcomes from expiry and inva
     false
   );
 });
-
 test("Context item ordering changes hash while object property ordering does not", () => {
   const original = fixtures.find((fixture) => fixture.name === "execution-selection").context;
   const reordered = {
@@ -552,14 +450,12 @@ test("Context item ordering changes hash while object property ordering does not
   reordered.items.reverse();
   assert.equal(contextHash(original), contextHash(reordered));
 });
-
 test("Context payload arrays preserve order and affect the hash", () => {
   const original = fixtures.find((fixture) => fixture.name === "multivalue-content").context;
   const reordered = structuredClone(original);
   reordered.items[0].payload.entries.reverse();
   assert.notEqual(contextHash(original), contextHash(reordered));
 });
-
 test("Context merge replaces atomic model without losing other execution fields and does not mutate defaults", () => {
   const defaults = {
     schema: "octo.context-envelope/v3",
@@ -587,7 +483,6 @@ test("Context merge replaces atomic model without losing other execution fields 
     selection: { id: "a" }
   });
 });
-
 test("Context rejects oversized payloads and non-JSON values", () => {
   const context = {
     schema: "octo.context-envelope/v3",
@@ -595,7 +490,7 @@ test("Context rejects oversized payloads and non-JSON values", () => {
       {
         namespace: "octo.content",
         name: "inline",
-        payload: { entries: [{ text: "x".repeat(65_536) }] }
+        payload: { entries: [{ text: "x".repeat(65536) }] }
       }
     ]
   };
@@ -603,7 +498,6 @@ test("Context rejects oversized payloads and non-JSON values", () => {
   context.items[0].payload.entries = [{ value: NaN }];
   assert.throws(() => assertContextEnvelope(context), /CONTEXT_SCHEMA_INVALID/);
 });
-
 test("InvokeRequest rejects legacy execution contracts before provider dispatch", () => {
   const request = {
     protocolVersion: 2,
@@ -611,26 +505,26 @@ test("InvokeRequest rejects legacy execution contracts before provider dispatch"
     agentSessionId: "session-1",
     runId: "run-1",
     prompt: "hello",
-    workdir: "/tmp",
     modelInput: "hello",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    approvalMode: "ask",
-    agentSource: "provisioned",
-    agentConfig: {}
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: "/tmp" } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+    ])
   };
   assert.doesNotThrow(() => assertInvokeRequest(request));
   assert.throws(
     () => assertInvokeRequest({ ...request, appendInstructions: "legacy" }),
     /LEGACY_RUN_CONTRACT_REJECTED/
   );
-  assert.throws(() => assertInvokeRequest({ ...request, context: {} }), /CONTEXT_SCHEMA_INVALID/);
-  assert.throws(
-    () =>
-      assertInvokeRequest({
-        ...request,
-        agentSource: "provisioned",
-        agentConfig: { autoApprove: true }
-      }),
-    /LEGACY_PERMISSION_CONFIG_REJECTED/
+  assert.throws(() => assertInvokeRequest({ ...request, context: {} }), /unknown field/);
+  assert.doesNotThrow(() =>
+    assertInvokeRequest({
+      ...request,
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } },
+        { namespace: "adapter.codex", name: "options", payload: { autoApprove: true } }
+      ])
+    })
   );
 });

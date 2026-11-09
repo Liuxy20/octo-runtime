@@ -24,9 +24,9 @@ supersedes: []
 
 ## 当前边界
 
-自有 Adapter capabilities、执行计划 required_capabilities 以及 ExecutionTarget 预留设计已经删除。不得在 schema 或生成类型中保留 AbilityProvider、executor_id、provider_binding_ref 的占位定义。Provider 原生协议的同名 capabilities 不属于此次删除范围，见[Adapter 元数据](adapter-metadata.md)。
+自有 Adapter capabilities、旧 required_capabilities 以及 ExecutionTarget 预留设计已经删除。不得在 schema 或生成类型中保留 AbilityProvider、executor_id、provider_binding_ref 的占位定义。Provider 原生协议的同名 capabilities 不属于此次删除范围，见[Adapter 元数据](adapter-metadata.md)。
 
-Schema 定义 ProviderSession、AgentConfig、Context、执行计划、Host 帧和 InvokeRequest wire 等数据形状。字段格式、权限和跨字段约束还由 Protocol 中相应的运行时校验器处理；生成 TypeScript 类型本身不会在运行时校验输入。
+Schema 定义 ProviderSession、AgentEnv 信封、公共配置 bean、Host 帧和 InvokeRequest wire 等数据形状。公共层校验信封结构、JSON、唯一键和预算；Adapter 校验所消费配置的语义。私有 item 的字段、类型和校验仅属于宿主与对应 Adapter，不增加公共 schema、类型或协议版本；生成 TypeScript 类型本身不会在运行时校验输入。
 
 泛型 CanonicalEvent、带 `AbortSignal` 的 InvokeRequest 组合及非生成的运行时辅助留在 [src/index.ts](../../packages/octo-runtime-protocol/src/index.ts)。函数、活对象及 AbortSignal 不通过 JSON wire 传输。
 

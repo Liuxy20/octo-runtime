@@ -1,3 +1,4 @@
+import { invocationApprovalMode } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 /**
@@ -16,7 +17,8 @@ export const qoderCliCnAdapter = createAcpAdapter({
   type: "qoderclicn",
   provider: "qoderclicn",
   command: "qoderclicn",
-  args: (request) => (request.approvalMode === "full_access" ? ["--yolo", "--acp"] : ["--acp"])
+  args: (request) =>
+    invocationApprovalMode(request) === "full_access" ? ["--yolo", "--acp"] : ["--acp"]
 });
 
 export default qoderCliCnAdapter;

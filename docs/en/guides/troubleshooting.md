@@ -23,8 +23,8 @@ Kernel does not restart its host process; the SDK application or CLI service man
 | Symptom / code                                 | Action                                                                                                                                                                                           |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Invalid Context structure, duplicates, or size | Validate parameters with `InvokeInput.check`. Check schema, the 32-item / 64-KiB limit, and duplicate namespace/name pairs. See [Context reference](../reference/contexts.md) for field formats. |
-| `CONTEXT_PLAN_MISMATCH`                        | Compare agentEnv.workdir, agentConfig.workdir, model and approval settings with Context selections and correct conflicting values. |
-| `WORKDIR_REQUIRED` | Supply an explicit, existing absolute local directory through agentEnv.workdir or the path-only workspace item; CLI and SDK have no cwd default. |
+| `CONTEXT_PLAN_MISMATCH` | The explicit Adapter route supplied to a low-level request wrapper conflicts with the envelope route; use the matching adapter item. |
+| `WORKDIR_REQUIRED` | Supply an explicit, existing absolute local directory through the path-only workspace item; CLI and SDK have no cwd default. |
 | `WORKDIR_INVALID` | Use a valid absolute path, without workspace mode. |
 | `WORKDIR_NOT_FOUND` | The caller must prepare the chosen directory before invocation. Resume/recovery does not recreate it or allocate a replacement. |
 | `WORKDIR_NOT_DIRECTORY` | Supply a directory rather than a file. |

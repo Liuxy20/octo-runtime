@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
 import {
@@ -5,7 +6,6 @@ import {
   canonicalEvents,
   assertInvokeRequest
 } from "@mininglamp-oss/octo-runtime-protocol";
-
 export function preparedFrames(host, type, request, options = {}) {
   assertInvokeRequest(request);
   return host.invokeFrames(invocationInput(request, options.protocolMode ?? "native", type), {
@@ -14,7 +14,6 @@ export function preparedFrames(host, type, request, options = {}) {
     ...(options.streamLimits ? { streamLimits: options.streamLimits } : {})
   });
 }
-
 export function preparedSubmit(host, type, request, options = {}) {
   return host.submit(invocationInput(request, options.protocolMode ?? "native", type), {
     signal: request.signal,
@@ -22,7 +21,6 @@ export function preparedSubmit(host, type, request, options = {}) {
     ...(options.streamLimits ? { streamLimits: options.streamLimits } : {})
   });
 }
-
 export function preparedTestInvoke(source) {
   return async function* (type, request, options = {}) {
     const frames = source(type, request, options);
@@ -30,7 +28,6 @@ export function preparedTestInvoke(source) {
     else yield* frames;
   };
 }
-
 export function codexAppServerFixture({
   method = "item/commandExecution/requestApproval",
   holdResponseWrites = false,
@@ -132,7 +129,6 @@ export function codexAppServerFixture({
       })
   };
 }
-
 export function contextEnvelope(items = []) {
   return { schema: "octo.context-envelope/v3", items: structuredClone(items) };
 }
@@ -149,52 +145,6 @@ export function resolvedRuntimeSelection(runtimeId = "runtime-1") {
     failover: "none"
   };
 }
-
-export function executionContext(plan, items = []) {
-  return contextEnvelope([
-    {
-      namespace: "octo.execution",
-      name: "adapter",
-      payload: {
-        type: plan.adapter_type,
-        ...(plan.provider_agent_id ? { provider_agent_id: plan.provider_agent_id } : {})
-      }
-    },
-    {
-      namespace: "octo.execution",
-      name: "workspace",
-      payload: plan.workspace ?? { path: plan.workdir }
-    },
-    {
-      namespace: "octo.execution",
-      name: "model",
-      payload: {
-        selection: plan.model === undefined ? { use_provider_default: true } : { id: plan.model },
-        reasoning:
-          plan.effort === undefined ? { use_provider_default: true } : { effort: plan.effort }
-      }
-    },
-    { namespace: "octo.security", name: "approval_policy", payload: { mode: plan.approval_mode } },
-    ...(plan.runtime_limits === undefined
-      ? []
-      : [{ namespace: "octo.execution", name: "limits", payload: plan.runtime_limits }]),
-    ...items
-  ]);
-}
-
-export function withExecutionPlan(envelope, plan) {
-  const items = envelope.effective_context.items.filter(
-    (item) =>
-      item.namespace !== "octo.execution" &&
-      !(item.namespace === "octo.security" && item.name === "approval_policy")
-  );
-  return {
-    ...envelope,
-    resolved_execution_plan: structuredClone(plan),
-    effective_context: executionContext(plan, items)
-  };
-}
-
 export function continuityItem({
   sessionGeneration = 7,
   triggerMessageId = "message-current",
@@ -226,8 +176,9 @@ export function continuityItem({
     }
   };
 }
-
 export function invokeRequest(overrides = {}) {
+  // 测试调用方显式采用 cwd/审批/source 基线；非法覆盖信封必须先拒绝，不能被基线修复。
+  if (overrides.agentEnv !== undefined) withAgentEnvItems(overrides.agentEnv, []);
   return {
     protocolVersion: 2,
     invocationId: "invoke-test",
@@ -235,22 +186,24 @@ export function invokeRequest(overrides = {}) {
     runId: "run-test",
     prompt: "Display-safe input",
     modelInput: "Provider model input",
-    context: contextEnvelope(),
     runMetadata: { namespace: "test", triggerOccurrenceId: "test/invoke" },
-    approvalMode: "ask",
-    workdir: process.cwd(),
-    agentSource: "provisioned",
-    agentConfig: {},
-    ...overrides
+    ...overrides,
+    agentEnv: withAgentEnvItems(
+      withAgentEnvItems(contextEnvelope(), [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ]),
+      overrides.agentEnv?.items ?? []
+    )
   };
 }
-
 export function approvalPayload(invocationId, interactionId = "approval-1") {
   return {
     interactionId,
     kind: "approval",
     executionInstanceId: invocationId,
-    expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
     request: {
       schema: "octo.approval-request/v1",
       policy: { mode: "ask", hash: `sha256:${"a".repeat(64)}` },
@@ -265,7 +218,6 @@ export function approvalPayload(invocationId, interactionId = "approval-1") {
     }
   };
 }
-
 export function wire(type, payload) {
   return JSON.stringify({
     version: 2,
@@ -275,7 +227,6 @@ export function wire(type, payload) {
     payload
   });
 }
-
 export function terminalGrant(event) {
   return {
     context_commit_granted: true,
@@ -283,7 +234,6 @@ export function terminalGrant(event) {
     authoritative_terminal_event_id: event.event_id
   };
 }
-
 export function deferred() {
   let resolve;
   return {
@@ -293,15 +243,13 @@ export function deferred() {
     resolve
   };
 }
-
-export async function waitFor(predicate, timeoutMs = 2_000) {
+export async function waitFor(predicate, timeoutMs = 2000) {
   const deadline = Date.now() + timeoutMs;
   while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error("condition timeout");
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
 }
-
 export async function withTimeout(promise, timeoutMs, message) {
   let timer;
   try {

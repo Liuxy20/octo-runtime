@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames, preparedSubmit } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -28,7 +29,12 @@ function fixture(invoke, modes = ["canonical"]) {
     respondNative: provider.respondNative.bind(provider)
   });
 }
-const input = () => invokeRequest({ approvalMode: "full_access" });
+const input = () =>
+  invokeRequest({
+    agentEnv: withAgentEnvItems(undefined, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+    ])
+  });
 test("drain waits for direct invocation streams and closes admission", async () => {
   let release;
   const gate = new Promise((resolve) => {
@@ -61,7 +67,7 @@ test("drain waits for direct invocation streams and closes admission", async () 
   }
 });
 test("Host counts pending handshakes toward capacity and releases expired terminal runs", async (t) => {
-  const startedAt = 1_800_000_000_000;
+  const startedAt = 1800000000000;
   let now = startedAt;
   t.mock.method(Date, "now", () => now);
   let release;
@@ -115,7 +121,7 @@ test("Host counts pending handshakes toward capacity and releases expired termin
     preparedSubmit(host, "fixture", request, { protocolMode: "canonical" });
   // TTL 时钟保持固定；执行等待必须用独立的单调时钟限定，失败时也能退出。
   const waitForTerminals = async (receipts) => {
-    const deadline = performance.now() + 2_000;
+    const deadline = performance.now() + 2000;
     while (!receipts.every((receipt) => host.get(receipt.run_id).terminal)) {
       assert.ok(performance.now() < deadline, "capacity runs did not reach terminal states");
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -163,15 +169,13 @@ test("Host counts pending handshakes toward capacity and releases expired termin
   const receipts = await Promise.all(pending);
   await waitForTerminals(receipts);
   requests.forEach((request, index) => assertCompletedOutput(request, receipts[index]));
-
-  now = startedAt + 119_999;
+  now = startedAt + 119999;
   requests.forEach((request, index) => assertCompletedOutput(request, receipts[index]));
   await assert.rejects(
     submit({ ...input(), runId: "retained-overflow" }),
     /RUN_CAPACITY_EXHAUSTED/
   );
-
-  now = startedAt + 120_000;
+  now = startedAt + 120000;
   requests.forEach((request, index) => {
     assert.throws(() => host.get(request.runId), /RUN_NOT_AVAILABLE/);
     assert.throws(
@@ -269,7 +273,6 @@ test("byte pressure reports a gap while terminal state remains independently que
   host.acquireSubscription()();
   await host.close();
 });
-
 test("a lower global replay override does not evict another active adapter run", async () => {
   const host = fixture(async function* () {
     for (let i = 0; i < 80; i++)
@@ -292,7 +295,6 @@ test("a lower global replay override does not evict another active adapter run",
   });
   await waitFor(() => host.get(first.runId).terminal);
   assert.equal(host.get(first.runId).oldest_seq, 1);
-
   const second = {
     ...input(),
     invocationId: "invoke-low-global",
@@ -324,7 +326,6 @@ test("unsupported native is rejected before acceptance and never invokes a canon
   assert.equal(count, 0);
   await host.close();
 });
-
 test("native replay retains original payload and source identity without executing or converting again", async () => {
   let count = 0;
   const payload = {

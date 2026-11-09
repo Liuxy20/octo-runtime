@@ -14,4 +14,4 @@ Issue 334 后，应用启动提示词与渠道材料均由调用方在调用前�
 
 独立 Gateway 当前仍消费旧合同；本仓仅审计，尚未迁移或验收其端到端行为。具体路径、输入次序、冻结重试与发行顺序见[消费者审计](../tasks/334-caller-owned-prompts/gateway-audit.md)。
 
-Issue 335 同样要求调用方先准备应用目录，再传入 path-only workspace 或 agentEnv.workdir；CLI 与 SDK 不隐式取 cwd，Runtime 不分配随机目录或补建。Gateway 当前在自己的边界选择并创建默认目录，这属于业务方责任，但仍发送已删除的 fixed mode，须另行迁移；Gateway 的后续实施已取消，本次仅记录[工作目录消费者审计](../tasks/335-caller-owned-workspace/gateway-audit.md)。不因此改变 Gateway 配置、部署或发行状态。
+Issue 335 同样要求调用方先准备应用目录，再传入 path-only workspace；CLI 与 SDK 不隐式取 cwd，Runtime 不分配随机目录或补建。Gateway 当前在自己的边界选择并创建默认目录，这属于业务方责任，但仍发送已删除的 fixed mode，须另行迁移；Gateway 的后续实施已取消，本次仅记录[工作目录消费者审计](../tasks/335-caller-owned-workspace/gateway-audit.md)。不因此改变 Gateway 配置、部署或发行状态。

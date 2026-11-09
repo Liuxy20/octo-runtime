@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { nativeHost } from "./native-host-fixture.js";
 import { adapters } from "./fixtures/acp-failure-host.js";
 import assert from "node:assert/strict";
@@ -6,7 +7,6 @@ import { PassThrough } from "node:stream";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { AcpClient, spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
-
 function fixture() {
   const child = new EventEmitter();
   Object.assign(child, {
@@ -18,7 +18,6 @@ function fixture() {
   });
   return { child, client: new AcpClient({ child }) };
 }
-
 test("ACP spawn failure rejects only that client; a sibling and later client remain usable", async () => {
   const broken = spawnAcpClient({ command: "/octo-test-missing-provider-R05" });
   const sibling = fixture();
@@ -36,7 +35,6 @@ test("ACP spawn failure rejects only that client; a sibling and later client rem
     await sibling.client.close();
   }
 });
-
 for (const source of ["child", "stdin", "stdout", "stderr"]) {
   test(`ACP ${source} error fails pending and future requests once, without an unhandled error`, async () => {
     const { child, client } = fixture();
@@ -52,7 +50,6 @@ for (const source of ["child", "stdin", "stdout", "stderr"]) {
     await client.close();
   });
 }
-
 test(
   "ACP missing executable through Host RPC preserves a concurrent run and later invokes",
   { timeout: 5000 },
@@ -68,7 +65,13 @@ test(
           invocationId: id,
           agentSessionId: id,
           runId: id,
-          approvalMode: "full_access"
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
         }),
         { protocolMode: "canonical" }
       )) {

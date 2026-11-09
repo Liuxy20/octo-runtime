@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -9,7 +10,6 @@ import { runOwnedCodexTurn as runCodexAppServerTurn } from "../test-support/owne
 import { CodexService } from "../packages/octo-runtime-adapter-codex/dist/service.js";
 import { runCodexAppServerTurn as runTurn } from "../packages/octo-runtime-adapter-codex/dist/app-server.js";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
-
 function alive(pid) {
   try {
     process.kill(pid, 0);
@@ -24,7 +24,6 @@ async function waitGone(pid) {
   while (alive(pid) && Date.now() < deadline) await delay(10);
   assert.equal(alive(pid), false, `process ${pid} must exit`);
 }
-
 for (const protocolMode of ["canonical", "native"]) {
   for (const mode of ["cancel", "complete", "complete-eof", "cancel-paused"]) {
     test(
@@ -43,8 +42,14 @@ for (const protocolMode of ["canonical", "native"]) {
         const stream = runCodexAppServerTurn({
           request: invokeRequest({
             signal: controller.signal,
-            workdir: directory,
-            approvalMode: "full_access"
+            agentEnv: withAgentEnvItems(undefined, [
+              { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
           }),
           spec: {
             command: process.execPath,
@@ -123,7 +128,6 @@ for (const protocolMode of ["canonical", "native"]) {
     );
   }
 }
-
 for (const protocolMode of ["canonical", "native"]) {
   test(`Codex ${protocolMode} reports execution and service cleanup failures separately`, async () => {
     const fixture = codexAppServerFixture({ turnStartError: "original provider failure" });

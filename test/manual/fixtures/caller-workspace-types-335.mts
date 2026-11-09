@@ -18,7 +18,10 @@ import { prepareRunContext } from "../../../packages/octo-runtime-executor-core/
 import type { WorkspaceAssignments } from "../../../packages/octo-runtime-executor-core/dist/index.js";
 
 const workspace: ContextWorkspacePayload = { path: "/caller/prepared" };
-const env: AgentEnv = { schema: "octo.context-envelope/v3", items: [], workdir: workspace.path };
+const env: AgentEnv = {
+  schema: "octo.context-envelope/v3",
+  items: [{ namespace: "octo.execution", name: "workspace", payload: { ...workspace } }]
+};
 // @ts-expect-error Application prompts belong in ordinary inputs.
 const oldEnv: AgentEnv = { ...env, controlInstructions: "" };
 // @ts-expect-error Workspace modes were removed, even if accompanied by a valid path.

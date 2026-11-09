@@ -1,10 +1,10 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { CodexEventNormalizer } from "../packages/octo-runtime-adapter-codex/dist/app-server.js";
-
 test("host emits activity without persisting private analysis and closes every activity", async () => {
   const host = new AgentExecutor();
   host.register({
@@ -46,11 +46,11 @@ test("host emits activity without persisting private analysis and closes every a
       runId: "r",
       prompt: "p",
       modelInput: "p",
-      workdir: process.cwd(),
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      approvalMode: "full_access",
-      agentSource: "provisioned",
-      agentConfig: {}
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ])
     },
     { protocolMode: "canonical" }
   ))
@@ -71,7 +71,6 @@ test("host emits activity without persisting private analysis and closes every a
   assert.deepEqual(starts, ends);
   assert.deepEqual(events.at(-1).payload, {});
 });
-
 test("Codex maps plan revisions, MCP progress and safe retry notices", () => {
   const normalizer = new CodexEventNormalizer();
   const plan = {
@@ -96,7 +95,6 @@ test("Codex maps plan revisions, MCP progress and safe retry notices", () => {
   assert.equal(retry[0].payload.params.attempt, 2);
   assert.doesNotMatch(JSON.stringify(retry), /secret/);
 });
-
 test("Codex plan text accepts strings without coercing malformed values", () => {
   const normalizer = new CodexEventNormalizer();
   const [event] = normalizer.normalize({

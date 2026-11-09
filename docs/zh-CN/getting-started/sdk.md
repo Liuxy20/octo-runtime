@@ -18,7 +18,12 @@ export async function execute(endpoint: string, input: InvokeInput) {
   const client = attachKernel({ endpoint });
   try {
     const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
-    for await (const event of client.invoke({ ...content, parts, protocol_mode: "canonical" }, sessionId, providerSession, agentEnv)) {
+    for await (const event of client.invoke(
+      { ...content, parts, protocol_mode: "canonical" },
+      sessionId,
+      providerSession,
+      agentEnv
+    )) {
       console.log(event);
     }
   } finally {
@@ -101,7 +106,7 @@ CODEX_HOME 必须由宿主选择、准备并显式注入，关闭进程不删除
 
 ## 调用前准备工作目录
 
-本地 AgentRun 必须由调用方先成功创建绝对工作目录，再通过 `agentEnv.workdir` 或仅含 path 的 `octo.execution/workspace` 传入。SDK 不默认取 cwd，不创建目录，也不在续接/恢复时重建。Runtime Home 是独立的运维目录；OpenClaw 等自行管理工作区的 Agent 可以省略本地覆盖。见[输入校验与 workdir 错误码](../reference/invoke-input.md)。
+本地 AgentRun 必须由调用方先成功创建绝对工作目录，再通过 仅含 path 的 `octo.execution/workspace` 传入。SDK 不默认取 cwd，不创建目录，也不在续接/恢复时重建。Runtime Home 是独立的运维目录；OpenClaw 等自行管理工作区的 Agent 可以省略本地覆盖。见[输入校验与 workdir 错误码](../reference/invoke-input.md)。
 
 ```ts
 import { mkdtemp } from "node:fs/promises";
@@ -115,7 +120,12 @@ const agentEnv = {
   workdir,
   items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
 };
-for await (const event of client.invoke([{ type: "text", text: "Summarize this directory." }], undefined, undefined, agentEnv)) {
+for await (const event of client.invoke(
+  [{ type: "text", text: "Summarize this directory." }],
+  undefined,
+  undefined,
+  agentEnv
+)) {
   console.log(event);
 }
 ```

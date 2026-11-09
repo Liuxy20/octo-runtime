@@ -15,13 +15,13 @@
 
 ## agentEnv
 
-信封 schema/items 不变。允许 `octo.execution/*`、`octo.security/approval_policy`，拒绝业务材料。工作目录用 workspace；Adapter 用 adapter；模型和思考强度用 model；环境变量用 envs；MCP 用 mcp；审批用 approval_policy；预算用 limits。
+公共执行 bean 包括 workspace、adapter、model、envs、mcp、approval_policy 和 limits。私有 item 不需要中央注册；无关 Adapter 忽略，消费它的 Adapter 负责语义校验。公共层只检查信封结构、JSON、唯一键及容量。
 
-执行配置还支持 agentEnv 内的 `agentSource`、`workdir`、`approvalMode`、`agentConfig`、`runtimeLimits`，用于完整 Provider 配置和高级设置；与 items 同时提供的选择必须一致。它们不再是 InvokeInput 顶层字段。`agentConfig.providerOptions` 归具体 Adapter。OpenClaw adapter item 显式提供 provider_agent_id（通常 main）。
+AgentEnv 只有 `schema`、`items`。模型、思考强度等共性配置使用公共 bean；Harness 专属配置由宿主和对应 Adapter 约定为私有 item。Core 仅读取路由并保序透传，Adapter 通过 adapter-sdk 直接读取、校验和映射；不生成中间配置对象。见[架构中的 OpenClaw 示例](../concepts/architecture.md)。
 
 ## 调用方拥有工作目录
 
-本地执行必须显式指定已存在的绝对目录。使用 `octo.execution/workspace` 的 `payload: { "path": "/absolute/prepared/project" }`，或 `agentEnv.workdir`；二者及 `agentConfig.workdir` 同时存在时必须一致。目录选择、创建、复用和删除归调用方；CLI 与 SDK 都不默认取 cwd，不分配应用工作区。调用方自己创建的临时目录遵守相同合同。
+本地执行必须显式指定已存在的绝对目录。使用 `octo.execution/workspace` 的 `payload: { "path": "/absolute/prepared/project" }`。目录选择、创建、复用和删除归调用方；CLI 与 SDK 都不默认取 cwd，不分配应用工作区。调用方自己创建的临时目录遵守相同合同。
 
 Runtime 在 Provider 执行前检查本地路径，不创建或重建。未提供路径返回 `WORKDIR_REQUIRED`，相对或非法路径返回 `WORKDIR_INVALID`，目录不存在返回 `WORKDIR_NOT_FOUND`，路径为文件返回 `WORKDIR_NOT_DIRECTORY`，无权限或其他不可用返回 `WORKDIR_UNAVAILABLE`。这些原因码沿用公开分类 `OH-ADP-3004`；可读取异常 `.code`、canonical 失败的 `payload.code` / `failure.reasonCode` 或 native error control。检查不能阻止检查后、Provider 操作前的文件系统变化，后续原生错误仍如实返回。
 
@@ -45,7 +45,7 @@ Runtime 保留传入文本/图片的顺序，不添加提示词或分隔符。�
 
 ## 低层 IPC v2
 
-CLI JSON 和 `client.submit` 使用 `InvokeInput`：`{ inputs, sessionId?, providerSession?, agentEnv, ...内容/追踪字段 }`。`InvokeInput.check` 做边界校验；Core 再解析执行配置。低层 submit/subscribe 由高级调用者自行持有完整 RunRef、取消和尾流，不自动进入 invoke 登记。
+CLI JSON 和 `client.submit` 使用 `InvokeInput`：`{ inputs, sessionId?, providerSession?, agentEnv, ...内容/追踪字段 }`。`InvokeInput.check` 做边界校验；Adapter 直接消费执行配置。低层 submit/subscribe 由高级调用者自行持有完整 RunRef、取消和尾流，不自动进入 invoke 登记。
 
 旧 `invoke(request, environment)`、`cancelInvocation`、contexts 和顶层执行设置均不兼容。client 只接受 IPC v2。独立 Gateway 须先完成自己的提示词迁移，才能使用删除旧合同的 Runtime/client 版本；仅修改 Runtime 不代表完成端到端迁移。内部 Core/Adapter 的 InvokeEnvironment.signal 仍作为取消传递机制，它不是公开 invoke 参数。
 

@@ -1,7 +1,8 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -21,7 +22,6 @@ import {
   envelope,
   resolveContextConfiguration
 } from "@mininglamp-oss/octo-runtime-protocol";
-
 // 独立手动入口，不加入默认测试 glob、docs:check 或 CI；所有测试使用本次构建产物。
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const { adapters } = await import("./145-sdk-worker.mjs");
@@ -34,16 +34,19 @@ const collect = async (stream) => {
 const input = (adapter = "docs", text = "example") =>
   InvokeInput.check({
     inputs: [{ type: "text", text }],
-
-    agentEnv: {
-      ...{
-        schema: "octo.context-envelope/v3",
-        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: adapter } }]
+    agentEnv: withAgentEnvItems(
+      {
+        ...{
+          schema: "octo.context-envelope/v3",
+          items: [{ namespace: "octo.execution", name: "adapter", payload: { type: adapter } }]
+        }
       },
-      approvalMode: "full_access"
-    }
+      [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "workspace", payload: { path: root } }
+      ]
+    )
   });
-
 function nodes(node) {
   return [node, ...(node.children ?? []).flatMap(nodes)];
 }
@@ -56,7 +59,6 @@ function bounded(promise, milliseconds = 5000) {
     })
   ]).finally(() => clearTimeout(timer));
 }
-
 // 各清理步骤独立尝试；保留业务断言与清理错误，不能因 socket 失败跳过服务关闭。
 async function withCleanup(action, operations) {
   const errors = [];
@@ -77,7 +79,6 @@ async function withCleanup(action, operations) {
   if (errors.length) throw new AggregateError(errors, "manual validation and cleanup failed");
   return result;
 }
-
 test("manual cleanup attempts every owner and retains original and cleanup failures", async () => {
   const original = new Error("original assertion"),
     cleanup = new Error("socket close timeout");
@@ -98,20 +99,12 @@ test("manual cleanup attempts every owner and retains original and cleanup failu
   );
   assert.equal(closed, true);
 });
-
 test("A1/A2: extracted bilingual README examples compile and run with current validators", async () => {
   // 位于仓库内以复用真实包解析；仅补 export，不重写任何示例合同字段。
   await mkdir(join(root, ".tmp"), { recursive: true });
   const directory = await mkdtemp(join(root, ".tmp/sdk-docs-"));
   await withCleanup(async () => {
-    // 根发行包不依赖私有 Adapter SDK；只在本次临时目录链接当前工作区包。
-    const scope = join(directory, "node_modules/@mininglamp-oss");
-    await mkdir(scope, { recursive: true });
-    await symlink(
-      join(root, "packages/octo-runtime-adapter-sdk"),
-      join(scope, "octo-runtime-adapter-sdk"),
-      process.platform === "win32" ? "junction" : "dir"
-    );
+    // README 使用正式公开 SDK 子路径，不额外链接私有包来绕过发行边界。
     const paths = [];
     for (const language of ["md", "zh.md"]) {
       for (const name of ["protocol", "adapter-sdk"]) {
@@ -200,7 +193,6 @@ test("A1/A2: extracted bilingual README examples compile and run with current va
     }
   }, [() => rm(directory, { recursive: true, force: true })]);
 });
-
 test("A3: public native-only execution completes without canonical output or conversion", async () => {
   const executor = new AgentExecutor();
   let conversions = 0;
@@ -234,7 +226,6 @@ test("A3: public native-only execution completes without canonical output or con
     assert.equal(conversions, 0);
   }, [async () => assert.equal((await executor.shutdown()).cleanup, "complete")]);
 });
-
 test("A3: canonical-only adapter rejects default native before invocation", async () => {
   const { defineAdapter } = await import("../../packages/octo-runtime-adapter-sdk/dist/index.js");
   const executor = new AgentExecutor();
@@ -260,7 +251,6 @@ test("A3: canonical-only adapter rejects default native before invocation", asyn
     assert.equal(calls, 1);
   }, [async () => assert.equal((await executor.shutdown()).cleanup, "complete")]);
 });
-
 test("A4: mandatory env values override request differences without mutating inputs", () => {
   const envs = (values) => ({
     schema: "octo.context-envelope/v3",
@@ -292,12 +282,11 @@ test("A4: mandatory env values override request differences without mutating inp
     envs({ A: "base" })
   );
 });
-
 test("A5: legacy public wrappers, unversioned events and removed terminals are rejected", () => {
   for (const field of ["protocolMode", "adapterType", "request", "options"])
     assert.throws(
       () => InvokeInput.check({ ...input(), [field]: "canonical" }),
-      /unified JSON contract/
+      /unknown field; use AgentEnv items/
     );
   assert.throws(
     () => assertCanonicalEvent({ type: "message.delta", payload: { text: "old" } }),
@@ -308,7 +297,6 @@ test("A5: legacy public wrappers, unversioned events and removed terminals are r
     /unsupported canonical event/
   );
 });
-
 async function subscribe(endpoint, ref, sockets, errors) {
   const socket = net.createConnection(endpoint);
   sockets.add(socket);
@@ -373,7 +361,6 @@ async function subscribe(endpoint, ref, sockets, errors) {
     ]);
   }
 }
-
 async function subscribeAfterRelease(endpoint, ref, sockets, errors) {
   const deadline = Date.now() + 5000;
   // socket 关闭和 Run 终态均可能先于服务端归还额度；只对明确容量拒绝有界重试。
@@ -385,10 +372,9 @@ async function subscribeAfterRelease(endpoint, ref, sockets, errors) {
     }
   }
 }
-
 test(
   "A3/A6: object attachment and two-run Kernel-wide subscription allocation and release",
-  { timeout: 30_000 },
+  { timeout: 30000 },
   async () => {
     const directory = await mkdtemp(
       join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ort145-")
@@ -468,18 +454,30 @@ test(
     ]);
   }
 );
-
 test("A7: bilingual signatures and shared capacity match the documented public contract", async () => {
   for (const language of ["en", "zh-CN"]) {
-    for (const page of ["getting-started/sdk", "concepts/architecture"]) {
-      const text = await source(`docs/${language}/${page}.md`);
-      // 原生宿主使用自己的 RPC client；独立应用跨进程 attach 的示例在 CLI 章节。
-      assert.ok(text.includes("createKernelService"));
-      assert.ok(text.includes("kernel.client"));
-      assert.ok(!text.includes("attachKernel(endpoint)"));
-    }
-    const cli = await source(`docs/${language}/getting-started/cli.md`);
-    assert.ok(cli.includes("attachKernel({ endpoint"));
+    const sdk = await source(`docs/${language}/getting-started/sdk.md`);
+    // 同页分别覆盖原生装配和独立 client，使用当前公开签名。
+    assert.ok(sdk.includes("createKernelService"));
+    assert.ok(sdk.includes("kernel.client"));
+    assert.ok(sdk.includes("attachKernel({ endpoint"));
+    assert.ok(!sdk.includes("attachKernel(endpoint)"));
+    const architecture = await source(`docs/${language}/concepts/architecture.md`);
+    assert.ok(architecture.includes("defaultAgentEnv"));
+    assert.ok(architecture.includes("adapter.openclaw/options"));
+    const examples = nodes(markdown.parsers.markdown.parse(architecture)).filter(
+      (node) => node.type === "code" && node.lang === "json"
+    );
+    const privateExample = examples
+      .map((node) => JSON.parse(node.value))
+      .find((value) => value.schema === "octo.context-envelope/v3");
+    assert.ok(privateExample, "architecture must include a usable private AgentEnv example");
+    assert.deepEqual(Object.keys(privateExample).sort(), ["items", "schema"]);
+    const target = privateExample.items.find((item) => item.namespace === "adapter.openclaw");
+    assert.equal(target.name, "options");
+    assert.equal(target.payload.agentId, "researcher");
+    const route = privateExample.items.find((item) => item.name === "adapter");
+    assert.deepEqual(route.payload, { type: "openclaw" });
     const capacity = await source(`docs/${language}/reference/kernel-ipc.md`);
     assert.match(
       capacity,

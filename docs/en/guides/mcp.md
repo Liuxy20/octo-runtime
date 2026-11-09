@@ -20,12 +20,22 @@ This example connects to a service that uses Bearer Token authentication. Replac
 ```json
 {
   "protocol_mode": "canonical",
-  "inputs": [{ "type": "text", "text": "Use the project tools to summarize the current task." }],
+  "inputs": [
+    {
+      "type": "text",
+      "text": "Use the project tools to summarize the current task."
+    }
+  ],
   "agentEnv": {
-    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
-      { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
+      {
+        "namespace": "octo.execution",
+        "name": "adapter",
+        "payload": {
+          "type": "codex"
+        }
+      },
       {
         "namespace": "octo.execution",
         "name": "mcp",
@@ -34,9 +44,18 @@ This example connects to a service that uses Bearer Token authentication. Replac
             "project-api": {
               "type": "streamable_http",
               "url": "https://example.com/mcp",
-              "headers": { "Authorization": "Bearer ${BUSINESS_TOKEN}" }
+              "headers": {
+                "Authorization": "Bearer ${BUSINESS_TOKEN}"
+              }
             }
           }
+        }
+      },
+      {
+        "namespace": "octo.execution",
+        "name": "workspace",
+        "payload": {
+          "path": "/absolute/prepared/project"
         }
       }
     ]
@@ -55,12 +74,22 @@ Install the MCP server on the machine running Runtime, then replace `command` be
 ```json
 {
   "protocol_mode": "canonical",
-  "inputs": [{ "type": "text", "text": "List the available project documents." }],
+  "inputs": [
+    {
+      "type": "text",
+      "text": "List the available project documents."
+    }
+  ],
   "agentEnv": {
-    "workdir": "/absolute/prepared/project",
     "schema": "octo.context-envelope/v3",
     "items": [
-      { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
+      {
+        "namespace": "octo.execution",
+        "name": "adapter",
+        "payload": {
+          "type": "codex"
+        }
+      },
       {
         "namespace": "octo.execution",
         "name": "mcp",
@@ -70,9 +99,18 @@ Install the MCP server on the machine running Runtime, then replace `command` be
               "type": "stdio",
               "command": "/absolute/path/to/project-mcp",
               "args": ["--project", "example"],
-              "env": { "PROJECT_ID": "example-project" }
+              "env": {
+                "PROJECT_ID": "example-project"
+              }
             }
           }
+        }
+      },
+      {
+        "namespace": "octo.execution",
+        "name": "workspace",
+        "payload": {
+          "path": "/absolute/prepared/project"
         }
       }
     ]

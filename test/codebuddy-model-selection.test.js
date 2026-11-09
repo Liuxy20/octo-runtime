@@ -1,9 +1,9 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { codeBuddyModelFixture } from "./fixtures/codebuddy-model-fixture.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 async function collect(source) {
   return await Array.fromAsync(source);
 }
@@ -11,10 +11,14 @@ const receipt = (events) =>
   events.find((e) => e.type === "session.update")?.payload.providerSession;
 const request = (model, providerSession) =>
   invokeRequest({
-    agentConfig: model ? { model } : {},
-    ...(providerSession ? { providerSession } : {})
+    ...(providerSession ? { providerSession } : {}),
+    agentEnv: withAgentEnvItems(
+      undefined,
+      model
+        ? [{ namespace: "octo.execution", name: "model", payload: { selection: { id: model } } }]
+        : []
+    )
   });
-
 for (const catalog of ["config", "models"]) {
   test(`CodeBuddy fresh selection and resumed switching use native ${catalog} setter`, async () => {
     const { adapter, state } = codeBuddyModelFixture({
@@ -50,7 +54,6 @@ for (const catalog of ["config", "models"]) {
     assert.equal(state.calls[0].params.model, undefined);
   });
 }
-
 for (const catalog of ["config", "empty", "missing"]) {
   test(`CodeBuddy rejects unknown IDs before setter and prompt (${catalog})`, async () => {
     const { adapter, state } = codeBuddyModelFixture({ catalog });
@@ -66,7 +69,6 @@ for (const catalog of ["config", "empty", "missing"]) {
     assert.equal(state.closes, 1);
   });
 }
-
 for (const selectionResult of [
   {},
   { model: "model-a" },
@@ -82,7 +84,6 @@ for (const selectionResult of [
     assert.equal(state.closes, 1);
   });
 }
-
 test("CodeBuddy native rejection and invalid resumed selection do not poison the next valid turn", async () => {
   const { adapter, state } = codeBuddyModelFixture();
   const first = receipt(await collect(adapter.invoke(request("model-a"))));
@@ -97,7 +98,6 @@ test("CodeBuddy native rejection and invalid resumed selection do not poison the
   assert.deepEqual(state.promptModels, ["model-a", "model-b"]);
   assert.equal(state.closes, 4);
 });
-
 test("CodeBuddy omitted and empty model keep native default; confirmed current selection needs no setter", async () => {
   const { adapter, state } = codeBuddyModelFixture();
   for (const model of [undefined, "", "model-a"]) {
@@ -111,7 +111,6 @@ test("CodeBuddy omitted and empty model keep native default; confirmed current s
   );
   assert.equal(state.closes, 3);
 });
-
 test("CodeBuddy rejects an advertised config option without a usable id", async () => {
   const { adapter, state } = codeBuddyModelFixture({ configId: "" });
   await assert.rejects(
@@ -121,7 +120,6 @@ test("CodeBuddy rejects an advertised config option without a usable id", async 
   assert.deepEqual(state.promptModels, []);
   assert.equal(state.closes, 1);
 });
-
 test("CodeBuddy cancellation while selecting a model closes transport without prompting", async () => {
   const controller = new AbortController();
   const ready = Promise.withResolvers();

@@ -26,7 +26,7 @@ octo-runtime uninstall
 
 渠道使用 [octo-channel-gateway](https://github.com/Mininglamp-OSS/octo-channel-gateway) 自己的 CLI 和 Home，并指定已启动 Kernel 的 endpoint。
 
-通过 `playboard` 提交 Agent 请求时，在发送 stdin JSON 前准备好工作目录。本地请求必须显式提供 `agentEnv.workdir` 或仅含 path 的 workspace item，例如 `{ "namespace": "octo.execution", "name": "workspace", "payload": { "path": "/absolute/prepared/project" } }`。CLI 与 SDK 都要求已存在的绝对路径，不默认取命令的 cwd，也不创建应用目录。`run` 启动 Kernel 服务，不选择 Agent 工作区。OpenClaw 使用 Provider 自有工作区，可以省略本地覆盖。见[工作目录校验与迁移](../reference/invoke-input.md)。
+通过 `playboard` 提交 Agent 请求时，在发送 stdin JSON 前准备好工作目录。本地请求必须显式提供 仅含 path 的 workspace item，例如 `{ "namespace": "octo.execution", "name": "workspace", "payload": { "path": "/absolute/prepared/project" } }`。CLI 与 SDK 都要求已存在的绝对路径，不默认取命令的 cwd，也不创建应用目录。`run` 启动 Kernel 服务，不选择 Agent 工作区。OpenClaw 使用 Provider 自有工作区，可以省略本地覆盖。见[工作目录校验与迁移](../reference/invoke-input.md)。
 
 生命周期命令直接位于顶层：`install`、`uninstall`、`start`、`stop`、`restart`、`run`、`status`、`logs`、`recover`。前台运行使用 `octo-runtime run`，参数说明使用 `octo-runtime <命令> --help`。`recover` 只能在确认 doctor 报告的遗留工具已停止后，带 `--acknowledge-orphan-cleanup` 执行。
 

@@ -1,3 +1,7 @@
+import {
+  withAgentEnvItems,
+  assertAdapterAgentEnv
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -16,7 +20,6 @@ import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/
 import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { createAcpAdapter } from "../packages/octo-runtime-adapter-acp/dist/index.js";
 import { invokeRequest, contextEnvelope } from "./runtime-fixture.js";
-
 const fixture = fileURLToPath(new URL("../test-support/fake-actmode.mjs", import.meta.url));
 const contexts = (mode) =>
   contextEnvelope(
@@ -27,7 +30,6 @@ const collect = async (source) => {
   for await (const event of source) events.push(event);
   return events;
 };
-
 test("actmode validates explicit values, applies configuration ownership and never renders as model text", () => {
   for (const mode of ["plan", "default"]) {
     assertContextEnvelope(contexts(mode));
@@ -35,18 +37,18 @@ test("actmode validates explicit values, applies configuration ownership and nev
       inputs: [{ type: "text", text: "test" }],
       agentEnv: contexts(mode)
     });
-    assert.equal(contextActmode(request.context), mode);
+    assert.equal(contextActmode(request.agentEnv), mode);
     assert.equal(request.modelInput, "test");
   }
   assert.equal(
     contextActmode(
       prepareInvokeInput({ inputs: [{ type: "text", text: "test" }], agentEnv: contexts() }).request
-        .context
+        .agentEnv
     ),
     undefined
   );
   for (const mode of [null, "", "PLAN", "execute", false, {}])
-    assert.throws(() => assertContextEnvelope(contexts(mode)));
+    assert.throws(() => assertAdapterAgentEnv(invokeRequest({ agentEnv: contexts(mode) })));
   assert.throws(
     () =>
       assertContextEnvelope(
@@ -83,7 +85,6 @@ test("actmode validates explicit values, applies configuration ownership and nev
     })
   );
 });
-
 for (const provider of ["codex", "claude-code"])
   for (const mode of [undefined, "default", "plan"]) {
     test(
@@ -103,10 +104,10 @@ for (const provider of ["codex", "claude-code"])
                     commandArgsPrefix: options
                   });
             const req = invokeRequest({
-              context: contexts(mode),
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(8000),
+              agentEnv: withAgentEnvItems(contexts(mode), [])
             });
-            const snapshot = structuredClone(req.context);
+            const snapshot = structuredClone(req.agentEnv);
             const events = await collect(adapter.invoke(req, { protocolMode }));
             const evidence = events.find(
               (event) => event.type === "execution.update" || event.control?.name === "execution"
@@ -137,7 +138,7 @@ for (const provider of ["codex", "claude-code"])
               );
               assert.equal(args.includes("--dangerously-skip-permissions"), false);
             }
-            assert.deepEqual(req.context, snapshot);
+            assert.deepEqual(req.agentEnv, snapshot);
           }
         } finally {
           await rm(directory, { recursive: true, force: true });
@@ -145,7 +146,6 @@ for (const provider of ["codex", "claude-code"])
       }
     );
   }
-
 test(
   "Codex falls back only for advertised unsupported plan; provider failure does not restart turn",
   { timeout: 10000 },
@@ -160,7 +160,10 @@ test(
         });
         const events = await collect(
           adapter.invoke(
-            invokeRequest({ context: contexts("plan"), signal: AbortSignal.timeout(8000) })
+            invokeRequest({
+              signal: AbortSignal.timeout(8000),
+              agentEnv: withAgentEnvItems(contexts("plan"), [])
+            })
           )
         );
         const evidence = events.find((e) => e.type === "execution.update");
@@ -183,7 +186,6 @@ test(
     }
   }
 );
-
 for (const modern of [true, false])
   test(`ACP ${modern ? "configOptions" : "modes"} maps explicit input, omission performs no setting`, async () => {
     for (const mode of [undefined, "default", "plan"]) {
@@ -228,7 +230,9 @@ for (const modern of [true, false])
         { type: "fixture", provider: "fixture", command: "fixture" },
         { acpClientFactory: () => client }
       );
-      const events = await collect(adapter.invoke(invokeRequest({ context: contexts(mode) })));
+      const events = await collect(
+        adapter.invoke(invokeRequest({ agentEnv: withAgentEnvItems(contexts(mode), []) }))
+      );
       const settings = calls.filter((call) => call.method.startsWith("session/set_"));
       assert.equal(settings.length, mode === "plan" ? 1 : 0);
       if (mode === "plan")
@@ -249,7 +253,6 @@ for (const modern of [true, false])
       for (const event of events) assertJsonValue(event);
     }
   });
-
 test("ACP only falls back for advertised unsupported modes; setter errors do not prompt", async () => {
   for (const fail of [false, true]) {
     let prompted = false;
@@ -278,7 +281,9 @@ test("ACP only falls back for advertised unsupported modes; setter errors do not
     );
     const events = [];
     const execution = async () => {
-      for await (const event of adapter.invoke(invokeRequest({ context: contexts("plan") })))
+      for await (const event of adapter.invoke(
+        invokeRequest({ agentEnv: withAgentEnvItems(contexts("plan"), []) })
+      ))
         events.push(event);
     };
     if (fail) await assert.rejects(execution, /SET_MODE_FAILED/);

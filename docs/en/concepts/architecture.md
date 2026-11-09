@@ -81,6 +81,33 @@ The host stops local admission and acquisition, cancels and drains its work, clo
 
 Initialization failure rolls back only resources created by that composition, without destroying an injected shared owner. Timeouts, release failures, and unconfirmed process exits remain distinct; independent cleanup still runs after another disposer fails. Managed Engines recover through their owner; application Engines recover through the business owner. Recovery never replays accepted turns, tool actions, or interaction decisions, or routes stale interactions into a new incarnation.
 
+## AgentEnv Goes Directly to the Adapter
+
+Callers construct `inputs` and `AgentEnv`. The envelope contains only `schema` and `items`. Core snapshots it for each invocation, reads the Adapter route, and forwards all items with their values and order intact. It does not derive a second configuration object or interpret Harness-specific settings. Runtime owns execution, cancellation, watchdogs and cleanup; the Adapter reads and validates configuration, applies its defaults and maps settings to the Provider.
+
+Only shared concepts, such as model, reasoning effort and approval policy, have public protocol beans. `adapter-sdk` provides item readers, composition helpers and shared-setting helpers. Managed Adapters expose an independent `defaultAgentEnv` for callers to build on. Invocation does not append default items to the submitted envelope.
+
+For OpenClaw, the target Agent is a private agreement between the host and the OpenClaw Adapter:
+
+```json
+{
+  "schema": "octo.context-envelope/v3",
+  "items": [
+    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "openclaw" } },
+    {
+      "namespace": "octo.execution",
+      "name": "model",
+      "payload": { "selection": { "id": "provider/model" }, "reasoning": { "effort": "high" } }
+    },
+    { "namespace": "adapter.openclaw", "name": "options", "payload": { "agentId": "researcher" } }
+  ]
+}
+```
+
+The public protocol defines the envelope and shared beans. The name, fields, types, defaults and validation of `adapter.openclaw/options` belong exclusively to the host and OpenClaw Adapter. This example does not make them public protocol fields. Core forwards the item; OpenClaw reads `agentId`; other Adapters ignore it. Adding private settings or a custom Harness requires only the caller's item and its consuming Adapter, without a public schema registration, public type or protocol-version change. Private items are not rendered into model input.
+
+Trusted connection credentials travel through the local Adapter context. Envelope validation checks structure, unique keys, JSON depth and size; the consuming Adapter reports semantic errors in recognized settings.
+
 ## Execution Configuration and Session Identity
 
 agentEnv is snapshotted per invocation, not required to remain equal across a session. Runtime does not fingerprint it for cross-run equality. Applications may explicitly select new effort, environment variables, MCP settings, permissions or a workdir for the next run; execution validation and Provider configuration/resume limitations still apply.

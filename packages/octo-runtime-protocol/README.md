@@ -20,9 +20,15 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
-    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 ```
@@ -35,14 +41,12 @@ const input = InvokeInput.check({
 | ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------- |
 | `inputs`                             | yes      | This turn's text and image parts, in order. Image bytes go here once.                             |
 | `agentEnv`                           | yes      | Context v3 envelope. Its `octo.execution` / `adapter` item selects the Adapter; empty is legal.   |
-| `agentEnv.workdir`                   | local calls | Caller-prepared existing absolute directory, or the same path in the workspace item. No cwd default; not a sandbox. |
+| `octo.execution/workspace.payload.path`                   | local calls | Caller-prepared existing absolute directory in the workspace item. No cwd default; not a sandbox. |
 | `protocol_mode`                      | no       | `native` (default) or `canonical`.                                                                |
 | `providerSession`                    | no       | Explicit Provider session to resume. Never rebuilt from `sessionId`.                              |
-| `agentEnv.agentConfig`               | no       | Full Provider configuration, including `providerOptions`. Must agree with the Context selections. |
-| `agentEnv.runtimeLimits`             | no       | Timeouts and enforcement for this turn; execution defaults apply when omitted.                    |
 | `sessionId`, `invocationId`, `runId` | no       | Correlation IDs, generated when omitted. Not Provider history.                                    |
 
-`inputs` and `agentEnv` are the only required fields, but a request without the `octo.execution` / `adapter` item fails before any Provider starts.
+`inputs` and `agentEnv` are the only required fields. Without an explicit Adapter item, Core routes to `codex`; its configuration defaults belong to that Adapter. Core snapshots and forwards every AgentEnv item in order. Private items are agreed between the host and the consuming Adapter without registration in the public schema.
 
 ## Reading the output
 

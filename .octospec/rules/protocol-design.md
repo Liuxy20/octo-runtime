@@ -23,7 +23,7 @@ supersedes: []
 
 ## 合同与版本
 
-- 主输入是 InvokeInput；Core 唯一解析执行配置、准备输入并映射到 Provider。
+- 主输入是 InvokeInput；Core 准备身份与输入，AgentEnv 保序透传至 Adapter；Adapter 直接读取、校验并映射到 Provider。
 - Run schema_version=7；Context 为 octo.context-envelope/v3；Kernel IPC 为 ipc_version=2，分别版本化。
 - /executor-core 保留显式低层执行能力，不能代替普通宿主的 Kernel RPC；/executor-kernel 提供统一原生服务与客户端，#294 不再要求 worker authoring；/host 提供 Kernel 服务与宿主辅助。旧 owned launch 已删除，不得恢复。
 - 源帧和 canonical 事件保持原协议，native/canonical 模式在接纳时冻结，续流不得切换。

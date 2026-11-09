@@ -20,7 +20,7 @@ supersedes: []
 
 本协议允许在 Context 中指定本轮 MCP 连接。HostApp 负责 Skills、知识库组件、CLI、插件和 MCP 程序的安装与更新；原生运行时负责连接 HTTP 服务或启动已安装的 stdio 程序。Runtime 不通过此配置下载或安装组件。
 
-连接通过 `octo.execution/mcp` 提供。Runtime 不使用 FileBundle、资源下载、旧 `InvokeRequest.mcpServers` 或旧执行计划 `mcp_servers`。Run 保持 7，Context 保持 v3。
+连接通过 `octo.execution/mcp` 提供。Runtime 不使用 FileBundle、资源下载、旧 `InvokeRequest.mcpServers` 。Run 保持 7，Context 保持 v3。
 
 ## Context 字段
 
@@ -77,14 +77,14 @@ Schema 结构参考 [Agent Plugins 官方 MCP schema](https://agent-plugins.org/
 
 - 临时配置：本次 Run 的 `context.items`。
 - 默认／强制配置：业务方持有的 `ContextConfiguration.defaults.items` 和 `mandatory.items`，在发起请求前按共享合同解析。
-- Worker 接收有效 Context 和执行计划；不再持有 Agent 配置表或提供 Agent 配置管理。
-- 本地 Core 的 `resolveLocalContext(defaults, submitted, agentSource)` 解析调用方提供的 defaults 与本轮请求；Runtime 不再注册本地业务 Agent 或提供 `replaceDefaultContext()`。
+- Adapter 直接接收本次 AgentEnv；不再持有 Agent 配置表或提供 Agent 配置管理。
+- Core 透传原 AgentEnv；Adapter 通过 adapter-sdk 读取本轮 MCP，不保存业务 Agent 配置。
 
 defaults 和请求按 server 名称合并；同名 server 整项替换，不深合并 headers、env 或 transport 字段。mandatory 也按 server 名称约束：mandatory 同名 server 完整覆盖请求值，不因值不同报错。空 map 不删除 defaults 或原生本地 MCP。
 
-执行计划使用 `mcp: { mcpServers: ... }` 冻结未展开的模板，并与有效 Context 核对。环境值仅在执行主机准备 invocation 时读取，不回写 Context、执行计划或原生配置文件。框架不从上一轮补 MCP 配置；调用方根据本轮执行配置决定会话复用。MCP 配置和 envs 不渲染到模型上下文。
+AgentEnv 的 `octo.execution/mcp` 保存未展开的模板，由 Adapter SDK 直接读取并展开为本次原生配置。环境值仅在执行主机准备 invocation 时读取，不回写 Context 或原生配置文件。框架不从上一轮补 MCP 配置；调用方根据本轮执行配置决定会话复用。MCP 配置和 envs 不渲染到模型上下文。
 
-此扩展使用现有 Context 和执行计划字段，不要求 Runtime 新增数据库或业务配置存储。
+此扩展使用现有 AgentEnv item，不要求 Runtime 新增数据库或业务配置存储。
 
 ## 环境与变量
 
@@ -97,7 +97,7 @@ defaults 和请求按 server 名称合并；同名 server 整项替换，不深�
 - 未设置变量报 `MCP_ENV_MISSING`，只显示配置位置和变量名，不显示变量值。
 - 空值保留；空 command、非法 URL 或带换行的 header 在最终校验时拒绝。
 - `envs` 的值继续保持字面量，不引入 envs 之间的依赖或递归插值。
-- URL 模板在 Context 阶段校验结构，展开后必须为 HTTP(S) URL，且不能包含用户信息、fragment 或控制字符。
+- URL 模板由消费它的 Adapter 校验结构，展开后必须为 HTTP(S) URL，且不能包含用户信息、fragment 或控制字符。
 
 常驻组件不会自动获得另一个终端后来执行的 export。模型启动后在 shell 子进程执行 export，也不会修改已启动的 Provider 和 MCP 连接。
 

@@ -27,9 +27,15 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }
+    ]
   }
 });
 ```
@@ -47,11 +53,11 @@ const input = InvokeInput.check({
 
 ## 配置与会话归属
 
-上例采用 `ask` 审批模式，推理强度沿用 Provider 默认。审批通过 Context `octo.security/approval_policy` 设置，强度通过 `octo.execution/model.payload.reasoning.effort` 设置。公共 `InvokeInput.agentEnv.approvalMode` 也可显式指定，但必须与显式 Context 策略一致。Adapter 接收准备后的内部 `InvokeRequest`；当前字段与被拒绝的旧配置见[输入参考](../../docs/zh-CN/reference/invoke-input.md)。
+上例采用 `ask` 审批模式，推理强度沿用 Provider 默认。审批通过 Context `octo.security/approval_policy` 设置，强度通过 `octo.execution/model.payload.reasoning.effort` 设置。Adapter 接收准备后的内部 `InvokeRequest`；当前字段与被拒绝的旧配置见[输入参考](../../docs/zh-CN/reference/invoke-input.md)。
 
 调用方保存会话更新中的完整 `providerSession`（含 Provider 扩展字段），并在下一轮显式回传。只复用业务 `sessionId` 会新开 Provider 会话；Core 不持久维护业务会话到 Provider 的绑定表。续接与恢复输入步骤见[背景资料与会话](../../docs/zh-CN/guides/context-and-sessions.md)。
 
-兼容配置包含可执行文件身份、argv、cwd、完整有效环境、`CODEX_HOME`、MCP 语义配置、有效 `rawMessageMaxBytes` 预算和 `agentConfig.providerOptions.codexServiceRevision`。原地修改原生配置或凭据后，更新该修订值或重建 owner。兼容键和凭据不进入诊断；进程快照只报告归属、PID、状态及代次。裸描述对象调用要求显式创建执行作用域；通过 Core 注册时自动绑定。
+兼容配置包含可执行文件身份、argv、cwd、完整有效环境、`CODEX_HOME`、MCP 语义配置、有效 `rawMessageMaxBytes` 预算和 `adapter.codex/options.payload.codexServiceRevision`。原地修改原生配置或凭据后，更新该修订值或重建 owner。兼容键和凭据不进入诊断；进程快照只报告归属、PID、状态及代次。裸描述对象调用要求显式创建执行作用域；通过 Core 注册时自动绑定。
 
 空闲或活动期间 transport 失效都会主动恢复自有进程；每个恢复周期最多替换 5 次，总预算 90 秒，不重放原业务或控制请求。可执行文件不存在等启动错误直接失败，不反复重试。连续健康 60 秒后重置恢复预算。
 
@@ -76,7 +82,7 @@ SDK 必须显式传绝对 codexHome，缺失/相对路径报 CODEX_HOME_REQUIRED
 
 人工审批额度按每次调用的「等待决定」计数，上限 256；第 257 条收到明确拒绝，已接纳审批保持有效。接受合法决定后立即释放额度；自动审批不占此额度。问题与 MCP elicitation 保留独立的 16 条未完成额度。`full_access` 仍使用 Codex `untrusted` 策略，由 Runtime 自动处理支持的审批，以保留动态 MCP 行为。
 
-同一 app-server 的所有 stdin 帧共用有界发送器：普通队列最多 128 条 / 32 MiB（含在途帧），协议拒绝与中断另留 8 条 / 64 KiB；人工额度拒绝走普通队列，避免正常超额突发挤满控制预留。按序等待写回调，并在 `write=false` 时等待 `drain`；连续 5 秒无写入进展或入队后 30 秒未完成投递即失败。人工决定期限仍为 10 分钟。resolved 仅表示本地写回调成功，不代表 Provider 已读取或工具执行完成。取消只删除所属调用的排队响应；已进入管道的字节无法撤回。
+同一 app-server 的所有 stdin 帧共用有界发送器：普通队列最多 4096 条 / 64 MiB（含在途帧），协议拒绝与中断另留 8 条 / 64 KiB；人工额度拒绝走普通队列，避免正常超额突发挤满控制预留。按序等待写回调，并在 `write=false` 时等待 `drain`；连续 5 秒无写入进展或入队后 30 秒未完成投递即失败。人工决定期限仍为 10 分钟。resolved 仅表示本地写回调成功，不代表 Provider 已读取或工具执行完成。取消只删除所属调用的排队响应；已进入管道的字节无法撤回。
 
 本地容量、写入和超时故障使用结构化原因，优先于无关插件 stderr 中的 Unauthorized。native 的 `HOST_EXECUTION_FAILED.failure` 与 canonical 失败保留相同原因；真实 Provider 认证拒绝仍按凭据错误处理。
 

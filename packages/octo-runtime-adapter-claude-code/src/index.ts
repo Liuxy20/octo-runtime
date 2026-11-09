@@ -1,4 +1,10 @@
 import {
+  invocationModel,
+  invocationEffort,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   hasImageInput,
   invocationEnvironment,
   invocationMcpServers,
@@ -100,7 +106,9 @@ export async function buildClaudeCommand(
   if (hasImageInput(req))
     throw new Error("UNSUPPORTED_INPUT_MODALITY: claude-code does not encode image input");
   const mode =
-    contextActmode(req.context) === "plan" ? "plan" : claudePermissionMode(req.approvalMode);
+    contextActmode(req.agentEnv) === "plan"
+      ? "plan"
+      : claudePermissionMode(invocationApprovalMode(req));
   const servers = invocationMcpServers(req);
   assertMcpOptions(servers, "claude-code", []);
   // Native Claude expands placeholders again at connection time. Reject values
@@ -164,8 +172,9 @@ export async function buildClaudeCommand(
   if (req.providerSession?.sessionId) args.push("--resume", req.providerSession.sessionId);
   // --name 是展示标题；不能替换原生 UUID，也不在 resume 时覆盖既有名称。
   else if (req.sessionName) args.push("--name", req.sessionName);
-  if (req.agentConfig?.model) args.push("--model", req.agentConfig.model);
-  const effort = mapReasoningEffort("claude-code", req.agentConfig?.effort);
+  const model = invocationModel(req);
+  if (model) args.push("--model", model);
+  const effort = mapReasoningEffort("claude-code", invocationEffort(req));
   if (effort) args.push("--effort", effort);
   args.push("--permission-mode", mode);
   args.push("--permission-prompt-tool", "stdio");
@@ -181,7 +190,7 @@ export async function buildClaudeCommand(
   };
 }
 
-export function claudePermissionMode(mode: InvokeRequest["approvalMode"]): string {
+export function claudePermissionMode(mode: "ask" | "assisted" | "full_access"): string {
   switch (mode) {
     case "ask":
       return "default";
@@ -729,7 +738,7 @@ export function createClaudeCodeAdapter({
     // The normalizer must not be hoisted to an adapter singleton: one adapter may run several invocations concurrently.
     const normalizer =
       permissions instanceof NativeInteractionBridge ? undefined : new ClaudeEventNormalizer();
-    const requestedMode = contextActmode(request.context);
+    const requestedMode = contextActmode(request.agentEnv);
     let modeReported = false;
     try {
       if (normalizer)
@@ -740,7 +749,7 @@ export function createClaudeCodeAdapter({
         };
       for await (const native of spawnJsonLines<ClaudeNativeEvent>({
         ...spec,
-        cwd: request.workdir,
+        cwd: invocationWorkdir(request),
         env: invocationEnvironment(request),
         signal: request.signal,
         rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
@@ -792,7 +801,7 @@ export function createClaudeCodeAdapter({
               native,
               write,
               validate,
-              request.approvalMode === "full_access"
+              invocationApprovalMode(request) === "full_access"
                 ? {
                     type: "control_response",
                     response: {

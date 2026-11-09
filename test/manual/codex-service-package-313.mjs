@@ -36,7 +36,7 @@ import type { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
 const home = process.cwd();
 const makeOwner = () => createManagedCodexEngine({ codexHome: home, command: process.execPath, appServerArgs: [join(home, "provider.mjs"), join(home, "rpc.ndjson")] });
 const input: InvokeInput & { protocol_mode: "canonical" } = { inputs: [{ type: "text", text: "hello" }], protocol_mode: "canonical",
-  agentEnv: { schema: "octo.context-envelope/v3", workdir: home, items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }] } };
+  agentEnv: { schema: "octo.context-envelope/v3", items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },{namespace:"octo.execution",name:"workspace",payload:{path:home}}] } };
 const core = new AgentExecutor();
 const owner = makeOwner();
 core.register(createCodexAdapter({ engine: owner.provider }));

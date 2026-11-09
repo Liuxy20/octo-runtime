@@ -31,7 +31,12 @@ const input = InvokeInput.check({
       {
         namespace: "octo.execution",
         name: "adapter",
-        payload: { type: "openclaw", provider_agent_id: "main" }
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: { agentId: "main" }
       }
     ]
   }
@@ -40,12 +45,14 @@ const input = InvokeInput.check({
 
 ## What it binds
 
+`adapter.openclaw/options` is a private agreement between the host and this Adapter. Its fields, validation and defaults are not part of the public protocol or generated types. Other Adapters ignore it. `defaultAgentEnv` returns an independent envelope for the caller to compose; invocation does not append default items to the submitted envelope. Connection credentials travel separately in the trusted local invocation context.
+
 | Item         | Value                                                                              |
 | ------------ | ---------------------------------------------------------------------------------- |
 | Adapter type | `openclaw`                                                                         |
 | Exports      | `openclawAdapter`, `createOpenClawAdapter`                                         |
 | Transport    | Gateway WebSocket RPC, advertised v4 methods and events                            |
-| Target       | an existing Agent via `provider_agent_id`; input preparation defaults it to `main` |
+| Target       | an existing Agent via `adapter.openclaw/options.payload.agentId`; the OpenClaw Adapter defaults it to `main` |
 | Output       | canonical events only                                                              |
 | Workspace    | disabled — the remote Agent owns it                                                |
 

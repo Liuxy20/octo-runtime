@@ -1,3 +1,7 @@
+import {
+  withAgentEnvItems,
+  invocationWorkdir
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -5,7 +9,6 @@ import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { kernelFixture } from "./kernel-fixture.js";
 import { kernelRelay } from "./kernel-relay.js";
 import { waitFor } from "./runtime-fixture.js";
-
 async function fixture(t, invoke) {
   const adapter = {
     metadata: {
@@ -22,24 +25,24 @@ async function fixture(t, invoke) {
   const relay = await kernelRelay(t, kernel);
   return { host, client: relay.client, wire: relay.requests };
 }
-
 const input = (mode = "canonical") => ({
   inputs: [{ type: "text", text: "only this turn" }],
-  agentEnv: {
-    workdir: process.cwd(),
-    schema: "octo.context-envelope/v3",
-    items: [
-      { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
-      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
-    ]
-  },
+  agentEnv: withAgentEnvItems(
+    {
+      schema: "octo.context-envelope/v3",
+      items: [
+        { namespace: "octo.execution", name: "adapter", payload: { type: "fixture" } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ]
+    },
+    [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+  ),
   protocol_mode: mode,
   invocationId: "parity-invoke",
   runId: "parity-run",
   sessionId: "parity-session",
   sessionName: "caller-parity-session"
 });
-
 for (const mode of ["native", "canonical"])
   test(`${mode} local and RPC invocations share input and Host defaults`, async (t) => {
     const received = [];
@@ -69,7 +72,7 @@ for (const mode of ["native", "canonical"])
     const { signal: _remote, ...remoteRequest } = received[1];
     assert.deepEqual(remoteRequest, localRequest);
     assert.equal(remoteRequest.sessionName, value.sessionName);
-    assert.equal(remoteRequest.workdir, process.cwd());
+    assert.equal(invocationWorkdir(remoteRequest), process.cwd());
     assert.deepEqual(value, before);
     const call = remote.wire.find((message) => message.method === "agent_run.invoke");
     assert.deepEqual(call.params.input, value);
@@ -79,7 +82,6 @@ for (const mode of ["native", "canonical"])
       mode === "native" ? "completed" : "run.completed"
     );
   });
-
 test("local and RPC pre-abort never start a Provider or transmit an invocation", async (t) => {
   let calls = 0;
   const { host, client, wire } = await fixture(t, async function* () {
@@ -99,7 +101,6 @@ test("local and RPC pre-abort never start a Provider or transmit an invocation",
   assert.equal(calls, 0);
   assert.deepEqual(wire, []);
 });
-
 test("local and RPC active signal cancellation reaches Provider and closes the stream", async (t) => {
   for (const route of ["host", "client"]) {
     let started = false,

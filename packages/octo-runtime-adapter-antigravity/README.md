@@ -26,15 +26,21 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }
+    ]
   }
 });
 ```
 
-`approvalMode` must already be `full_access` before the call — there is no `ask` path.
+`octo.security/approval_policy.payload.mode` must be `full_access` before the call; there is no `ask` path.
 
 ## What it binds
 

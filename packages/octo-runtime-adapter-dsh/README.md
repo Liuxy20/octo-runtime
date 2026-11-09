@@ -23,14 +23,20 @@ const executor = new AgentExecutor();
 executor.register(dshAdapter);
 
 const input = InvokeInput.check({
-  agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    workdir: "/absolute/prepared/project",
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "adapter.dsh", name: "options", payload: { dshBin: hostSelectedDshEntry } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 ```

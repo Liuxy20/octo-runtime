@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -27,7 +28,6 @@ import {
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest } from "./runtime-fixture.js";
-
 // 实际子进程验证选择路径和版本门禁，不安装或替换宿主 Provider。
 async function executable(t, body) {
   const directory = await mkdtemp(join(tmpdir(), "octo-opencode-fixture-"));
@@ -174,7 +174,17 @@ for (const version of ["1.18.30", "2.0.0", "2.1.2", "2.1.3-beta", "3.0.0", "unpa
       if (version.startsWith("1.")) assert.match(probe.reason, /OpenCode 1 is no longer supported/);
       for (const approvalMode of ["ask", "full_access"]) {
         await assert.rejects(async () => {
-          for await (const _ of adapter.invoke(invokeRequest({ approvalMode }))) {
+          for await (const _ of adapter.invoke(
+            invokeRequest({
+              agentEnv: withAgentEnvItems(undefined, [
+                {
+                  namespace: "octo.security",
+                  name: "approval_policy",
+                  payload: { mode: approvalMode }
+                }
+              ])
+            })
+          )) {
             /* drain */
           }
         }, /OPENCODE_VERSION_/);
@@ -210,11 +220,25 @@ let input="";process.stdin.on("data",d=>input+=d);process.stdin.on("end",()=>{
       const events = [];
       for await (const event of createOpenCodeAdapter({ command }).invoke(
         invokeRequest({
-          approvalMode: "full_access",
-          workdir: fixture.directory,
-          agentConfig: { effort: "high" },
           modelInput: 'exact\n"quoted"  spacing',
-          executionEnvOverrides: { env_variables: [{ key: "PATH", value: fixture.directory }] }
+          executionEnvOverrides: { env_variables: [{ key: "PATH", value: fixture.directory }] },
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.execution",
+              name: "workspace",
+              payload: { path: fixture.directory }
+            },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            },
+            {
+              namespace: "octo.execution",
+              name: "model",
+              payload: { reasoning: { effort: "high" } }
+            }
+          ])
         })
       ))
         events.push(event);
@@ -244,7 +268,11 @@ console.log(JSON.stringify({type:"step_finish",part:{reason:"stop"}}));process.e
   );
   const events = [];
   for await (const event of createOpenCodeAdapter({ command: fixture.command }).invoke(
-    invokeRequest({ approvalMode: "full_access" })
+    invokeRequest({
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    })
   ))
     events.push(event);
   assert.equal(
@@ -278,9 +306,11 @@ process.stdin.resume();process.stdin.on("end",()=>console.log(JSON.stringify({ty
       assert.equal(probe.command, expected.command);
       assert.equal(probe.available, expected === selected);
       const request = invokeRequest({
-        approvalMode: "full_access",
-        workdir: cwd.directory,
-        executionEnvOverrides: { env_variables: [{ key: "PATH", value: PATH }] }
+        executionEnvOverrides: { env_variables: [{ key: "PATH", value: PATH }] },
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: cwd.directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
       });
       const adapter = createOpenCodeAdapter();
       if (expected === cwd) {
@@ -301,7 +331,6 @@ process.stdin.resume();process.stdin.on("end",()=>console.log(JSON.stringify({ty
     }
   }
 );
-
 for (const { name, frames, terminal } of [
   { name: "no events", frames: [], terminal: "run.failed" },
   {
@@ -353,7 +382,15 @@ process.stdin.resume();process.stdin.on("end",()=>{for(const frame of ${JSON.str
       );
       const events = await Array.fromAsync(
         createOpenCodeAdapter({ command: fixture.command }).invoke(
-          invokeRequest({ approvalMode: "full_access" })
+          invokeRequest({
+            agentEnv: withAgentEnvItems(undefined, [
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
+          })
         )
       );
       const terminals = events.filter((event) =>
@@ -366,7 +403,6 @@ process.stdin.resume();process.stdin.on("end",()=>{for(const frame of ${JSON.str
     }
   );
 }
-
 test(
   "Core reports missing CLI output as failed with complete resource cleanup",
   posix,
@@ -385,7 +421,20 @@ process.stdin.resume();process.stdin.on("end",()=>{
     const events = await Array.fromAsync(
       core.invoke(
         invocationInput(
-          invokeRequest({ approvalMode: "full_access", workdir: fixture.directory }),
+          invokeRequest({
+            agentEnv: withAgentEnvItems(undefined, [
+              {
+                namespace: "octo.execution",
+                name: "workspace",
+                payload: { path: fixture.directory }
+              },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
+          }),
           "canonical",
           "opencode"
         )
@@ -409,24 +458,26 @@ test("OpenCode V2 preserves native config and overlays MCP under servers with ex
     mcp: { timeout: { catalog: 123 }, servers: { existing: { disabled: true } } }
   };
   const request = invokeRequest({
-    approvalMode: "full_access",
     executionEnvOverrides: {
       env_variables: [{ key: "OPENCODE_CONFIG_CONTENT", value: JSON.stringify(original) }]
     },
-    context: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        {
-          namespace: "octo.execution",
-          name: "mcp",
-          payload: {
-            mcpServers: {
-              live: { type: "stdio", command: "node", args: ["server.js"], toolTimeoutMs: 5000 }
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          {
+            namespace: "octo.execution",
+            name: "mcp",
+            payload: {
+              mcpServers: {
+                live: { type: "stdio", command: "node", args: ["server.js"], toolTimeoutMs: 5000 }
+              }
             }
           }
-        }
-      ]
-    }
+        ]
+      },
+      [{ namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }]
+    )
   });
   const spec = await buildOpenCodeCommand(request);
   const config = JSON.parse(spec.env.OPENCODE_CONFIG_CONTENT);
@@ -467,7 +518,6 @@ test("V2 ACP usage retains context size and cost", () => {
     { used: 100, size: 128000, cost: { amount: 0.1, currency: "USD" } }
   );
 });
-
 test("ACP only qualifies ordinary invocation errors after successful transport cleanup", async () => {
   for (const providerError of [
     new Error("provider rejected the request"),
@@ -493,7 +543,13 @@ test("ACP only qualifies ordinary invocation errors after successful transport c
       );
       await assert.rejects(
         async () => {
-          for await (const _ of adapter.invoke(invokeRequest({ approvalMode: "ask" }))) {
+          for await (const _ of adapter.invoke(
+            invokeRequest({
+              agentEnv: withAgentEnvItems(undefined, [
+                { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+              ])
+            })
+          )) {
             /* drain */
           }
         },
@@ -520,14 +576,19 @@ test("ACP only qualifies ordinary invocation errors after successful transport c
   );
   await assert.rejects(
     async () => {
-      for await (const _ of adapter.invoke(invokeRequest({ approvalMode: "ask" }))) {
+      for await (const _ of adapter.invoke(
+        invokeRequest({
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+          ])
+        })
+      )) {
         /* drain */
       }
     },
     (error) => error === structured
   );
 });
-
 test("OpenCode accepts a version banner after extracting its stable version", posix, async (t) => {
   const fixture = await executable(t, 'console.log("opencode v2.1.3");');
   const probe = await probeOpenCode(fixture.command);

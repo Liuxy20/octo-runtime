@@ -1,3 +1,8 @@
+import {
+  withAgentEnvItems,
+  defineAdapter,
+  invocationWorkdir
+} from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 显式本地专项：真实 Core/IPC 路径验证，不进入默认 CI glob。
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -20,26 +25,31 @@ import {
   prepareInvokeInput
 } from "../../packages/octo-runtime-executor-core/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
-
 const modes = ["canonical", "native"];
-function input(workdir, mode = "canonical", env = {}, extra = {}) {
+function input(workdir, mode = "canonical", items = [], extra = {}) {
   return {
     inputs: [{ type: "text", text: "caller prepared input" }],
     protocol_mode: mode,
-    agentEnv: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        { namespace: "octo.execution", name: "adapter", payload: { type: "workspace-fixture" } }
-      ],
-      approvalMode: "full_access",
-      ...(workdir !== undefined ? { workdir } : {}),
-      ...env
-    },
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          { namespace: "octo.execution", name: "adapter", payload: { type: "workspace-fixture" } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ]
+      },
+      [
+        ...(workdir === undefined
+          ? []
+          : [{ namespace: "octo.execution", name: "workspace", payload: { path: workdir } }]),
+        ...items
+      ]
+    ),
     ...extra
   };
 }
 function adapter(received, metadata = {}, verifyChildCwd = false) {
-  return {
+  return defineAdapter({
     metadata: {
       type: "workspace-fixture",
       agentSources: ["provisioned", "preset"],
@@ -50,16 +60,20 @@ function adapter(received, metadata = {}, verifyChildCwd = false) {
       received.push(request);
       if (verifyChildCwd) {
         const { stdout } = await promisify(execFile)(process.execPath, ["-p", "process.cwd()"], {
-          cwd: request.workdir
+          cwd: invocationWorkdir(request)
         });
-        assert.equal(stdout.trim(), await realpath(request.workdir));
+        assert.equal(stdout.trim(), await realpath(invocationWorkdir(request)));
       }
       if (context.protocolMode === "native") {
-        yield { kind: "native", messageKind: "notification", payload: { cwd: request.workdir } };
+        yield {
+          kind: "native",
+          messageKind: "notification",
+          payload: { cwd: invocationWorkdir(request) }
+        };
         yield { kind: "control", control: { type: "state", state: "completed" } };
       } else yield { protocolVersion: 2, type: "run.completed", payload: {} };
     }
-  };
+  });
 }
 async function core(t, metadata = {}, verifyChildCwd = false) {
   const received = [];
@@ -91,23 +105,17 @@ async function directory(t) {
   t.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }
-
-test("Core has no implicit cwd and rejects every conflicting explicit path", () => {
-  assert.equal(prepareInvokeInput(input()).request.workdir, "");
-  assert.equal(prepareInvokeInput(input("")).request.workdir, "");
+test("Core snapshots the submitted workspace without deriving another path", () => {
+  assert.equal(invocationWorkdir(prepareInvokeInput(input()).request), "");
+  assert.equal(invocationWorkdir(prepareInvokeInput(input("")).request), "");
   const path = resolve("prepared-caller-directory");
-  const workspace = { namespace: "octo.execution", name: "workspace", payload: { path } };
-  const matched = input(path, "canonical", { agentConfig: { workdir: path } });
-  matched.agentEnv.items.push(workspace);
-  assert.equal(prepareInvokeInput(matched).request.workdir, path);
-  for (const candidate of [
-    input(path, "canonical", { agentConfig: { workdir: `${path}-other` } }),
-    input(undefined, "canonical", { agentConfig: { workdir: path } }),
-    { ...matched, agentEnv: { ...matched.agentEnv, workdir: `${path}-other` } }
-  ])
-    assert.throws(() => prepareInvokeInput(candidate), /CONTEXT_PLAN_MISMATCH/);
+  const value = input(path);
+  assert.equal(invocationWorkdir(prepareInvokeInput(value).request), path);
+  assert.throws(
+    () => prepareInvokeInput({ ...value, agentEnv: { ...value.agentEnv, workdir: "/other" } }),
+    /CONTEXT_SCHEMA_INVALID/
+  );
 });
-
 test("caller-created paths survive both output views, continuation and recovery inputs", async (t) => {
   const path = await directory(t);
   const { executor, received } = await core(t, {}, true);
@@ -116,7 +124,7 @@ test("caller-created paths survive both output views, continuation and recovery 
       const value = input(
         path,
         mode,
-        { agentConfig: { workdir: path } },
+        [],
         recovery
           ? {
               providerSession: { sessionId: "caller-provider-session" },
@@ -128,8 +136,8 @@ test("caller-created paths survive both output views, continuation and recovery 
       );
       const frames = await Array.fromAsync(executor.invokeFrames(value));
       assert.equal(frames.at(-1).control.state, "completed");
-      assert.equal(received.at(-1).workdir, path);
-      assert.equal(received.at(-1).agentConfig.workdir, path);
+      assert.equal(invocationWorkdir(received.at(-1)), path);
+
       if (recovery) assert.equal(received.at(-1).freshFallbackModelInput, "caller recovery");
     }
     const fromContext = input(undefined, mode);
@@ -140,10 +148,9 @@ test("caller-created paths survive both output views, continuation and recovery 
     });
     const frames = await Array.fromAsync(executor.invokeFrames(fromContext));
     assert.equal(frames.at(-1).control.state, "completed");
-    assert.equal(received.at(-1).workdir, path);
+    assert.equal(invocationWorkdir(received.at(-1)), path);
   }
 });
-
 test("invalid local paths fail before Adapter invocation in both views without creating data", async (t) => {
   const root = await directory(t);
   const file = join(root, "existing-file");
@@ -164,7 +171,6 @@ test("invalid local paths fail before Adapter invocation in both views without c
   assert.deepEqual(await readdir(root), ["existing-file"]);
   assert.equal(await readFile(file, "utf8"), "preserve user data");
 });
-
 test("a removed continuation workspace fails without recreating or replacing it", async (t) => {
   const root = await directory(t);
   const path = join(root, "caller-random-name");
@@ -173,22 +179,16 @@ test("a removed continuation workspace fails without recreating or replacing it"
   await Array.fromAsync(executor.invokeFrames(input(path)));
   await rm(path, { recursive: true });
   for (const mode of modes) {
-    const value = input(
-      path,
-      mode,
-      {},
-      {
-        providerSession: { sessionId: "existing-provider-session" },
-        continuityMode: "continue",
-        freshFallbackModelInput: "caller recovery"
-      }
-    );
+    const value = input(path, mode, [], {
+      providerSession: { sessionId: "existing-provider-session" },
+      continuityMode: "continue",
+      freshFallbackModelInput: "caller recovery"
+    });
     assertFailure(await Array.fromAsync(executor.invokeFrames(value)), mode, "WORKDIR_NOT_FOUND");
   }
   assert.equal(received.length, 1);
   assert.deepEqual(await readdir(root), []);
 });
-
 test("Provider-owned workspaces do not require or inspect local paths", async (t) => {
   const root = await directory(t);
   const { executor, received } = await core(t, { workspace: false });
@@ -200,22 +200,16 @@ test("Provider-owned workspaces do not require or inspect local paths", async (t
   }
   assert.equal(received.length, 4);
   const preset = await core(t, { type: "openclaw" });
-  const value = input(undefined, "canonical", {
-    agentSource: "preset",
-    items: [
-      {
-        namespace: "octo.execution",
-        name: "adapter",
-        payload: { type: "openclaw", provider_agent_id: "main" }
-      }
-    ]
-  });
+  const value = input(undefined, "canonical", [
+    { namespace: "octo.execution", name: "adapter", payload: { type: "openclaw" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
+    { namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }
+  ]);
   const frames = await Array.fromAsync(preset.executor.invokeFrames(value));
   assert.equal(frames.at(-1).control.state, "completed");
-  assert.equal(preset.received[0].workdir, "");
+  assert.equal(invocationWorkdir(preset.received[0]), "");
   assert.deepEqual(await readdir(root), []);
 });
-
 test("inaccessible prepared directories fail before Provider on supported POSIX accounts", async (t) => {
   if (process.platform === "win32" || process.getuid?.() === 0)
     return t.skip("POSIX non-root permissions required");
@@ -236,7 +230,6 @@ test("inaccessible prepared directories fail before Provider on supported POSIX 
     await chmod(path, 0o700);
   }
 });
-
 test("local IPC retains WORKDIR failures and successful caller paths in both output views", async (t) => {
   const root = await directory(t);
   const received = [];
@@ -267,7 +260,7 @@ test("local IPC retains WORKDIR failures and successful caller paths in both out
         value.agentEnv
       )
     );
-    assert.equal(received.at(-1).workdir, root);
+    assert.equal(invocationWorkdir(received.at(-1)), root);
   }
   assert.equal(received.length, 2);
   assert.deepEqual(await readdir(root), []);

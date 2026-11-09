@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -12,7 +13,6 @@ import {
   streamCapacityError
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest } from "./runtime-fixture.js";
-
 const runId = `run_${"1".repeat(32)}`;
 const diagnosticId = `diag_${"1".repeat(32)}`;
 const limits = resolveStreamLimitPolicy({
@@ -21,7 +21,6 @@ const limits = resolveStreamLimitPolicy({
   replayRunMaxBytes: 4096,
   replayGlobalMaxBytes: 8192
 });
-
 function fixture(mode = "canonical", invoke) {
   const host = new AgentExecutor();
   const adapter = {
@@ -58,19 +57,22 @@ function fixture(mode = "canonical", invoke) {
   };
   host.register(adapter);
   const input = invocationInput(
-    invokeRequest({ runId, approvalMode: "full_access" }),
+    invokeRequest({
+      runId,
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    }),
     mode,
     "capacity-fixture"
   );
   return { host, input, adapter };
 }
-
 async function collect(source) {
   const values = [];
   for await (const value of source) values.push(value);
   return values;
 }
-
 for (const mode of ["canonical", "native"]) {
   test(`HostFrame ${mode} capacity failures preserve safe diagnostics`, async (context) => {
     const { host, input } = fixture(mode);
@@ -97,7 +99,6 @@ for (const mode of ["canonical", "native"]) {
     assert.equal(frames.at(-1).control.state, "failed");
   });
 }
-
 test("HostFrame diagnostics survive RPC and canonical errors without inventing a Provider result", async (context) => {
   const { host: unusedCore, input, adapter } = fixture();
   await unusedCore.shutdown();
@@ -128,7 +129,6 @@ test("HostFrame diagnostics survive RPC and canonical errors without inventing a
     events.some((event) => ["run.completed", "run.failed", "run.cancelled"].includes(event.type)),
     false
   );
-
   async function collectCanonical() {
     for await (const event of canonicalEvents(
       (async function* () {
@@ -138,7 +138,6 @@ test("HostFrame diagnostics survive RPC and canonical errors without inventing a
       events.push(event);
   }
 });
-
 test("native capacity errors retain existing failure creation and whitelist measurements", async (context) => {
   const evidence = {
     boundary: "fixture.queue",
@@ -165,7 +164,6 @@ test("native capacity errors retain existing failure creation and whitelist meas
   assert.doesNotMatch(JSON.stringify(control), /private-output|secret-prompt|rawOutput|prompt/);
   assert.equal(frames.at(-1).control.state, "failed");
 });
-
 test("error control validation accepts legacy errors and rejects unsafe diagnostic metadata", () => {
   const legacy = { type: "error", code: "HOST_FRAME_TOO_LARGE", message: "capacity exceeded" };
   assertHostControl(legacy);

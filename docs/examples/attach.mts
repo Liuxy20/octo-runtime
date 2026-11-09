@@ -12,17 +12,21 @@ const input = InvokeInput.check({
   invocationId: randomUUID(),
   inputs: [{ type: "text", text: "Reply with a short greeting." }],
   agentEnv: {
-    ...(workdir ? { workdir } : {}),
     schema: "octo.context-envelope/v3",
     items: [
       {
         namespace: "octo.execution",
         name: "adapter",
         payload: {
-          type: adapterType,
-          ...(adapterType === "openclaw" ? { provider_agent_id: "main" } : {})
+          type: adapterType
         }
-      }
+      },
+      ...(workdir
+        ? [{ namespace: "octo.execution", name: "workspace", payload: { path: workdir } }]
+        : []),
+      ...(adapterType === "openclaw"
+        ? [{ namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }]
+        : [])
     ]
   }
 });

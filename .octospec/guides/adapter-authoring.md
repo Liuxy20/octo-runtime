@@ -2,7 +2,7 @@
 type: Guide
 title: Adapter 开发指南
 description: 开发 Provider Adapter 的最小接口与验收步骤。
-tags: []
+tags: [adapter, context, protocol]
 timestamp: 2026-10-15T00:00:00Z
 implementation_baseline: df63c8f
 ---
@@ -15,12 +15,12 @@ implementation_baseline: df63c8f
 
 一个 adapter 提供静态元数据 `metadata` 和 `invoke`。元数据包含 `type` 和 `agentSources`；`defineAdapter` 在未声明输出模式时补 canonical-only 的 `protocolSupport`。`probe` 是可选项；省略时 Host 返回 `available: false`、`unavailableReason: "probe_missing"`，不代表 Provider 已确认可用。
 
-`Adapter` / `AdapterMetadata` 是允许省略协议声明的编写输入，工厂返回 `DefinedAdapter`，其类型保证 `protocolSupport` 必有。直接实现 `HostedAdapter` 并调用 `register()` / `serveWorker()` 时必须显式填写协议声明；注册入口不补默认值。保留工厂推导出的返回类型，避免重新注解为编写输入而丢失完整性保证。canonical-only Adapter 的调用方须显式选择 canonical 模式。
+`Adapter` / `AdapterMetadata` 是允许省略协议声明的编写输入，工厂返回 `DefinedAdapter`，其类型保证 `protocolSupport` 必有。直接实现 `HostedAdapter` 并调用 `register()` 时必须显式填写协议声明；注册入口不补默认值。保留工厂推导出的返回类型，避免重新注解为编写输入而丢失完整性保证。canonical-only Adapter 的调用方须显式选择 canonical 模式。
 
 SDK 已删除 `executionFeatures` 自建能力声明机制，功能支持范围归宿主管理；不得恢复标签或设计替代能力表。Adapter 按明确执行合同适配转发，必要的校验与原生握手仍在执行边界处理。规则见 [Adapter 责任边界](../rules/adapter-metadata.md#宿主掌握支持范围adapter-适配转发)。
 
 ```js
-import { defineAdapter, probeCommand } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { defineAdapter, probeCommand } from "@mininglamp-oss/octo-runtime/adapter-sdk";
 
 export const adapter = defineAdapter({
   metadata: {
@@ -38,7 +38,11 @@ export const adapter = defineAdapter({
 });
 ```
 
-CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json) 中登记 `type`、模块路径和导出名称。导出对象可以直接是 adapter，也可以通过 `factory` 加 `options` 创建实例。Host 会校验导出形状；清单声明了 `type` 时，还会校验它是否与 `metadata.type` 一致。SDK 产品不读取该清单，而在自己的独立 Host 入口直接 import 并调用 `serveWorker` 注册；完整代码和必须保留的中文注释见 [SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。
+CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json) 中登记 `type`、模块路径和导出名称。导出对象可以直接是 adapter，也可以通过 `factory` 加 `options` 创建实例。Host 会校验导出形状；清单声明了 `type` 时，还会校验它是否与 `metadata.type` 一致。SDK 产品不读取该清单，而在自己的独立 Host 入口直接 import 并交给 createKernelService 装配；完整代码和必须保留的中文注释见 [SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。
+
+## AgentEnv 与私有配置
+
+直接读取 request.agentEnv；公共 bean 可用 adapter-sdk helper，私有 bean 用 agentEnvItem<T>(env, namespace, name) 读取后由本 Adapter 校验。宿主自己构造私有 item；不要为单个 Harness 的字段修改公共协议或中央 catalog，也不要生成另一份通用配置对象。OpenClaw 示意见[基础架构](../rules/architecture.md)。defineAdapter 暴露独立的 defaultAgentEnv，调用方可以显式组合；执行时不补写原信封。不使用包装器的自定义 Adapter 需自行校验已消费配置，并通过 context.configureRuntimeLimits 配置 Core watchdog。
 
 ## 设计规则
 
@@ -51,7 +55,7 @@ CLI 默认项在 [`apps/cli/src/manifest.json`](../../apps/cli/src/manifest.json
 7. 应用启动提示词只作为调用方准备的普通输入传递；Adapter 不按首轮、续接或 fallback 添加提示词，不提升为 system/developer/受信角色，不新增等价字段或注入 helper。Provider 私有提示词能力不构成 Runtime 公共抽象。保留调用方文本/图片次序，原生映射不得加入空指令块或额外分隔符。
 8. Token 和其他敏感值不得出现在命令行参数、prompt、事件 payload 或工作目录中。
 9. 会话、审批、图片等行为在 Adapter 中按具体合同实现，由宿主管理功能支持范围；不得新增 `executionFeatures` 标签、自有 capabilities、能力字段表或 AbilityProvider 注册体系。当前输出模式仍使用 `protocolSupport`，其简化不在本次文档决定中实施。单独记录真实 Provider 验证范围，不将静态声明当作执行证据。
-10. 本地工作目录由调用方显式提供且已成功创建；Core 在 Provider 操作前检查，Adapter 不默认取 cwd、不分配随机目录、不在续接/fallback 时重建。公共 workspace 仅含 path，没有 mode 或分配回执；外部/preset Agent 与 metadata.workspace:false 的本地覆盖缺省按合同处理，不制造远端 Agent 的本地工作区。Runtime 运维状态和 Provider 自有状态不等于应用目录。
+10. 本地工作目录由调用方显式提供且已成功创建；Adapter SDK 在 Provider 操作前检查，Adapter 不默认取 cwd、不分配随机目录、不在续接/fallback 时重建。公共 workspace 仅含 path，没有 mode 或分配回执；外部/preset Agent 与 metadata.workspace:false 的本地覆盖缺省按合同处理，不制造远端 Agent 的本地工作区。Runtime 运维状态和 Provider 自有状态不等于应用目录。
 
 上例演示 canonical 事件生成；公共 `invoke` 的 `InvokeInput` 须显式指定 `{ protocol_mode: "canonical" }`。Adapter 内部通过 `context.protocolMode` 读取已选模式，不能把该内部字段当作公共输入。需要 native 时实现 Driver 与独立控制帧，不能直接声明支持后继续只返回 canonical 事件。native-only Adapter 无须生成 canonical 事件；上述 canonical 事件规则只作用于 canonical 模式。详情见 [模式合同](../rules/output-protocol.md)。
 

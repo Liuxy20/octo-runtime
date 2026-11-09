@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 显式本地专项，不进入默认 CI 测试 glob。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +14,6 @@ import { assertCanonicalEvent } from "../../dist/public/protocol.js";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
-
 // 测试宿主直接注入原生 Adapter；重建 Kernel 时仍使用同一 fake Provider。
 const options = {
   get adapters() {
@@ -35,7 +35,13 @@ const input = (scenario = "stale") =>
       agentSessionId: "supplement-session",
       prompt: scenario,
       modelInput: scenario,
-      agentConfig: { providerOptions: { finalizationTimeoutMs: 40 } }
+      agentEnv: withAgentEnvItems(undefined, [
+        {
+          namespace: "adapter.codex",
+          name: "options",
+          payload: { ...{ finalizationTimeoutMs: 40 } }
+        }
+      ])
     }),
     "canonical",
     "codex"
@@ -77,7 +83,6 @@ async function complete(f) {
   assert.equal(f.handle.snapshot().completed, true);
   return frames;
 }
-
 test("async cancellation waits for ACK and blocks competing submissions", async (t) => {
   const f = await setup(t);
   const ack = Promise.withResolvers();
@@ -101,7 +106,6 @@ test("async cancellation waits for ACK and blocks competing submissions", async 
   await cancelling;
   assert.equal(reply.snapshot().phase, "cancelled");
 });
-
 test("lost cancellation ACK stays unknown after restore and cannot replay", async (t) => {
   const f = await setup(t);
   let calls = 0;
@@ -119,7 +123,6 @@ test("lost cancellation ACK stays unknown after restore and cannot replay", asyn
   await assert.rejects(restored.respond(value), { code: "INTERACTION_NOT_ACTIVE" });
   assert.equal(calls, 1);
 });
-
 test("inactive cancellation is invalidated; completed cancellation needs no RPC", async (t) => {
   const f = await setup(t);
   let calls = 0;
@@ -141,7 +144,6 @@ test("inactive cancellation is invalidated; completed cancellation needs no RPC"
   assert.equal(completed.snapshot().phase, "cancelled");
   assert.equal(calls, 1);
 });
-
 test("observed cancellation survives a lost ACK", async (t) => {
   // 保持 turn 活跃，避免默认 stale 场景的 20ms 完成定时器先关闭交互。
   const f = await setup(t, "normal");
@@ -162,7 +164,6 @@ test("observed cancellation survives a lost ACK", async (t) => {
   await rejected;
   assert.equal(reply.snapshot().phase, "cancelled");
 });
-
 test(
   "async final_answer survives more than the finalization deadline without answering",
   { timeout: 10000 },
@@ -193,7 +194,6 @@ test(
     );
   }
 );
-
 test(
   "active supplement steers; same handle rejects a second submission",
   { timeout: 10000 },
@@ -206,7 +206,6 @@ test(
     await assert.rejects(f.handle.respond(value), (e) => e.code === "INTERACTION_NOT_ACTIVE");
   }
 );
-
 test(
   "completed question starts a new Run in the original session and preserves the original terminal",
   { timeout: 10000 },
@@ -237,7 +236,6 @@ test(
     assert.equal((await f.client.get(f.ref)).terminal.control.state, "completed");
   }
 );
-
 test(
   "host-persisted completed snapshot can supplement after Kernel restart",
   { timeout: 15000 },
@@ -258,7 +256,6 @@ test(
     assert.equal(handle.snapshot().phase, "answered");
   }
 );
-
 test(
   "invalid answers, stale generation, explicit expiry and cancelled forms do not invoke",
   { timeout: 10000 },
@@ -283,7 +280,6 @@ test(
     await assert.rejects(f.handle.respond(value), (e) => e.code === "INTERACTION_NOT_ACTIVE");
   }
 );
-
 test(
   "unknown steer delivery never starts a new Run or becomes retryable",
   { timeout: 10000 },
@@ -294,7 +290,6 @@ test(
     await assert.rejects(f.handle.respond(value), (e) => e.code === "INTERACTION_NOT_ACTIVE");
   }
 );
-
 test("missing original execution is not evidence of completion", { timeout: 10000 }, async (t) => {
   const f = await setup(t);
   const client = {
@@ -311,7 +306,6 @@ test("missing original execution is not evidence of completion", { timeout: 1000
     await assert.rejects(restored.respond(value), (e) => e.code === "INTERACTION_NOT_ACTIVE");
   }
 });
-
 for (const change of ["expiry", "generation"])
   test(`lazy continuation rechecks ${change} before invoke`, { timeout: 10000 }, async (t) => {
     const f = await setup(t);
@@ -326,7 +320,6 @@ for (const change of ["expiry", "generation"])
       ["INTERACTION_NOT_ACTIVE", "ASYNC_QUESTION_SESSION_STALE"].includes(e.code)
     );
   });
-
 for (const sessionId of ["resume-reject", "resume-turn-reject"])
   test(
     `required resume never starts a fresh provider session: ${sessionId}`,

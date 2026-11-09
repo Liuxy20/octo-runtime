@@ -1,7 +1,7 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createOpenClawAdapter } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
-
 test("OpenClaw Gateway preserves new thought phases, native answer IDs and commentary snapshots", async () => {
   let listener;
   const client = {
@@ -64,20 +64,30 @@ test("OpenClaw Gateway preserves new thought phases, native answer IDs and comme
     runId: "r",
     prompt: "p",
     modelInput: "p",
-    workdir: process.cwd(),
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    approvalMode: "full_access",
-    agentSource: "provisioned",
-    agentConfig: {
-      providerAgentId: "runner",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://localhost:1",
-        OPENCLAW_GATEWAY_TOKEN: "fixture",
-        OPENCLAW_GATEWAY_DEVICE_ID: "fixture",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "fixture",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "fixture"
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "runner",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://localhost:1",
+            OPENCLAW_GATEWAY_TOKEN: "fixture",
+            OPENCLAW_GATEWAY_DEVICE_ID: "fixture",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "fixture",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "fixture"
+          }
+        }
       }
-    }
+    ])
   }))
     output.push(e);
   const thoughts = output.filter(

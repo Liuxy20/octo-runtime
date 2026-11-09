@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -5,7 +6,6 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { kernelFixture } from "../kernel-fixture.js";
-
 for (const mode of ["native", "canonical"])
   test(
     `${mode}: Kernel public invoke preserves approvals and local failure`,
@@ -32,20 +32,30 @@ for (const mode of ["native", "canonical"])
           invocationId: randomUUID(),
           runId: randomUUID(),
           inputs: [{ type: "text", text: scenario }],
-          agentEnv: {
-            ...{
-              schema: "octo.context-envelope/v3",
-              items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
+          agentEnv: withAgentEnvItems(
+            {
+              ...{
+                schema: "octo.context-envelope/v3",
+                items: [
+                  { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }
+                ]
+              }
             },
-            approvalMode: "full_access",
-            workdir
-          },
+            [
+              { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ]
+          ),
           protocol_mode: mode
         }))
           events.push(event);
         return events;
       };
-      // 同一 Kernel 上故障调用与成功调用并行，确保不回收共享内核或兄弟 Provider。
+      // fake 按调用方目录隔离服务；同一 Kernel 并行故障不能回收兄弟 Provider。
       const [success, failed, cleanupFailed] = await Promise.all([
         run("success"),
         run("transport-error"),

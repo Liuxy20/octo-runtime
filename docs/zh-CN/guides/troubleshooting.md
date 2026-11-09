@@ -23,8 +23,8 @@ Kernel 不负责重启宿主进程；SDK 由应用管理，CLI 由原生服务�
 | 现象或错误码                   | 处理步骤                                                                                                                                            |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Context 结构、重复项或大小错误 | 用 `InvokeInput.check` 校验参数，检查 schema、32 项 / 64 KiB 限制，以及重复的 namespace/name。字段格式见 [Context 参考](../reference/contexts.md)。 |
-| `CONTEXT_PLAN_MISMATCH`        | 检查 agentEnv.workdir、agentConfig.workdir、模型和审批设置是否与 Context 选择一致，修正冲突值。 |
-| `WORKDIR_REQUIRED` | 通过 agentEnv.workdir 或仅含 path 的 workspace item 显式提供已存在的本地绝对目录；CLI 与 SDK 无 cwd 默认值。 |
+| `CONTEXT_PLAN_MISMATCH` | 低层请求包装器中显式指定的 Adapter 路由与信封路由冲突；统一使用对应的 adapter item。 |
+| `WORKDIR_REQUIRED` | 通过 仅含 path 的 workspace item 显式提供已存在的本地绝对目录；CLI 与 SDK 无 cwd 默认值。 |
 | `WORKDIR_INVALID` | 使用合法绝对路径，不再提供 workspace mode。 |
 | `WORKDIR_NOT_FOUND` | 调用方在调用前准备选定目录；续接/恢复不重建、不分配替代目录。 |
 | `WORKDIR_NOT_DIRECTORY` | 提供目录而非文件。 |

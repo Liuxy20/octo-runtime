@@ -21,7 +21,7 @@ export function invocationMcpServers(
   request: InvokeRequest,
   env = invocationEnvironment(request)
 ): McpServers {
-  const payload = contextItem(request.context, "octo.execution", "mcp")?.payload ?? {
+  const payload = contextItem(request.agentEnv, "octo.execution", "mcp")?.payload ?? {
     mcpServers: {}
   };
   assertContextMcp(payload);

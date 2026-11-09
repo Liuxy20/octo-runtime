@@ -6,13 +6,22 @@ import {
   assertHostControl
 } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { invokeRequest } from "../runtime-fixture.js";
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { approvalFixture, until } from "./codex-approval-fixture.js";
 
 async function running(t, mode, approvalMode, options) {
   const fixture = approvalFixture(options);
-  const adapter = createCodexAdapter({ command: "fixture", spawnFn: () => fixture.child });
+  const adapter = createCodexAdapter({
+    command: "fixture",
+    spawnFn: () => fixture.child
+  });
   const controller = new AbortController();
-  const request = invokeRequest({ approvalMode, signal: controller.signal });
+  const request = invokeRequest({
+    signal: controller.signal,
+    agentEnv: withAgentEnvItems(undefined, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+    ])
+  });
   const events = [];
   let error;
   const source = adapter.invoke(request, {
@@ -30,6 +39,7 @@ async function running(t, mode, approvalMode, options) {
     fixture.release();
     fixture.close();
     await done;
+    await adapter.close({ deadline: performance.now() + 2500 });
   });
   await until(() => fixture.started, "turn start");
   const pending = () =>

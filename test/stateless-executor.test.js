@@ -36,8 +36,6 @@ test("Runtime source and built packages do not load a SQL driver or expose a dom
   assert.deepEqual(Object.keys(core).sort(), [
     "AgentExecutor",
     "DEFAULT_RUNTIME_LIMITS",
-    "localRuntimeLimits",
-    "prepareInvokeInput",
-    "resolveLocalContext"
+    "prepareInvokeInput"
   ]);
 });

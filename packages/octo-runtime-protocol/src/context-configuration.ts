@@ -12,7 +12,6 @@ import {
   assertContextMcp,
   CONTEXT_SCHEMA
 } from "./context.js";
-import { findContextTypeDefinition } from "./context-catalog.js";
 
 const empty = (): ContextEnvelope => ({ schema: CONTEXT_SCHEMA, items: [] });
 const keyOf = (item: ContextItem): string => `${item.namespace}/${item.name}`;
@@ -31,10 +30,6 @@ export function assertContextConfiguration(value: unknown): asserts value is Con
 function validateLayers(configuration: ContextConfiguration): void {
   for (const envelope of [configuration.defaults, configuration.mandatory]) {
     assertContextEnvelope(envelope);
-    for (const item of envelope.items) {
-      if (!findContextTypeDefinition(item.namespace, item.name)?.persistent)
-        throw new TypeError("CONTEXT_CONFIGURATION_TYPE_FORBIDDEN");
-    }
   }
 }
 

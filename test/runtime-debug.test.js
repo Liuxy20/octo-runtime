@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames, preparedTestInvoke, invokeRequest } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -6,7 +7,6 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { nativeHost } from "./native-host-fixture.js";
 import { testAdapter } from "./fixtures/test-adapter.js";
-
 const entrypoint = resolve("packages/octo-runtime-executor-kernel/dist/runner.js");
 const manifest = resolve("test/fixtures/adapters.json");
 const logPath = async (directory) =>
@@ -22,14 +22,15 @@ async function invoke(host, id = "log-test") {
       invocationId: id,
       runId: id,
       prompt: "private-log-fixture",
-      approvalMode: "full_access"
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
     }),
     { protocolMode: "canonical" }
   ))
     events.push(event);
   assert.equal(events.at(-1).type, "run.completed");
 }
-
 for (const enabled of [false, true]) {
   test(`F31 Host logging requires an explicit directory (enabled=${enabled})`, async () => {
     const home = await mkdtemp(join(tmpdir(), "oh-metadata-")),
@@ -62,7 +63,6 @@ for (const enabled of [false, true]) {
     }
   });
 }
-
 test("F31 unavailable log directory does not prevent Host readiness or invocation", async () => {
   const home = await mkdtemp(join(tmpdir(), "oh-log-failure-"));
   let host;

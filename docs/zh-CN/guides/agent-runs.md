@@ -9,8 +9,9 @@ const run = client.invoke(
   { parts: [{ type: "text", text: "Summarize this project." }], protocol_mode: "canonical" },
   "project-chat",
   undefined,
-  { schema: "octo.context-envelope/v3", workdir: "/absolute/prepared/project", items: [
-    { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }
+  { schema: "octo.context-envelope/v3", items: [
+    { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
+    { namespace: "octo.execution", name: "workspace", payload: { path: "/absolute/prepared/project" } }
   ] }
 );
 let terminal: string | undefined;

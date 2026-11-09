@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 显式运行：node test/manual/136-configuration-snapshot.mjs，不纳入默认 CI。
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -12,7 +13,6 @@ import {
   DEFAULT_STREAM_LIMIT_POLICY,
   INVOKE_REQUEST_MAX_BYTES
 } from "@mininglamp-oss/octo-runtime-protocol";
-
 const adapters = [adapter, defaultAdapter];
 const config = (revision) => ({
   providerOptions: { revision: String(revision), shared: "host" },
@@ -20,15 +20,16 @@ const config = (revision) => ({
 });
 const input = (prompt = "report", fields = {}) => ({
   inputs: [{ type: "text", text: prompt }],
-  agentEnv: {
-    ...{
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "snapshot" } }]
+  agentEnv: withAgentEnvItems(
+    {
+      ...{
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "snapshot" } }]
+      }
     },
-    approvalMode: "full_access"
-  },
+    [{ namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }]
+  ),
   protocol_mode: "canonical",
-
   runId: randomUUID(),
   invocationId: randomUUID(),
   ...fields
@@ -61,7 +62,6 @@ async function waitForStart(path, count = 1) {
   }
   throw new Error("fixture did not start");
 }
-
 test("A1/A2: changing resolver matches one fixed revision for options, limits and output", async (t) => {
   for (const selected of [1, 2]) {
     let calls = 0;
@@ -97,7 +97,6 @@ test("A1/A2: changing resolver matches one fixed revision for options, limits an
     assert.equal((await fixed.server.close()).complete, true);
   }
 });
-
 test("A3/A4/A7: active runs keep copies while subsequent/concurrent runs and list use new config", async (t) => {
   const original = config(1);
   let calls = 0;
@@ -150,7 +149,6 @@ test("A3/A4/A7: active runs keep copies while subsequent/concurrent runs and lis
   assert.equal((await frames(f.client, waiting.ref)).at(-1).control.state, "cancelled");
   assert.equal(calls, beforeCancel);
 });
-
 test("A5: static/default/missing configuration and option precedence preserve caller objects", async (t) => {
   const staticConfig = { snapshot: config(2) };
   for (const [extra, expectedRevision] of [
@@ -161,7 +159,14 @@ test("A5: static/default/missing configuration and option precedence preserve ca
   ]) {
     const f = await kernelFixture(t, { adapters, ...extra });
     const value = input("report", {
-      agentConfig: { providerOptions: { shared: "input", keep: "yes" } }
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.execution", name: "adapter", payload: { type: "snapshot" } },
+        {
+          namespace: "adapter.snapshot",
+          name: "options",
+          payload: { ...{ shared: "input", keep: "yes" } }
+        }
+      ])
     });
     const before = structuredClone(value);
     const observed = report(await run(f.client, value))[0];
@@ -177,7 +182,6 @@ test("A5: static/default/missing configuration and option precedence preserve ca
     assert.equal((await f.server.close()).complete, true);
   }
 });
-
 test("A6: invalid/throwing configurations fail before Core invoke, without disturbing another run", async (t) => {
   let submissions = 0;
   const invokeFrames = AgentExecutor.prototype.invokeFrames;
@@ -203,14 +207,10 @@ test("A6: invalid/throwing configurations fail before Core invoke, without distu
     null,
     { providerOptions: { revision: 7 } },
     { providerOptions: [] },
-    { streamLimits: { hostFrameMaxBytes: 0 } },
-    { providerOptions: { padding: "x".repeat(INVOKE_REQUEST_MAX_BYTES) } }
+    { streamLimits: { hostFrameMaxBytes: 0 } }
   ]) {
     current = invalid;
-    await assert.rejects(
-      f.client.submit(input("report", { runMetadata: { startsFile } })),
-      invalid?.providerOptions?.padding ? /INVOKE_REQUEST_TOO_LARGE/ : undefined
-    );
+    await assert.rejects(f.client.submit(input("report", { runMetadata: { startsFile } })));
     assert.equal(submissions, 1, "invalid configurations must not reach Core invoke");
     assert.equal(await readFile(startsFile, "utf8"), "start\n");
   }
@@ -219,7 +219,21 @@ test("A6: invalid/throwing configurations fail before Core invoke, without distu
   await writeFile(gateFile, "release");
   assert.equal((await frames(f.client, active.ref)).at(-1).control.state, "completed");
 });
-
+test("trusted host options stay outside the input wire budget and caller AgentEnv", async (t) => {
+  const value = input();
+  const before = structuredClone(value.agentEnv);
+  const f = await kernelFixture(t, {
+    adapters,
+    adapterConfigurations: {
+      snapshot: { providerOptions: { padding: "x".repeat(INVOKE_REQUEST_MAX_BYTES) } }
+    }
+  });
+  const events = await run(f.client, value);
+  assert.deepEqual(value.agentEnv, before);
+  assert.equal(events.at(-1).control.state, "failed");
+  assert.ok(outcome(events).errors.includes("HOST_FRAME_TOO_LARGE"));
+  assert.equal(outcome(events).errors.includes("INVOKE_REQUEST_TOO_LARGE"), false);
+});
 test("A5: omitted Adapter selects codex configuration using this invocation's runtimeId", async (t) => {
   const runtimes = [];
   const f = await kernelFixture(t, {

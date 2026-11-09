@@ -1,3 +1,7 @@
+import {
+  withAgentEnvItems,
+  assertAdapterAgentEnv
+} from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
@@ -8,14 +12,11 @@ import {
   CONTEXT_SCHEMA,
   assertAgentEnv,
   assertContextEnvelope,
-  assertFrozenContextPlan,
   assertHostControl,
   assertInvokeRequest,
-  assertResolvedExecutionPlan,
   classifyFailure,
   failurePayload
 } from "../../packages/octo-runtime-protocol/dist/index.js";
-
 // Explicit manual suite; requires the full workspace build for removed Core export checks.
 const root = resolve(import.meta.dirname, "../..");
 const schema = JSON.parse(
@@ -36,15 +37,14 @@ const request = (path = "") => ({
   invocationId: "invocation-335",
   runId: "run-335",
   agentSessionId: "session-335",
-  agentSource: "provisioned",
-  context: envelope(),
-  approvalMode: "ask",
   modelInput: "prompt",
   prompt: "prompt",
-  workdir: path,
-  agentConfig: {}
+  agentEnv: withAgentEnvItems(envelope(), [
+    { namespace: "octo.execution", name: "workspace", payload: { path: path } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 });
-
 test("path-only workspace rejects every former mode and empty payload", () => {
   const validate = validator("ContextWorkspacePayload");
   assert.equal(validate({ path: "/caller/prepared" }), true);
@@ -59,52 +59,19 @@ test("path-only workspace rejects every former mode and empty payload", () => {
     { mode: "", path: "/caller/prepared" }
   ]) {
     assert.equal(validate(payload), false, JSON.stringify(payload));
-    assert.throws(() => assertContextEnvelope(envelope(payload)), /CONTEXT_SCHEMA_INVALID/);
+    if (payload.path !== "")
+      assert.throws(
+        () => assertAdapterAgentEnv({ ...request(), agentEnv: envelope(payload) }),
+        /WORKDIR_INVALID/
+      );
   }
 });
-
-test("pure protocol checks represent no cwd override and enforce explicit path agreement", () => {
-  const plan = {
-    agent_source: "provisioned",
-    adapter_type: "codex",
-    approval_mode: "ask",
-    workdir: ""
-  };
-  assert.equal(validator("ResolvedExecutionPlan")(plan), true);
-  assert.doesNotThrow(() => assertResolvedExecutionPlan(plan));
-  assert.doesNotThrow(() => assertInvokeRequest(request()));
-  const path = "/caller/prepared";
-  const env = { ...envelope({ path }), workdir: path, agentConfig: { workdir: path } };
+test("AgentEnv has one workspace item and no duplicate path entrance", () => {
+  const env = envelope({ path: "/caller/prepared" });
   assert.doesNotThrow(() => assertAgentEnv(env));
-  assert.throws(() => assertAgentEnv({ ...env, workdir: "/other" }), /CONTEXT_PLAN_MISMATCH/);
-  assert.throws(
-    () => assertAgentEnv({ ...env, agentConfig: { workdir: "/other" } }),
-    /CONTEXT_PLAN_MISMATCH/
-  );
-  assert.throws(
-    () => assertInvokeRequest({ ...request(path), context: envelope({ path: "/other" }) }),
-    /CONTEXT_PLAN_MISMATCH/
-  );
-  assert.throws(
-    () => assertInvokeRequest({ ...request(path), agentConfig: { workdir: "/other" } }),
-    /CONTEXT_PLAN_MISMATCH/
-  );
-  const context = {
-    schema: CONTEXT_SCHEMA,
-    items: [
-      { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
-      { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
-    ]
-  };
-  assert.doesNotThrow(() => assertFrozenContextPlan(context, plan));
-  const selected = { ...plan, workdir: path, workspace: { path } };
-  const withWorkspace = { ...context, items: [...context.items, ...envelope({ path }).items] };
-  assert.doesNotThrow(() => assertFrozenContextPlan(withWorkspace, selected));
-  assert.throws(
-    () => assertFrozenContextPlan(withWorkspace, { ...selected, workdir: "/other" }),
-    /CONTEXT_PLAN_MISMATCH/
-  );
-  assert.throws(() => assertFrozenContextPlan(context, selected), /CONTEXT_PLAN_MISMATCH/);
+  assert.doesNotThrow(() => assertInvokeRequest({ ...request(), agentEnv: env }));
+  assert.throws(() => assertAgentEnv({ ...env, workdir: "/other" }), /CONTEXT_SCHEMA_INVALID/);
+  assert.throws(() => assertInvokeRequest({ ...request(), workdir: "/other" }), /unknown field/);
 });
 
 test("workspace modes disappear from receipt and effective-view Schema", () => {
@@ -128,7 +95,6 @@ test("workspace modes disappear from receipt and effective-view Schema", () => {
     false
   );
 });
-
 test("specific workspace reasons win over errno and diagnostic text", () => {
   const context = {
     stage: "execution",
@@ -171,7 +137,6 @@ test("specific workspace reasons win over errno and diagnostic text", () => {
     );
   }
 });
-
 test("package declarations reject removed workspace and instruction surfaces", () => {
   execFileSync(
     process.execPath,

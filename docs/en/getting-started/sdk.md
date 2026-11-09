@@ -18,7 +18,12 @@ export async function execute(endpoint: string, input: InvokeInput) {
   const client = attachKernel({ endpoint });
   try {
     const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
-    for await (const event of client.invoke({ ...content, parts, protocol_mode: "canonical" }, sessionId, providerSession, agentEnv)) {
+    for await (const event of client.invoke(
+      { ...content, parts, protocol_mode: "canonical" },
+      sessionId,
+      providerSession,
+      agentEnv
+    )) {
       console.log(event);
     }
   } finally {
@@ -109,7 +114,7 @@ After integration, read [invocation, events, and control](../guides/agent-runs.m
 
 ## Prepare The Working Directory
 
-Before a local AgentRun, the caller must successfully prepare an absolute working directory and pass it through `agentEnv.workdir` or path-only `octo.execution/workspace`. SDK does not default to cwd, create a directory, or restore a missing one during continuation/recovery. Runtime Home is a separate operational directory. OpenClaw and other Agents that own their workspace can omit the local override. See [input validation and workdir error codes](../reference/invoke-input.md).
+Before a local AgentRun, the caller must successfully prepare an absolute working directory and pass it through `octo.execution/workspace.payload.path` or path-only `octo.execution/workspace`. SDK does not default to cwd, create a directory, or restore a missing one during continuation/recovery. Runtime Home is a separate operational directory. OpenClaw and other Agents that own their workspace can omit the local override. See [input validation and workdir error codes](../reference/invoke-input.md).
 
 ```ts
 import { mkdtemp } from "node:fs/promises";
@@ -123,7 +128,12 @@ const agentEnv = {
   workdir,
   items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }]
 };
-for await (const event of client.invoke([{ type: "text", text: "Summarize this directory." }], undefined, undefined, agentEnv)) {
+for await (const event of client.invoke(
+  [{ type: "text", text: "Summarize this directory." }],
+  undefined,
+  undefined,
+  agentEnv
+)) {
   console.log(event);
 }
 ```

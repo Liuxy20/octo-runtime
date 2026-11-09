@@ -1,4 +1,12 @@
 import {
+  invocationModel,
+  invocationEffort,
+  invocationProviderOptions,
+  invocationOption,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   actmodeEvidence,
   invocationEnvs,
   mapReasoningEffort
@@ -170,7 +178,7 @@ export async function* runCodexAppServerTurn({
   ) => void;
 }): AsyncGenerator<AdapterOutput> {
   const requestTimeoutMs = appServerRequestTimeout(request);
-  const interactive = request.approvalMode !== "full_access";
+  const interactive = invocationApprovalMode(request) !== "full_access";
   if (!channel) throw codexTransportError("CODEX_SERVICE_SCOPE_REQUIRED");
   const client = new CodexAppServerClient(channel, requestTimeoutMs, interactive, request, context);
   onInteractionResponder?.((response) => client.respondInteraction(response));
@@ -185,7 +193,10 @@ export async function* runCodexAppServerTurn({
     let environmentConfig: JsonRecord | undefined;
     if (Object.keys(invocationEnvs(request)).length || spec.mcpServers) {
       const result = recordValue(
-        await client.request("config/read", { includeLayers: false, cwd: request.workdir })
+        await client.request("config/read", {
+          includeLayers: false,
+          cwd: invocationWorkdir(request)
+        })
       );
       const config = recordValue(result?.config);
       if (!config)
@@ -259,7 +270,7 @@ export async function* runCodexAppServerTurn({
     // 名称属于调用方；只命名本轮新建 thread，恢复时保留原生标题与句柄。
     if (!resumed && request.sessionName)
       await client.request("thread/name/set", { threadId, name: request.sessionName });
-    const requestedMode = contextActmode(request.context);
+    const requestedMode = contextActmode(request.agentEnv);
     let collaborationMode: JsonRecord | undefined;
     let effectiveMode: "default" | "plan" | undefined;
     if (requestedMode !== undefined) {
@@ -273,14 +284,14 @@ export async function* runCodexAppServerTurn({
           "ACTMODE_UNSUPPORTED: Codex did not advertise a default collaboration mode"
         );
       const thread = recordValue(threadResult);
-      const model = request.agentConfig.model ?? stringValue(thread?.model);
+      const model = invocationModel(request) ?? stringValue(thread?.model);
       if (!model) throw new Error("ACTMODE_UNCONFIRMED: Codex omitted its effective model");
       collaborationMode = {
         mode: effectiveMode,
         settings: {
           model,
           reasoning_effort:
-            mapReasoningEffort("codex", request.agentConfig.effort) ??
+            mapReasoningEffort("codex", invocationEffort(request)) ??
             thread?.reasoningEffort ??
             null,
           developer_instructions: null
@@ -1227,7 +1238,7 @@ class CodexAppServerClient {
       return;
     this.#clearFinalizationTimer();
     const configured = recordValue(
-      this.invocation.agentConfig.providerOptions
+      invocationProviderOptions(this.invocation, "codex")
     )?.finalizationTimeoutMs;
     const timeoutMs =
       typeof configured === "number" && Number.isFinite(configured) && configured > 0
@@ -1918,8 +1929,8 @@ class CodexAppServerClient {
               ? {
                   schema: "octo.approval-request/v1",
                   policy: {
-                    mode: this.invocation.approvalMode,
-                    hash: contextHash(this.invocation.context)
+                    mode: invocationApprovalMode(this.invocation),
+                    hash: contextHash(this.invocation.agentEnv)
                   },
                   operation: {
                     kind:
@@ -2118,12 +2129,12 @@ function threadParams(
 ): JsonRecord {
   return {
     ...extra,
-    cwd: request.workdir,
-    ...(request.agentConfig.model ? { model: request.agentConfig.model } : {}),
+    cwd: invocationWorkdir(request),
+    ...(invocationModel(request) ? { model: invocationModel(request) } : {}),
     sandbox: codexSandbox(request),
     // Dynamic MCP tools are untrusted until Codex asks the client to approve them. `never`
     // rejects those calls before the existing reverse-request handler can answer them.
-    approvalPolicy: request.approvalMode === "assisted" ? "on-request" : "untrusted",
+    approvalPolicy: invocationApprovalMode(request) === "assisted" ? "on-request" : "untrusted",
     ...(environmentConfig ? { config: environmentConfig } : {})
   };
 }
@@ -2135,7 +2146,7 @@ function threadParams(
  * publishing summaryTextDelta, so a UI might see only an empty analysis lifecycle.
  */
 function turnParams(request: InvokeRequest, threadId: string, freshFallback = false): JsonRecord {
-  const effort = mapReasoningEffort("codex", request.agentConfig.effort);
+  const effort = mapReasoningEffort("codex", invocationEffort(request));
   return {
     threadId,
     input: [
@@ -2145,8 +2156,8 @@ function turnParams(request: InvokeRequest, threadId: string, freshFallback = fa
           : { type: "text", text: part.text, text_elements: [] }
       )
     ],
-    cwd: request.workdir,
-    ...(request.agentConfig.model ? { model: request.agentConfig.model } : {}),
+    cwd: invocationWorkdir(request),
+    ...(invocationModel(request) ? { model: invocationModel(request) } : {}),
     ...(effort ? { effort } : {}),
     summary: codexReasoningSummary(request)
   };
@@ -2158,7 +2169,7 @@ function turnParams(request: InvokeRequest, threadId: string, freshFallback = fa
  * disable it via providerOptions.reasoningSummary.
  */
 function codexReasoningSummary(request: InvokeRequest): string {
-  const configured = recordValue(request.agentConfig.providerOptions)?.reasoningSummary;
+  const configured = recordValue(invocationProviderOptions(request, "codex"))?.reasoningSummary;
   const value = typeof configured === "string" ? configured : "auto";
   if (!["auto", "concise", "detailed", "none"].includes(value)) {
     throw new Error(`unsupported Codex reasoning summary: ${value}`);
@@ -2168,19 +2179,21 @@ function codexReasoningSummary(request: InvokeRequest): string {
 
 function codexSandbox(request: InvokeRequest): string {
   const value =
-    request.approvalMode === "full_access"
+    invocationApprovalMode(request) === "full_access"
       ? "danger-full-access"
-      : (request.agentConfig.sandbox ?? "workspace-write");
+      : (invocationOption(request, "sandbox", "codex") ?? "workspace-write");
   if (!["read-only", "workspace-write", "danger-full-access"].includes(value)) {
     throw new Error(`unsupported Codex sandbox mode: ${value}`);
   }
-  if (request.approvalMode !== "full_access" && value === "danger-full-access")
+  if (invocationApprovalMode(request) !== "full_access" && value === "danger-full-access")
     throw new Error("APPROVAL_SANDBOX_CONFLICT");
   return value;
 }
 
 function appServerRequestTimeout(request: InvokeRequest): number {
-  const configured = recordValue(request.agentConfig.providerOptions)?.appServerRequestTimeoutMs;
+  const configured = recordValue(
+    invocationProviderOptions(request, "codex")
+  )?.appServerRequestTimeoutMs;
   return typeof configured === "number" && Number.isFinite(configured) && configured > 0
     ? configured
     : APP_SERVER_REQUEST_TIMEOUT_MS;
