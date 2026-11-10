@@ -51,6 +51,7 @@ import {
   type MessageProvenance
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { InvocationExperience } from "./experience.js";
+import { ModelOutputSilence } from "./model-output-silence.js";
 import { noopRuntimeLog, type RuntimeLog } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { AdapterWatchdogTimeoutError, InvocationWatchdog } from "./watchdog.js";
 export type {
@@ -87,6 +88,9 @@ interface MessageState {
   stepId?: string;
   exposure?: MessageExposure;
   provenance?: MessageProvenance;
+  /** 静默观察复用同一消息身份；只记录已见长度，不复制正文。 */
+  textLength: number;
+  role: string;
 }
 
 /** closed 表示不再接纳；只有 cleanup=complete 才确认当前登记的 Adapter 清理均已完成。 */
@@ -741,6 +745,8 @@ export class AgentExecutor {
       session_id: request.agentSessionId,
       adapter_type: adapterType
     };
+    // 静默事实只属于 canonical；native 不实例化观察器、不新增控制帧。
+    const silence = protocolMode === "canonical" ? new ModelOutputSilence() : undefined;
     const watchdog = new InvocationWatchdog(undefined, controller, (diagnostic) =>
       this.#log("warn", "invoke.watchdog", {
         ...identity,
@@ -753,6 +759,7 @@ export class AgentExecutor {
     let cleanupWait: Promise<void> | undefined;
     let cleanupDeadline: number | undefined;
     let completedBeforeCleanup = false;
+    let preparedNext: ReturnType<typeof prepareMessage> | undefined;
     const beginCleanup = (): number =>
       (cleanupDeadline ??= performance.now() + watchdog.limits.cancelGraceMs);
     const remainingCleanup = (): number => Math.max(0, beginCleanup() - performance.now());
@@ -766,12 +773,47 @@ export class AgentExecutor {
       if (nextFailed) throw new Error("EXECUTOR_CLEANUP_UNVERIFIED");
     };
     const readNext = async (source: AsyncIterator<AdapterOutput>) => {
+      let result: IteratorResult<AdapterOutput>;
       try {
-        const result = await source.next();
-        if (result.done) iteratorDone = true;
+        result = await source.next();
+      } catch (error) {
+        silence?.dispose();
+        if (!terminal && !nativeTerminal) watchdog.terminal();
+        // 只有源 next 本身拒绝才使其 finally 清理存疑；校验错误不冒充清理失败。
+        nextFailed = !isAdapterPreparationFailure(error, context);
+        throw error;
+      }
+      try {
+        if (result.done) {
+          iteratorDone = true;
+          silence?.dispose();
+          if (!terminal && !nativeTerminal) watchdog.terminal();
+        } else if (silence) {
+          // 在源结果就绪时刷新，避免消费者停在 notice 的 yield 时继续累计旧区间。
+          assertCanonicalEvent(result.value);
+          const event = result.value;
+          // notice 让 next 保持在途；背压期间到达的进展/等待/终态也必须立即生效，
+          // 不能由消费者恢复读取的时刻决定超时或让晚到取消覆盖已到达的终态。
+          watchdog.canonical(event);
+          if (isTerminal(event) && !controller.signal.aborted)
+            this.#acceptedTerminals.add(request.invocationId);
+          // 无身份的空占位/全局关闭补丁仍按原分支处理，不能凭空创建消息。
+          if (!(
+            !event.payload.messageId &&
+            !event.payload.text &&
+            (event.type === "message.create" ||
+              (event.type === "message.update" &&
+                ["completed", "failed", "cancelled", "canceled", "stopped"].includes(
+                  String(event.payload.status)
+                )))
+          ))
+            preparedNext = prepareMessage(event);
+          silence.canonical(preparedNext?.event ?? event, preparedNext?.hasOutput ?? false);
+        }
         return result;
       } catch (error) {
-        nextFailed = !isAdapterPreparationFailure(error, context);
+        silence?.dispose();
+        if (!terminal && !nativeTerminal) watchdog.terminal();
         throw error;
       }
     };
@@ -783,6 +825,7 @@ export class AgentExecutor {
       (cleanupWait ??= boundedCleanup(closeIterator(), remainingCleanup()));
     // The timer can fire while a consumer is paused at yield.
     const onAbort = () => {
+      silence?.dispose();
       void waitCleanup().catch(() => undefined);
     };
     controller.signal.addEventListener("abort", onAbort, { once: true });
@@ -803,7 +846,10 @@ export class AgentExecutor {
           );
         conversions++;
       },
-      reportActivity: (activity) => watchdog.activity(activity),
+      reportActivity: (activity) => {
+        watchdog.activity(activity);
+        silence?.activity(activity);
+      },
       reportExecutionResult: (result) => {
         if (
           result.status === "completed" &&
@@ -817,12 +863,12 @@ export class AgentExecutor {
     // A provider may emit only deltas; here the host fills in the message lifecycle and stabilizes the messageId.
     const prepareMessage = (
       event: CanonicalEvent
-    ): { prefix: CanonicalEvent[]; event: CanonicalEvent } => {
+    ): { prefix: CanonicalEvent[]; event: CanonicalEvent; hasOutput: boolean } => {
       const isMessage =
         event.type === "message.create" ||
         event.type === "message.delta" ||
         event.type === "message.update";
-      if (!isMessage) return { prefix: [], event };
+      if (!isMessage) return { prefix: [], event, hasOutput: false };
       const previous = event.payload.messageId ? messages.get(event.payload.messageId) : undefined;
       const channel = event.payload.channel ?? previous?.channel ?? "final";
       const segmentKey = `${channel}:${event.payload.stepId ?? ""}`;
@@ -872,14 +918,31 @@ export class AgentExecutor {
         ["completed", "failed", "cancelled", "canceled", "stopped"].includes(
           String(event.payload.status)
         );
+      const role = event.payload.role ?? state?.role ?? "assistant";
+      const text = event.payload.text ?? "";
+      // 状态补丁、空快照及回退快照不能降低长度，否则旧快照会冒充新增输出。
+      const textLength =
+        event.type === "message.delta"
+          ? (state?.textLength ?? 0) + text.length
+          : Math.max(state?.textLength ?? 0, text.length);
+      const hasOutput =
+        role === "assistant" &&
+        (channel !== "analysis" ||
+          ["public_reasoning", "public_summary", "public_plan"].includes(
+            prepared.payload.exposure ?? ""
+          )) &&
+        text.trim().length > 0 &&
+        (event.type === "message.delta" || textLength > (state?.textLength ?? 0));
       messages.set(messageId, {
         messageId,
         channel,
+        role,
+        textLength,
         open: !closed,
         ...(stepId ? { stepId } : {}),
         ...analysisMetadata
       });
-      return { prefix, event: prepared };
+      return { prefix, event: prepared, hasOutput };
     };
 
     const closeMessages = (
@@ -913,9 +976,11 @@ export class AgentExecutor {
       controller.signal.throwIfAborted();
       const invocation = adapter.invoke({ ...request, signal: controller.signal }, context);
       iterator = invocation[Symbol.asyncIterator]();
+      let pendingNext: Promise<IteratorResult<AdapterOutput>> | undefined;
       while (true) {
         if (controller.signal.aborted) throw controller.signal.reason;
-        const pendingNext = readNext(iterator);
+        // notice 不消费 Provider 结果；复用同一个 next，绝不并发拉取或丢弃结果。
+        pendingNext ??= readNext(iterator);
         const next =
           terminal || nativeTerminal
             ? await withCleanupDeadline(
@@ -924,9 +989,18 @@ export class AgentExecutor {
                 watchdog.limits.cancelGraceMs,
                 controller
               )
-            : await waitForNext(pendingNext, controller.signal);
+            : await waitForProviderOutput(pendingNext, controller.signal, silence);
         if (controller.signal.aborted) throw controller.signal.reason;
+        // 普通源结果和通知可以同时就绪；先交付已生成的事实，不依赖 race 的赢家。
+        // yield 期间源 next 仍保持唯一在途；恢复后再次核对取消，不消费已取消的结果。
+        const notice = silence?.take();
+        if (notice) yield notice;
+        if (controller.signal.aborted) throw controller.signal.reason;
+        if (next === "notice") continue;
+        pendingNext = undefined;
         if (next.done) break;
+        const prepared = preparedNext;
+        preparedNext = undefined;
         const adapterEvent = next.value;
         if (protocolMode === "native") {
           if (!("kind" in adapterEvent)) throw protocolError("EXECUTION_PROTOCOL_MISMATCH");
@@ -962,7 +1036,6 @@ export class AgentExecutor {
                 })
               }
             : adapterEvent;
-        watchdog.canonical(event);
         if (terminal) throw new Error(`${adapterType} emitted after terminal event`);
         if (isTerminal(event)) {
           terminal = event;
@@ -996,9 +1069,9 @@ export class AgentExecutor {
             for (const closed of closeMessages(event.payload.status, event.payload.stepId))
               yield closed;
           }
-          const prepared = prepareMessage(event);
-          for (const prefix of prepared.prefix) yield prefix;
-          yield prepared.event;
+          const output = prepared ?? prepareMessage(event);
+          for (const prefix of output.prefix) yield prefix;
+          yield output.event;
         }
       }
       await withCleanupDeadline(
@@ -1120,6 +1193,7 @@ export class AgentExecutor {
         };
       }
     } finally {
+      silence?.dispose();
       watchdog.finish(outcome);
       this.#log("info", "invoke.conversion", {
         run_id: request.runId,
@@ -1353,6 +1427,24 @@ function capacityFailureDetails(error: unknown): Record<string, unknown> {
       .filter((key) => Object.hasOwn(input, key))
       .map((key) => [key, input[key]])
   );
+}
+
+/** 等待真实源输出或一个静默事实；每次退出释放唯一 notice 监听与 timer。 */
+async function waitForProviderOutput<T>(
+  pending: Promise<T>,
+  signal: AbortSignal,
+  silence?: ModelOutputSilence
+): Promise<T | "notice"> {
+  if (!silence) return waitForNext(pending, signal);
+  let detach: (() => void) | undefined;
+  try {
+    const notice = new Promise<"notice">((resolve) => {
+      detach = silence.listen(() => resolve("notice"));
+    });
+    return await waitForNext(Promise.race([pending, notice]), signal);
+  } finally {
+    detach?.();
+  }
 }
 
 async function waitForNext<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {

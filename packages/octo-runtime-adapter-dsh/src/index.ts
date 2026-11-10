@@ -20,7 +20,6 @@ import {
   type AdapterInvocationContext
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
-  contextActmode,
   DEFAULT_STREAM_LIMIT_POLICY,
   DEFAULT_RUN_TIMEOUT_MS
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -67,7 +66,7 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
   const log = options.log ?? noopRuntimeLog;
   return defineAdapter(
     {
-      metadata: { type: "dsh", agentSources: ["provisioned"] },
+      metadata: { type: "dsh" },
       async probe(probeOptions?: { providerOptions?: Record<string, string> }) {
         try {
           const launch = await resolveDshLaunch(probeOptions?.providerOptions ?? {}, {
@@ -95,9 +94,6 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
         let sessionId: string;
         let requestedId: string | undefined;
         try {
-          const actmode = contextActmode(request.agentEnv);
-          if (actmode !== undefined && actmode !== "default")
-            throw new DshError("DSH_ACTMODE_UNSUPPORTED");
           if (
             invocationOption(request, "sandbox", "dsh") !== undefined &&
             invocationOption(request, "sandbox", "dsh") !== "danger-full-access"

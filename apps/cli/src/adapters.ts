@@ -230,15 +230,7 @@ function callFactory(value: unknown, entry: AdapterModuleEntry, env: NodeJS.Proc
 
 function isHostedAdapter(value: unknown): value is HostedAdapter {
   if (!isRecord(value) || !isRecord(value.metadata)) return false;
-  return (
-    typeof value.metadata.type === "string" &&
-    Array.isArray(value.metadata.agentSources) &&
-    value.metadata.agentSources.length > 0 &&
-    value.metadata.agentSources.every(
-      (source) => source === "preset" || source === "provisioned"
-    ) &&
-    typeof value.invoke === "function"
-  );
+  return typeof value.metadata.type === "string" && typeof value.invoke === "function";
 }
 function isScopeCleanup(value: unknown): value is AdapterScopeCleanup {
   if (!isRecord(value) || typeof value.complete !== "boolean") return false;

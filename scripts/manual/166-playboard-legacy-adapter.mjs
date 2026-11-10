@@ -2,7 +2,7 @@
 export const adapter = {
   metadata: {
     type: "ort166-legacy",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "ort166.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async respondInteraction() {},

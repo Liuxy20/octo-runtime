@@ -1,4 +1,5 @@
 import {
+  agentEnvItem,
   invocationModel,
   invocationApprovalMode,
   invocationWorkdir
@@ -11,7 +12,6 @@ import {
   type AcpUpdate
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import {
-  actmodeEvidence,
   AcpApprovalBridge,
   AcpTurnNormalizer,
   acpToolTerminalStatus,
@@ -30,7 +30,6 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
-  contextActmode,
   providerInputParts,
   type InteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -76,14 +75,13 @@ export interface AcpModelSelectionRequest {
 }
 
 /** 只使用 Provider 发布的模式 ID；不从产品名称、审批档位或正文猜测。 */
-export function acpActmodeSelectionRequest(
+export function acpModeSelectionRequest(
   session: JsonRecord,
   sessionId: string,
-  requested: "default" | "plan"
+  requested: string
 ): {
   method: "session/set_config_option" | "session/set_mode";
   params: JsonRecord;
-  effective: "default" | "plan";
   nativeMode: string;
   unchanged: boolean;
 } {
@@ -101,20 +99,17 @@ export function acpActmodeSelectionRequest(
         })
         .map((value) => stringField(value, "value"))
     : arrayField(modes, "availableModes").map((value) => stringField(recordValue(value), "id"));
-  const ordinary = available.includes("default")
-    ? "default"
-    : available.includes("build")
-      ? "build"
-      : undefined;
-  const nativeMode = requested === "plan" && available.includes("plan") ? "plan" : ordinary;
-  if (!nativeMode) throw new Error("ACTMODE_UNSUPPORTED: ACP did not advertise an applicable mode");
+  if (!requested.trim() || !available.includes(requested))
+    throw new Error("ACP_MODE_UNSUPPORTED: Provider did not advertise the requested mode ID");
+  if (option && !stringField(option, "id"))
+    throw new Error("ACP_MODE_INVALID: mode config option has no ID");
+  const nativeMode = requested;
   return {
     method: option ? "session/set_config_option" : "session/set_mode",
     params: option
       ? { sessionId, configId: stringField(option, "id"), value: nativeMode }
       : { sessionId, modeId: nativeMode },
     nativeMode,
-    effective: nativeMode === "plan" ? "plan" : "default",
     unchanged:
       (option ? stringField(option, "currentValue") : stringField(modes, "currentModeId")) ===
       nativeMode
@@ -262,13 +257,12 @@ export function createAcpAdapter(
       ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
       : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
+  // 私有条目按最终注册身份读取；宿主可复用传输定义并覆盖 metadata.type。
+  // 固定构造时的 metadata，避免调用方后来修改定义对象改变本包读取的命名空间。
+  const metadata = { ...(definition.metadata ?? { mcp: true, type: definition.type }) };
   return defineAdapter(
     {
-      metadata: definition.metadata ?? {
-        mcp: true,
-        type: definition.type,
-        agentSources: ["provisioned"]
-      },
+      metadata,
       probe:
         probe ??
         (acpClientFactory === spawnAcpClient
@@ -435,19 +429,10 @@ export function createAcpAdapter(
             }
           }
         };
-      const requestedMode = contextActmode(request.agentEnv);
+      const requestedMode = acpModeId(request, metadata.type);
       if (requestedMode !== undefined) {
-        const selection = acpActmodeSelectionRequest(sessionResult, sessionId, requestedMode);
+        const selection = acpModeSelectionRequest(sessionResult, sessionId, requestedMode);
         if (!selection.unchanged) await client.request(selection.method, selection.params);
-        yield actmodeEvidence({
-          requested: requestedMode,
-          effective: selection.effective,
-          nativeMode: selection.nativeMode,
-          status: selection.effective === requestedMode ? "applied" : "fallback",
-          ...(selection.effective !== requestedMode
-            ? { reason: "provider_unsupported" as const }
-            : {})
-        });
       }
       const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {
@@ -704,4 +689,13 @@ function nonEmptyString(value: unknown): string | undefined {
 
 function stringField(value: JsonRecord, key: string): string | undefined {
   return typeof value[key] === "string" ? value[key] : undefined;
+}
+
+/** ACP 包私有约定；派生 Adapter 以自己的类型命名空间选取原生 modeId。 */
+export function acpModeId(request: InvokeRequest, type: string): string | undefined {
+  const value = agentEnvItem(request.agentEnv, `adapter.${type}`, "options")?.modeId;
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim())
+    throw new TypeError("ADAPTER_OPTION_INVALID: modeId");
+  return value;
 }

@@ -26,7 +26,7 @@ test("host rejects malformed public input before dispatch and Adapter rejects mi
   const host = new AgentExecutor();
   host.register(
     defineAdapter({
-      metadata: { type: "contract", agentSources: ["provisioned"] },
+      metadata: { type: "contract" },
       async *invoke() {
         invoked = true;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
@@ -83,7 +83,7 @@ test("SDK Adapter requires an actual responder for ask and assisted", async () =
   const host = new AgentExecutor();
   host.register(
     defineAdapter({
-      metadata: { type: "no-responder", agentSources: ["provisioned"] },
+      metadata: { type: "no-responder" },
       async *invoke() {
         invoked = true;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
@@ -114,8 +114,7 @@ test("host holds terminal until adapter stream cleanup succeeds", async () => {
   host.register({
     metadata: {
       protocolSupport: { protocol: "bad" + ".canonical", modes: ["canonical"], nativeMethods: [] },
-      type: "bad",
-      agentSources: ["provisioned"]
+      type: "bad"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -148,8 +147,7 @@ test("host reports failure when adapter exits without terminal", async () => {
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "short",
-      agentSources: ["provisioned"]
+      type: "short"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -175,8 +173,7 @@ test("host classifies and redacts adapter-provided provider failures", async () 
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "provider-fixture",
-      agentSources: ["provisioned"]
+      type: "provider-fixture"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -215,8 +212,7 @@ test("host normalizes unclassified analysis to an explicit fail-closed exposure"
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "legacy",
-      agentSources: ["provisioned"]
+      type: "legacy"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -252,8 +248,7 @@ test("host keeps step-scoped analysis messages separate and closes each round", 
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "steps",
-      agentSources: ["provisioned"]
+      type: "steps"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -319,8 +314,7 @@ test("host cancellation aborts provider and emits stopped once", async () => {
   host.register({
     metadata: {
       protocolSupport: { protocol: "slow" + ".canonical", modes: ["canonical"], nativeMethods: [] },
-      type: "slow",
-      agentSources: ["provisioned"]
+      type: "slow"
     },
     async *invoke(req, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
@@ -355,8 +349,7 @@ test("host watchdog fails a provider that never emits its first protocol frame",
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "silent-start",
-      agentSources: ["provisioned"]
+      type: "silent-start"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -378,8 +371,7 @@ test("host watchdog fails a provider that never emits its first protocol frame",
             model_idle_timeout_ms: 10000,
             tool_timeout_ms: 10000,
             run_timeout_ms: 10000,
-            cancel_grace_ms: 100,
-            enforcement: "enforce"
+            cancel_grace_ms: 100
           }
         }
       ])
@@ -408,8 +400,7 @@ test("host watchdog uses the tool budget while a canonical tool call is open", a
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "silent-tool",
-      agentSources: ["provisioned"]
+      type: "silent-tool"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -437,8 +428,7 @@ test("host watchdog uses the tool budget while a canonical tool call is open", a
             model_idle_timeout_ms: 10000,
             tool_timeout_ms: 100,
             run_timeout_ms: 10000,
-            cancel_grace_ms: 100,
-            enforcement: "enforce"
+            cancel_grace_ms: 100
           }
         }
       ])
@@ -467,8 +457,7 @@ test("host shutdown aborts every active provider invocation before returning", a
   host.register({
     metadata: {
       protocolSupport: { protocol: "slow" + ".canonical", modes: ["canonical"], nativeMethods: [] },
-      type: "slow",
-      agentSources: ["provisioned"]
+      type: "slow"
     },
     async *invoke(req, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
@@ -523,8 +512,7 @@ test(
           modes: ["canonical"],
           nativeMethods: []
         },
-        type: "interactive",
-        agentSources: ["provisioned"]
+        type: "interactive"
       },
       async *invoke(invocation, _fixtureContext) {
         _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(invocation));

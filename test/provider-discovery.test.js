@@ -61,8 +61,7 @@ test("provider discovery reports real executable path/version, not adapter versi
           modes: ["canonical"],
           nativeMethods: []
         },
-        type: "codex",
-        agentSources: ["provisioned"]
+        type: "codex"
       },
       probe: () => probeCommand(command),
       async *invoke() {}
@@ -70,7 +69,7 @@ test("provider discovery reports real executable path/version, not adapter versi
     assert.deepEqual(await host.describe(), [
       {
         type: "codex",
-        agentSources: ["provisioned"],
+
         protocolSupport: { protocol: "codex.canonical", modes: ["canonical"], nativeMethods: [] },
         available: true,
         providerPath: command,
@@ -107,8 +106,7 @@ test("missing and failed probes report unavailable without invented provider met
     host.register({
       metadata: {
         protocolSupport: { protocol: type + ".canonical", modes: ["canonical"], nativeMethods: [] },
-        type,
-        agentSources: ["provisioned"]
+        type
       },
       ...(probe ? { probe } : {}),
       async *invoke() {}

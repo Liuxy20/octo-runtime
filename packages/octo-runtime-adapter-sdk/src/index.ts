@@ -21,7 +21,6 @@ import {
   assertAdapterWorkdir,
   bindInvocationConnection,
   invocationApprovalMode,
-  invocationAgentSource,
   invocationRuntimeLimits
 } from "./agent-env.js";
 export * from "./agent-env.js";
@@ -41,7 +40,6 @@ export {
   processEnvironmentValue
 } from "./environment.js";
 export { invocationMcpServers, expandMcpValue, assertMcpOptions } from "./mcp.js";
-export { actmodeEvidence } from "./actmode.js";
 
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
@@ -106,7 +104,6 @@ export interface AdapterMetadata {
   /** 仅编写输入可省略；这是执行时消费的协议描述，不能作为业务能力标签。 */
   protocolSupport?: AdapterProtocolSupport;
   type: string;
-  agentSources: ("preset" | "provisioned")[];
   processModel?: string;
   transport?: string;
 }
@@ -251,13 +248,7 @@ export function defineAdapter<TAdapter extends Adapter>(
     modes: ["canonical"],
     nativeMethods: []
   };
-  const defaults = structuredClone(
-    adapter.defaultAgentEnv ??
-      defaultAgentEnv(
-        metadata.type,
-        metadata.agentSources.includes("provisioned") ? "provisioned" : "preset"
-      )
-  );
+  const defaults = structuredClone(adapter.defaultAgentEnv ?? defaultAgentEnv(metadata.type));
   return Object.freeze({
     ...adapter,
     get defaultAgentEnv(): AgentEnv {
@@ -279,13 +270,6 @@ export function defineAdapter<TAdapter extends Adapter>(
       await runAdapterPreparation(context, async () => {
         assertAdapterAgentEnv(request);
         context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
-        if (
-          request.agentEnv.items.some(
-            (item) => item.namespace === "octo.execution" && item.name === "agent"
-          ) &&
-          !metadata.agentSources.includes(invocationAgentSource(request))
-        )
-          throw new Error(`AGENT_SOURCE_UNSUPPORTED: ${metadata.type}`);
         if (
           invocationApprovalMode(request) !== "full_access" &&
           (context?.protocolMode === "native"

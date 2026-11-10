@@ -238,7 +238,7 @@ test("CLI assembly failure attempts every owned disposer and retains the origina
   await writeFile(
     module,
     `export const calls=[];
-const adapter={metadata:{type:"fixture",agentSources:["provisioned"],protocolSupport:{protocol:"fixture",modes:["canonical"],nativeMethods:[]}},async *invoke(){}};
+const adapter={metadata:{type:"fixture",protocolSupport:{protocol:"fixture",modes:["canonical"],nativeMethods:[]}},async *invoke(){}};
 export function first(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"first"}},async close(){calls.push("first");throw Error("CLEANUP_FAILED");}};}
 export function second(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"second"}},async close(){calls.push("second");return {complete:true,unresolvedServiceIds:[],failedCleanupServiceIds:[]};}};}
 export function broken(){throw Error("CONSTRUCTION_FAILED");}
@@ -284,7 +284,7 @@ test("CLI rollback releases dependent sessions before their transport", async (t
   await writeFile(
     module,
     `export const calls=[];let alive=true;
-const adapter={metadata:{type:"fixture",agentSources:["provisioned"]},async *invoke(){}};
+const adapter={metadata:{type:"fixture",},async *invoke(){}};
 const complete={complete:true,unresolvedServiceIds:[],failedCleanupServiceIds:[]};
 export function transport(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"transport"}},async close(){calls.push("transport");alive=false;return complete;}};}
 export function session(){return {adapter:{...adapter,metadata:{...adapter.metadata,type:"session"}},async close(){calls.push("session");if(!alive)throw Error("TRANSPORT_CLOSED_BEFORE_UNSUBSCRIBE");return complete;}};}
@@ -337,7 +337,7 @@ test(
     const module = join(home, "malformed-cleanup.mjs");
     await writeFile(
       module,
-      `export function factory(){return {adapter:{metadata:{type:"fixture",agentSources:["provisioned"]},async *invoke(){}},async close(){return {complete:true};}}}`
+      `export function factory(){return {adapter:{metadata:{type:"fixture",},async *invoke(){}},async close(){return {complete:true};}}}`
     );
     const assembly = await loadCliAdapters([
       { module, export: "factory", factory: true, options: {}, sourceManifest: module }
@@ -360,7 +360,7 @@ test("CLI cleanup is bounded, idempotent and still attempts independent resource
   const module = join(home, "slow.mjs");
   await writeFile(
     module,
-    `export let calls=0;export function factory(){return {adapter:{metadata:{type:"fixture",agentSources:["provisioned"]},async *invoke(){}},close(){calls++;return new Promise(()=>{});}}}`
+    `export let calls=0;export function factory(){return {adapter:{metadata:{type:"fixture",},async *invoke(){}},close(){calls++;return new Promise(()=>{});}}}`
   );
   const assembly = await loadCliAdapters([
     { module, export: "factory", factory: true, options: {}, sourceManifest: module }
@@ -433,7 +433,7 @@ test("arbitrary black-box constructors and closure adapters preserve business ow
   };
   const metadata = {
     type: "blackbox",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "business", modes: ["canonical"], nativeMethods: [] }
   };
   class BusinessAdapter {

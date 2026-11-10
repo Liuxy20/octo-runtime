@@ -77,8 +77,7 @@ for (const approvalMode of ["ask", "assisted", "full_access"])
     host.register({
       metadata: {
         protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] },
-        type: "fixture",
-        agentSources: ["provisioned"]
+        type: "fixture"
       },
       async respondInteraction() {},
       async *invoke(input) {
@@ -113,8 +112,7 @@ for (const protocolMode of ["canonical", "native"])
             modes: ["native", "canonical"],
             nativeMethods: []
           },
-          type: "fixture",
-          agentSources: ["provisioned"]
+          type: "fixture"
         },
         ...(protocolMode === "native"
           ? { async respondInteraction() {} }

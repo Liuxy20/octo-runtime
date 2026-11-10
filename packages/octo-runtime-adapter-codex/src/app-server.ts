@@ -1,3 +1,4 @@
+import { codexCollaborationMode } from "./agent-env.js";
 import {
   invocationModel,
   invocationEffort,
@@ -6,18 +7,13 @@ import {
   invocationApprovalMode,
   invocationWorkdir
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import {
-  actmodeEvidence,
-  invocationEnvs,
-  mapReasoningEffort
-} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { invocationEnvs, mapReasoningEffort } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
   classifyFailure,
   isCodexLocalFailureReason,
   isStreamCapacityReason,
   contextHash,
-  contextActmode,
   assertJsonByteLimit,
   providerInputParts,
   PROVIDER_DIAGNOSTIC_MAX_BYTES,
@@ -274,39 +270,39 @@ export async function* runCodexAppServerTurn({
     // 名称属于调用方；只命名本轮新建 thread，恢复时保留原生标题与句柄。
     if (!resumed && request.sessionName)
       await client.request("thread/name/set", { threadId, name: request.sessionName });
-    const requestedMode = contextActmode(request.agentEnv);
-    let collaborationMode: JsonRecord | undefined;
-    let effectiveMode: "default" | "plan" | undefined;
+    const requestedMode = codexCollaborationMode(request);
     if (requestedMode !== undefined) {
       const modes = recordValue(await client.request("collaborationMode/list", {}));
       const available = Array.isArray(modes?.data) ? modes.data.map(recordValue) : [];
-      effectiveMode = available.some((mode) => mode?.mode === requestedMode)
-        ? requestedMode
-        : "default";
-      if (!available.some((mode) => mode?.mode === effectiveMode))
-        throw new Error(
-          "ACTMODE_UNSUPPORTED: Codex did not advertise a default collaboration mode"
-        );
+      if (!available.some((mode) => mode?.mode === requestedMode))
+        throw new Error("CODEX_COLLABORATION_MODE_UNSUPPORTED");
+    }
+    // 恢复线程转为 fresh fallback 时必须重新读取新线程的模型，不能沿用旧线程默认值。
+    const collaborationSettings = (): JsonRecord | undefined => {
+      if (requestedMode === undefined) return undefined;
       const thread = recordValue(threadResult);
       const model = invocationModel(request) ?? stringValue(thread?.model);
-      if (!model) throw new Error("ACTMODE_UNCONFIRMED: Codex omitted its effective model");
-      collaborationMode = {
-        mode: effectiveMode,
-        settings: {
-          model,
-          reasoning_effort:
-            mapReasoningEffort("codex", invocationEffort(request)) ??
-            thread?.reasoningEffort ??
-            null,
-          developer_instructions: null
+      if (!model)
+        throw new Error("CODEX_COLLABORATION_MODE_UNCONFIRMED: Codex omitted its effective model");
+      return {
+        collaborationMode: {
+          mode: requestedMode,
+          settings: {
+            model,
+            reasoning_effort:
+              mapReasoningEffort("codex", invocationEffort(request)) ??
+              thread?.reasoningEffort ??
+              null,
+            developer_instructions: null
+          }
         }
       };
-    }
+    };
     let turnResult: unknown;
     try {
       turnResult = await client.request("turn/start", {
         ...turnParams(request, threadId, resumeFallback !== undefined),
-        ...(collaborationMode ? { collaborationMode } : {})
+        ...collaborationSettings()
       });
     } catch (error) {
       // Some corrupt sessions pass thread/resume but only reveal the missing rollout at turn/start.
@@ -327,24 +323,13 @@ export async function* runCodexAppServerTurn({
         await client.request("thread/name/set", { threadId, name: request.sessionName });
       turnResult = await client.request("turn/start", {
         ...turnParams(request, threadId, true),
-        ...(collaborationMode ? { collaborationMode } : {})
+        ...collaborationSettings()
       });
     }
 
     const turnId = extractTurnId(turnResult);
     if (turnId) client.setActiveTurn(turnId);
     context?.reportActivity?.({ kind: "turn_started", method: "turn_start" });
-    if (requestedMode !== undefined && effectiveMode !== undefined)
-      yield actmodeEvidence(
-        {
-          requested: requestedMode,
-          effective: effectiveMode,
-          status: effectiveMode === requestedMode ? "applied" : "fallback",
-          nativeMode: effectiveMode,
-          ...(effectiveMode !== requestedMode ? { reason: "provider_unsupported" as const } : {})
-        },
-        context?.protocolMode
-      );
 
     // turn/start 成功后才发布权威会话更新，供调用方保存完整 binding；Core 不持久化业务会话绑定。
     const session: CanonicalEvent = {

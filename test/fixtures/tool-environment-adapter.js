@@ -4,8 +4,7 @@ import { invocationEnvironment } from "../../packages/octo-runtime-adapter-sdk/d
 export const adapter = {
   metadata: {
     type: "tool-env",
-    protocolSupport: { protocol: "tool-env.canonical", modes: ["canonical"], nativeMethods: [] },
-    agentSources: ["provisioned"]
+    protocolSupport: { protocol: "tool-env.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async *invoke(request) {
     const env = invocationEnvironment(request);

@@ -263,7 +263,6 @@ test("canonical bookkeeping and empty placeholders cannot escape startup deadlin
     event("session.update"),
     event("usage.update"),
     event("run.notice"),
-    event("execution.update"),
     event("message.create"),
     event("message.delta", { text: "" }),
     event("tool_call.delta", { id: "missing", outputDelta: "" }),
@@ -274,7 +273,7 @@ test("canonical bookkeeping and empty placeholders cannot escape startup deadlin
     f.watchdog.canonical(record);
   }
   assert.equal(f.watchdog.snapshot().phase, "starting");
-  f.tick(20);
+  f.tick(100 - records.length * 10);
   assert.equal(f.controller.signal.reason.evidence.elapsedMs, 100);
   assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
 });
@@ -387,8 +386,7 @@ test(
           modes: ["canonical"],
           nativeMethods: []
         },
-        type: "terminal-race",
-        agentSources: ["provisioned"]
+        type: "terminal-race"
       },
       async *invoke(_fixtureRequest, _fixtureContext) {
         _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -564,26 +562,22 @@ test("last tool closing starts a fresh model budget and terminal cancels timers"
   assert.equal(f.timers.size, 0);
   assert.equal(f.controller.signal.aborted, false);
 });
-test("native-aware canonical usage does not count as progress; legacy observe remains explicit opt-out", () => {
+test("native-aware canonical usage does not count as progress", () => {
   const f = fixture({ modelIdleTimeoutMs: 100 });
   f.watchdog.activity(started);
   f.tick(90);
   f.watchdog.canonical({ protocolVersion: 2, type: "usage.update", payload: {} });
   f.tick(10);
   assert.equal(f.controller.signal.aborted, true);
-  const g = fixture({ enforcement: "observe" });
-  g.tick(2000000);
-  assert.equal(g.controller.signal.aborted, false);
-  g.watchdog.dispose();
 });
-test("invalid budgets and ambiguous legacy/v2 policies fail closed", () => {
+test("invalid budgets and removed fields fail closed", () => {
   for (const limits of [
     { modelIdleTimeoutMs: NaN },
     { runTimeoutMs: 0 },
     { modelIdleTimeoutMs: 1.5 },
     { unknown: 1 },
     { modelIdlePolicy: "invalid" },
-    { enforcement: "observe", modelIdlePolicy: "observe" }
+    { enforcement: "observe" }
   ]) {
     assert.throws(() => assertRuntimeLimits(limits));
   }
@@ -664,8 +658,7 @@ test("host preserves a single pending next during activity and ignores failing d
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "native",
-      agentSources: ["provisioned"]
+      type: "native"
     },
     invoke(req, ctx) {
       ctx?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
@@ -720,8 +713,7 @@ test("host uses canonical progress until this invocation actually reports native
   host.register({
     metadata: {
       protocolSupport: { protocol: "fallback.canonical", modes: ["canonical"], nativeMethods: [] },
-      type: "fallback",
-      agentSources: ["provisioned"]
+      type: "fallback"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
@@ -761,8 +753,7 @@ test("host hard deadline aborts provider even when its consumer is paused", asyn
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "paused",
-      agentSources: ["provisioned"]
+      type: "paused"
     },
     async *invoke(req, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
@@ -802,8 +793,7 @@ test("host bounds cleanup after terminal and timeout wins over provider stopped 
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "cleanup",
-      agentSources: ["provisioned"]
+      type: "cleanup"
     },
     async *invoke(_fixtureRequest, _fixtureContext) {
       _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));

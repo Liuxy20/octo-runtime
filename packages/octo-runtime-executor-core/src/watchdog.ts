@@ -14,8 +14,7 @@ export const DEFAULT_RUNTIME_LIMITS = {
   modelIdlePolicy: "enforce" as const,
   toolTimeoutMs: 600_000,
   runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
-  cancelGraceMs: 1_000,
-  enforcement: "enforce" as const
+  cancelGraceMs: 1_000
 };
 export type EffectiveLimits = Required<Omit<RuntimeLimits, "toolWallTimeoutMs">> &
   Pick<RuntimeLimits, "toolWallTimeoutMs">;
@@ -370,7 +369,7 @@ export class InvocationWatchdog {
 
   #arm(): void {
     this.#cancelTimer?.();
-    if (!this.#active() || this.limits.enforcement === "observe") return; // legacy opt-out
+    if (!this.#active()) return;
     const now = this.time.now();
     const deadlines: { at: number; reason: WatchdogReason; budget: number }[] = [
       {

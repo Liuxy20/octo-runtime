@@ -3,7 +3,7 @@ export const adapters = [
   {
     metadata: {
       type: "docs",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "docs.native", modes: ["native"], nativeMethods: [] }
     },
     async *invoke(request) {

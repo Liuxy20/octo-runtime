@@ -40,7 +40,7 @@ async function fixture(t, invoke) {
       {
         metadata: {
           type: "size-fixture",
-          agentSources: ["provisioned"],
+
           protocolSupport: { protocol: "size-fixture", modes: ["canonical"], nativeMethods: [] }
         },
         invoke:

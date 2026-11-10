@@ -2,7 +2,7 @@
 type: Rule
 title: Adapter 执行元数据与可用状态
 description: 宿主管理 Adapter 支持范围，Adapter 按执行合同适配转发，不维护自建能力声明。
-tags: ["adapter","agent-source"]
+tags: ["adapter","agent-env"]
 timestamp: 2026-10-16T00:00:00Z
 implementation_baseline: df63c8f
 id: runtime-adapter-metadata
@@ -11,7 +11,7 @@ priority: 90
 load_bearing: true
 inject_when:
   paths: ["packages/octo-runtime-adapter-*/**","packages/octo-runtime-executor-core/**","config/**"]
-  touches: ["adapter","agent-source"]
+  touches: ["adapter","agent-env"]
 source: self
 supersedes: []
 ---
@@ -46,22 +46,16 @@ Adapter 仍按现有执行合同消费显式模型，完成原生映射及必要
 
 [#294](architecture.md#sdk-原生装配与统一-rpc)要求宿主完成 import 和对象构造，再向 createKernelService 注入 Adapter。模块 manifest、来源解析、动态 import 和选中工厂调用全部归 CLI 这类宿主，executor-kernel 不参与。Electron 原生 import 与 CLI 动态 import 只影响装配来源；执行都经过 KernelClient/RPC，由 Kernel 本进程的唯一 AgentExecutor 使用已注入对象。当前工作树已按此边界实施，验证范围见 #294 任务。
 
-## 来源
+## Agent 目标归属
 
-| 值 | 语义 |
-| --- | --- |
-| `preset` | 调用 Provider 中已有的 Agent；调用方提供有效目标 |
-| `provisioned` | 由基础执行方承载调用方提供的定义及本轮执行配置；不要求持久创建 Provider Agent |
+AgentSource、metadata.agentSources 和 octo.execution/agent.source 已删除。defineAdapter 只声明执行实现及实际使用的元数据，不要求来源分类；默认信封不再附加来源条目。需要选择 Provider 目标时，由调用方与对应 Adapter 私有约定，见 [OpenClaw 包文档](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。
 
-来源与传输、部署位置、权限和工作区相互独立。Adapter 通过 `metadata.agentSources` 声明支持范围；来源从 octo.execution/agent 的 source 读取；具体 Provider 目标由宿主与 Adapter 约定私有 item，例如 OpenClaw 的 adapter.openclaw/options。Core 不解释或复制这些设置。
-
-OpenClaw 声明两种来源，Adapter 在自身边界读取私有 `adapter.openclaw/options.payload.agentId`，省略时由 Adapter 内部采用 `main`；公共协议与 Core 不定义或补入该目标。此默认值不表示创建 Agent；当前实现验证并调用已有 Agent，不创建受控 runner、不修改 Agent 配置。它声明 `metadata.workspace: false`，使用原生工作区。详见 [OpenClaw 合同](openclaw.md)。
+本地工作目录是否必需只由 metadata.workspace 决定。只有 workspace:false 免除本地目录要求，不再根据 preset/provisioned 分支豁免。
 
 ## 执行支持与可用状态
 
 当前源码的 [AdapterMetadata](../../packages/octo-runtime-adapter-sdk/src/index.ts) 包含以下字段：
 
-- `agentSources`：支持的 Agent 来源。
 - `protocolSupport`：native／canonical 输出模式及原生协议标识。
 - `mcp`、`workspace`：本地 MCP 配置支持和工作目录行为。
 
@@ -87,12 +81,12 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。纯原生 authoring 与通用帮助类从源码 workspace 的 `@mininglamp-oss/octo-runtime-adapter-sdk` 引入，按需依赖所选 Adapter，不依赖 CLI 聚合包；private 包不单独 npm 发布，不恢复 Extra API。
 
-Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
+Host 按执行合同校验输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 
 ## 协议删除边界
 
 - 当前协议不定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知公共字段拒绝，不进行改名转换。
-- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。公共 adapter item 仅选择执行实现；Provider Agent 目标由宿主与目标 Adapter 通过私有 item 约定，例如 OpenClaw 的 `adapter.openclaw/options.payload.agentId`。
+- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。公共 adapter item 仅选择执行实现；Provider Agent 目标由宿主与目标 Adapter 通过私有 item 约定，详见 [OpenClaw 包文档](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。
 - SDK、宿主加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。

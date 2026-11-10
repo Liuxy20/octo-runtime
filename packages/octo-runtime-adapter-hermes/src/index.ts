@@ -3,8 +3,7 @@ import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 export const hermesMetadata: AdapterMetadata = {
   type: "hermes",
-  mcp: true,
-  agentSources: ["provisioned"]
+  mcp: true
 };
 
 /** 宿主交付所选命令或 client factory；本模块仅维护 ACP 协议要求。 */

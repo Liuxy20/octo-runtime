@@ -198,8 +198,7 @@ test("ACP injects HTTP configuration on new, resume and missing-session fallback
 test("unsupported adapters and native options fail explicitly", async () => {
   const adapter = defineAdapter({
     metadata: {
-      type: "unsupported",
-      agentSources: ["provisioned"]
+      type: "unsupported"
     },
     async *invoke() {
       throw new Error("must not execute");

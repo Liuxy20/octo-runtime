@@ -133,18 +133,6 @@ export function contextEnvelope(items = []) {
   return { schema: "octo.context-envelope/v3", items: structuredClone(items) };
 }
 
-export function resolvedRuntimeSelection(runtimeId = "runtime-1") {
-  return {
-    schema: "octo.runtime-selection/v2",
-    selection_mode: "explicit",
-    explicit_runtime_id: runtimeId,
-    authorized_candidates: [
-      { runtime_id: runtimeId, priority: 1, owner_subject_type: "user", owner_subject_id: "user-1" }
-    ],
-    offline_behavior: "wait",
-    failover: "none"
-  };
-}
 export function continuityItem({
   sessionGeneration = 7,
   triggerMessageId = "message-current",
@@ -177,7 +165,7 @@ export function continuityItem({
   };
 }
 export function invokeRequest(overrides = {}) {
-  // 测试调用方显式采用 cwd/审批/source 基线；非法覆盖信封必须先拒绝，不能被基线修复。
+  // 测试调用方显式采用 cwd/审批 基线；非法覆盖信封必须先拒绝，不能被基线修复。
   if (overrides.agentEnv !== undefined) withAgentEnvItems(overrides.agentEnv, []);
   return {
     protocolVersion: 2,
@@ -191,8 +179,7 @@ export function invokeRequest(overrides = {}) {
     agentEnv: withAgentEnvItems(
       withAgentEnvItems(contextEnvelope(), [
         { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
-        { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
-        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
       ]),
       overrides.agentEnv?.items ?? []
     )

@@ -1,0 +1,12 @@
+baseline: ab9762dc791853c59c18349a6141888606c7ac64
+review: https://github.com/Mininglamp-OSS/octo-runtime/pull/352
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-design.md
+scope:
+  - Preserve queued notice across interval reset without changing protocol
+  - Preserve terminal/cancel/error priority and one pending provider read
+  - Manual regression only, no CI expansion

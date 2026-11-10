@@ -202,16 +202,6 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       ],
       [
         (request) => {
-          request.agentEnv.items.push({
-            namespace: "octo.execution",
-            name: "actmode",
-            payload: { mode: "plan" }
-          });
-        },
-        "DSH_ACTMODE_UNSUPPORTED"
-      ],
-      [
-        (request) => {
           agentEnvItem(request.agentEnv, "adapter.dsh", "options").requestTimeoutMs = 0;
         },
         "DSH_CONFIG_INVALID"

@@ -14,7 +14,7 @@ export async function verifyExecutorCore(): Promise<void> {
   const adapter: HostedAdapter = {
     metadata: {
       type: "release-fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "release.fixture",
         modes: ["native", "canonical"],

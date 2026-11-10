@@ -14,14 +14,14 @@ import type { AdapterProtocolSupport } from "@mininglamp-oss/octo-runtime/protoc
 // 仅显式执行 tsc：覆盖发行入口的注册合同，不启动 worker 或真实 Provider。
 export function checkAdapterProtocolContract(executor: AgentExecutor): void {
   const definition: Adapter = {
-    metadata: { type: "contract", agentSources: ["provisioned"] },
+    metadata: { type: "contract" },
     async *invoke() {
       yield { protocolVersion: 2, type: "run.completed", payload: {} };
     }
   };
 
   // @ts-expect-error 直接注册的元数据必须声明协议支持。
-  const missing: HostedAdapterMetadata = { type: "missing", agentSources: ["provisioned"] };
+  const missing: HostedAdapterMetadata = { type: "missing" };
   // @ts-expect-error 未规范化的编写输入不能直接注册。
   executor.register(definition);
   // @ts-expect-error worker 与 Core 的注册要求一致。

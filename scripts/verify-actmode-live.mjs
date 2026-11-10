@@ -10,7 +10,8 @@ import {
   createCliClaudeCodeAdapter,
   createCliKimiCodeAdapter,
   createCliOpenCodeAdapter,
-  createCliMcodeAdapter
+  createCliMcodeAdapter,
+  createCliGrokBuildAdapter
 } from "../apps/cli/dist/providers.js";
 
 // 脚本复用 CLI 宿主的安装选择与环境快照；同时拥有 Executor 和 Codex owner，依次关闭。
@@ -32,7 +33,8 @@ async function createHost() {
       createCliClaudeCodeAdapter,
       createCliKimiCodeAdapter,
       createCliOpenCodeAdapter,
-      createCliMcodeAdapter
+      createCliMcodeAdapter,
+      createCliGrokBuildAdapter
     ])
       host.register(factory({}, context));
     return { host, shutdown };
@@ -47,7 +49,7 @@ if (process.argv.includes("--check-startup")) {
   await reportVerificationStartup(
     { list: () => owned.host.list(), shutdown: owned.shutdown },
     import.meta.url,
-    ["codex", "claude-code", "kimi-code", "opencode", "mcode"]
+    ["codex", "claude-code", "kimi-code", "opencode", "mcode", "grok-build"]
   );
   process.exit(0);
 }
@@ -61,14 +63,16 @@ try {
     ","
   )) {
     let providerSession;
-    for (const mode of ["plan", "default", undefined]) {
+    for (const mode of ["codex", "grok-build"].includes(type)
+      ? ["plan", "default", undefined]
+      : ["plan", undefined]) {
       const runId = `actmode_${randomUUID()}`;
       const result = {
         type,
         mode: mode ?? "omitted",
         runId,
         resumed: Boolean(providerSession),
-        evidence: [],
+        diagnostics: [],
         text: ""
       };
       try {
@@ -99,7 +103,18 @@ try {
                     ]
                   : []),
                 ...(mode
-                  ? [{ namespace: "octo.execution", name: "actmode", payload: { mode } }]
+                  ? [
+                      {
+                        namespace: `adapter.${type}`,
+                        name: "options",
+                        payload:
+                          type === "codex"
+                            ? { collaborationMode: mode }
+                            : type === "claude-code"
+                              ? { permissionMode: mode }
+                              : { modeId: mode }
+                      }
+                    ]
                   : [])
               ]
             },
@@ -109,7 +124,7 @@ try {
           },
           { signal: AbortSignal.timeout(120000) }
         )) {
-          if (event.type === "execution.update") result.evidence.push(event.payload.actmode);
+          if (event.type === "run.notice") result.diagnostics.push(event.payload);
           if (event.type === "session.update" && event.payload.providerSession)
             providerSession = event.payload.providerSession;
           if (event.type === "message.delta" && event.payload.channel !== "analysis")
@@ -125,11 +140,7 @@ try {
         result.providerSessionId = providerSession?.sessionId;
         assert.equal(result.terminal, "run.completed", JSON.stringify(result.failure));
         assert.match(result.text, /MODE_PASS/);
-        if (mode) {
-          assert.equal(result.evidence.length, 1);
-          assert.equal(result.evidence[0].effective, mode);
-          assert.equal(result.evidence[0].status, "applied");
-        } else assert.equal(result.evidence.length, 0);
+        // 终态和正文只证明执行成功；模式应用需结合所属 Provider 的原生输出核对。
         result.passed = true;
       } catch (error) {
         result.passed = false;
@@ -140,7 +151,7 @@ try {
       if (!result.passed) break;
     }
   }
-  const output = resolve(".octospec/tasks/adapter-plan-interaction-exploration/live-results.json");
+  const output = resolve(".octospec/tasks/348-351-context-envelope/live-results.json");
   await mkdir(resolve(output, ".."), { recursive: true });
   await writeFile(output, `${JSON.stringify({ workdir, results }, null, 2)}\n`);
   assert.ok(

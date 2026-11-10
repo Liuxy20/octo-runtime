@@ -8,7 +8,7 @@ import { appendFile } from "node:fs/promises";
 export const adapter = {
   metadata: {
     type: "long-budget",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "long-budget.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async *invoke(request, context) {

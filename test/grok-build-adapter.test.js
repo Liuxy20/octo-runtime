@@ -265,7 +265,7 @@ test("Grok maps explicit plan, model, model-specific effort downgrade and both M
         schema: "octo.context-envelope/v3",
         items: [
           ...base().agentEnv.items,
-          { namespace: "octo.execution", name: "actmode", payload: { mode: "plan" } },
+          { namespace: "adapter.grok-build", name: "options", payload: { modeId: "plan" } },
           {
             namespace: "octo.execution",
             name: "mcp",
@@ -301,11 +301,6 @@ test("Grok maps explicit plan, model, model-specific effort downgrade and both M
   assert.equal(
     trace.find((entry) => entry.method === "session/set_config_option").params.value,
     "grok-three-level"
-  );
-  assert.ok(
-    events.some(
-      (event) => event.type === "execution.update" && event.payload.actmode.effective === "plan"
-    )
   );
   assert.ok(
     events.some((event) => event.payload.params?.warningCode === "REASONING_EFFORT_DOWNGRADED")

@@ -2,8 +2,7 @@ import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const openCodeMetadata: AdapterMetadata = {
   mcp: true,
-  type: "opencode",
-  agentSources: ["provisioned"]
+  type: "opencode"
 };
 
 import {
@@ -30,7 +29,11 @@ import { canonicalTerminalStatus } from "@mininglamp-oss/octo-runtime-protocol";
  * --thinking --auto`) for full access and ACP for interactive approval.
  * Both transports normalize provider output into canonical events.
  */
-import { AcpInvocationError, createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
+import {
+  AcpInvocationError,
+  acpModeId,
+  createAcpAdapter
+} from "@mininglamp-oss/octo-runtime-adapter-acp";
 import {
   createJsonCliAdapter,
   probeCommand,
@@ -464,6 +467,12 @@ export function createOpenCodeAdapter({
           throw new Error("APPROVAL_MODE_UNSUPPORTED: opencode has no qualified assisted policy");
         // 启动前只做目录与纯配置检查；实际协议失败按执行结果报告，不以版本号拦截。
         inlineConfig(request, launch.env);
+        // JSON CLI 没有本包已接线的模式载体，不替宿主改变审批或选择传输。
+        if (
+          invocationApprovalMode(request) === "full_access" &&
+          acpModeId(request, "opencode") !== undefined
+        )
+          throw new Error("OPENCODE_MODE_UNSUPPORTED: modeId requires the ACP execution path");
       });
       request.signal?.throwIfAborted();
       if (invocationApprovalMode(request) === "ask") {

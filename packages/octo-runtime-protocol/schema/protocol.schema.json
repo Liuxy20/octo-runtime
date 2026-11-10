@@ -260,7 +260,6 @@
         "type": {
           "enum": [
             "session.update",
-            "execution.update",
             "usage.update",
             "model_step.started",
             "model_step.finished",
@@ -432,22 +431,6 @@
     "HostControl": {
       "title": "HostControl",
       "oneOf": [
-        {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "name", "payload"],
-          "properties": {
-            "type": {
-              "const": "evidence"
-            },
-            "name": {
-              "const": "execution"
-            },
-            "payload": {
-              "$ref": "#/definitions/ExecutionEvidence"
-            }
-          }
-        },
         {
           "type": "object",
           "additionalProperties": false,
@@ -984,7 +967,7 @@
     "ContextItem": {
       "title": "ContextItem",
       "description": "Opaque ordered item. The envelope validates structure; consuming Adapters validate shared settings and their privately agreed payloads. Private items require no public registration.",
-      "tsType": "{ namespace: string; name: string; guidance?: string; data_format?: 'text'; payload: Record<string, unknown> }",
+      "tsType": "{ namespace: string; name: string; payload: Record<string, unknown> }",
       "type": "object",
       "additionalProperties": false,
       "required": ["namespace", "name", "payload"],
@@ -1003,14 +986,6 @@
           "type": "object",
           "additionalProperties": true,
           "tsType": "Record<string, unknown>"
-        },
-        "guidance": {
-          "type": "string",
-          "description": "Optional producer metadata. Runtime does not render AgentEnv items into model input."
-        },
-        "data_format": {
-          "const": "text",
-          "description": "Optional producer metadata; it does not request Runtime rendering."
         }
       },
       "not": {
@@ -1064,223 +1039,6 @@
         }
       }
     },
-    "RunContextProjection": {
-      "title": "RunContextProjection",
-      "description": "Public Context facts. Preparation is distinct from Adapter application or invocation. This projection excludes resource files, trusted instruction text, credentials and Runtime paths.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "run_id",
-        "context_hash",
-        "preparation_status",
-        "application_status",
-        "invocation_status",
-        "execution",
-        "model_uses_provider_default",
-        "effort_uses_provider_default"
-      ],
-      "properties": {
-        "run_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "context_hash": {
-          "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "actual_runtime_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "preparation_status": {
-          "enum": ["unknown", "prepared"]
-        },
-        "application_status": {
-          "enum": ["unknown", "applied"]
-        },
-        "invocation_status": {
-          "const": "unknown"
-        },
-        "model_uses_provider_default": {
-          "type": "boolean"
-        },
-        "effort_uses_provider_default": {
-          "type": "boolean"
-        },
-        "object_materials": {
-          "description": "Frozen inline object facts proven by a matching preparation receipt. Source fields are provenance claims, not access grants. No contents, local handles, paths or credentials are exposed; application is separately evidenced by application_status.",
-          "type": "array",
-          "maxItems": 32,
-          "items": {
-            "$ref": "#/definitions/PublicObjectMaterial"
-          }
-        },
-        "execution": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["adapter_type", "approval_mode"],
-          "properties": {
-            "adapter_type": {
-              "type": "string",
-              "minLength": 1
-            },
-            "model": {
-              "type": "string",
-              "minLength": 1
-            },
-            "effort": {
-              "type": "string",
-              "minLength": 1
-            },
-            "approval_mode": {
-              "enum": ["ask", "assisted", "full_access"]
-            }
-          }
-        }
-      }
-    },
-    "PublicObjectMaterial": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["resource_ref", "object_type", "origin", "byte_size", "digest"],
-      "properties": {
-        "resource_ref": {
-          "type": "string",
-          "pattern": "^selection-[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,190}$"
-        },
-        "object_type": {
-          "enum": [
-            "task",
-            "discussion",
-            "discussion_comment",
-            "discussion_reply",
-            "local_file",
-            "drive_file"
-          ]
-        },
-        "object_id": {
-          "type": "string",
-          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,190}$"
-        },
-        "origin": {
-          "enum": ["mention", "attachment", "object_action", "source_entity"]
-        },
-        "revision": {
-          "type": "string",
-          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,190}$"
-        },
-        "byte_size": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 32768
-        },
-        "digest": {
-          "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "object_scope": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["type", "id"],
-          "properties": {
-            "type": {
-              "enum": ["user", "teamspace"]
-            },
-            "id": {
-              "type": "string",
-              "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:@-]{0,190}$"
-            }
-          }
-        },
-        "selector": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["mode"],
-          "properties": {
-            "mode": {
-              "enum": ["core", "content", "history", "chain", "metadata"]
-            },
-            "start": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            },
-            "end": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 9007199254740991
-            }
-          }
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "object_type": {
-                "const": "local_file"
-              }
-            }
-          },
-          "then": {
-            "not": {
-              "required": ["object_id"]
-            }
-          },
-          "else": {
-            "required": ["object_id"]
-          }
-        }
-      ]
-    },
-    "ContextPreparationReceipt": {
-      "title": "ContextPreparationReceipt",
-      "description": "Preparation facts for the current Run lease and caller-owned workspace path; they do not prove Provider use of model context or transfer directory ownership to Runtime.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "context_hash",
-        "run_id",
-        "lease_id",
-        "fencing_token",
-        "workspace_path",
-        "provider_state_dir",
-        "warnings"
-      ],
-      "properties": {
-        "context_hash": {
-          "type": "string",
-          "pattern": "^sha256:[a-f0-9]{64}$"
-        },
-        "run_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "lease_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "fencing_token": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 9007199254740991
-        },
-        "workspace_path": {
-          "type": "string"
-        },
-        "provider_state_dir": {
-          "type": "string"
-        },
-        "warnings": {
-          "type": "array",
-          "maxItems": 256,
-          "items": {
-            "type": "string",
-            "maxLength": 4096
-          }
-        }
-      }
-    },
     "PersistentContextEnvelope": {
       "title": "PersistentContextEnvelope",
       "$ref": "#/definitions/ContextEnvelope",
@@ -1294,46 +1052,6 @@
         "type": {
           "type": "string",
           "minLength": 1
-        }
-      }
-    },
-    "ContextActmodePayload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode"],
-      "properties": {
-        "mode": {
-          "enum": ["default", "plan"]
-        }
-      }
-    },
-    "ExecutionEvidence": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["actmode"],
-      "properties": {
-        "actmode": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["requested", "effective", "status"],
-          "properties": {
-            "requested": {
-              "enum": ["default", "plan"]
-            },
-            "effective": {
-              "enum": ["default", "plan", null]
-            },
-            "status": {
-              "enum": ["applied", "fallback", "unknown"]
-            },
-            "nativeMode": {
-              "type": "string",
-              "minLength": 1
-            },
-            "reason": {
-              "enum": ["provider_unsupported", "adapter_unmapped", "provider_unconfirmed"]
-            }
-          }
         }
       }
     },
@@ -1357,25 +1075,9 @@
         "effort": {
           "type": "string",
           "minLength": 1
-        },
-        "use_provider_default": {
-          "const": true
         }
       },
-      "oneOf": [
-        {
-          "required": ["effort"],
-          "not": {
-            "required": ["use_provider_default"]
-          }
-        },
-        {
-          "required": ["use_provider_default"],
-          "not": {
-            "required": ["effort"]
-          }
-        }
-      ]
+      "required": ["effort"]
     },
     "ContextWorkspacePayload": {
       "description": "Caller-owned, already prepared directory. Runtime validates the concrete local execution path and never allocates or recreates an application workspace.",
@@ -1390,7 +1092,7 @@
       }
     },
     "ContextLimitsPayload": {
-      "description": "Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits. Legacy enforcement=observe cannot be combined with v2 settings.",
+      "description": "Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -1431,98 +1133,8 @@
           "type": "integer",
           "minimum": 100,
           "maximum": 60000
-        },
-        "enforcement": {
-          "enum": ["enforce", "observe"]
-        }
-      },
-      "if": {
-        "required": ["enforcement"],
-        "properties": {
-          "enforcement": {
-            "const": "observe"
-          }
-        }
-      },
-      "then": {
-        "not": {
-          "anyOf": [
-            {
-              "required": ["model_idle_policy"]
-            },
-            {
-              "required": ["model_idle_warning_ms"]
-            },
-            {
-              "required": ["tool_wall_timeout_ms"]
-            }
-          ]
         }
       }
-    },
-    "ContextRuntimeSelectionPayload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["mode"],
-      "properties": {
-        "mode": {
-          "enum": ["candidates", "explicit"]
-        },
-        "runtime_id": {
-          "type": "string",
-          "minLength": 1
-        },
-        "runtime_ids": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 64,
-          "uniqueItems": true,
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "strategy": {
-          "const": "preferred_failover"
-        },
-        "offline_behavior": {
-          "enum": ["wait", "fail"]
-        },
-        "failover": {
-          "enum": ["candidates", "none"]
-        }
-      },
-      "oneOf": [
-        {
-          "properties": {
-            "mode": {
-              "const": "candidates"
-            }
-          },
-          "required": ["runtime_ids", "strategy"],
-          "not": {
-            "required": ["runtime_id"]
-          }
-        },
-        {
-          "properties": {
-            "mode": {
-              "const": "explicit"
-            }
-          },
-          "required": ["runtime_id"],
-          "not": {
-            "anyOf": [
-              {
-                "required": ["runtime_ids"]
-              },
-              {
-                "required": ["strategy"]
-              }
-            ]
-          }
-        }
-      ]
     },
     "ContextApprovalPolicyPayload": {
       "type": "object",
@@ -1533,112 +1145,6 @@
           "$ref": "#/definitions/ApprovalMode"
         }
       }
-    },
-    "ContextMcpLocator": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["server_ref", "tool"],
-      "properties": {
-        "server_ref": {
-          "type": "string",
-          "minLength": 1
-        },
-        "tool": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "ResolvedRuntimeSelection": {
-      "title": "ResolvedRuntimeSelection",
-      "description": "Worker-frozen Context runtime candidates. Explicit selection cannot fail over.",
-      "x-octo-unicode-scalar-strings": true,
-      "x-octo-runtime-selection-invariants": true,
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "schema",
-        "selection_mode",
-        "authorized_candidates",
-        "offline_behavior",
-        "failover"
-      ],
-      "properties": {
-        "schema": {
-          "const": "octo.runtime-selection/v2"
-        },
-        "selection_mode": {
-          "enum": ["explicit", "candidates"]
-        },
-        "explicit_runtime_id": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 191
-        },
-        "authorized_candidates": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 64,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["runtime_id", "priority", "owner_subject_type", "owner_subject_id"],
-            "properties": {
-              "runtime_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 191
-              },
-              "priority": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 9007199254740991
-              },
-              "owner_subject_type": {
-                "enum": ["user", "teamspace"]
-              },
-              "owner_subject_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 191
-              }
-            }
-          }
-        },
-        "offline_behavior": {
-          "enum": ["wait", "fail"]
-        },
-        "failover": {
-          "enum": ["candidates", "none"]
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "selection_mode": {
-                "const": "explicit"
-              }
-            }
-          },
-          "then": {
-            "required": ["explicit_runtime_id"],
-            "properties": {
-              "authorized_candidates": {
-                "maxItems": 1
-              },
-              "failover": {
-                "const": "none"
-              }
-            }
-          },
-          "else": {
-            "not": {
-              "required": ["explicit_runtime_id"]
-            }
-          }
-        }
-      ]
     },
     "MessageChannel": {
       "title": "MessageChannel",
@@ -1892,10 +1398,6 @@
           "type": "integer",
           "minimum": 100,
           "maximum": 60000
-        },
-        "enforcement": {
-          "type": "string",
-          "enum": ["observe", "enforce"]
         }
       }
     },
@@ -3041,7 +2543,8 @@
             "context_compacted",
             "model_rerouted",
             "config_warning",
-            "provider_diagnostic"
+            "provider_diagnostic",
+            "model_output_idle"
           ]
         },
         "severity": {
@@ -3064,12 +2567,43 @@
           "maxLength": 191
         }
       },
-      "required": ["noticeId", "code", "severity", "params"]
-    },
-    "AgentSource": {
-      "title": "AgentSource",
-      "type": "string",
-      "enum": ["preset", "provisioned"]
+      "required": ["noticeId", "code", "severity", "params"],
+      "allOf": [
+        {
+          "if": {
+            "required": ["code"],
+            "properties": {
+              "code": {
+                "const": "model_output_idle"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "severity": {
+                "const": "info"
+              },
+              "params": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["silenceMs", "message"],
+                "properties": {
+                  "silenceMs": {
+                    "type": "integer",
+                    "minimum": 60000,
+                    "maximum": 9007199254740991
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 96
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "ContextModelSelectionPayload": {
       "type": "object",
@@ -3078,119 +2612,9 @@
         "id": {
           "type": "string",
           "minLength": 1
-        },
-        "use_provider_default": {
-          "const": true
         }
       },
-      "oneOf": [
-        {
-          "required": ["id"],
-          "not": {
-            "required": ["use_provider_default"]
-          }
-        },
-        {
-          "required": ["use_provider_default"],
-          "not": {
-            "required": ["id"]
-          }
-        }
-      ]
-    },
-    "ContextInlineEntry": {
-      "description": "Untrusted inline selection text with optional resource reference, source metadata and summary. Source metadata is not an authorization claim.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["text"],
-      "properties": {
-        "text": {
-          "type": "string",
-          "minLength": 1
-        },
-        "resource_ref": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source": {
-          "type": ["object", "string"],
-          "additionalProperties": true
-        },
-        "summary": {
-          "type": "string"
-        }
-      }
-    },
-    "ContextReferenceEntry": {
-      "description": "Declarative MCP resource operation. Only deployed scoped operations may execute; schema validation does not authorize access.",
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["resource_ref", "resolver", "locator"],
-      "properties": {
-        "resource_ref": {
-          "type": "string",
-          "minLength": 1
-        },
-        "resolver": {
-          "const": "mcp"
-        },
-        "locator": {
-          "type": "object"
-        },
-        "params": {
-          "description": "Frozen non-secret JSON parameters supplied by the authenticated resolver plan, not model-generated commands.",
-          "type": "object",
-          "additionalProperties": true,
-          "tsType": "Record<string, unknown>"
-        },
-        "authorization_ref": {
-          "type": "string",
-          "minLength": 1
-        },
-        "revision": {
-          "type": "string",
-          "minLength": 1
-        }
-      },
-      "allOf": [
-        {
-          "properties": {
-            "locator": {
-              "$ref": "#/definitions/ContextMcpLocator"
-            }
-          }
-        }
-      ]
-    },
-    "ContextInlinePayload": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["entries"],
-      "properties": {
-        "entries": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "$ref": "#/definitions/ContextInlineEntry"
-          }
-        }
-      }
-    },
-    "ContextReferencesPayload": {
-      "type": "object",
-      "x-octo-unique-resource-refs": true,
-      "additionalProperties": false,
-      "required": ["entries"],
-      "properties": {
-        "entries": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/definitions/ContextReferenceEntry"
-          }
-        }
-      }
+      "required": ["id"]
     },
     "ToolAuthorization": {
       "title": "ToolAuthorization",
@@ -3527,16 +2951,10 @@
     "HostedAdapterMetadataWire": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["type", "agentSources"],
+      "required": ["type"],
       "properties": {
         "type": {
           "type": "string"
-        },
-        "agentSources": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/AgentSource"
-          }
         },
         "workspace": {
           "type": "boolean"

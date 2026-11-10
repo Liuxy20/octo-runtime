@@ -81,11 +81,10 @@ native 模式下的终态是 `type: "state"` 的 `control` 帧。
 | `activity.updated`      | activity    | 活动信息刷新                               | `activityId`、`info`                                                                          |
 | `activity.finished`     | activity    | 活动结束                                   | `activityId`、`status`                                                                        |
 | `plan.updated`          | plan        | 整体替换计划                               | `planId`、`revision`、`steps[]`                                                               |
-| `run.notice`            | notice      | 重试、上下文压缩、改道、配置告警           | `noticeId`、`code`、`severity`、`params`                                                      |
+| `run.notice`            | notice      | 重试、上下文压缩、改道、配置告警、模型静默           | `noticeId`、`code`、`severity`、`params`                                                      |
 | `interaction.requested` | interaction | 需要审批、回答或补充输入                   | `interactionId`、`kind`、`expiresAt`、`request`                                               |
 | `interaction.resolved`  | interaction | 已处理、已过期或已失效                     | `interactionId`、`status`、`outcome`、`reasonCode`                                            |
 | `session.update`        | state       | Provider 会话信息变化                      | `providerSession`                                                                             |
-| `execution.update`      | state       | 执行模式证据，例如 actmode                 | `actmode`                                                                                     |
 | `usage.update`          | state       | 本轮 token 用量                            | Adapter 归一的计数，如 `inputTokens`、`outputTokens`，可选 `cumulative`、`modelContextWindow` |
 
 三条规则管住整张表：
@@ -119,7 +118,7 @@ pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 
 两个 Schema 使用 JSON Schema Draft-07。标准 Draft-07 校验器检查标准结构约束；`x-octo-*` 关键字描述额外语义，校验器必须显式实现后才能执行。只通过标准关键字校验不代表完整符合协议。现有运行时校验器还检查 JSON 字节/深度预算、Unicode 标量字符串、唯一性、跨字段一致性、身份和生命周期规则。生成 TypeScript 类型不能校验运行时输入，手写校验器仍有职责。
 
-七份正反样本位于 [test/fixtures](test/fixtures)，用于验证实现是否符合合同，不属于协议定义。只有 IPC 一致性样本刻意对外发布：完整 Runtime 的 `/executor-kernel/ipc-fixtures.json` 和独立 client 的 `/protocol/ipc-fixtures.json` 原有导入路径保持，其他样本不进入发行包。
+六份正反样本位于 [test/fixtures](test/fixtures)，用于验证实现是否符合合同，不属于协议定义。只有 IPC 一致性样本刻意对外发布：完整 Runtime 的 `/executor-kernel/ipc-fixtures.json` 和独立 client 的 `/protocol/ipc-fixtures.json` 原有导入路径保持，其他样本不进入发行包。
 
 客户端连接/并发上限、超时和重试间隔由客户端实现维护，不属于共享行为协议，也不再另存一份 JSON 配置。共享 wire 字节限制继续使用协议常量。
 
@@ -127,11 +126,11 @@ pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 
 Issue #332 删除 `kernel-client.behavior.json` 及独立 client 的 `/protocol/behavior.json` 导出。调用方停止导入此文件，使用客户端 API 及其文档默认值。IPC Schema 标识改为 `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`，使用旧 v1 标识的注册或引用需要更新；实际 IPC 版本仍为 2。删除无人消费的 `x-octo-methods` 生成元数据，RPC 方法及其请求/结果定义保持。
 
-以下遗留类型从 Schema、生成类型与协议导出中删除：`ContextSelectionEntry`、`ContextResourceEntry`、`ContextContinuityPayload`、`ChannelScope`、`ChannelMessagePart`、`ChannelMessageSender`、`ChannelMessageFlags`、`ChannelMessageFact`、`ChannelContextAppend`、`ContextSyncRequest`、`ContextSyncResult`、`ChannelContextDescriptor`、`ContextCommitResult`。对应的五个校验器 `assertChannelScope`、`assertChannelMessageFact`、`assertChannelContextAppend`、`assertContextSyncResult`、`assertChannelContextDescriptor` 也删除。保留的通用材料结构使用现有 `ContextInlineEntry`、`ContextReferenceEntry`；渠道历史及同步合同归应用。这些导出不提供兼容层，调用方须相应调整导入。
+以下遗留类型从 Schema、生成类型与协议导出中删除：`ContextSelectionEntry`、`ContextResourceEntry`、`ContextContinuityPayload`、`ChannelScope`、`ChannelMessagePart`、`ChannelMessageSender`、`ChannelMessageFlags`、`ChannelMessageFact`、`ChannelContextAppend`、`ContextSyncRequest`、`ContextSyncResult`、`ChannelContextDescriptor`、`ContextCommitResult`。对应的五个校验器 `assertChannelScope`、`assertChannelMessageFact`、`assertChannelContextAppend`、`assertContextSyncResult`、`assertChannelContextDescriptor` 也删除。`ContextInlineEntry`、`ContextReferenceEntry` 也已删除；材料、历史及同步合同归应用。这些导出不提供兼容层，调用方须相应调整导入。
 
 ## 工作目录迁移
 
-Issue #335 将 `octo.execution/workspace` 简化为仅含路径的 `{ "path": "/absolute/prepared/project" }`。本地 CLI 与 SDK 执行前，由调用方选择或创建已有绝对目录。Runtime 不隐式取 cwd、不分配随机目录，也不在续接/恢复时重建。外部/preset Agent 与声明 `metadata.workspace: false` 的 Adapter 可不传本地覆盖；OpenClaw 保持 Provider 自有工作区。
+Issue #335 将 `octo.execution/workspace` 简化为仅含路径的 `{ "path": "/absolute/prepared/project" }`。本地 CLI 与 SDK 执行前，由调用方选择或创建已有绝对目录。Runtime 不隐式取 cwd、不分配随机目录，也不在续接/恢复时重建。声明 `metadata.workspace: false` 的 Adapter 可不传本地覆盖；OpenClaw 保持 Provider 自有工作区。
 
 删除 `mode`（`fixed`、`random`、`none`），并更新已删除的 `workspace_mode` 回执/投影字段、`prepareRunContext` 和 `WorkspaceAssignments` 导入。旧 mode payload 明确失败，没有兼容转换；已有用户目录不删除。`WORKDIR_REQUIRED`、`WORKDIR_INVALID`、`WORKDIR_NOT_FOUND`、`WORKDIR_NOT_DIRECTORY`、`WORKDIR_UNAVAILABLE` 沿用公开分类 `OH-ADP-3004`，详见[校验与错误说明](../../docs/zh-CN/reference/invoke-input.md)。Runtime 运维目录继续独立管理。源码包版本及 Run/Context/IPC/Adapter wire 版本不变，由既有发行流程选择发布版本。独立 Gateway 采用本次发行前须迁移旧 fixed-mode payload。
 
@@ -144,3 +143,11 @@ Issue #334 从 Runtime 及公开合同删除 `octo.control/instructions`、`cont
 - [InvokeInput](src/invoke-input.ts)、[workspace 导出](src/index.ts)、[生成类型](src/generated/protocol-types.ts)。
 - [输入参考](../../docs/zh-CN/reference/invoke-input.md)、[输出与控制](../../docs/zh-CN/reference/output-and-control.md)、[Kernel IPC](../../docs/zh-CN/reference/kernel-ipc.md)。
 - [协议测试](test/run-protocol.test.js)。
+
+Issue #349 同时删除 `PublicObjectMaterial`；task/discussion、mention 和 history 等材料分类归应用。无生产消费者的旧 `ContextPreparationReceipt` 和整个 `RunContextProjection` 一并从 Schema、生成类型和导出删除，不提供兼容别名。执行配置通过 AgentEnv 条目传入，现行 Host 回执和运行事件继续维护各自合同。
+
+endpoint 寻址、设备选择、离线等待及故障转移归业务调用方。已删除 ContextRuntimeSelectionPayload、ResolvedRuntimeSelection、RUNTIME_SELECTION_SCHEMA、assertResolvedRuntimeSelection、octo.runtime/selection catalog 条目和 RUNTIME_RUN_CONTRACT.routing_schema。client 向已选定 Runtime 发起 invoke，不保留设备选择专用合并或兼容别名。
+
+canonical `run.notice` 包含 `model_output_idle`：Runtime 连续 60 秒无新增公开模型文本时通知一次，恢复输出后重新计满 60 秒。参见[计时、预算与 RPC 示例](../../docs/zh-CN/reference/output-and-control.md#模型输出静默通知)。native 控制类型不变。
+
+`octo.execution/limits` 和 `RuntimeLimits` 已删除 `enforcement` 及全局关闭 watchdog 的兼容行为。旧字段必须从调用配置中移除；Adapter 读取预算时拒绝该字段。需要运行更久时，设置相应的有限预算：整轮默认 24 小时、最大 7 天；只增大 `run_timeout_ms` 不改变首帧、模型空闲或工具预算。`model_idle_policy: "observe"` 保留，只禁止模型空闲终止。

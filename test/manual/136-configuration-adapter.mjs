@@ -9,7 +9,7 @@ import { setTimeout } from "node:timers/promises";
 export const adapter = {
   metadata: {
     type: "snapshot",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "snapshot.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async probe(options) {

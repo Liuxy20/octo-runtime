@@ -58,7 +58,7 @@ try {
 
 ## 它对你的输入做了什么
 
-应用在调用前准备 `/absolute/prepared/project`。本地执行通过 仅含 path 的 workspace item 显式提供已存在的绝对目录。Core 不继承 cwd、不创建应用目录、不分配随机工作区，也不在续接/fresh recovery 时重建。自行管理工作区的外部/preset Agent 与 `metadata.workspace: false` Adapter 可以省略覆盖。缺失或非法目录返回稳定 `WORKDIR_*` 原因码，分类为 `OH-ADP-3004`；见[输入校验](../../docs/zh-CN/reference/invoke-input.md)。`prepareRunContext` 与 `WorkspaceAssignments` 已删除；Runtime 自有运维状态另行管理。
+应用在调用前准备 `/absolute/prepared/project`。本地执行通过 仅含 path 的 workspace item 显式提供已存在的绝对目录。Core 不继承 cwd、不创建应用目录、不分配随机工作区，也不在续接/fresh recovery 时重建。声明 `metadata.workspace: false` 的 Adapter 可以省略覆盖。缺失或非法目录返回稳定 `WORKDIR_*` 原因码，分类为 `OH-ADP-3004`；见[输入校验](../../docs/zh-CN/reference/invoke-input.md)。`prepareRunContext` 与 `WorkspaceAssignments` 已删除；Runtime 自有运维状态另行管理。
 
 Core 校验并复制本次输入和 AgentEnv，仅读取 Adapter 路由，将调用方已准备的文本/图片与配置 items 保序交给对应 Adapter。配置语义校验、默认值、环境合并和 Provider 原生映射归 Adapter，Core 不生成 agentConfig 或另一份配置投影，也不渲染业务 Context 或补入会话历史。身份、容量和关闭状态在执行接纳时检查，早于 Provider 启动。
 

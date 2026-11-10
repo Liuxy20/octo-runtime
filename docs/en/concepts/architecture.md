@@ -98,24 +98,7 @@ Callers construct `inputs` and `AgentEnv`. The envelope contains only `schema` a
 
 Only shared concepts, such as model, reasoning effort and approval policy, have public protocol beans. `adapter-sdk` provides item readers, composition helpers and shared-setting helpers. Managed Adapters expose an independent `defaultAgentEnv` for callers to build on. Invocation does not append default items to the submitted envelope.
 
-For OpenClaw, the target Agent is a private agreement between the host and the OpenClaw Adapter:
-
-```json
-{
-  "schema": "octo.context-envelope/v3",
-  "items": [
-    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "openclaw" } },
-    {
-      "namespace": "octo.execution",
-      "name": "model",
-      "payload": { "selection": { "id": "provider/model" }, "reasoning": { "effort": "high" } }
-    },
-    { "namespace": "adapter.openclaw", "name": "options", "payload": { "agentId": "researcher" } }
-  ]
-}
-```
-
-The public protocol defines the envelope and shared beans. The name, fields, types, defaults and validation of `adapter.openclaw/options` belong exclusively to the host and OpenClaw Adapter. This example does not make them public protocol fields. Core forwards the item; OpenClaw reads `agentId`; other Adapters ignore it. Adding private settings or a custom Harness requires only the caller's item and its consuming Adapter, without a public schema registration, public type or protocol-version change. Private items are not rendered into model input.
+Private item names and fields belong to the consuming Adapter package; `adapter.xxx` is not a public protocol standard. See the [OpenClaw package README](../../../packages/octo-runtime-adapter-openclaw/README.md) for its complete example and validation. Core forwards private items without rendering them as model input.
 
 Adapters read private payloads through `agentEnvItem<T>(req.agentEnv, namespace, name)`; the generic performs no runtime validation. See [SDK integration](../getting-started/sdk.md) for host construction, Adapter validation and shared model reading through `invocationModel`.
 

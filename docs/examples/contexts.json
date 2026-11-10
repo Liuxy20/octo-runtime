@@ -1,59 +1,65 @@
 {
   "schema": "octo.context-envelope/v3",
   "items": [
-    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "codex" } },
+    {
+      "namespace": "octo.execution",
+      "name": "adapter",
+      "payload": {
+        "type": "codex"
+      }
+    },
     {
       "namespace": "octo.execution",
       "name": "model",
       "payload": {
-        "selection": { "use_provider_default": true },
-        "reasoning": { "effort": "medium" }
+        "reasoning": {
+          "effort": "medium"
+        }
       }
     },
-    { "namespace": "octo.execution", "name": "actmode", "payload": { "mode": "default" } },
     {
       "namespace": "octo.execution",
       "name": "workspace",
-      "payload": { "path": "/example/project" }
+      "payload": {
+        "path": "/example/project"
+      }
     },
     {
       "namespace": "octo.execution",
       "name": "envs",
-      "payload": { "env_variables": [{ "key": "PROJECT_ID", "value": "example-project" }] }
+      "payload": {
+        "env_variables": [
+          {
+            "key": "PROJECT_ID",
+            "value": "example-project"
+          }
+        ]
+      }
     },
     {
       "namespace": "octo.execution",
       "name": "mcp",
       "payload": {
         "mcpServers": {
-          "project-docs": { "type": "streamable_http", "url": "https://example.com/mcp" }
+          "project-docs": {
+            "type": "streamable_http",
+            "url": "https://example.com/mcp"
+          }
         }
       }
     },
-    { "namespace": "octo.execution", "name": "limits", "payload": { "run_timeout_ms": 120000 } },
     {
-      "namespace": "octo.runtime",
-      "name": "selection",
-      "payload": { "mode": "explicit", "runtime_id": "example-runtime" }
-    },
-    { "namespace": "octo.security", "name": "approval_policy", "payload": { "mode": "ask" } },
-    {
-      "namespace": "octo.content",
-      "name": "inline",
-      "payload": { "entries": [{ "text": "Selected source text", "resource_ref": "doc:example" }] }
-    },
-    {
-      "namespace": "octo.content",
-      "name": "references",
+      "namespace": "octo.execution",
+      "name": "limits",
       "payload": {
-        "entries": [
-          {
-            "resource_ref": "doc:example",
-            "resolver": "mcp",
-            "locator": { "server_ref": "project-docs", "tool": "read_document" },
-            "params": { "id": "example" }
-          }
-        ]
+        "run_timeout_ms": 120000
+      }
+    },
+    {
+      "namespace": "octo.security",
+      "name": "approval_policy",
+      "payload": {
+        "mode": "ask"
       }
     }
   ]

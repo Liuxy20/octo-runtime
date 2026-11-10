@@ -1,5 +1,9 @@
 # 工程知识变更记录
 
+## 2026-11-10
+
+- [Issue 348–351 联合清理规划](journal/shared/2026-11-10-348-351-context-envelope-plan.md)：从最新 main@7892ebdf 创建独立 worktree，补齐包内合同和消费者审计，规划自评 97/100；后续已授权实施。[实现及验证记录](journal/shared/2026-11-10-348-351-context-envelope-implementation.md)记录协议删除、私有边界、全量及双包验证、真实 Provider 结果与 Grok 网络限制。不扩大 CI，未提交。
+
 ## 2026-11-09
 
 - [Issue 346 宿主执行依赖](journal/shared/2026-11-09-346-host-execution-plan.md)：按后续授权完成 spec、实施及双轴 review，rebase main@c7ae0256。无兼容层，CLI 发现 executable，Adapter 固定路径/运行器；复用静态 metadata。全量 1455 通过/61 跳过、65 项专项、真实 Codex 与 OpenCode JSON/ACP、发行包验证通过；双轴无未关闭问题，原生 Windows/Electron 未验。方案自评 96/100，不扩 CI；2026-11-10 用户授权英文提交与 main PR，禁止自动合并。

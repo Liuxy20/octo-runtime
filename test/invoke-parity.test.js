@@ -13,7 +13,7 @@ async function fixture(t, invoke) {
   const adapter = {
     metadata: {
       type: "fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture", modes: ["native", "canonical"], nativeMethods: [] }
     },
     invoke

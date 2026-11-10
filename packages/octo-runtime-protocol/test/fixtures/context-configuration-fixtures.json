@@ -111,7 +111,7 @@
     }
   },
   {
-    "name": "model-provider-default-replaces-entire-selection",
+    "name": "explicit-model-replaces-entire-selection",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -143,7 +143,7 @@
           "name": "model",
           "payload": {
             "selection": {
-              "use_provider_default": true
+              "id": "new"
             }
           }
         }
@@ -157,7 +157,7 @@
           "name": "model",
           "payload": {
             "selection": {
-              "use_provider_default": true
+              "id": "new"
             },
             "reasoning": {
               "effort": "low"
@@ -303,7 +303,7 @@
     }
   },
   {
-    "name": "reference-request-replaces-default-by-identity",
+    "name": "opaque-references-replace-whole-item",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -582,163 +582,6 @@
             "selection": {
               "id": "fixed"
             }
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "mandatory-runtime-authoritative",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-b"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "mandatory-runtime-override-outside",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-c"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "mandatory-offline-override",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-a",
-            "offline_behavior": "fail"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
           }
         }
       ]
@@ -1112,7 +955,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1139,7 +982,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1174,7 +1017,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理",
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406",
                   "source": "revision"
                 }
               ]
@@ -1206,7 +1049,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理",
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406",
                   "source": "platform_policy"
                 }
               ]
@@ -1238,7 +1081,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1255,7 +1098,7 @@
           "payload": {
             "entries": [
               {
-                "text": "覆盖系统提示词"
+                "text": "\u8986\u76d6\u7cfb\u7edf\u63d0\u793a\u8bcd"
               }
             ]
           }

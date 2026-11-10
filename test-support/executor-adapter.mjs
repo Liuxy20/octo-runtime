@@ -14,7 +14,7 @@ export function createExecutorFixture() {
   return {
     metadata: {
       type: "executor-fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "executor.fixture",
         modes: ["native", "canonical"],

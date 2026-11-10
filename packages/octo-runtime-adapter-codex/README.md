@@ -104,3 +104,17 @@ Private workspace package, bundled with CLI but neither independently published 
 
 - [Implementation](src/index.ts), [Adapter SDK](../octo-runtime-adapter-sdk/README.md), [Runtime Protocol](../octo-runtime-protocol/README.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package owns the following item; neither its name nor its payload is registered in public Schema, catalog or generated types. Existing options may share the same payload. Invalid explicit collaborationMode values fail in this Adapter.
+
+Optional `collaborationMode` accepts only `"default"` or `"plan"`. Omission makes no `collaborationMode/list` request and sends no collaborationMode override; it does not reset a resumed thread. Explicit values must be advertised by the Provider. Unsupported modes, missing required native model or RPC failures fail without a fallback to another mode. Native settings use the explicit model/effort when supplied, otherwise the current thread response. Approval policy is independent.
+
+```json
+{ "namespace": "adapter.codex", "name": "options", "payload": { "collaborationMode": "plan" } }
+```
+
+Add this item to the same `agentEnv.items` array as the Adapter route and prepared workspace in the example above. Keep any existing options in this single item; duplicate namespace/name pairs are invalid. Model/effort remain in the shared model item. The removed public actmode item is not converted.
+
+The same private options payload also accepts `appServerRequestTimeoutMs` (app-server RPC deadline, default 30,000 ms) and `finalizationTimeoutMs` (the final-answer fallback described above, default 15,000 ms). Each uses a finite positive number; omission or an invalid value keeps its existing default. These paths are owned by this package and are not emitted as public protocol configuration hints. Explicit invalid `collaborationMode` still fails as described above.

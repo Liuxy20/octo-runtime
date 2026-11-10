@@ -26,7 +26,7 @@ syncBuiltinESMExports();
 export const testAdapter = {
   metadata: {
     type: "test",
-    agentSources: ["provisioned"],
+
     protocolSupport: {
       protocol: "test.pipes",
       modes: ["canonical"],

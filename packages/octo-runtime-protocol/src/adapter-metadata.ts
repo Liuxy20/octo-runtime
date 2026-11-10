@@ -6,7 +6,6 @@ export type HostedAdapterMetadata = Pick<
   HostedAdapterMetadataWire,
   | "workspace"
   | "type"
-  | "agentSources"
   | "processModel"
   | "transport"
   | "providerVersion"

@@ -52,7 +52,7 @@ function adapter(received, metadata = {}, verifyChildCwd = false) {
   return defineAdapter({
     metadata: {
       type: "workspace-fixture",
-      agentSources: ["provisioned", "preset"],
+
       protocolSupport: { protocol: "workspace-fixture", modes, nativeMethods: [] },
       ...metadata
     },
@@ -199,10 +199,9 @@ test("Provider-owned workspaces do not require or inspect local paths", async (t
     }
   }
   assert.equal(received.length, 4);
-  const preset = await core(t, { type: "openclaw" });
+  const preset = await core(t, { type: "openclaw", workspace: false });
   const value = input(undefined, "canonical", [
     { namespace: "octo.execution", name: "adapter", payload: { type: "openclaw" } },
-    { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
     { namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }
   ]);
   const frames = await Array.fromAsync(preset.executor.invokeFrames(value));

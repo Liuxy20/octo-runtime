@@ -11,7 +11,7 @@
 openclaw --version
 ```
 
-Runtime 连接已运行的 Gateway，不代启它。使用 `adapter.openclaw/options.payload.agentId`，不得设置本地 `workdir`。连接地址及认证在 Runtime 的 OpenClaw Adapter 配置中准备，详见[Adapter README](../../../../packages/octo-runtime-adapter-openclaw/README.md)。
+Runtime 连接已运行的 Gateway，不代启它。按包内私有合同选择目标，不得设置本地 `workdir`。连接地址及认证在 Runtime 的 OpenClaw Adapter 配置中准备，详见[Adapter README](../../../../packages/octo-runtime-adapter-openclaw/README.zh.md)。
 
 ## 渠道集成
 

@@ -2,7 +2,6 @@ import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const antigravityMetadata: AdapterMetadata = {
   type: "antigravity",
-  agentSources: ["provisioned"],
   processModel: "subprocess-per-invocation",
   transport: "ndjson/stdio"
 };

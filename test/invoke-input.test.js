@@ -61,7 +61,7 @@ test("all prepared fields, primary/recovery images and provider extensions survi
       {
         namespace: "octo.execution",
         name: "limits",
-        payload: { first_frame_timeout_ms: 10000, run_timeout_ms: 120000, enforcement: "enforce" }
+        payload: { first_frame_timeout_ms: 10000, run_timeout_ms: 120000 }
       }
     ])
   });
@@ -107,7 +107,7 @@ test("every ingress can use the same plain JSON and exact model parts reach the 
   host.register({
     metadata: {
       type: "fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async respondInteraction() {},

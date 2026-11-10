@@ -73,3 +73,9 @@ private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，�
 
 - [实现](src/index.ts)、[OpenClaw 合同](../../.octospec/rules/openclaw.md)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)。
 - [Runtime 公共协议](../octo-runtime-protocol/README.zh.md)。
+
+## 私有 AgentEnv.Item 校验
+
+上方组合示例中的 `adapter.openclaw/options` 由本包独有；`agentId` 接受字符串；沿用本包既有行为，省略或 null 采用 `main`。字符串须匹配 `^[a-z0-9_][a-z0-9_-]{0,63}$`，空字符串和非法标识拒绝。目标必须已存在，不能自动创建或替换。续接 session key 前缀及原生回执 agentId 须与所选目标一致，避免把另一 Agent 的会话交给当前目标。
+
+工作区属于 Provider；`metadata.workspace:false` 允许省略本地 cwd，与已删除的 AgentSource 无关。本条目的命名、字段、默认值与校验均不进入 protocol。其他私有 options 和连接设置继续遵守本包实现；连接凭据不放入信封。

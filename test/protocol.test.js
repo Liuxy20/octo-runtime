@@ -5,6 +5,7 @@ import {
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  RUNTIME_RUN_CONTRACT,
   assertCanonicalEvent,
   assertInteractionResponse,
   assertContextEnvelope,
@@ -607,4 +608,14 @@ test("protocol v2 rejects old roots and validates experience frames", () => {
       }
     })
   );
+});
+
+// 保留从旧 selection 套件迁移的通用版本合同断言；寻址不属于执行协议。
+test("run contract advertises execution schemas", () => {
+  assert.deepEqual(RUNTIME_RUN_CONTRACT, {
+    schema_version: 7,
+    context_schema: "octo.context-envelope/v3",
+    approval_schema: "octo.approval-request/v1"
+  });
+  assert.equal(Object.isFrozen(RUNTIME_RUN_CONTRACT), true);
 });

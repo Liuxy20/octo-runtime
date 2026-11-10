@@ -14,8 +14,7 @@ test("host emits activity without persisting private analysis and closes every a
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "experience",
-      agentSources: ["provisioned"]
+      type: "experience"
     },
     async *invoke() {
       yield {

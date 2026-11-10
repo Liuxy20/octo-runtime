@@ -231,7 +231,7 @@ for (const [name, versionCode] of [
           command: launch.command,
           metadata: {
             type: "optional-version",
-            agentSources: ["provisioned"],
+
             protocolSupport: {
               protocol: "fixture.canonical",
               modes: ["canonical"],
@@ -273,7 +273,14 @@ test("actmode verification startup uses factories and closes host-owned resource
   );
   const receipt = JSON.parse(stdout);
   assert.equal(receipt.cleanup, "complete");
-  assert.deepEqual(receipt.adapters, ["claude-code", "codex", "kimi-code", "mcode", "opencode"]);
+  assert.deepEqual(receipt.adapters, [
+    "claude-code",
+    "codex",
+    "grok-build",
+    "kimi-code",
+    "mcode",
+    "opencode"
+  ]);
 });
 
 test(

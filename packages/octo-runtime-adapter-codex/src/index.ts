@@ -1,7 +1,6 @@
 import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export const codexMetadata: AdapterMetadata = {
   type: "codex",
-  agentSources: ["provisioned"],
   mcp: true,
   processModel: "host-owned-engine",
   transport: "codex-channel",
@@ -75,7 +74,7 @@ export function createCodexAdapter({ engine }: { engine: CodexEngineProvider }) 
       const scope = {
         metadata: {
           type: "codex",
-          agentSources: ["provisioned" as const],
+
           mcp: true,
           protocolSupport: {
             protocol: "codex.app-server",

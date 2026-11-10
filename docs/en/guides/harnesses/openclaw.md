@@ -11,7 +11,7 @@
 openclaw --version
 ```
 
-Runtime connects to an existing Gateway; it does not start it. Set `adapter.openclaw/options.payload.agentId` and omit local `workdir`. Prepare connection settings and authentication in Runtime's OpenClaw Adapter configuration; see the [Adapter README](../../../../packages/octo-runtime-adapter-openclaw/README.md).
+Runtime connects to an existing Gateway; it does not start it. Select the target using the package-local contract and omit local `workdir`. Prepare connection settings and authentication in Runtime's OpenClaw Adapter configuration; see the [Adapter README](../../../../packages/octo-runtime-adapter-openclaw/README.md).
 
 ## Channel Integration
 

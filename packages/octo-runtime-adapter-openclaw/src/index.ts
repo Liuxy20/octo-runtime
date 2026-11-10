@@ -1409,15 +1409,14 @@ export function createOpenClawAdapter({
     }
   };
   return defineAdapter({
-    defaultAgentEnv: withAgentEnvItems(defaultAgentEnv("openclaw", "preset"), [
+    defaultAgentEnv: withAgentEnvItems(defaultAgentEnv("openclaw"), [
       { namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }
     ]),
     metadata: {
       type: "openclaw",
       workspace: false,
       processModel: "websocket-per-invocation",
-      transport: "openclaw-gateway-rpc",
-      agentSources: ["preset", "provisioned"]
+      transport: "openclaw-gateway-rpc"
     },
     probe: probeGateway,
     async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {

@@ -26,7 +26,7 @@ function fixture(mode = "canonical", invoke) {
   const adapter = {
     metadata: {
       type: "capacity-fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "capacity-fixture.output",
         modes: [mode],

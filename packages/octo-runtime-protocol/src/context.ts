@@ -5,12 +5,10 @@ import type {
   ContextItem,
   McpServers
 } from "./generated/protocol-types.js";
-import { RUNTIME_SELECTION_SCHEMA } from "./runtime-selection.js";
 
 export const CONTEXT_SCHEMA = "octo.context-envelope/v3" as const;
 export const RUNTIME_RUN_CONTRACT = Object.freeze({
   schema_version: 7,
-  routing_schema: RUNTIME_SELECTION_SCHEMA,
   context_schema: CONTEXT_SCHEMA,
   approval_schema: "octo.approval-request/v1"
 } as const);
@@ -20,10 +18,6 @@ export const CONTEXT_MAX_ITEMS = 32;
 export const DEFAULT_RUN_TIMEOUT_MS = 86_400_000;
 export const MAX_RUN_TIMEOUT_MS = 604_800_000;
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["ask", "assisted", "full_access"];
-
-export function assertAgentSource(value: unknown): asserts value is "preset" | "provisioned" {
-  if (value !== "preset" && value !== "provisioned") throw new TypeError("AGENT_SOURCE_INVALID");
-}
 
 export function assertApprovalMode(value: unknown): asserts value is ApprovalMode {
   if (!APPROVAL_MODES.includes(value as ApprovalMode))
@@ -44,7 +38,7 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
       throw new TypeError(
         "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
       );
-    fields(item, ["namespace", "name", "guidance", "data_format", "payload"]);
+    fields(item, ["namespace", "name", "payload"]);
     for (const property of ["namespace", "name"]) {
       const text = item[property];
       if (typeof text !== "string" || text.length > 96 || !/^[a-z0-9][a-z0-9._-]*$/.test(text))
@@ -53,13 +47,7 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
     const key = JSON.stringify([item.namespace, item.name]);
     if (keys.has(key)) throw new TypeError("CONTEXT_KEY_DUPLICATED");
     keys.add(key);
-    if (item.guidance !== undefined) {
-      if (typeof item.guidance !== "string") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    }
     object(item.payload, "CONTEXT_SCHEMA_INVALID");
-    if (item.data_format !== undefined) {
-      if (item.data_format !== "text") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    }
   }
   if (new TextEncoder().encode(JSON.stringify(value)).length > CONTEXT_MAX_BYTES)
     throw new TypeError("CONTEXT_BUDGET_EXCEEDED");
@@ -110,16 +98,6 @@ export function mergeContext(
           ...(next.payload.mcpServers as McpServers)
         }
       };
-    if (previous && item.namespace === "octo.runtime" && item.name === "selection") {
-      for (const field of ["offline_behavior", "failover"])
-        if (next.payload[field] === undefined && previous.payload[field] !== undefined)
-          next.payload[field] = previous.payload[field];
-    }
-    if (previous && item.namespace === "octo.content" && item.name === "references")
-      next.payload.entries = mergeReferences(
-        previous.payload.entries as Record<string, unknown>[],
-        next.payload.entries as Record<string, unknown>[]
-      );
     items.set(key, next);
   }
   const result: ContextEnvelope = { schema: CONTEXT_SCHEMA, items: [...items.values()] };
@@ -248,16 +226,6 @@ function assertMcpTimeout(value: unknown, path: string, maximum: number): void {
 
 export function assertJsonValue(value: unknown): void {
   json(value, 0);
-}
-
-export function mergeReferences(
-  base: Record<string, unknown>[],
-  next: Record<string, unknown>[]
-): Record<string, unknown>[] {
-  const entries = new Map(
-    [...base, ...next].map((entry) => [String(entry.resource_ref), structuredClone(entry)])
-  );
-  return [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, entry]) => entry);
 }
 
 function fields(value: Record<string, unknown>, allowed: string[]): void {

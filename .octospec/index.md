@@ -1,5 +1,13 @@
 # Octo Runtime 工程知识目录
 
+- [PR352 静默通知交付竞态](tasks/352-silence-notice-delivery/brief.md)：保留已生成通知，输出仅重置未来区间；[专项复核](tasks/352-silence-notice-delivery/review.md)与[验证](tasks/352-silence-notice-delivery/validation.md)记录真实竞态及计时回归。
+
+- [删除全局 watchdog enforcement 开关](tasks/remove-limits-enforcement/brief.md)：Schema、类型、解析、默认值与兼容分支已删除；保留有限预算和model_idle_policy。[专项复核](tasks/remove-limits-enforcement/review.md)与[验证](tasks/remove-limits-enforcement/validation.md)通过；提交状态见Git历史及issue交付评论。
+
+- [Runtime 模型输出静默通知](tasks/runtime-model-output-idle/brief.md)：复用 agent_run.event/run.notice，真实输出恢复后重新计满60秒，native不新增类型；三组专项发现已修复复核，见[审查](tasks/runtime-model-output-idle/review.md)和[验证](tasks/runtime-model-output-idle/validation.md)。Gateway #34仅建issue。
+
+- [Issue 348–351：执行信封与 Adapter 私有配置边界清理](tasks/348-351-context-envelope/brief.md)：最新 main `7892ebdf` 独立 worktree 已实施；来源分类、业务公共内容、默认值哨兵和公共 actmode 已删除。私有 item 及文档归各 Adapter 包，adapter.xxx 不登记公共 protocol。[验证](tasks/348-351-context-envelope/validation.md)记录全量、手动、真实 Provider 和双包结果及 Grok 网络限制，[自查](tasks/348-351-context-envelope/review.md)记录合同及 CI 范围。[规划自评 97/100](tasks/348-351-context-envelope/assessment.md)。CI范围未扩大；后续另行授权[删除 limits.enforcement](tasks/remove-limits-enforcement/brief.md)。
+
 - [Issue 346：宿主选择执行依赖](tasks/346-host-execution/brief.md)：最新 main `c7ae0256` 独立 worktree 已实施，无兼容层，CLI 发现 executable；[逐模块改动与 metadata 复用](tasks/346-host-execution/design.md)、[验收矩阵](tasks/346-host-execution/plan.md)、[方案自评 96/100](tasks/346-host-execution/assessment.md)。全量、65 项专项、真实 Codex/OpenCode 与包外验证见[记录](tasks/346-host-execution/validation.md)，双轴 [review](tasks/346-host-execution/review.md)无未关闭问题；Windows/Electron 实机未验。
 
 - [Issue 341：AgentEnv 直传 Adapter](tasks/341-adapter-agentenv/brief.md)：移除配置投影，私有配置归宿主与 Adapter，共性 bean 保留公共类型；整合 #339 后双轴及测试/验证 JS 审查通过，[验收](tasks/341-adapter-agentenv/validation.md)记录全量、手动专项和双包验证。仅创建 main PR，禁止自动合并，不扩大 CI。

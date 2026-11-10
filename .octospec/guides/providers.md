@@ -26,7 +26,7 @@ CLI 默认加载集合以 [manifest.json](../../apps/cli/src/manifest.json) 为�
 
 Host 公共 `invoke` 默认 native。使用 canonical-only Adapter，或需要统一事件的业务方，必须在 `InvokeInput` 中显式指定 `{ protocol_mode: "canonical" }`。公共字段与内部 Adapter context、`HostInvokeOptions` 的 `protocolMode` 不同。模式不支持时在接纳前拒绝，不从 canonical 重建原生输出，见 [输出模式合同](../rules/output-protocol.md)。当前仓库不再提供 Worker 远程接入包。
 
-`agentSources` 声明来源支持，`protocolSupport` 描述输出协议；可用状态由真实 probe 单独判断。Runtime 已删除 `executionFeatures` 标签机制；功能入口归宿主管理，Adapter 按具体执行合同适配或明确拒绝。详见 [执行元数据](../rules/adapter-metadata.md)。Host 当前没有公开 fork 流程，不因 Provider 原生具有 fork 就声明端到端支持。
+来源分类已移除；`protocolSupport` 描述输出协议；可用状态由真实 probe 单独判断。Runtime 已删除 `executionFeatures` 标签机制；功能入口归宿主管理，Adapter 按具体执行合同适配或明确拒绝。详见 [执行元数据](../rules/adapter-metadata.md)。Host 当前没有公开 fork 流程，不因 Provider 原生具有 fork 就声明端到端支持。
 
 ## 会话与权限
 

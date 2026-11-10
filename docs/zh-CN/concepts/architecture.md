@@ -98,24 +98,7 @@ Runtime Home 用于 Kernel 自身状态；CODEX_HOME 用于 Codex 数据。Home 
 
 只有跨 Harness 共用的概念，例如模型、思考强度和审批策略，才在公共协议中定义 bean。`adapter-sdk` 提供 item 读取、组合及共性配置帮助函数。内置 Adapter 暴露可独立修改的 `defaultAgentEnv`，调用方可据此构造请求；执行时不向原信封追加默认条目。
 
-以 OpenClaw 为例，目标 Agent 是宿主与 OpenClaw Adapter 的私有约定：
-
-```json
-{
-  "schema": "octo.context-envelope/v3",
-  "items": [
-    { "namespace": "octo.execution", "name": "adapter", "payload": { "type": "openclaw" } },
-    {
-      "namespace": "octo.execution",
-      "name": "model",
-      "payload": { "selection": { "id": "provider/model" }, "reasoning": { "effort": "high" } }
-    },
-    { "namespace": "adapter.openclaw", "name": "options", "payload": { "agentId": "researcher" } }
-  ]
-}
-```
-
-公共协议只定义信封和公共 bean；上例 `adapter.openclaw/options` 的名称、字段、类型、默认值及校验均归宿主与 OpenClaw Adapter，不属于公共协议。Core 保序透传，OpenClaw Adapter 自己读取 `agentId`，其他 Adapter 忽略该私有 item。新增 OpenClaw 专属参数或定制 Harness 时，只需宿主构造对应 item、对应 Adapter 消费，无须注册公共 schema、增加公共类型或修改协议版本。私有 item 不会自动进入模型输入。
+私有 item 的命名和字段由所属 Adapter 包定义；`adapter.xxx` 不是公共协议规范。完整示例与校验见 [OpenClaw 包文档](../../../packages/octo-runtime-adapter-openclaw/README.zh.md)。Core 保序透传，不将私有 item 渲染为模型输入。
 
 Adapter 使用 `agentEnvItem<T>(req.agentEnv, namespace, name)` 读取私有 payload；泛型不执行运行时校验。宿主构造、Adapter 校验和公共 `invocationModel` 读取的完整示例见 [SDK 接入](../getting-started/sdk.md)。
 

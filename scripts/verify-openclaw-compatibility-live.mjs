@@ -120,7 +120,6 @@ for (const scenario of probeOnly ? [] : scenarios) {
             name: "approval_policy",
             payload: { mode: requestedPermission }
           },
-          { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
           {
             namespace: "octo.execution",
             name: "adapter",

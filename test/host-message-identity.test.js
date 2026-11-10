@@ -13,8 +13,7 @@ test("Host scopes anonymous segments to tool boundaries and closes every channel
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "identity",
-      agentSources: ["provisioned"]
+      type: "identity"
     },
     async *invoke() {
       const event = (type, payload) => ({ protocolVersion: 2, type, payload });

@@ -59,10 +59,12 @@ test("built-in helper definitions exist without registering private payloads", (
   assert.throws(() => contextTypeDefinition("unknown", "selection"), /CONTEXT_TYPE_UNSUPPORTED/);
 });
 
-test("business material types cannot become persistent execution defaults", () => {
-  assert.equal(contextTypeDefinition("octo.content", "inline").persistent, false);
-  assert.equal(contextTypeDefinition("octo.content", "references").persistent, false);
-  assert.equal(contextTypeDefinition("octo.runtime", "selection").persistent, true);
+test("business material types are not registered public protocol entries", () => {
+  assert.throws(() => contextTypeDefinition("octo.content", "inline"), /CONTEXT_TYPE_UNSUPPORTED/);
+  assert.throws(
+    () => contextTypeDefinition("octo.content", "references"),
+    /CONTEXT_TYPE_UNSUPPORTED/
+  );
 });
 
 test("configuration rejects unknown fields and default-layer trusted controls", () => {

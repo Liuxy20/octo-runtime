@@ -82,3 +82,15 @@ Private workspace package, neither independently published nor re-exported throu
 - [Implementation](src/index.ts), [ACP transport](../octo-runtime-acp-client/README.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).
 - A wrapper to copy: [Hermes](../octo-runtime-adapter-hermes/README.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package uses `adapter.<metadata.type>/options` with optional `modeId: string`, an exact Provider-native ID. This is a package-local contract, not registered in public protocol; adapter.xxx is not a public namespace standard.
+
+Omission performs no mode discovery or setter and does not reset a resumed session. Explicit values must be nonblank strings and match the current Provider advertisement exactly, without trimming or mapping default to build. A mode config option (including grouped options) and its actual configId take precedence; otherwise modes.availableModes is used. Missing advertisements, unsupported IDs, missing configId and RPC rejection fail without selecting another mode. No setter is sent when the current value already matches; otherwise session/set_config_option or session/set_mode is called. Setter success is acceptance, not fabricated confirmation. modeId does not change approval authorization.
+
+Add the following item alongside the caller-prepared workspace and shared adapter/model items. Choose modeId from the native advertisement; the example does not promise Provider support. Keep existing options in the same payload. Old actmode is not converted.
+
+```json
+{ "namespace": "adapter.<metadata.type>", "name": "options", "payload": { "modeId": "plan" } }
+```

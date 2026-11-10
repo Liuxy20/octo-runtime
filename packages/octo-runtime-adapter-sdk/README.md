@@ -18,7 +18,6 @@ import { defineAdapter } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 export const echoAdapter = defineAdapter({
   metadata: {
     type: "echo",
-    agentSources: ["provisioned"],
     protocolSupport: { protocol: "echo.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async *invoke(request) {
@@ -59,7 +58,7 @@ Core forwards `request.agentEnv` as an ordered snapshot. Read common beans with 
 An Adapter with resident resources may supply synchronous, lazy `createExecutionScope({log})`. Core creates one scope per registration, binds invocation and replies to it, calls `beginShutdown(reason)` before cancellation, and awaits `close({deadline})`. The deadline is absolute `performance.now()` milliseconds. Report unresolved and failed service IDs independently of invocation cleanup; optional `processes()` returns only safe resident ownership snapshots. A turn releases its subscription; a scope cleans only work, leases and resources it owns. Explicit host owners manage injected persistent Engines and connections. Adapter construction methods, parameters and dependencies are unrestricted; CLI manifest conventions do not constrain SDK construction. See [scope types](src/execution-scope.ts) and the [Codex implementation](../octo-runtime-adapter-codex/src/service.ts).
 
 - You receive a prepared `InvokeRequest`, not the public `InvokeInput`.
-- Local execution receives the caller's existing absolute directory, validated by the Adapter through SDK helpers. Do not default to cwd, allocate or recreate application workspaces on resume/fallback. Workspace-owning external/preset Agents and `metadata.workspace: false` Adapters may omit the local override; preserve Provider-owned and Runtime operational state separately. See [workdir contract](../../docs/en/reference/invoke-input.md).
+- Local execution receives the caller's existing absolute directory, validated by the Adapter through SDK helpers. Do not default to cwd, allocate or recreate application workspaces on resume/fallback. Adapters declaring `metadata.workspace: false` may omit the local override; preserve Provider-owned and Runtime operational state separately. See [workdir contract](../../docs/en/reference/invoke-input.md).
 - Emit output for the declared and selected mode: `CanonicalEvent`s in canonical mode, native payloads and control output in native mode. A native-only Adapter does not need a canonical converter. Read the selected mode from internal `context.protocolMode`; public callers select it with `InvokeInput.protocol_mode`.
 - Keep unsupported settings visible. Never report a setting as applied when the Provider rejected or ignored it.
 - Cancellation has to reach the real Provider operation, and cleanup has to be awaited. A terminal event or a stopped iterator does not prove child processes exited.

@@ -104,3 +104,17 @@ private workspace 包，包含在 CLI 发行物里，不单独发布 npm 包，�
 
 - [实现](src/index.ts)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)、[Runtime 公共协议](../octo-runtime-protocol/README.zh.md)。
 - [输入参考](../../docs/zh-CN/reference/invoke-input.md)。
+
+## 私有 AgentEnv.Item
+
+以下条目由本包私有定义，名称与 payload 均不登记公共 Schema、catalog 或生成类型。已有 options 可放在同一 payload 中；非法显式 collaborationMode 由本 Adapter 拒绝。
+
+可选 `collaborationMode` 仅接受 `"default"` 或 `"plan"`。省略时不调用 `collaborationMode/list`，也不发送模式覆盖，不主动重置续接线程。显式模式必须在 Provider 广告中；不支持、原生必填模型缺失或 RPC 失败均失败，不改选其他模式。原生 settings 优先采用显式 model/effort，否则采用当前线程响应。审批策略独立。
+
+```json
+{ "namespace": "adapter.codex", "name": "options", "payload": { "collaborationMode": "plan" } }
+```
+
+将该条目加入上方示例的 `agentEnv.items`，与 Adapter 路由和已准备的 workspace 一起传入。已有 options 放入同一条目；重复 namespace/name 非法。model/effort 仍使用公共 model item。已删除的公共 actmode 不会自动转换。
+
+同一私有 options payload 还可设置 `appServerRequestTimeoutMs`（app-server RPC 截止时间，默认 30,000ms）和 `finalizationTimeoutMs`（上文 final_answer 收尾 fallback，默认 15,000ms）。两者使用有限正数；省略或非法值沿用现有默认值。这些路径由本包维护，不由公共 protocol 输出为配置提示。显式非法 `collaborationMode` 仍按上文规则拒绝。

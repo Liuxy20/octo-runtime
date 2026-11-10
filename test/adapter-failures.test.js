@@ -86,7 +86,7 @@ test("all Adapters preserve the same canonical failure detail and structured err
     const event = await failed({
       metadata: {
         type,
-        agentSources: ["provisioned"],
+
         protocolSupport: { protocol: `${type}.canonical`, modes: ["canonical"], nativeMethods: [] }
       },
       async *invoke() {
@@ -130,7 +130,7 @@ test("ACP raw message preservation does not bypass sanitization of outer failure
     const event = await failed({
       metadata: {
         type,
-        agentSources: ["provisioned"],
+
         protocolSupport: { protocol: `${type}.canonical`, modes: ["canonical"], nativeMethods: [] }
       },
       async *invoke() {

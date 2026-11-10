@@ -162,8 +162,7 @@ test("Host rejects interactive approval with no response implementation", async 
           modes: ["canonical"],
           nativeMethods: []
         },
-        type: "broken",
-        agentSources: ["provisioned"]
+        type: "broken"
       },
       async *invoke() {
         started = true;

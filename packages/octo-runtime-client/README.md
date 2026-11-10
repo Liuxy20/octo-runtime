@@ -52,6 +52,6 @@ Business channels use the independent `@mininglamp-oss/octo-channel-gateway` pac
 
 中文：CLI 启动执行服务后，独立 App 只依赖本 client；纯原生宿主从源码 workspace 按需依赖 Kernel/Core、公共辅助包与所选 Adapter，不通过 CLI 聚合包接入。依赖、加载和所有权见 [SDK 接入](../../docs/zh-CN/getting-started/sdk.md)。
 
-For local Agent execution, applications must pass an already prepared absolute directory through a path-only `octo.execution/workspace` item. Client/Kernel do not choose cwd, create a directory or recreate it during recovery. External/preset Agents that own their workspace can omit the local override. Old `mode` payloads are removed without compatibility conversion. See [workdir validation, error codes and migration](../../docs/en/reference/invoke-input.md). The independent Gateway still requires its own workspace and prompt migration before adopting this release.
+For local Agent execution, applications must pass an already prepared absolute directory through a path-only `octo.execution/workspace` item. Client/Kernel do not choose cwd, create a directory or recreate it during recovery. Adapters declaring `metadata.workspace: false` can omit the local override. Old `mode` payloads are removed without compatibility conversion. See [workdir validation, error codes and migration](../../docs/en/reference/invoke-input.md). The independent Gateway still requires its own workspace and prompt migration before adopting this release.
 
-中文：本地执行必须显式传入已经准备好的绝对目录（仅含 path 的 workspace item）；client/Kernel 不默认选择 cwd、不创建目录，也不在恢复时补建。自行管理工作区的外部/preset Agent 可省略本地覆盖。旧 mode payload 无兼容转换；目录错误码与迁移见输入参考。独立 Gateway 的工作区与提示词仍须另行迁移。
+中文：本地执行必须显式传入已经准备好的绝对目录（仅含 path 的 workspace item）；client/Kernel 不默认选择 cwd、不创建目录，也不在恢复时补建。声明 `metadata.workspace: false` 的 Adapter 可省略本地覆盖。旧 mode payload 无兼容转换；目录错误码与迁移见输入参考。独立 Gateway 的工作区与提示词仍须另行迁移。

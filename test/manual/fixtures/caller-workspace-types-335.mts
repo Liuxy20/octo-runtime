@@ -1,6 +1,5 @@
 import type {
   AgentEnv,
-  ContextPreparationReceipt,
   ContextWorkspacePayload,
   InvokeRequest
 } from "../../../packages/octo-runtime-protocol/dist/index.js";
@@ -26,8 +25,6 @@ const env: AgentEnv = {
 const oldEnv: AgentEnv = { ...env, controlInstructions: "" };
 // @ts-expect-error Workspace modes were removed, even if accompanied by a valid path.
 const oldWorkspace: ContextWorkspacePayload = { path: "/caller/prepared", mode: "fixed" };
-// @ts-expect-error The preparation receipt no longer contains a workspace mode.
-const receiptMode: keyof ContextPreparationReceipt = "workspace_mode";
 // @ts-expect-error Internal InvokeRequest no longer exposes the removed instruction field.
 const requestField: keyof InvokeRequest = "controlInstructions";
-void [workspace, env, oldEnv, oldWorkspace, receiptMode, requestField];
+void [workspace, env, oldEnv, oldWorkspace, requestField];

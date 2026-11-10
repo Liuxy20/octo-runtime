@@ -54,7 +54,6 @@ for await (const event of adapter.invoke(
     agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
       { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
       { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
-      { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
       {
         namespace: "octo.execution",
         name: "adapter",

@@ -68,3 +68,17 @@ private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，�
 
 - [实现](src/index.ts)、[ACP Adapter](../octo-runtime-adapter-acp/README.zh.md)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)。
 - [输入参考](../../docs/zh-CN/reference/invoke-input.md)。
+
+## 私有 AgentEnv.Item
+
+本包采用 `adapter.opencode/options`，可选 `modeId: string` 为 Provider 原生 ID；这是包内约定，不登记公共 protocol，也不将 adapter.xxx 规定为公共命名规范。
+
+省略不探测或设置模式，也不主动重置续接会话。显式值必须为非空、非纯空白字符串，按原值精确匹配本次 Provider 广告；不 trim、不把 default 改为 build。优先使用 mode config option（含分组选项）及其真实 configId，否则使用 modes.availableModes。无广告、不支持值、缺 configId 或 RPC 拒绝均失败，不替换模式。当前值相同时不发 setter；否则调用 session/set_config_option 或 session/set_mode。setter 成功只表示请求被接受，不伪造生效回执。modeId 不改变审批授权。
+
+仅 ask 路径走 ACP 并支持此字段；full_access 走 JSON CLI，显式 modeId 在启动前以 OPENCODE_MODE_UNSUPPORTED 拒绝，不切换审批或传输。assisted 仍不支持。
+
+将以下条目与调用方准备的 workspace、公共 adapter/model item 放在同一 agentEnv.items 中；modeId 使用本次原生广告中的值，示例值不承诺 Provider 支持。已有 options 合在同一 payload，旧 actmode 不转换。
+
+```json
+{ "namespace": "adapter.opencode", "name": "options", "payload": { "modeId": "plan" } }
+```

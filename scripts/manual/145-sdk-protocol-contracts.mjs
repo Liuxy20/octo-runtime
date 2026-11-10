@@ -199,7 +199,7 @@ test("A3: public native-only execution completes without canonical output or con
   const adapter = {
     metadata: {
       type: "native-docs",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "docs.native", modes: ["native"], nativeMethods: [] }
     },
     async *invoke(request, context) {
@@ -232,7 +232,7 @@ test("A3: canonical-only adapter rejects default native before invocation", asyn
   let calls = 0;
   executor.register(
     defineAdapter({
-      metadata: { type: "canonical-docs", agentSources: ["provisioned"] },
+      metadata: { type: "canonical-docs" },
       async *invoke() {
         calls++;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };

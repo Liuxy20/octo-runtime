@@ -957,7 +957,7 @@ test("OpenCode preserves model rounds and associates their reasoning, tools, and
 });
 test("JSON CLI adapters reap a provider that stays alive after a semantic terminal", async () => {
   const adapter = createJsonCliAdapter({
-    metadata: { type: "semantic-terminal", agentSources: ["provisioned"] },
+    metadata: { type: "semantic-terminal" },
     buildCommand: () => ({
       command: process.execPath,
       args: ["-e", "console.log(JSON.stringify({done:true}));setInterval(()=>{},1000)"]
@@ -1982,7 +1982,7 @@ test("built-in Adapters expose execution metadata without feature catalogues", (
       adapter.metadata.type
     );
     assert.equal(Object.hasOwn(adapter.metadata, "capabilities"), false, adapter.metadata.type);
-    assert.ok(adapter.metadata.agentSources.length > 0);
+    assert.equal(Object.hasOwn(adapter.metadata, "agentSources"), false);
     assert.equal(typeof adapter.invoke, "function");
   }
 });

@@ -4,7 +4,7 @@ import { setTimeout as delay } from "node:timers/promises";
 export const modelWaitAdapter = {
   metadata: {
     type: "model-wait-fixture",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "model-wait-fixture", modes: ["canonical"], nativeMethods: [] }
   },
   async *invoke(request) {

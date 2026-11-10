@@ -80,3 +80,15 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 - [Implementation](src/index.ts), [Adapter SDK](../octo-runtime-adapter-sdk/README.md), [Runtime Protocol](../octo-runtime-protocol/README.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package owns the following item; neither its name nor its payload is registered in public Schema, catalog or generated types. Existing options may share the same payload. Invalid explicit values fail in this Adapter.
+
+Optional `permissionMode` accepts only `"plan"`. Omission preserves the approval mapping: ask → default, assisted → auto, full_access → bypassPermissions. Plan overrides that CLI permission mode and never adds `--dangerously-skip-permissions`, including with full_access; interaction authorization remains unchanged. Other values, including null and default, are rejected. An absent or different native init permissionMode produces a canonical provider diagnostic; native output retains the Provider messages. No shared mode evidence is generated.
+
+```json
+{ "namespace": "adapter.claude-code", "name": "options", "payload": { "permissionMode": "plan" } }
+```
+
+Add this item to the same `agentEnv.items` array as the Adapter route and prepared workspace in the example above. Keep any existing options in this single item; duplicate namespace/name pairs are invalid. Model/effort remain in the shared model item. The removed public actmode item is not converted.

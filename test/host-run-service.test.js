@@ -14,8 +14,7 @@ function fixture(invoke, modes = ["canonical"]) {
         modes,
         nativeMethods: []
       },
-      type: "fixture",
-      agentSources: ["provisioned"]
+      type: "fixture"
     },
     invoke
   });

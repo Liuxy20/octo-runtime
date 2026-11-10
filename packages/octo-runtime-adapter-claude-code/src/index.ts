@@ -1,3 +1,4 @@
+import { claudePlanMode } from "./agent-env.js";
 import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const claudeCodeMetadata: AdapterMetadata = {
@@ -8,7 +9,6 @@ export const claudeCodeMetadata: AdapterMetadata = {
     nativeMethods: ["managed-turn", "can_use_tool", "control_response", "cancel"]
   },
   type: "claude-code",
-  agentSources: ["provisioned"],
   processModel: "subprocess-per-invocation",
   transport: "ndjson/stdio"
 };
@@ -24,10 +24,9 @@ import {
   invocationEnvironment,
   invocationMcpServers,
   assertMcpOptions,
-  actmodeEvidence,
   mapReasoningEffort
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import { canonicalTerminalStatus, contextActmode } from "@mininglamp-oss/octo-runtime-protocol";
+import { canonicalTerminalStatus } from "@mininglamp-oss/octo-runtime-protocol";
 /**
  * Claude Code local CLI transport and event normalization layer.
  *
@@ -123,9 +122,7 @@ export async function buildClaudeCommand(
   if (hasImageInput(req))
     throw new Error("UNSUPPORTED_INPUT_MODALITY: claude-code does not encode image input");
   const mode =
-    contextActmode(req.agentEnv) === "plan"
-      ? "plan"
-      : claudePermissionMode(invocationApprovalMode(req));
+    claudePlanMode(req) === "plan" ? "plan" : claudePermissionMode(invocationApprovalMode(req));
   const servers = invocationMcpServers(req, invocationEnvironment(req, {}, inherited));
   assertMcpOptions(servers, "claude-code", []);
   // Native Claude expands placeholders again at connection time. Reject values
@@ -747,7 +744,7 @@ export function createClaudeCodeAdapter({
     // The normalizer must not be hoisted to an adapter singleton: one adapter may run several invocations concurrently.
     const normalizer =
       permissions instanceof NativeInteractionBridge ? undefined : new ClaudeEventNormalizer();
-    const requestedMode = contextActmode(request.agentEnv);
+    const requestedMode = claudePlanMode(request);
     let modeReported = false;
     try {
       if (normalizer)
@@ -871,33 +868,28 @@ export function createClaudeCodeAdapter({
         if (
           requestedMode !== undefined &&
           !modeReported &&
-          native.type === "system" &&
-          native.subtype === "init"
+          ((native.type === "system" && native.subtype === "init") || native.type === "result")
         ) {
           modeReported = true;
           const nativeMode =
             typeof native.permissionMode === "string" ? native.permissionMode : undefined;
-          const effective =
-            nativeMode === "plan"
-              ? "plan"
-              : nativeMode &&
-                  ["default", "auto", "bypassPermissions", "acceptEdits", "dontAsk"].includes(
-                    nativeMode
-                  )
-                ? "default"
-                : null;
-          yield actmodeEvidence(
-            {
-              requested: requestedMode,
-              effective,
-              status: effective === requestedMode ? "applied" : "unknown",
-              ...(nativeMode ? { nativeMode } : {}),
-              ...(effective !== requestedMode
-                ? { effective: null, reason: "provider_unconfirmed" as const }
-                : {})
-            },
-            context?.protocolMode
-          );
+          // 原生模式是否确认由本包解释；不再发布统一 execution evidence。
+          if (nativeMode !== requestedMode && context?.protocolMode !== "native")
+            yield {
+              protocolVersion: 2,
+              type: "run.notice",
+              payload: {
+                noticeId: `${request.invocationId}:permission-mode`,
+                code: "provider_diagnostic",
+                severity: "warning",
+                params: {
+                  adapter: "claude-code",
+                  diagnosticId: "permission-mode-unconfirmed",
+                  category: "permission_mode_unconfirmed",
+                  message: "Claude did not confirm the requested plan permission mode."
+                }
+              }
+            };
         }
         if (native.type === "system" && native.subtype === "init")
           context?.reportActivity?.({ kind: "turn_started", method: "turn_start" });

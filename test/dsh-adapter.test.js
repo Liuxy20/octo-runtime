@@ -526,16 +526,6 @@ test("DSH same provider session concurrency is rejected without disturbing owner
 });
 const preflightCases = [
   {
-    name: "actmode",
-    code: "DSH_ACTMODE_UNSUPPORTED",
-    change: (request) =>
-      request.agentEnv.items.push({
-        namespace: "octo.execution",
-        name: "actmode",
-        payload: { mode: "plan" }
-      })
-  },
-  {
     name: "sandbox",
     code: "DSH_CONFIG_INVALID",
     change: (request) => {

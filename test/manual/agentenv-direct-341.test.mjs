@@ -32,7 +32,7 @@ const input = (agentEnv) => ({
 });
 const customAdapter = (invoke) =>
   defineAdapter({
-    metadata: { type: "private-host", agentSources: ["provisioned"], workspace: false },
+    metadata: { type: "private-host", workspace: false },
     respondInteraction: async () => {},
     invoke
   });

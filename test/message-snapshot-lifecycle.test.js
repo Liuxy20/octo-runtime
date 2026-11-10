@@ -51,8 +51,7 @@ test("Host closes a still-streaming snapshot on root completion", async () => {
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "snapshot",
-      agentSources: ["provisioned"]
+      type: "snapshot"
     },
     async *invoke() {
       yield {

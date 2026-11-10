@@ -99,7 +99,7 @@ test("default HostFrame policy accepts the observed 1.43 MB completion payload",
   host.register({
     metadata: {
       type: "large-output",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "large-output.canonical",
         modes: ["canonical"],
@@ -140,7 +140,7 @@ test("HostFrame capacity failures retain their precise control reason", async ()
   host.register({
     metadata: {
       type: "oversized-frame",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "oversized-frame.canonical",
         modes: ["canonical"],

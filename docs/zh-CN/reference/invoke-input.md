@@ -25,7 +25,7 @@ AgentEnv 只有 `schema`、`items`。模型、思考强度等共性配置使用�
 
 Runtime 在 Provider 执行前检查本地路径，不创建或重建。未提供路径返回 `WORKDIR_REQUIRED`，相对或非法路径返回 `WORKDIR_INVALID`，目录不存在返回 `WORKDIR_NOT_FOUND`，路径为文件返回 `WORKDIR_NOT_DIRECTORY`，无权限或其他不可用返回 `WORKDIR_UNAVAILABLE`。这些原因码沿用公开分类 `OH-ADP-3004`；可读取异常 `.code`、canonical 失败的 `payload.code` / `failure.reasonCode` 或 native error control。检查不能阻止检查后、Provider 操作前的文件系统变化，后续原生错误仍如实返回。
 
-续接和显式 fresh recovery 仍须传入选定目录。目录消失就失败，不补建或另选。外部/preset Agent 与声明 `metadata.workspace: false` 的 Adapter 可以不传本地覆盖；OpenClaw 使用自身工作区，不把远端路径当本地目录检查。Runtime Home、日志、IPC 文件和 Provider 自有状态继续分别管理。
+续接和显式 fresh recovery 仍须传入选定目录。目录消失就失败，不补建或另选。声明 `metadata.workspace: false` 的 Adapter 可以不传本地覆盖；OpenClaw 使用自身工作区，不把远端路径当本地目录检查。Runtime Home、日志、IPC 文件和 Provider 自有状态继续分别管理。
 
 Issue #335 删除 workspace `mode`（`fixed`、`random`、`none`）、回执/投影中的 `workspace_mode`、`prepareRunContext` 与 `WorkspaceAssignments`。带旧 mode 的 payload 明确拒绝；调用方须删掉它并在调用前准备目录。不提供兼容转换，不删除用户数据；历史分配的目录仍归用户。Run 7、Context v3、IPC 2 和 Adapter transport 2 保持不变。
 

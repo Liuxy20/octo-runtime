@@ -160,7 +160,7 @@ test("Codex finalization timeout cannot retry an already answered turn", () => {
     }
   );
   assert.equal(failure.retryable, false);
-  assert.equal(failure.params.configParameter, "adapter.codex/options.finalizationTimeoutMs");
+  assert.deepEqual(failure.params, {});
 });
 
 test("timeout causes have distinct public codes and actionable configuration paths", () => {
@@ -171,7 +171,7 @@ test("timeout causes have distinct public codes and actionable configuration pat
     ["ADAPTER_TOOL_DEADLINE", "3010", "runtime_limits.tool_wall_timeout_ms"],
     ["ADAPTER_RUN_DEADLINE", "3011", "runtime_limits.run_timeout_ms"],
     ["ADAPTER_CLEANUP_TIMEOUT", "3012", "runtime_limits.cancel_grace_ms"],
-    ["RPC_TIMEOUT", "3013", "adapter.codex/options.appServerRequestTimeoutMs"]
+    ["RPC_TIMEOUT", "3013", undefined]
   ];
   for (const [code, suffix, parameter] of cases) {
     const context = {
@@ -192,9 +192,7 @@ test("timeout causes have distinct public codes and actionable configuration pat
     assert.equal(payload.failure.code, `OH-ADP-${suffix}`);
     assert.equal(
       payload.failure.params.configParameter,
-      parameter.startsWith("adapter.")
-        ? parameter
-        : parameter.replace("runtime_limits.", "octo.execution/limits.")
+      parameter?.replace("runtime_limits.", "octo.execution/limits.")
     );
     assert.doesNotMatch(JSON.stringify(payload), /private|secret/);
     assert.doesNotThrow(() =>

@@ -31,7 +31,8 @@ Set-Acl -LiteralPath $path -AclObject $acl
       {
         env: { ...process.env, OCTO_FILE_PROTECTION_FIXTURE: file },
         windowsHide: true,
-        timeout: 10000
+        // 与只读 ACL 探针使用同一有限预算，权限断言仍须真实执行。
+        timeout: 30000
       }
     );
   } else {
@@ -66,7 +67,8 @@ test(
         new URL("../test-support/file-protection.mjs", import.meta.url).href,
         file
       ],
-      { env: { ...process.env, PSModulePath: modules }, windowsHide: true, timeout: 15000 }
+      // 外层 Node 的预算覆盖内层 PowerShell 的 30 秒以及自身启动和退出。
+      { env: { ...process.env, PSModulePath: modules }, windowsHide: true, timeout: 45000 }
     );
   }
 );

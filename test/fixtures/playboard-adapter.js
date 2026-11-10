@@ -5,9 +5,7 @@ export const playboardAdapter = {
       protocol: "playboard-test.canonical",
       modes: ["canonical"],
       nativeMethods: []
-    },
-
-    agentSources: ["provisioned", "preset"]
+    }
   },
   async respondInteraction() {},
   async *invoke(request, context) {

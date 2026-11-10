@@ -76,7 +76,7 @@ Gateway 是独立 Git 仓库和 npm package：https://github.com/Mininglamp-OSS/
 
 AgentEnv 仅含 schema/items。Core 只读取 Adapter 路由，为本次调用复制快照并保序透传；配置语义校验、默认值和 Provider 原生映射归 Adapter，不生成中间配置对象。adapter-sdk 提供通用 item 读取和组合帮助函数、共性配置 helper；内置 Adapter 暴露独立副本 defaultAgentEnv 供宿主选用，执行时不向原信封追加默认条目。Core 保留执行、取消、watchdog 和清理生命周期；Adapter 解释预算后通过本地上下文配置 watchdog。
 
-只有模型、思考强度等各 Harness 共用概念才定义公共 bean。OpenClaw 是私有扩展的例子：公共 octo.execution/adapter 只含 type: openclaw；宿主另构造 adapter.openclaw/options，OpenClaw Adapter 自己读取其中 agentId。该私有 item 的名称、字段、类型、默认值及校验完全属于宿主和 Adapter，不进入公共 schema、生成类型或通用 SDK 专属配置模型。其他 Adapter 忽略，新增专属参数无须公共登记或协议版本变更。完整示例见[架构文档](../../docs/zh-CN/concepts/architecture.md)。可信连接认证经本地 Adapter 上下文传递，不写回调用方 AgentEnv。
+只有模型、思考强度等各 Harness 共用概念才定义公共 bean。私有 item 的命名、字段、类型、默认值及校验完全属于调用方与对应 Adapter，不进入公共 schema、catalog、生成类型或通用 SDK 专属配置模型。adapter.xxx 不是公共命名空间规范，不注册、不建立公共私有字段目录。新增专属参数无须公共登记或协议版本变更；由包内 README 维护权威合同，例如 [OpenClaw](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。可信连接认证经本地 Adapter 上下文传递，不写回调用方 AgentEnv。
 
 ### agentEnv 不定义会话身份
 
@@ -134,7 +134,7 @@ HostApp 选择安装与认证方案。Runtime 不隐式登录、刷新业务凭�
 
 Issue 335 的执行边界为调用方已成功准备的绝对目录 → Adapter 校验 → Provider 执行。CLI 与 SDK 均须显式传入 workspace.path，不默认取 cwd、Home 或旧会话，不分配随机目录、不在缺失或恢复时重建。workspace payload 仅含 path，删除 fixed/random/none mode、workspace_mode、prepareRunContext 和 WorkspaceAssignments，不保留兼容转换。已有用户目录不删除。
 
-路径在 Provider 操作前检查；缺失、非法、不存在、非目录及不可访问分别返回 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE，公开分类沿用 OH-ADP-3004。续接和 fresh recovery 仍使用本次调用路径，消失就失败；校验不承诺消除文件系统竞态。外部/preset Agent 或 metadata.workspace:false 的 Adapter 可以没有本地覆盖，OpenClaw 的原生工作区归 Provider，不制造或 stat 远端路径。Runtime Home、日志、IPC 及 Provider 自有状态与应用目录分别管理，运维目录的既有创建与清理不因本次删除而扩大。
+路径在 Provider 操作前检查；缺失、非法、不存在、非目录及不可访问分别返回 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE，公开分类沿用 OH-ADP-3004。续接和 fresh recovery 仍使用本次调用路径，消失就失败；校验不承诺消除文件系统竞态。声明 metadata.workspace:false 的 Adapter 可以没有本地覆盖，OpenClaw 的原生工作区归 Provider，不制造或 stat 远端路径。Runtime Home、日志、IPC 及 Provider 自有状态与应用目录分别管理，运维目录的既有创建与清理不因本次删除而扩大。
 
 ## 业务动作归 Agent tool call，Context 约束行为
 
@@ -143,3 +143,5 @@ octo-cli 是业务团队的 API 工具，与 Runtime CLI 不同。是否预置�
 ## 保持的执行约束
 
 原生 Kernel 和 Core 共享宿主故障域，RPC 不提供执行 worker 隔离。Core iterator 提前关闭请求取消；Kernel 观察 iterator/连接关闭只结束观察。Windows taskkill 依赖可识别的进程树，leader 先退、宿主被杀或事件循环阻塞时不能承诺后代清空；cleanup.complete 只能代表实际确认范围。不得把强退当作执行或投递成功。
+
+业务调用方负责 endpoint 寻址、设备选择、授权候选与故障转移，再使用 octo-runtime-client 向已选定的 Runtime invoke。Runtime 是执行边界，不登记 octo.runtime/selection、已解析候选或寻址 schema，也不补齐或合并路由策略；不得从 AgentEnv 恢复设备调度责任。

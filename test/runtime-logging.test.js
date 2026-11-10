@@ -36,7 +36,7 @@ test("F31 kernel lifecycle counts only this input/context and keeps execution in
   host.register({
     metadata: {
       type: "fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke() {
@@ -155,7 +155,7 @@ test("Core provides the shared adapter log sink and records the canonical failur
   core.register({
     metadata: {
       type: "fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke(_request, context) {

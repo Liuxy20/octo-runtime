@@ -86,13 +86,7 @@ ajv.addKeyword("x-octo-capability-selection", {
     return new Set(ids).size === ids.length && ids.every((id) => !excluded.includes(id));
   }
 });
-ajv.addKeyword("x-octo-unique-resource-refs", {
-  type: "object",
-  validate: (enabled, value) =>
-    !enabled ||
-    !Array.isArray(value.entries) ||
-    new Set(value.entries.map((entry) => entry.resource_ref)).size === value.entries.length
-});
+
 ajv.addKeyword("x-octo-unique-env-keys", {
   type: "object",
   validate: (enabled, value) =>
@@ -470,13 +464,13 @@ test("Context merge replaces atomic model without losing other execution fields 
       {
         namespace: "octo.execution",
         name: "model",
-        payload: { selection: { use_provider_default: true } }
+        payload: { selection: { id: "b" } }
       }
     ]
   };
   const merged = mergeContext(defaults, overrides);
   assert.deepEqual(merged.items.find((item) => item.name === "model").payload, {
-    selection: { use_provider_default: true }
+    selection: { id: "b" }
   });
   assert.deepEqual(merged.items.find((item) => item.name === "adapter").payload, { type: "codex" });
   assert.deepEqual(defaults.items.find((item) => item.name === "model").payload, {

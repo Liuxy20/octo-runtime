@@ -27,6 +27,75 @@ HostFrame 带有执行和会话标识：`run_id`、`invocation_id`、`stream_id`
 
 帧分三类：`native` 保存 Provider 原生数据和扩展字段，`canonical` 的 `event` 保存统一事件，`control` 报告状态、错误、交互状态和输出缺失。三类帧共同使用同一套 `seq`。如果自己实现 IPC 客户端，应保存收到的帧序号，不能用 canonical 事件数量推算读取位置。
 
+## 模型输出静默通知
+
+首次区间从 Core 开始本轮 Adapter 调用时计时。canonical 执行在连续 60 秒没有新的公开模型文本时，由 Runtime 发出一次 `run.notice`，code 为 `model_output_idle`。收到新文本 delta 或增长的文本快照，立即从零重新计满 60 秒；即使上一段已通知，下一段仍会再次通知。空内容、重复或回退快照、心跳、usage、私有 reasoning 不刷新计时。排队、工具执行和同步审批/输入等待期间暂停，最后一个等待解除后重新计时；异步问题不暂停。
+
+已经达到阈值并生成的通知会保留到交付，新输出只重置下一段计时；该通知先于同时就绪的普通模型输出交付。终态、取消或异常仍优先清除尚未交付的通知。
+
+`silenceMs` 是 Runtime 单调时钟测得的实际毫秒数；timer 迟到时可能大于 60000。message 使用对应整数秒数，例如 `60s no LLM output`。这是信息通知，不是终态、取消指令或周期心跳。现有预算仍生效：默认首帧预算 60 秒可能先触发失败，`model_idle_policy: observe` 只关闭模型空闲终止，不关闭首帧、整轮或工具预算。
+
+消费端必须使用已支持 `model_output_idle` 的 client/协议校验器。旧版严格校验器会拒绝未知 notice code，升级 Runtime 时需同步升级消费端；本功能不宣称向旧 client 自动兼容。
+
+`client.invoke` 的 canonical 视图收到以下内容：
+
+```json
+{
+  "protocolVersion": 2,
+  "type": "run.notice",
+  "payload": {
+    "noticeId": "idle-1",
+    "code": "model_output_idle",
+    "severity": "info",
+    "params": {
+      "silenceMs": 60000,
+      "message": "60s no LLM output"
+    }
+  }
+}
+```
+
+IPC 则复用既有 JSON-RPC 2.0 `agent_run.event` 通知外壳，无 `id`，`params.event` 是原 HostFrame，里面的 `event` 才是上述 notice：
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "agent_run.event",
+  "params": {
+    "kernel_instance_id": "kernel-1",
+    "run_id": "run-1",
+    "stream_id": "stream-1",
+    "seq": 8,
+    "event": {
+      "run_id": "run-1",
+      "invocation_id": "invocation-1",
+      "stream_id": "stream-1",
+      "agent_session_id": "session-1",
+      "session_generation": 1,
+      "seq": 8,
+      "protocol_mode": "canonical",
+      "protocol": "codex.app-server",
+      "kind": "canonical",
+      "event": {
+        "protocolVersion": 2,
+        "type": "run.notice",
+        "payload": {
+          "noticeId": "idle-1",
+          "code": "model_output_idle",
+          "severity": "info",
+          "params": {
+            "silenceMs": 60000,
+            "message": "60s no LLM output"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+续流保留原身份、序号及测量值，不重新计时。channel-gateway 的迁移要求是仅消费 Runtime 的静默事实，不维护自己的静默秒表、30/60 秒状态或 300 秒静默取消；该仓库迁移由 [issue #34](https://github.com/Mininglamp-OSS/octo-channel-gateway/issues/34) 跟踪，尚未在本仓完成。native 不新增类型、不发该通知。通知不能保证中间网络设备不主动断开，断线恢复仍遵守原订阅合同。
+
 ## 取消
 
 在创建句柄的 client 上调用 `client.interrupt(run.invocationId, reason?)`。公开 invoke 不再接收 signal。身份立即可读；提交前中断阻止发送，提交后只控制原执行，并保留原流尾事件的观察。

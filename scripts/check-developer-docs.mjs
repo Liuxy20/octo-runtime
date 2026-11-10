@@ -27,6 +27,9 @@ async function checkDocs() {
   const validateWire = ajv.compile(
     await json("packages/octo-runtime-protocol/schema/kernel-ipc.schema.json")
   );
+  const validateEventNotification = ajv.compile({
+    $ref: "urn:mininglamp-oss:octo-runtime:kernel-ipc:v2#/definitions/EventNotification"
+  });
 
   async function files(directory) {
     const result = [];
@@ -82,7 +85,10 @@ async function checkDocs() {
         if (value.inputs) InvokeInput.check(value);
         else if (value.schema === "octo.context-envelope/v3") assertContextEnvelope(value);
         else if (value.jsonrpc) {
-          assert.ok(validateWire(value), JSON.stringify(validateWire.errors));
+          // 同一文档示例范围内按现有 wire 类型校验；通知本来就没有请求 id。
+          const validate =
+            value.method === "agent_run.event" ? validateEventNotification : validateWire;
+          assert.ok(validate(value), JSON.stringify(validate.errors));
           if (value.params?.input) InvokeInput.check(value.params.input);
         }
         jsonExamples++;

@@ -4,7 +4,7 @@ const pending = new Map();
 export const testAdapter = {
   metadata: {
     type: "test",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "test.invoke", modes: ["native", "canonical"], nativeMethods: [] }
   },
   async *invoke(request, context) {

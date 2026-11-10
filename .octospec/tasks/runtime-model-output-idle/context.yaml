@@ -1,0 +1,21 @@
+baseline: 7892ebdf2ed9b1fa859bd51f15da6d7f03c247e2
+workspace: existing context-envelope-cleanup worktree with authorized uncommitted cleanup
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/context-input.md
+scope:
+  - Runtime canonical silence notice only; reuse existing RPC stream
+  - No native type additions
+  - No Gateway implementation; tracked in octo-channel-gateway issue 34
+  - No changes to existing limits or CI scope
+review_sources:
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - scripts/check-developer-docs.mjs
+  - packages/octo-runtime-protocol/schema/kernel-ipc.schema.json

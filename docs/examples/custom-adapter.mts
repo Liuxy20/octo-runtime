@@ -10,7 +10,7 @@ interface XxxClient {
 }
 const metadata = {
   type: "black-box",
-  agentSources: ["provisioned"] as ["provisioned"],
+
   protocolSupport: {
     protocol: "business.canonical",
     modes: ["canonical"] as ["canonical"],

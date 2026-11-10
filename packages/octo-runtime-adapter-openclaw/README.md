@@ -73,3 +73,9 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 - [Implementation](src/index.ts), [OpenClaw contract](../../.octospec/rules/openclaw.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).
 - [Runtime Protocol](../octo-runtime-protocol/README.md).
+
+## Private AgentEnv.Item validation
+
+The `adapter.openclaw/options` item in the composition example above belongs exclusively to this package. `agentId` accepts a string; omission or null retains this package's existing default of `main`. String values must match `^[a-z0-9_][a-z0-9_-]{0,63}$`; empty strings and invalid IDs are rejected. The target must exist; it is never created or substituted. A resumed session key prefix and native agentId receipt must match the selected target.
+
+The Provider owns the workspace; `metadata.workspace:false` permits omission of local cwd independently of the removed AgentSource. This item's name, fields, defaults and validation never enter protocol. Other private options and connection settings retain their package-local implementation; credentials stay outside the envelope.

@@ -1,8 +1,7 @@
 import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 
 export const codeBuddyMetadata: AdapterMetadata = {
-  type: "codebuddy",
-  agentSources: ["provisioned"]
+  type: "codebuddy"
 };
 
 import {

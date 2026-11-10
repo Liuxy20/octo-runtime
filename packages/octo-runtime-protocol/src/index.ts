@@ -56,7 +56,6 @@ export {
   DEFAULT_RUN_TIMEOUT_MS,
   MAX_RUN_TIMEOUT_MS,
   RUNTIME_RUN_CONTRACT,
-  assertAgentSource,
   assertApprovalMode,
   assertContextEnvelope,
   assertContextEnvs,
@@ -66,7 +65,6 @@ export {
   contextItem,
   mergeContext
 } from "./context.js";
-export { RUNTIME_SELECTION_SCHEMA, assertResolvedRuntimeSelection } from "./runtime-selection.js";
 export {
   CONTEXT_TYPE_CATALOG,
   contextTypeDefinition,
@@ -105,7 +103,6 @@ import type {
 // of `@mininglamp-oss/octo-runtime-protocol` stays stable regardless of how the
 // generator lays out its output.
 export type {
-  AgentSource,
   NotificationMessage,
   ModelInputPart,
   ApprovalMode,
@@ -113,25 +110,15 @@ export type {
   ApprovalOperation,
   ApprovalDisplayDetails,
   ContextItem,
-  ContextInlinePayload,
-  ContextReferencesPayload,
-  ContextInlineEntry,
-  ContextReferenceEntry,
   ContextEnvelope,
   ContextConfiguration,
-  ContextPreparationReceipt,
-  RunContextProjection,
   ContextAdapterPayload,
   ContextModelPayload,
-  ContextActmodePayload,
-  ExecutionEvidence,
   ContextReasoningPayload,
   ContextWorkspacePayload,
   ContextLimitsPayload,
   ContextEnvsPayload,
-  ContextRuntimeSelectionPayload,
   ContextApprovalPolicyPayload,
-  ResolvedRuntimeSelection,
   MessageChannel,
   MessageExposure,
   MessageProvenance,
@@ -216,12 +203,9 @@ export type TerminalEventType = (typeof TERMINAL_EVENT_TYPES)[number];
  * updates -> a Run terminal. Provider-native event names must be translated
  * inside the adapter and must never leak through to this level.
  */
-export { contextActmode, assertExecutionEvidence } from "./actmode.js";
-import { assertExecutionEvidence } from "./actmode.js";
 
 export const CANONICAL_EVENT_TYPES = [
   "session.update",
-  "execution.update",
   "usage.update",
   "model_step.started",
   "model_step.finished",
@@ -401,7 +385,6 @@ export function assertCanonicalEvent(event: unknown): asserts event is Canonical
       assertAsyncQuestions(payload.questions);
     }
   }
-  if (event.type === "execution.update") assertExecutionEvidence(payload);
   assertExperiencePayload(event.type, payload);
   if (event.type === "run.failed" && payload.failure !== undefined) {
     assertFailureEnvelope(payload.failure);
@@ -811,7 +794,7 @@ export function assertRuntimeLimits(value: unknown): asserts value is RuntimeLim
     cancelGraceMs: 60_000
   };
   for (const [key, setting] of Object.entries(value)) {
-    if (key === "enforcement" || key === "modelIdlePolicy") {
+    if (key === "modelIdlePolicy") {
       if (setting !== "enforce" && setting !== "observe")
         throw new TypeError(`invalid runtimeLimits.${key}`);
     } else if (
@@ -823,16 +806,6 @@ export function assertRuntimeLimits(value: unknown): asserts value is RuntimeLim
     ) {
       throw new TypeError(`invalid runtimeLimits.${key}`);
     }
-  }
-  if (
-    value.enforcement === "observe" &&
-    ["modelIdlePolicy", "modelIdleWarningMs", "toolWallTimeoutMs"].some(
-      (key) => value[key] !== undefined
-    )
-  ) {
-    throw new TypeError(
-      "legacy enforcement=observe cannot be combined with watchdog v2 settings; use modelIdlePolicy=observe with enforcement=enforce"
-    );
   }
 }
 

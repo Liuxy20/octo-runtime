@@ -24,8 +24,7 @@ type JsonRecord = Record<string, unknown>;
 export const GROK_BUILD_TESTED_VERSION = "1.0.67";
 export const grokBuildMetadata: AdapterMetadata = {
   type: "grok-build",
-  mcp: true,
-  agentSources: ["provisioned"]
+  mcp: true
 };
 const levels = { low: "low", medium: "medium", high: "high", xhigh: "xhigh" } as const;
 
@@ -118,16 +117,6 @@ export function createGrokBuildAdapter({
         error instanceof GrokBuildRpcError &&
         error.code === -32603 &&
         record(error.data).code === "FS_NOT_FOUND",
-      selectActmode(_session, sessionId, requested) {
-        // 1.0.67 不发布 modes，但实现标准 set_mode(default/plan)；成功响应后才发布 applied。
-        return {
-          method: "session/set_mode",
-          params: { sessionId, modeId: requested },
-          effective: requested,
-          nativeMode: requested,
-          unchanged: false
-        };
-      },
       async *configureSession(client, session, sessionId, request) {
         const requested = invocationEffort(request);
         if (requested === undefined) return;

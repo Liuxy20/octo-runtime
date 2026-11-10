@@ -46,8 +46,7 @@ for (const [type, create, Normalizer] of [
       signal: AbortSignal.timeout(90000),
       agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
         { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
-        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
-        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
       ])
     };
     const original = Normalizer.prototype.normalize;

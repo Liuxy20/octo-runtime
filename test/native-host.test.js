@@ -65,7 +65,7 @@ test("adapter authoring defaults register as canonical-only without granting nat
   const host = new AgentExecutor();
   let invokes = 0;
   const definition = {
-    metadata: { type: "custom-canonical", agentSources: ["provisioned"] },
+    metadata: { type: "custom-canonical" },
     async *invoke() {
       invokes++;
       yield { protocolVersion: 2, type: "run.completed", payload: {} };
@@ -350,8 +350,7 @@ test("RPC native admission rejects unsupported mode before ACK; genuine native f
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "canonical-only",
-      agentSources: ["provisioned"]
+      type: "canonical-only"
     },
     async *invoke() {
       invokes++;
@@ -478,7 +477,7 @@ test("invalid driver frames preserve continuous sequence for failure controls", 
   const host = hostFor({
     metadata: {
       type: "invalid",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "invalid.raw", modes: ["native"], nativeMethods: [] }
     },
     async *invoke() {
@@ -500,7 +499,7 @@ for (const protocolMode of ["native", "canonical"])
     const host = hostFor({
       metadata: {
         type: "cleanup",
-        agentSources: ["provisioned"],
+
         protocolSupport: {
           protocol: "cleanup.raw",
           modes: ["native", "canonical"],

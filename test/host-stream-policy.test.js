@@ -25,7 +25,7 @@ function createPolicyAdapter({ type }) {
   return {
     metadata: {
       type,
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke(request, context) {
@@ -60,7 +60,7 @@ function createSdkAdapter({ type }) {
   return {
     metadata: {
       type,
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "fixture.sdk",
         modes: ["canonical", "native"],

@@ -1,3 +1,4 @@
+import { grokModeId } from "./agent-env.js";
 import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   invocationModel,
@@ -11,7 +12,6 @@ import {
 import { GrokBuildInteractionBridge as AcpApprovalBridge } from "./interactions.js";
 import {
   acpModelSelectionRequest,
-  acpActmodeSelectionRequest,
   normalizeAcpUpdate
 } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import {
@@ -22,7 +22,6 @@ import {
   type AcpUpdate
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import {
-  actmodeEvidence,
   AcpTurnNormalizer,
   defineAdapter,
   invocationEnvironment,
@@ -38,7 +37,6 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
-  contextActmode,
   providerInputParts,
   type InteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -70,7 +68,6 @@ export interface AcpAdapterDefinition {
     sessionId: string,
     request: InvokeRequest
   ) => AsyncIterable<CanonicalEvent>;
-  selectActmode?: typeof acpActmodeSelectionRequest;
   reasoningLevels?: ReasoningLevelMap;
   clientOptions?: (
     request: InvokeRequest,
@@ -133,8 +130,7 @@ export function createGrokBuildAcpAdapter(
     {
       metadata: definition.metadata ?? {
         mcp: true,
-        type: definition.type,
-        agentSources: ["provisioned"]
+        type: definition.type
       },
       probe:
         definition.probe ??
@@ -297,23 +293,10 @@ export function createGrokBuildAcpAdapter(
         ? stringField(sessionResult, "sessionId")
         : (requestedSessionId ?? stringField(sessionResult, "sessionId"));
       if (!sessionId) throw new Error("ACP session/new returned no sessionId");
-      const requestedMode = contextActmode(request.agentEnv);
+      const requestedMode = grokModeId(request);
       if (requestedMode !== undefined) {
-        const selection = (definition.selectActmode ?? acpActmodeSelectionRequest)(
-          sessionResult,
-          sessionId,
-          requestedMode
-        );
-        if (!selection.unchanged) await client.request(selection.method, selection.params);
-        yield actmodeEvidence({
-          requested: requestedMode,
-          effective: selection.effective,
-          nativeMode: selection.nativeMode,
-          status: selection.effective === requestedMode ? "applied" : "fallback",
-          ...(selection.effective !== requestedMode
-            ? { reason: "provider_unsupported" as const }
-            : {})
-        });
+        // Grok 原生实现 set_mode 但不广告 modes；此约定仅在本包生效。
+        await client.request("session/set_mode", { sessionId, modeId: requestedMode });
       }
       const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {

@@ -205,3 +205,5 @@ for await (const event of client.invoke(
 [English](../../en/getting-started/sdk.md)
 
 业务渠道使用独立 `@mininglamp-oss/octo-channel-gateway`，仅依赖公开 client。
+
+私有 AgentEnv.Item 的名称与字段以所属包 README 为准，不登记公共 protocol；`adapter.xxx` 不是公共规范。原生模式见 [Codex](../../../packages/octo-runtime-adapter-codex/README.zh.md)、[Claude Code](../../../packages/octo-runtime-adapter-claude-code/README.zh.md)、[ACP](../../../packages/octo-runtime-adapter-acp/README.zh.md)、[Grok](../../../packages/octo-runtime-adapter-grok-build/README.zh.md)；远端目标选项见 [OpenClaw](../../../packages/octo-runtime-adapter-openclaw/README.zh.md)。

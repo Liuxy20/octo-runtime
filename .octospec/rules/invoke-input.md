@@ -24,7 +24,7 @@ AgentEnv 仅含 schema/items，配置全部包装为 item；Core 不构造中间
 
 应用提示词是调用方准备的普通输入，不属于 agentEnv。Issue 334 删除 octo.control/instructions、controlInstructions、两个指令 payload 类型及派生/首轮注入 helper；不换名、不兼容转发，旧项/字段即使为空也明确拒绝。输入文本和图片保序，不加提示词或分隔符。新建、续接和显式 fresh fallback 各由调用方选择完整输入，Runtime 不按会话状态注入。独立 Gateway 尚须迁移自己的配置和编译入口，Runtime 单仓验收不代表仓外迁移完成。
 
-工作目录按 Issue 335 由调用方先成功创建，再显式提交已存在的绝对 workspace.path。CLI 与 SDK 都不默认取 cwd，Runtime 不选择、创建、替换或恢复应用目录。workspace payload 仅含 path，旧 mode 和随机分配合同删除且拒绝，不留兼容层。Adapter 在 Provider 执行前的路径失败保留 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE 原因码及 OH-ADP-3004 分类；续接/fallback 缺目录同样失败。外部/preset Agent 与 metadata.workspace:false 的无本地覆盖场景允许缺省。运维 Home/log/IPC 的所有权独立。
+工作目录按 Issue 335 由调用方先成功创建，再显式提交已存在的绝对 workspace.path。CLI 与 SDK 都不默认取 cwd，Runtime 不选择、创建、替换或恢复应用目录。workspace payload 仅含 path，旧 mode 和随机分配合同删除且拒绝，不留兼容层。Adapter 在 Provider 执行前的路径失败保留 WORKDIR_REQUIRED/INVALID/NOT_FOUND/NOT_DIRECTORY/UNAVAILABLE 原因码及 OH-ADP-3004 分类；续接/fallback 缺目录同样失败。声明 metadata.workspace:false 的 Adapter 的无本地覆盖场景允许缺省。运维 Home/log/IPC 的所有权独立。
 
 IPC v2 的 InvokeInput 使用 inputs/agentEnv，sessionId/providerSession 及内容/追踪字段平铺。旧 IPC v1 明确拒绝，不通过兼容包装恢复旧业务 Context。内部 InvokeRequest 供 Core/Adapter 使用，不作为普通调用方 API。
 

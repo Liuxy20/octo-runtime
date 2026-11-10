@@ -4,7 +4,6 @@ import { isAbsolute } from "node:path";
 import {
   assertAgentEnv,
   assertApprovalMode,
-  assertAgentSource,
   assertContextEnvs,
   assertContextMcp,
   assertRuntimeLimits,
@@ -13,7 +12,6 @@ import {
   DEFAULT_RUN_TIMEOUT_MS,
   type AgentEnv,
   type ContextItem,
-  type AgentSource,
   type ApprovalMode,
   type InvokeRequest,
   type RuntimeLimits
@@ -77,14 +75,6 @@ export function invocationApprovalMode(request: InvokeRequest): ApprovalMode {
   return mode;
 }
 
-export function invocationAgentSource(request: InvokeRequest): AgentSource {
-  const source =
-    agentEnvItem<{ source: AgentSource }>(request.agentEnv, "octo.execution", "agent")?.source ??
-    "provisioned";
-  assertAgentSource(source);
-  return source;
-}
-
 /** Harness 私有选项仍是原始 payload；不生成公共配置副本。 */
 export function invocationOptions(
   request: InvokeRequest,
@@ -143,8 +133,7 @@ const LIMIT_NAMES = {
   tool_timeout_ms: "toolTimeoutMs",
   tool_wall_timeout_ms: "toolWallTimeoutMs",
   run_timeout_ms: "runTimeoutMs",
-  cancel_grace_ms: "cancelGraceMs",
-  enforcement: "enforcement"
+  cancel_grace_ms: "cancelGraceMs"
 } as const;
 
 /** Adapter 解释预算，Core 仅按本地回调执行计时，不解析配置条目。 */
@@ -161,12 +150,11 @@ export function invocationRuntimeLimits(request: InvokeRequest): RuntimeLimits |
 }
 
 /** 每个 Harness 拥有自己的默认信封；不包含隐式 cwd、模型或业务材料。 */
-export function defaultAgentEnv(type: string, source: AgentSource = "provisioned"): AgentEnv {
+export function defaultAgentEnv(type: string): AgentEnv {
   return {
     schema: CONTEXT_SCHEMA,
     items: [
       { namespace: "octo.execution", name: "adapter", payload: { type } },
-      { namespace: "octo.execution", name: "agent", payload: { source } },
       { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
       {
         namespace: "octo.execution",
@@ -218,7 +206,6 @@ export function withAgentEnvItems(env: AgentEnv | undefined, items: ContextItem[
 export function assertAdapterAgentEnv(request: InvokeRequest): void {
   assertAgentEnv(request.agentEnv);
   invocationApprovalMode(request);
-  invocationAgentSource(request);
   invocationRuntimeLimits(request);
   for (const item of request.agentEnv.items) {
     if (item.namespace === "octo.security" && item.name === "approval_policy") {
@@ -232,20 +219,11 @@ export function assertAdapterAgentEnv(request: InvokeRequest): void {
       if (typeof value.type !== "string" || !value.type)
         throw new TypeError("ADAPTER_TYPE_INVALID");
     }
-    if (item.name === "agent") {
-      assertFields(value, ["source"]);
-      assertAgentSource(value.source);
-    }
     if (
       item.name === "workspace" &&
       (Object.keys(value).some((k) => k !== "path") || typeof value.path !== "string")
     )
       throw new TypeError("WORKDIR_INVALID");
-    if (item.name === "actmode") {
-      assertFields(value, ["mode"]);
-      if (!["plan", "default"].includes(String(value.mode)))
-        throw new TypeError("CONTEXT_SCHEMA_INVALID: actmode");
-    }
     if (item.name === "model") {
       assertFields(value, ["selection", "reasoning"]);
       if (!Object.keys(value).length) throw new TypeError("CONTEXT_SCHEMA_INVALID: model");
@@ -258,13 +236,8 @@ export function assertAdapterAgentEnv(request: InvokeRequest): void {
         if (!bean || typeof bean !== "object" || Array.isArray(bean))
           throw new TypeError("CONTEXT_SCHEMA_INVALID: model");
         const setting = bean as Record<string, unknown>;
-        assertFields(setting, [property, "use_provider_default"]);
-        if (setting.use_provider_default === true && setting[property] === undefined) continue;
-        if (
-          typeof setting[property] !== "string" ||
-          !setting[property] ||
-          setting.use_provider_default !== undefined
-        )
+        assertFields(setting, [property]);
+        if (typeof setting[property] !== "string" || !setting[property])
           throw new TypeError("CONTEXT_SCHEMA_INVALID: model");
       }
     }
@@ -284,7 +257,7 @@ export async function assertAdapterWorkdir(
   workspace = true
 ): Promise<void> {
   const path = invocationWorkdir(request);
-  if (!workspace || (invocationAgentSource(request) === "preset" && !path)) return;
+  if (!workspace) return;
   const messages: Record<string, string> = {
     WORKDIR_REQUIRED:
       "A prepared working directory is required; create it and provide its absolute path.",

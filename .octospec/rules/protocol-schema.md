@@ -34,7 +34,7 @@ Schema 定义 ProviderSession、AgentEnv 信封、公共配置 bean、Host 帧�
 
 ## 协议、默认值与测试资产
 
-七份正反样本位于协议包 [test/fixtures](../../packages/octo-runtime-protocol/test/fixtures)，用于检查实现与合同的一致性。已有公开 IPC 样本入口 `@mininglamp-oss/octo-runtime/executor-kernel/ipc-fixtures.json` 和 `@mininglamp-oss/octo-runtime-client/protocol/ipc-fixtures.json` 保持，发行时仅复制这一份到专用 fixtures 路径。其他内部测试样本不发布；不能把一致性样本称为协议定义。
+六份正反样本位于协议包 [test/fixtures](../../packages/octo-runtime-protocol/test/fixtures)，用于检查实现与合同的一致性。已有公开 IPC 样本入口 `@mininglamp-oss/octo-runtime/executor-kernel/ipc-fixtures.json` 和 `@mininglamp-oss/octo-runtime-client/protocol/ipc-fixtures.json` 保持，发行时仅复制这一份到专用 fixtures 路径。其他内部测试样本不发布；不能把一致性样本称为协议定义。
 
 Issue 332 删除 `kernel-client.behavior.json` 及 client `/protocol/behavior.json` 导出，不提供兼容副本，也不搬成另一份无人读取的 config。各字段归属如下：
 
@@ -49,7 +49,7 @@ Issue 332 删除 `kernel-client.behavior.json` 及 client `/protocol/behavior.js
 
 IPC Schema 的 title/$id 对齐 v2，标识为 `urn:mininglamp-oss:octo-runtime:kernel-ipc:v2`，原 v1 注册或引用须更新；实际 IPC 版本不改变。删除没有当前生成消费者的 `x-octo-methods`，保留 RPC 方法及请求/结果定义。
 
-遗留 ContextSelectionEntry、ContextResourceEntry、ContextContinuityPayload 和 Channel/history 同步类型、五个专属校验器已删除，不建立兼容层；调用方采用现有 ContextInlineEntry/ContextReferenceEntry 或自行维护业务同步合同。完整删除清单见[升级说明](../../packages/octo-runtime-protocol/README.zh.md)，实施范围见[Issue 332](../tasks/332-schema-ownership/brief.md)。
+遗留 ContextSelectionEntry、ContextResourceEntry、ContextContinuityPayload 和 Channel/history 同步类型、五个专属校验器已删除，不建立兼容层；ContextInlineEntry/ContextReferenceEntry 也已删除，调用方自行维护业务材料及同步合同。完整删除清单见[升级说明](../../packages/octo-runtime-protocol/README.zh.md)，实施范围见[Issue 332](../tasks/332-schema-ownership/brief.md)。
 
 ## 标准 Schema 与语义校验
 
@@ -71,3 +71,7 @@ pnpm --filter @mininglamp-oss/octo-runtime-protocol build
 Protocol 包的 `build` 自动运行生成器。验证入口包括 `test/context-protocol.test.js` 和 `packages/octo-runtime-protocol/test/*.test.js`；具体测试范围随修改的合同决定。
 
 Run 固定为 7、Context 固定为 `octo.context-envelope/v3`，IPC 和 Adapter transport 各使用自身的版本 2。新增可选字段不机械升级这些版本，不新增旧格式识别、转换或回退。影响实际 wire 或 Provider 行为时，须同步实际调用方，构建并重启受影响实例，真实接口在 im-test 验证；仅生成类型或全局链接不能代替实机验证。纯资产整理按受影响的合同、类型和双包发行检查验收，不把 fake Provider 结果当作真实模型/IM 证据。专项验证显式本地运行，不增加 CI 范围。
+
+ContextPreparationReceipt 与 RunContextProjection 属于已移除准备链的残留，Schema、生成类型和公开导出均删除，不保留兼容别名。执行参数由 AgentEnv 的对应条目承载；HostRunReceipt、Host 帧及运行事件表达各自实际事实，不恢复一份无生产者的配置/准备状态投影。
+
+runtime selection 不属于执行协议：ContextRuntimeSelectionPayload、ResolvedRuntimeSelection、选择校验器、catalog 和 RUNTIME_RUN_CONTRACT.routing_schema 已删除。通用信封仍允许 opaque 未知 item；结构接受不意味着 Runtime 执行设备选择或故障转移。

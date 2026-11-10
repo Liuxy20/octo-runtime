@@ -41,8 +41,7 @@ const request = (path = "") => ({
   prompt: "prompt",
   agentEnv: withAgentEnvItems(envelope(), [
     { namespace: "octo.execution", name: "workspace", payload: { path: path } },
-    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
-    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
   ])
 });
 test("path-only workspace rejects every former mode and empty payload", () => {
@@ -74,27 +73,6 @@ test("AgentEnv has one workspace item and no duplicate path entrance", () => {
   assert.throws(() => assertInvokeRequest({ ...request(), workdir: "/other" }), /unknown field/);
 });
 
-test("workspace modes disappear from receipt and effective-view Schema", () => {
-  const receipt = {
-    context_hash: `sha256:${"0".repeat(64)}`,
-    run_id: "run-335",
-    lease_id: "lease-335",
-    fencing_token: 1,
-    workspace_path: "/caller/prepared",
-    provider_state_dir: "",
-    warnings: []
-  };
-  const validate = validator("ContextPreparationReceipt");
-  assert.equal(validate(receipt), true);
-  assert.equal(validate({ ...receipt, workspace_mode: "fixed" }), false);
-  const execution = schema.definitions.RunContextProjection.properties.execution;
-  const validateExecution = ajv.compile(execution);
-  assert.equal(validateExecution({ adapter_type: "codex", approval_mode: "ask" }), true);
-  assert.equal(
-    validateExecution({ adapter_type: "codex", approval_mode: "ask", workspace_mode: "none" }),
-    false
-  );
-});
 test("specific workspace reasons win over errno and diagnostic text", () => {
   const context = {
     stage: "execution",

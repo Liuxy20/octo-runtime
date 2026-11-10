@@ -31,8 +31,7 @@ supersedes: []
 | Provider 类型 | 标识执行实现，例如 `openclaw`。当前协议沿用 `adapter_type` / `provider_type`；本次不新增含义重复的 `provider_id`。每个 本地 Runtime 对每个 Provider 类型保存一份连接配置。 |
 | Adapter | 把 Provider 的执行协议转换成统一 Host 事件的实现。OpenClaw 使用认证 WebSocket Gateway RPC，不使用 SSE。 |
 | Provider 连接配置 | 属于 本地 Runtime 的本地信息，包括连接来源、地址、凭据引用和设备身份。由本地宿主管理，不属于 Agent 定义或模型上下文。 |
-| 目标 Agent | Provider 内的执行目标，由 Context 的 `adapter.openclaw/options.payload.agentId` 指定。多个 Agent 可共享一个 Runtime 的同一连接。 |
-| Agent 来源 | `preset` 表示调用已有 Agent；`provisioned` 表示按该来源合同执行。来源与传输方式、连接配置相互独立；来源声明不意味着 Runtime 可以隐式安装 Runtime 或创建 OpenClaw Agent。 |
+| 目标 Agent | Provider 内的执行目标，私有选项见 [包级 README](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。多个 Agent 可共享同一连接。 |
 
 Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。Issue 335 删除公共 workspace.mode；调用 OpenClaw 不需要为 Runtime 制造本地目录。metadata.workspace:false 不把 Provider 工作区当本地路径校验，不覆盖远端工作区，不恢复随机分配或缺失补建，也不新增忽略告警。
 
@@ -78,22 +77,8 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 
 目标引用示例：
 
-```json
-{
-  "schema": "octo.context-envelope/v3",
-  "items": [{
-    "namespace": "octo.execution",
-    "name": "adapter",
-    "payload": { "type": "openclaw" }
-  }, {
-    "namespace": "adapter.openclaw",
-    "name": "options",
-    "payload": { "agentId": "researcher" }
-  }]
-}
-```
+私有 AgentEnv.Item 的字段、缺省、目标校验与组合示例统一维护在 [OpenClaw 包 README](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。Core 保序透传，不理解私有字段；连接凭据仍由本地可信上下文传递。Gateway 探测不要求存在默认目标，执行时校验本轮目标，缺失明确失败，不查找其他 Agent。
 
-`adapter.openclaw/options` 的名称、字段、类型和校验完全属于宿主与 OpenClaw Adapter 的私有约定，不进入公共协议、生成类型或通用 SDK 专属配置模型。Core 只保序透传，OpenClaw Adapter 自己读取目标，不进入模型提示词。新增专属字段不需要登记公共 schema 或修改协议版本，无关 Adapter 忽略。可信连接配置由宿主通过本地 Adapter 上下文提供。Gateway 探测不要求存在名为 `main` 的 Agent；执行时验证本轮目标，缺失明确失败，不查找其他 Agent。
 
 统一执行接口不表示各 Provider 能力相同。OpenClaw Adapter 声明 `metadata.workspace: false`，忽略 `octo.execution/workspace` 和 `workdir`，不检查或创建本地工作区、不分配随机目录、不覆盖目标 Agent 的原生工作区。本地调用不增加 Worker 回执门槛。Context 快照不改写，审批模式、环境变量和恢复等能力按实际支持范围校验。业务上下文由每轮发起方决定，显式重复照常传递，不自动补齐、缓存或追加。
 
@@ -106,7 +91,7 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 - Adapter 不调用 IM 业务接口；Gateway 继续负责交付限制、附件上传、链接改写、文件卡、去重、取消及失败反馈。远端资源如何被 Gateway 拉取并交付也属本项待办，不能把普通网页链接都当成附件。
 - 远端文件 API、URL 有效期及访问方式需在实施前核实。提示词可说明输出约定，但不能代替确定性的转换与验证；IPv6、代理/隧道、容器及共享目录映射另行确认，不扩充本次用户指定的 hostname 规则。
 
-两个 TODO 槽位位于 [Adapter](../../packages/octo-runtime-adapter-openclaw/src/index.ts) 的连接参数解析处和最终消息出口。待办与验收边界见 [Issue #243 记录](../tasks/234-context-lifecycle/remote-artifact-backlog.md)。本次不新增配置、协议字段或运行时分支，不删除 `agentSource`。
+两个 TODO 槽位位于 [Adapter](../../packages/octo-runtime-adapter-openclaw/src/index.ts) 的连接参数解析处和最终消息出口。待办与验收边界见 [Issue #243 记录](../tasks/234-context-lifecycle/remote-artifact-backlog.md)。本次不新增配置、协议字段或运行时分支；来源分类已由 #348 删除。
 
 ## Gateway 版本与会话权限
 

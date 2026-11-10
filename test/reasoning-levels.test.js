@@ -114,7 +114,7 @@ test("mapping and non-application use existing evidence and valid run notices, n
   ]) {
     let received;
     const adapter = defineAdapter({
-      metadata: { type, agentSources: ["provisioned"] },
+      metadata: { type },
       async *invoke(input) {
         received = input;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
@@ -133,7 +133,7 @@ test("mapping and non-application use existing evidence and valid run notices, n
 test("ACP override records no native setter even when another transport of the adapter supports effort", async () => {
   const adapter = defineAdapter(
     {
-      metadata: { type: "opencode", agentSources: ["provisioned"] },
+      metadata: { type: "opencode" },
       async *invoke() {
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       }
@@ -148,8 +148,7 @@ test("adapter wrapper preserves the original invoke receiver and context", async
   const context = { reportActivity() {} };
   const original = {
     metadata: {
-      type: "receiver-fixture",
-      agentSources: ["provisioned"]
+      type: "receiver-fixture"
     },
     marker: "original receiver",
     async *invoke(input, invocationContext) {

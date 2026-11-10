@@ -408,13 +408,7 @@ export function classifyFailure(
     category: catalog.category,
     stage: context.stage,
     messageKey: catalog.messageKey,
-    params: codexLocal
-      ? {}
-      : classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
-        ? {
-            configParameter: "adapter.codex/options.finalizationTimeoutMs"
-          }
-        : timeoutConfiguration(classification.code, context.source?.adapter),
+    params: codexLocal ? {} : timeoutConfiguration(classification.code),
     retryable:
       codexLocal || classification.reasonCode === "CODEX_FINALIZATION_TIMEOUT"
         ? false
@@ -519,7 +513,8 @@ function safeTimeoutStage(value: unknown): string | undefined {
     : undefined;
 }
 
-function timeoutConfiguration(code: string, adapter?: string): Record<string, string> {
+// 公共诊断只提示公共 limits；Adapter 私有配置路径由所属包文档维护，不能在此登记。
+function timeoutConfiguration(code: string): Record<string, string> {
   const fields: Record<string, string> = {
     "OH-ADP-3007": "first_frame_timeout_ms",
     "OH-ADP-3008": "model_idle_timeout_ms",
@@ -529,10 +524,6 @@ function timeoutConfiguration(code: string, adapter?: string): Record<string, st
     "OH-ADP-3012": "cancel_grace_ms"
   };
   if (fields[code]) return { configParameter: `octo.execution/limits.${fields[code]}` };
-  if (code === "OH-ADP-3013" && adapter === "codex")
-    return {
-      configParameter: "adapter.codex/options.appServerRequestTimeoutMs"
-    };
   return {};
 }
 

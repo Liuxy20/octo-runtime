@@ -5,7 +5,7 @@ export const adapters = [
   {
     metadata: {
       type: "healthy",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "healthy.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke() {

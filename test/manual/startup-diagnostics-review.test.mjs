@@ -123,7 +123,7 @@ test("missing bare Adapter resolution keeps its selected dependency and legacy e
     marker = join(home, "imported.txt");
   await writeFile(
     available,
-    `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, "imported"); export default { metadata: { type: "available", agentSources: ["preset"] }, async *invoke() {} };`
+    `import { writeFileSync } from "node:fs"; writeFileSync(${JSON.stringify(marker)}, "imported"); export default { metadata: { type: "available", }, async *invoke() {} };`
   );
   const preceding = [{ type: "available", module: available }];
   const result = await cliFailure(home, module, true, preceding);

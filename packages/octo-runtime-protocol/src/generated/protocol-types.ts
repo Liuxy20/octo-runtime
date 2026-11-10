@@ -35,11 +35,6 @@ export type MessageExposure = "public_reasoning" | "public_summary" | "public_pl
 export type HostControl =
   | {
       type: "evidence";
-      name: "execution";
-      payload: ExecutionEvidence;
-    }
-  | {
-      type: "evidence";
       name: "session";
       payload: {
         [k: string]: unknown;
@@ -124,13 +119,7 @@ export type ApprovalMode = "ask" | "assisted" | "full_access";
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextItem".
  */
-export type ContextItem = {
-  namespace: string;
-  name: string;
-  guidance?: string;
-  data_format?: "text";
-  payload: Record<string, unknown>;
-};
+export type ContextItem = {namespace: string; name: string; payload: Record<string, unknown>};
 /**
  * In addition to draft-07 validation, every consumer must enforce the x-octo semantic keywords: unique ordered namespace/name tuples, compact UTF-8 JSON byte budget, JSON nesting depth with the envelope at depth zero, and Unicode scalar strings in every nested value and object key. Canonical hashing uses ECMAScript JSON number serialization, including -0 becoming 0 and normalized exponent notation; object keys are sorted by UTF-16 code units before ECMAScript integer-index enumeration. U+2028/U+2029 and non-ASCII scalar values are not escaped or Unicode-normalized.
  */
@@ -140,70 +129,12 @@ export type PersistentContextEnvelope = ContextEnvelope;
  */
 export type PersistentContextEnvelope1 = ContextEnvelope;
 /**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "PublicObjectMaterial".
- */
-export type PublicObjectMaterial = {
-  resource_ref: string;
-  object_type: "task" | "discussion" | "discussion_comment" | "discussion_reply" | "local_file" | "drive_file";
-  object_id?: string;
-  origin: "mention" | "attachment" | "object_action" | "source_entity";
-  revision?: string;
-  byte_size: number;
-  digest: string;
-  object_scope?: {
-    type: "user" | "teamspace";
-    id: string;
-  };
-  selector?: {
-    mode: "core" | "content" | "history" | "chain" | "metadata";
-    start?: number;
-    end?: number;
-  };
-};
-/**
  * In addition to draft-07 validation, every consumer must enforce the x-octo semantic keywords: unique ordered namespace/name tuples, compact UTF-8 JSON byte budget, JSON nesting depth with the envelope at depth zero, and Unicode scalar strings in every nested value and object key. Canonical hashing uses ECMAScript JSON number serialization, including -0 becoming 0 and normalized exponent notation; object keys are sorted by UTF-16 code units before ECMAScript integer-index enumeration. U+2028/U+2029 and non-ASCII scalar values are not escaped or Unicode-normalized.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "PersistentContextEnvelope".
  */
 export type PersistentContextEnvelope2 = ContextEnvelope;
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextModelSelectionPayload".
- */
-export type ContextModelSelectionPayload = {
-  id?: string;
-  use_provider_default?: true;
-} & ContextModelSelectionPayload1;
-export type ContextModelSelectionPayload1 = {
-  [k: string]: unknown;
-};
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextReasoningPayload".
- */
-export type ContextReasoningPayload = {
-  effort?: string;
-  use_provider_default?: true;
-} & ContextReasoningPayload1;
-export type ContextReasoningPayload1 = {
-  [k: string]: unknown;
-};
-export type ContextRuntimeSelectionPayload =
-  | {
-      mode?: "candidates";
-    }
-  | {
-      mode?: "explicit";
-    };
-/**
- * Worker-frozen Context runtime candidates. Explicit selection cannot fail over.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ResolvedRuntimeSelection".
- */
-export type ResolvedRuntimeSelection = ResolvedRuntimeSelection1;
 /**
  * Provider-neutral interaction. Omitted delivery retains synchronous blocking semantics; async questions allow continued work. Only Adapter-owned automatic approvals may omit external responses; this does not imply completion.
  *
@@ -279,30 +210,6 @@ export type ActivitySubject =
       type: "interaction";
       id: string;
     };
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "AgentSource".
- */
-export type AgentSource = "preset" | "provisioned";
-/**
- * Declarative MCP resource operation. Only deployed scoped operations may execute; schema validation does not authorize access.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextReferenceEntry".
- */
-export type ContextReferenceEntry = {
-  locator?: ContextMcpLocator;
-} & {
-  resource_ref: string;
-  resolver: "mcp";
-  locator: {};
-  /**
-   * Frozen non-secret JSON parameters supplied by the authenticated resolver plan, not model-generated commands.
-   */
-  params?: Record<string, unknown>;
-  authorization_ref?: string;
-  revision?: string;
-};
 /**
  * @minItems 1
  * @maxItems 128
@@ -394,7 +301,6 @@ export interface CanonicalEventWire {
   protocolVersion: 2;
   type:
     | "session.update"
-    | "execution.update"
     | "usage.update"
     | "model_step.started"
     | "model_step.finished"
@@ -611,19 +517,6 @@ export interface ControlHostFrame {
   protocol: string;
   kind: "control";
   control: HostControl;
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ExecutionEvidence".
- */
-export interface ExecutionEvidence {
-  actmode: {
-    requested: "default" | "plan";
-    effective: "default" | "plan" | null;
-    status: "applied" | "fallback" | "unknown";
-    nativeMode?: string;
-    reason?: "provider_unsupported" | "adapter_unmapped" | "provider_unconfirmed";
-  };
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -2058,52 +1951,6 @@ export interface ContextConfiguration {
   mandatory: PersistentContextEnvelope1;
 }
 /**
- * Public Context facts. Preparation is distinct from Adapter application or invocation. This projection excludes resource files, trusted instruction text, credentials and Runtime paths.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "RunContextProjection".
- */
-export interface RunContextProjection {
-  run_id: string;
-  context_hash: string;
-  actual_runtime_id?: string;
-  preparation_status: "unknown" | "prepared";
-  application_status: "unknown" | "applied";
-  invocation_status: "unknown";
-  model_uses_provider_default: boolean;
-  effort_uses_provider_default: boolean;
-  /**
-   * Frozen inline object facts proven by a matching preparation receipt. Source fields are provenance claims, not access grants. No contents, local handles, paths or credentials are exposed; application is separately evidenced by application_status.
-   *
-   * @maxItems 32
-   */
-  object_materials?: PublicObjectMaterial[];
-  execution: {
-    adapter_type: string;
-    model?: string;
-    effort?: string;
-    approval_mode: "ask" | "assisted" | "full_access";
-  };
-}
-/**
- * Preparation facts for the current Run lease and caller-owned workspace path; they do not prove Provider use of model context or transfer directory ownership to Runtime.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextPreparationReceipt".
- */
-export interface ContextPreparationReceipt {
-  context_hash: string;
-  run_id: string;
-  lease_id: string;
-  fencing_token: number;
-  workspace_path: string;
-  provider_state_dir: string;
-  /**
-   * @maxItems 256
-   */
-  warnings: string[];
-}
-/**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextAdapterPayload".
  */
@@ -2112,18 +1959,25 @@ export interface ContextAdapterPayload {
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextActmodePayload".
- */
-export interface ContextActmodePayload {
-  mode: "default" | "plan";
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextModelPayload".
  */
 export interface ContextModelPayload {
   selection?: ContextModelSelectionPayload;
   reasoning?: ContextReasoningPayload;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ContextModelSelectionPayload".
+ */
+export interface ContextModelSelectionPayload {
+  id: string;
+}
+/**
+ * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
+ * via the `definition` "ContextReasoningPayload".
+ */
+export interface ContextReasoningPayload {
+  effort: string;
 }
 /**
  * Caller-owned, already prepared directory. Runtime validates the concrete local execution path and never allocates or recreates an application workspace.
@@ -2135,7 +1989,7 @@ export interface ContextWorkspacePayload {
   path: string;
 }
 /**
- * Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits. Legacy enforcement=observe cannot be combined with v2 settings.
+ * Snake-case frozen watchdog limits, with the same bounds as RuntimeLimits.
  *
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
  * via the `definition` "ContextLimitsPayload".
@@ -2149,19 +2003,6 @@ export interface ContextLimitsPayload {
   tool_wall_timeout_ms?: number;
   run_timeout_ms?: number;
   cancel_grace_ms?: number;
-  enforcement?: "enforce" | "observe";
-}
-export interface ContextRuntimeSelectionPayload1 {
-  mode: "candidates" | "explicit";
-  runtime_id?: string;
-  /**
-   * @minItems 1
-   * @maxItems 64
-   */
-  runtime_ids?: [string, ...string[]];
-  strategy?: "preferred_failover";
-  offline_behavior?: "wait" | "fail";
-  failover?: "candidates" | "none";
 }
 /**
  * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
@@ -2169,39 +2010,6 @@ export interface ContextRuntimeSelectionPayload1 {
  */
 export interface ContextApprovalPolicyPayload {
   mode: ApprovalMode;
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextMcpLocator".
- */
-export interface ContextMcpLocator {
-  server_ref: string;
-  tool: string;
-}
-export interface ResolvedRuntimeSelection1 {
-  schema: "octo.runtime-selection/v2";
-  selection_mode: "explicit" | "candidates";
-  explicit_runtime_id?: string;
-  /**
-   * @minItems 1
-   * @maxItems 64
-   */
-  authorized_candidates: [
-    {
-      runtime_id: string;
-      priority: number;
-      owner_subject_type: "user" | "teamspace";
-      owner_subject_id: string;
-    },
-    ...{
-      runtime_id: string;
-      priority: number;
-      owner_subject_type: "user" | "teamspace";
-      owner_subject_id: string;
-    }[]
-  ];
-  offline_behavior: "wait" | "fail";
-  failover: "candidates" | "none";
 }
 /**
  * Runtime-owned phase-aware invocation watchdog budgets.
@@ -2218,7 +2026,6 @@ export interface RuntimeLimits {
   toolWallTimeoutMs?: number;
   runTimeoutMs?: number;
   cancelGraceMs?: number;
-  enforcement?: "observe" | "enforce";
 }
 /**
  * Non-blocking question batch. IDs are positions scoped to this interaction, not provider-native question IDs.
@@ -2684,55 +2491,21 @@ export interface ToolProgressPayload {
     unit?: "items" | "bytes" | "steps";
   };
 }
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "RunNoticePayload".
- */
 export interface RunNoticePayload {
   noticeId: string;
-  code: "retry_scheduled" | "context_compacted" | "model_rerouted" | "config_warning" | "provider_diagnostic";
+  code:
+    | "retry_scheduled"
+    | "context_compacted"
+    | "model_rerouted"
+    | "config_warning"
+    | "provider_diagnostic"
+    | "model_output_idle";
   severity: "info" | "warning";
   params: {
     [k: string]: string | number | boolean;
   };
   relatedActivityId?: string;
   relatedItemId?: string;
-}
-/**
- * Untrusted inline selection text with optional resource reference, source metadata and summary. Source metadata is not an authorization claim.
- *
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextInlineEntry".
- */
-export interface ContextInlineEntry {
-  text: string;
-  resource_ref?: string;
-  source?:
-    | {
-        [k: string]: unknown;
-      }
-    | string;
-  summary?: string;
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextInlinePayload".
- */
-export interface ContextInlinePayload {
-  /**
-   * @minItems 1
-   */
-  entries: [ContextInlineEntry, ...ContextInlineEntry[]];
-}
-/**
- * This interface was referenced by `OctoRuntimeProtocolSchema`'s JSON-Schema
- * via the `definition` "ContextReferencesPayload".
- */
-export interface ContextReferencesPayload {
-  /**
-   * @minItems 1
-   */
-  entries: [ContextReferenceEntry, ...ContextReferenceEntry[]];
 }
 /**
  * Business authorization intent; never a tool installation definition.
@@ -2847,7 +2620,6 @@ export interface InteractionResponseWire {
  */
 export interface HostedAdapterMetadataWire {
   type: string;
-  agentSources: AgentSource[];
   workspace?: boolean;
   protocolSupport?: AdapterProtocolSupport;
   processModel?: string;

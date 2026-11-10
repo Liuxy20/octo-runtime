@@ -211,3 +211,5 @@ Keep the directory until all executions using it have finished and owned resourc
 See the [startup diagnostic contract and catalog](../guides/startup-diagnostics.md) for stable code branching, safe resource context, cleanup and CLI JSON compatibility.
 
 Business channels use the independent `@mininglamp-oss/octo-channel-gateway` package and only the public client.
+
+Private AgentEnv.Item names and fields are defined by their package READMEs, not registered in public protocol; `adapter.xxx` is not a public standard. For native modes see [Codex](../../../packages/octo-runtime-adapter-codex/README.md), [Claude Code](../../../packages/octo-runtime-adapter-claude-code/README.md), [ACP](../../../packages/octo-runtime-adapter-acp/README.md) and [Grok](../../../packages/octo-runtime-adapter-grok-build/README.md). Remote target options belong to [OpenClaw](../../../packages/octo-runtime-adapter-openclaw/README.md).
