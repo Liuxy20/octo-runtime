@@ -1,3 +1,28 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+export const codexMetadata: AdapterMetadata = {
+  type: "codex",
+  agentSources: ["provisioned"],
+  mcp: true,
+  processModel: "host-owned-engine",
+  transport: "codex-channel",
+  protocolSupport: {
+    protocol: "codex.app-server",
+    modes: ["native", "canonical"],
+    nativeMethods: [
+      "thread/start",
+      "thread/resume",
+      "turn/start",
+      "turn/interrupt",
+      "item/commandExecution/requestApproval",
+      "execCommandApproval",
+      "item/fileChange/requestApproval",
+      "applyPatchApproval",
+      "item/tool/requestUserInput",
+      "mcpServer/elicitation/request"
+    ]
+  }
+};
+
 import {
   defineAdapter,
   type AdapterExecutionScope,
@@ -35,29 +60,7 @@ export function createCodexAdapter({ engine }: { engine: CodexEngineProvider }) 
   if (!engine || typeof engine.acquire !== "function") throw new TypeError("CODEX_ENGINE_REQUIRED");
   assertCodexHome(engine.codexHome);
   return defineAdapter({
-    metadata: {
-      type: "codex",
-      agentSources: ["provisioned"],
-      mcp: true,
-      processModel: "host-owned-engine",
-      transport: "codex-channel",
-      protocolSupport: {
-        protocol: "codex.app-server",
-        modes: ["native", "canonical"],
-        nativeMethods: [
-          "thread/start",
-          "thread/resume",
-          "turn/start",
-          "turn/interrupt",
-          "item/commandExecution/requestApproval",
-          "execCommandApproval",
-          "item/fileChange/requestApproval",
-          "applyPatchApproval",
-          "item/tool/requestUserInput",
-          "mcpServer/elicitation/request"
-        ]
-      }
-    },
+    metadata: codexMetadata,
     ...(engine.probe ? { probe: () => engine.probe!() } : {}),
     createExecutionScope: (): AdapterExecutionScope => {
       const active = new Set<string>();

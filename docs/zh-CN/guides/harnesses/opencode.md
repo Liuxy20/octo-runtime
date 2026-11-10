@@ -11,7 +11,7 @@
 opencode --version
 ```
 
-当前 Adapter 要求 `>=2.1.3 <3`。`full_access` 使用 `opencode run --format json --thinking --auto --standalone`，`ask` 使用 `opencode acp`；不支持 `assisted` 或图片。模型使用 `provider/model`，网络设置仍遵循该版本原生规则。
+Adapter 不按版本号准入，调用前不执行 `--version`。`full_access` 使用 `opencode run --format json --thinking --auto --standalone`，`ask` 使用 `opencode acp`；真实协议失败仍按执行错误报告。不支持 `assisted` 或图片。模型使用 `provider/model`，网络设置遵循已安装 Provider 的原生规则。
 
 ## 渠道集成
 

@@ -1,3 +1,10 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const codeBuddyMetadata: AdapterMetadata = {
+  type: "codebuddy",
+  agentSources: ["provisioned"]
+};
+
 import {
   invocationModel,
   invocationApprovalMode,
@@ -29,6 +36,8 @@ import {
   defineAdapter,
   normalizeAcpToolUpdate,
   probeCommand,
+  snapshotProviderLaunch,
+  type ProbeResult,
   providerInputText,
   type AdapterInvocationContext,
   type CanonicalEvent,
@@ -230,15 +239,29 @@ function promptResultText(update: AcpUpdate): string | undefined {
  */
 export function createCodeBuddyAdapter({
   acpClientFactory = spawnAcpClient,
-  command = "codebuddy"
-}: { acpClientFactory?: typeof spawnAcpClient; command?: string } = {}) {
+  command,
+  commandArgsPrefix = [],
+  env = {},
+  probe
+}: {
+  acpClientFactory?: typeof spawnAcpClient;
+  command: string;
+  commandArgsPrefix?: readonly string[];
+  env?: NodeJS.ProcessEnv;
+  probe?: () => Promise<ProbeResult>;
+}) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
   return defineAdapter({
-    metadata: {
-      type: "codebuddy",
-      agentSources: ["provisioned"]
-    },
-    probe: () => probeCommand(command),
+    metadata: codeBuddyMetadata,
+    probe:
+      probe ??
+      (acpClientFactory === spawnAcpClient
+        ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+        : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
     async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
       const bridge = responders.get(invocationId);
       if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -256,13 +279,14 @@ export function createCodeBuddyAdapter({
       async function* execute(): AsyncGenerator<CanonicalEvent> {
         const client = await Promise.resolve(
           acpClientFactory({
-            command,
+            command: launch.command,
             args: [
+              ...launch.args,
               "--acp",
               "--permission-mode",
               codeBuddyPermissionMode(invocationApprovalMode(req))
             ],
-            env: invocationEnvironment(req),
+            env: invocationEnvironment(req, {}, launch.env),
             cwd: invocationWorkdir(req),
             signal: req.signal,
             permissionHandler: (params) => permissions.requestPermission(params),
@@ -456,6 +480,3 @@ export function codeBuddyPermissionMode(mode: "ask" | "assisted" | "full_access"
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-
-export const codebuddyAdapter = createCodeBuddyAdapter();
-export default codebuddyAdapter;

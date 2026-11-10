@@ -64,8 +64,19 @@ test("explicit SDK Home, removed singleton and conflicting per-call Home", async
   const exports = await import("../../packages/octo-runtime-adapter-codex/dist/index.js");
   assert.equal(exports.codexAdapter, undefined);
   assert.equal(exports.default, undefined);
-  assert.throws(() => createManagedCodexEngine({}), /CODEX_HOME_REQUIRED/);
-  assert.throws(() => createManagedCodexEngine({ codexHome: "relative" }), /CODEX_HOME_REQUIRED/);
+  assert.throws(
+    () => createManagedCodexEngine({ command: process.execPath, env: process.env }),
+    /CODEX_HOME_REQUIRED/
+  );
+  assert.throws(
+    () =>
+      createManagedCodexEngine({
+        command: process.execPath,
+        env: process.env,
+        codexHome: "relative"
+      }),
+    /CODEX_HOME_REQUIRED/
+  );
   const { owner, adapter, home } = await setup(t);
   const local = scope(adapter);
   const conflict = request("hello", {

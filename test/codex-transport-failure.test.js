@@ -11,7 +11,7 @@ for (const source of ["stdin", "stdout", "stderr"]) {
       const fixture = codexAppServerFixture();
       const child = fixture.spawnFn();
       const adapter = createCodexAdapter({
-        command: "fixture",
+        command: process.execPath,
         spawnFn: () => {
           setImmediate(() => {
             child[source].emit("error", new Error("first transport failure"));

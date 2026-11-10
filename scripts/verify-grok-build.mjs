@@ -1,3 +1,4 @@
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -7,7 +8,12 @@ import { join } from "node:path";
 import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 // 显式手动运行：使用本机 Grok 登录和网络，仅验证文本对话，不自动批准工具。
-const adapter = createGrokBuildAdapter();
+const launch = resolveHostProviderLaunch("grok", { env: process.env, cwd: process.cwd() });
+const adapter = createGrokBuildAdapter({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
+  env: launch.env
+});
 const probe = await adapter.probe();
 assert.equal(probe.available, true, probe.reason);
 console.log(JSON.stringify({ platform: platform(), arch: arch(), version: probe.version }));

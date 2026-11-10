@@ -72,7 +72,9 @@ The host prepares an absolute Home directory. SDK does not create or select the 
 | Service status | `kernel.status(): Promise<KernelServiceStatus>` | Lifecycle and Kernel state |
 | Close | `kernel.close(): Promise<ServiceCleanupResult>` | The host closes its service and checks `complete` |
 
-The host prepares Provider installation and authentication. Integration does not require an invocation:
+The host prepares Provider installation and authentication. Command adapters require an absolute `command`; pass `commandArgsPrefix` for a selected runtime/entry and `env` for its base environment. Constructors copy the binding. Adapters do not discover installations or reselect a runtime from request PATH/cwd. CLI performs discovery in its own composition layer. Metadata remains descriptive, and probe checks the bound target. Default adapter instances and implicit command selection have been removed.
+
+Integration does not require an invocation:
 
 ```ts
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
@@ -85,7 +87,7 @@ import { mkdir } from "node:fs/promises";
 const home = "/absolute/app-runtime-home";
 await mkdir(home, { recursive: true });
 const endpoint = componentEndpoint(home);
-const owner = createManagedCodexEngine({ codexHome: "/absolute/app-codex-home" });
+const owner = createManagedCodexEngine({ command: "/absolute/path/codex", env: process.env, codexHome: "/absolute/app-codex-home" });
 const kernel = createKernelService({ home, endpoint,
   adapters: [createCodexAdapter({ engine: owner.provider })],
   serviceProcesses: () => owner.processes(),

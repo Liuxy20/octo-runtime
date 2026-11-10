@@ -17,10 +17,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { antigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
+import { createAntigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 
 const executor = new AgentExecutor();
-executor.register(antigravityAdapter);
+executor.register(createAntigravityAdapter({ command: "/absolute/path/agy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -47,7 +47,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                            |
 | ------------ | ------------------------------------------------------------- |
 | Adapter 类型 | `antigravity`                                                 |
-| 导出         | `antigravityAdapter`、`createAntigravityAdapter`              |
+| 导出         | `createAntigravityAdapter`              |
 | 命令         | `agy` 加 `--dangerously-skip-permissions --mode accept-edits` |
 | 输出         | 仅 canonical 事件                                             |
 | 会话         | 显式 Provider 会话决定用哪段对话，且可续接                    |

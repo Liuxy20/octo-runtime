@@ -1,11 +1,25 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
-export const hermesAdapter = createAcpAdapter({
+export const hermesMetadata: AdapterMetadata = {
   type: "hermes",
-  provider: "hermes",
-  command: "hermes",
-  args: ["acp"],
-  emptyLoadResultMeansMissing: true
-});
+  mcp: true,
+  agentSources: ["provisioned"]
+};
 
-export default hermesAdapter;
+/** 宿主交付所选命令或 client factory；本模块仅维护 ACP 协议要求。 */
+export function createHermesAdapter(
+  options: NonNullable<Parameters<typeof createAcpAdapter>[1]> & { command: string }
+) {
+  return createAcpAdapter(
+    {
+      metadata: hermesMetadata,
+      type: "hermes",
+      provider: "hermes",
+      command: options.command,
+      args: ["acp"],
+      emptyLoadResultMeansMissing: true
+    },
+    options
+  );
+}

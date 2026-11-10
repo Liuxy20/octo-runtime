@@ -13,6 +13,7 @@ import {
   invocationInput
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { createFixtureCodexHost } from "../test-support/codex-owner.mjs";
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 
 // Print evidence metadata only. Provider payloads stay in this process.
 const report = [];
@@ -25,7 +26,14 @@ for (const [type, create, Normalizer] of [
     if (process.argv[3] && process.argv[3] !== protocolMode) continue;
     const host = new AgentExecutor();
     const codex = type === "codex" ? createFixtureCodexHost() : undefined;
-    host.register(codex ? codex.adapter : create());
+    const launch = codex
+      ? undefined
+      : resolveHostProviderLaunch("claude", { env: process.env, cwd: process.cwd() });
+    host.register(
+      codex
+        ? codex.adapter
+        : create({ command: launch.command, commandArgsPrefix: launch.args, env: launch.env })
+    );
     const marker = "DUAL_PROTOCOL_" + randomUUID().slice(0, 8);
     const request = {
       protocolVersion: 2,

@@ -24,6 +24,8 @@ Agent 定义由业务方管理。Adapter 元数据与 probe 分别描述执行�
 
 Adapter 构造方法和参数不受 Runtime 限制：类、任意签名工厂、闭包或直接对象均可，允许具体 client、函数、配置、多个对象及任意其他依赖。统一的是构造结果的注册执行合同。CodexEngineProvider 仅为 Codex 专用接口；CLI manifest 工厂 (options, {env}) 仅为 CLI 装配约定，不能施加到 SDK。注入引用不转移 Engine、连接或 Home 的关闭/权限管理权。
 
+Issue 346 进一步明确：executable、安装来源、运行器和执行位置由宿主选择，Adapter 消费显式依赖，不依据 PATH/cwd/环境另选安装。复用现有 metadata 的类型、来源、协议及描述字段，并复用 probe 的实际状态；不得把可执行依赖配置、client、owner 或关闭方法加入发现元数据，也不新增统一依赖/功能标签目录。内置模块导出同一份静态 metadata，供宿主在缺安装时构造 unavailable Adapter；注册仍须满足完整 protocolSupport 合同。逐模块实现、CLI 缺安装处理及底层启动器迁移见 [Issue 346](../tasks/346-host-execution/design.md)。
+
 2026-10-16 用户明确：CLI、desktop 及其他 SDK 宿主选择并交付具体 Adapter 和版本，功能支持范围由宿主管理。Adapter 将宿主的显式请求转换为 Provider 原生操作并返回真实结果；Runtime 不再额外维护一套功能标签供宿主发现、匹配或准入。
 
 - `executionFeatures` 自建字符串标签机制已删除，包括字段、常量、发现投影和标签驱动的判断；不得恢复标签，也不得换成另一份布尔字段表、能力 struct 或注册中心延续同一机制。

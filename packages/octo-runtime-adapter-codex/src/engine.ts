@@ -8,6 +8,7 @@ import {
   mergeProcessEnvironment,
   processEnvironmentValue,
   probeCommand,
+  snapshotProviderLaunch,
   type AdapterInvocationContext,
   type AdapterScopeCleanup,
   type InvokeRequest,
@@ -62,7 +63,8 @@ export interface ManagedCodexEngine {
 }
 export interface ManagedCodexEngineOptions {
   codexHome: string;
-  command?: string;
+  command: string;
+  commandArgsPrefix?: readonly string[];
   appServerArgs?: string[];
   spawnFn?: CodexAppServerSpawn;
   env?: NodeJS.ProcessEnv;
@@ -81,9 +83,9 @@ export function assertCodexInvocationHome(request: InvokeRequest, home: string):
 /** 构造命令不启动进程；显式环境必须含 Home，不回退 ~/.codex。 */
 export function buildCodexCommand(
   req: InvokeRequest,
-  command = "codex",
+  command: string,
   appServerArgs = buildCodexAppServerArgs(),
-  env: NodeJS.ProcessEnv = process.env
+  env: NodeJS.ProcessEnv = {}
 ): CodexAppServerCommand {
   const home = processEnvironmentValue(env, "CODEX_HOME");
   assertCodexHome(home);
@@ -103,18 +105,20 @@ export function buildCodexCommand(
 /** 宿主显式拥有唯一 app-server；本轮配置只进入 thread，不参与进程选择。 */
 export function createManagedCodexEngine({
   codexHome,
-  command = "codex",
+  command,
+  commandArgsPrefix = [],
   appServerArgs = buildCodexAppServerArgs(),
   spawnFn,
-  env = process.env
+  env = {}
 }: ManagedCodexEngineOptions): ManagedCodexEngine {
   assertCodexHome(codexHome);
-  const inherited = mergeProcessEnvironment(env, { CODEX_HOME: codexHome });
+  const launch = snapshotProviderLaunch({ command, args: commandArgsPrefix, env });
+  const inherited = mergeProcessEnvironment(launch.env, { CODEX_HOME: codexHome });
   const scopeId = randomUUID();
   // server 启动继承宿主目录；CODEX_HOME 仅是数据目录，本轮 cwd 只经 thread/turn RPC 传入。
   const spec: CodexAppServerCommand = {
-    command,
-    args: [...appServerArgs],
+    command: launch.command,
+    args: [...launch.args, ...appServerArgs],
     env: inherited,
     cleanup: () => undefined
   };
@@ -126,7 +130,7 @@ export function createManagedCodexEngine({
   return {
     provider: {
       codexHome,
-      probe: () => probeCommand(command),
+      probe: () => probeCommand(launch.command, { args: launch.args, env: inherited }),
       async acquire(request, context) {
         if (closing) throw new Error("CODEX_SERVICE_CLOSED");
         assertCodexInvocationHome(request, codexHome);

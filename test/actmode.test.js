@@ -100,6 +100,7 @@ for (const provider of ["codex", "claude-code"])
               provider === "codex"
                 ? createCodexAdapter({ command: process.execPath, appServerArgs: options })
                 : createClaudeCodeAdapter({
+                    env: process.env,
                     command: process.execPath,
                     commandArgsPrefix: options
                   });

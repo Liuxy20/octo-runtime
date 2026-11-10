@@ -16,10 +16,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { hermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
+import { createHermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
 
 const executor = new AgentExecutor();
-executor.register(hermesAdapter);
+executor.register(createHermesAdapter({ command: "/absolute/path/hermes", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                                        |
 | ------------ | ------------------------------------------------------------------------- |
 | Adapter 类型 | `hermes`                                                                  |
-| 导出         | `hermesAdapter`                                                           |
+| 导出         | `createHermesAdapter`                                                           |
 | 命令         | `hermes acp`                                                              |
 | 输出         | 仅 canonical 事件                                                         |
 | 会话         | 显式续接；`session/load` 返回空结果时视为会话丢失，改用调用方给的恢复输入 |

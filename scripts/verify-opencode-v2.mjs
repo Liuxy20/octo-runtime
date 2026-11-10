@@ -1,3 +1,4 @@
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -10,7 +11,12 @@ import { startMcpHttpServer } from "../test-support/mcp/http-server.mjs";
 // 手动验收使用宿主已有认证；只输出断言结果，工具仅操作隔离目录。
 const command = process.env.OCTO_OPENCODE_COMMAND ?? "opencode";
 const model = process.env.OCTO_OPENCODE_MODEL ?? "deepseek/deepseek-flash";
-const adapter = createOpenCodeAdapter({ command });
+const launch = resolveHostProviderLaunch(command, { env: process.env, cwd: process.cwd() });
+const adapter = createOpenCodeAdapter({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
+  env: launch.env
+});
 const probe = await adapter.probe();
 assert.equal(probe.available, true, probe.reason);
 console.log(JSON.stringify({ platform: platform(), arch: arch(), version: probe.version, model }));

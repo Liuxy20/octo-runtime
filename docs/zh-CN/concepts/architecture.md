@@ -29,7 +29,7 @@ Gateway 为独立仓库，配置、授权、上下文、会话和投递由其负
 | Executor Core | 已注册 Adapter、每注册执行 scope、调用控制器、迭代器和交互状态 | Core 管理接纳、定向取消、调用清理及 scope.beginShutdown/close；本进程内没有独立执行 worker |
 | Adapter SDK | Adapter/scope/cleanup 合同，队列、日志及进程辅助对象 | 使用方维护具体实例；辅助库不默认创建全局 Engine |
 | Codex Adapter | 注入的 CodexEngineProvider、本 scope 调用路由、本轮 channel、协议与交互状态 | createCodexAdapter({engine}) 不托管进程；Core 关闭 scope 只释放本地调用与 lease |
-| ManagedCodexEngine / CodexService | 单个 owned app-server、stdio reader/writer、RPC 关联、恢复 timer 和 incarnation | 宿主显式 createManagedCodexEngine({codexHome})，持有并最终 close owner；channel.close 只释放本轮资源 |
+| ManagedCodexEngine / CodexService | 单个 owned app-server、stdio reader/writer、RPC 关联、恢复 timer 和 incarnation | 宿主显式 createManagedCodexEngine({command, env, codexHome})，持有并最终 close owner；channel.close 只释放本轮资源 |
 | ACP Client / 其他 Provider Adapter | 逐轮子进程、原生会话队列或远端连接 | 各 Adapter 按已有模型释放本轮资源；调用 spawnAcpClient 的一方负责 client.close；不能由 Codex 模型推导全部 Provider |
 | protocol | Schema、执行信封、身份和事件类型 | 没有进程或连接的运行期所有权 |
 | runtime-client | 自己的连接、调用登记、观察及控制句柄 | 消费者停止接纳、排空自己调用，再关闭 client；close 不等于取消已接纳执行或关闭共享 Kernel |

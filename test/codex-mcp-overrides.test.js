@@ -30,7 +30,11 @@ for (const resume of [false, true]) {
       };
       const original = structuredClone(config);
       const server = codexAppServerFixture({ config });
-      const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn, env: {} });
+      const adapter = createCodexAdapter({
+        command: process.execPath,
+        spawnFn: server.spawnFn,
+        env: {}
+      });
       const events = [];
       for await (const event of adapter.invoke(
         invokeRequest({
@@ -106,7 +110,7 @@ for (const [name, native] of Object.entries(nativeServers)) {
     for (const resume of [false, true]) {
       test(`Codex rejects native MCP name before any thread or prompt: ${name}/${type}/resume=${resume}`, async () => {
         const server = codexAppServerFixture({ config: { mcp_servers: { [name]: native } } });
-        const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+        const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
         const events = [];
         const request = invokeRequest({
           signal: AbortSignal.timeout(2000),
@@ -134,7 +138,7 @@ for (const [name, native] of Object.entries(nativeServers)) {
 }
 test("Codex native mode returns the explicit MCP conflict code", async () => {
   const server = codexAppServerFixture({ config: { mcp_servers: nativeServers } });
-  const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+  const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
   await assert.rejects(
     async () => {
       for await (const _ of adapter.invoke(
@@ -155,7 +159,7 @@ test("Codex native mode returns the explicit MCP conflict code", async () => {
 });
 test("Codex leaves provider configuration untouched without run MCP or env overrides", async () => {
   const server = codexAppServerFixture({ config: { mcp_servers: nativeServers } });
-  const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+  const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
   const events = [];
   for await (const event of adapter.invoke(
     invokeRequest({

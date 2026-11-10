@@ -1,3 +1,4 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 /**
@@ -12,12 +13,25 @@ import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
  * `session/load` returns an empty result is treated as a missing session and
  * falls back to a fresh session (`emptyLoadResultMeansMissing`).
  */
-export const mcodeAdapter = createAcpAdapter({
+export const mcodeMetadata: AdapterMetadata = {
   type: "mcode",
-  provider: "mcode",
-  command: "mcode",
-  args: ["acp"],
-  emptyLoadResultMeansMissing: true
-});
+  mcp: true,
+  agentSources: ["provisioned"]
+};
 
-export default mcodeAdapter;
+/** 宿主交付所选命令或 client factory；本模块仅维护 ACP 协议要求。 */
+export function createMcodeAdapter(
+  options: NonNullable<Parameters<typeof createAcpAdapter>[1]> & { command: string }
+) {
+  return createAcpAdapter(
+    {
+      metadata: mcodeMetadata,
+      type: "mcode",
+      provider: "mcode",
+      command: options.command,
+      args: ["acp"],
+      emptyLoadResultMeansMissing: true
+    },
+    options
+  );
+}

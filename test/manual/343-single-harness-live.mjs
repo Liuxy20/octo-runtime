@@ -11,6 +11,7 @@ import { codexEnvironmentConfig } from "../../packages/octo-runtime-adapter-code
 import { invokeRequest } from "../runtime-fixture.js";
 import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { startMcpHttpServer } from "../../test-support/mcp/http-server.mjs";
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 
 if (!process.argv.includes("--live")) throw new Error("Explicit --live required");
 const count = 100;
@@ -28,7 +29,10 @@ const m=JSON.parse(line);if(m.id===undefined)return;
 const result=m.method==='initialize'?{protocolVersion:m.params.protocolVersion,capabilities:{tools:{}},serverInfo:{name:'probe',version:'1'}}:m.method==='tools/list'?{tools:[]}:{};
 console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result}));});`
 );
+const launch = resolveHostProviderLaunch("codex", { env: process.env, cwd: process.cwd() });
 const owner = createManagedCodexEngine({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
   codexHome: home,
   env: { ...process.env, NO_PROXY: "127.0.0.1,localhost", no_proxy: "127.0.0.1,localhost" }
 });

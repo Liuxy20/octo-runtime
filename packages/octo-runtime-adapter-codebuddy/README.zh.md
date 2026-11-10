@@ -17,10 +17,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { codebuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
+import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
 
 const executor = new AgentExecutor();
-executor.register(codebuddyAdapter);
+executor.register(createCodeBuddyAdapter({ command: "/absolute/path/codebuddy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | 项           | 值                                              |
 | ------------ | ----------------------------------------------- |
 | Adapter 类型 | `codebuddy`                                     |
-| 导出         | `codebuddyAdapter`、`createCodeBuddyAdapter`    |
+| 导出         | `createCodeBuddyAdapter`    |
 | 命令         | `codebuddy --acp --permission-mode <mode>`      |
 | 输出         | 仅 canonical 事件                               |
 | 会话         | 新开会话，或按 id 加载显式会话                  |

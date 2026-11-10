@@ -1,3 +1,18 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const claudeCodeMetadata: AdapterMetadata = {
+  mcp: true,
+  protocolSupport: {
+    protocol: "claude.stream-json",
+    modes: ["native", "canonical"],
+    nativeMethods: ["managed-turn", "can_use_tool", "control_response", "cancel"]
+  },
+  type: "claude-code",
+  agentSources: ["provisioned"],
+  processModel: "subprocess-per-invocation",
+  transport: "ndjson/stdio"
+};
+
 import {
   invocationModel,
   invocationEffort,
@@ -31,6 +46,7 @@ import {
   defineAdapter,
   parseJsonLine,
   probeCommand,
+  snapshotProviderLaunch,
   providerInputText,
   spawnJsonLines,
   type CanonicalEvent,
@@ -101,7 +117,8 @@ interface ClaudeNativeEvent {
 export async function buildClaudeCommand(
   req: InvokeRequest,
   command = "claude",
-  commandArgsPrefix: string[] = []
+  commandArgsPrefix: string[] = [],
+  inherited: NodeJS.ProcessEnv = {}
 ) {
   if (hasImageInput(req))
     throw new Error("UNSUPPORTED_INPUT_MODALITY: claude-code does not encode image input");
@@ -109,7 +126,7 @@ export async function buildClaudeCommand(
     contextActmode(req.agentEnv) === "plan"
       ? "plan"
       : claudePermissionMode(invocationApprovalMode(req));
-  const servers = invocationMcpServers(req);
+  const servers = invocationMcpServers(req, invocationEnvironment(req, {}, inherited));
   assertMcpOptions(servers, "claude-code", []);
   // Native Claude expands placeholders again at connection time. Reject values
   // it cannot preserve instead of silently changing a resolved literal/token.
@@ -662,28 +679,20 @@ function claudeToolResultOutput(content: unknown): unknown {
 
 /** Create a Claude Code adapter bound to a resolved CLI command and optional argv prefix. */
 export function createClaudeCodeAdapter({
-  command = "claude",
-  commandArgsPrefix = []
+  command,
+  commandArgsPrefix = [],
+  env = {}
 }: {
-  command?: string;
+  command: string;
   commandArgsPrefix?: string[];
-} = {}) {
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch = snapshotProviderLaunch({ command, args: commandArgsPrefix, env });
   const responders = new Map<string, AcpApprovalBridge>();
   const nativeResponders = new Map<string, NativeInteractionBridge>();
   return defineAdapter({
-    metadata: {
-      mcp: true,
-      protocolSupport: {
-        protocol: "claude.stream-json",
-        modes: ["native", "canonical"],
-        nativeMethods: ["managed-turn", "can_use_tool", "control_response", "cancel"]
-      },
-      type: "claude-code",
-      agentSources: ["provisioned"],
-      processModel: "subprocess-per-invocation",
-      transport: "ndjson/stdio"
-    },
-    probe: () => probeCommand(command),
+    metadata: claudeCodeMetadata,
+    probe: () => probeCommand(launch.command, { args: launch.args, env: launch.env }),
     async respondNative(invocationId: string, response: NativeInteractionResponse): Promise<void> {
       const bridge = nativeResponders.get(invocationId);
       if (!bridge) throw protocolError("INTERACTION_NOT_ACTIVE");
@@ -734,7 +743,7 @@ export function createClaudeCodeAdapter({
     permissions: AcpApprovalBridge | NativeInteractionBridge,
     context?: AdapterInvocationContext
   ): AsyncGenerator<AdapterOutput> {
-    const spec = await buildClaudeCommand(request, command, commandArgsPrefix);
+    const spec = await buildClaudeCommand(request, launch.command, [...launch.args], launch.env);
     // The normalizer must not be hoisted to an adapter singleton: one adapter may run several invocations concurrently.
     const normalizer =
       permissions instanceof NativeInteractionBridge ? undefined : new ClaudeEventNormalizer();
@@ -750,7 +759,7 @@ export function createClaudeCodeAdapter({
       for await (const native of spawnJsonLines<ClaudeNativeEvent>({
         ...spec,
         cwd: invocationWorkdir(request),
-        env: invocationEnvironment(request),
+        env: invocationEnvironment(request, {}, launch.env),
         signal: request.signal,
         rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
         onSpawn: (close) => permissions.bindTransport(close),
@@ -953,6 +962,3 @@ export function createClaudeCodeAdapter({
     }
   }
 }
-
-export const claudeCodeAdapter = createClaudeCodeAdapter();
-export default claudeCodeAdapter;

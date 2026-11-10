@@ -64,7 +64,9 @@ npm 版本与 IPC v2、Run 7、Context v3 分别管理。同次发行组合属�
 | 服务状态 | `kernel.status(): Promise<KernelServiceStatus>` | 生命周期及 Kernel 状态 |
 | 关闭 | `kernel.close(): Promise<ServiceCleanupResult>` | 宿主负责关闭并检查 `complete` |
 
-Provider 的安装、认证由宿主准备。这里只完成服务接入，不需要发起一次调用：
+Provider 的安装、认证由宿主准备。命令 Adapter 必填绝对 `command`；选定运行器/入口时传入 `commandArgsPrefix`，基础环境通过 `env` 交付，构造时复制绑定。Adapter 不发现安装，也不按请求 PATH/cwd 重新选择运行器；CLI 在自己的装配层完成发现。metadata 保持描述性，probe 检查已绑定目标。默认 Adapter 实例与隐式命令选择已删除。
+
+这里只完成服务接入，不需要发起一次调用：
 
 ```ts
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
@@ -77,7 +79,7 @@ import { mkdir } from "node:fs/promises";
 const home = "/absolute/app-runtime-home";
 await mkdir(home, { recursive: true });
 const endpoint = componentEndpoint(home);
-const owner = createManagedCodexEngine({ codexHome: "/absolute/app-codex-home" });
+const owner = createManagedCodexEngine({ command: "/absolute/path/codex", env: process.env, codexHome: "/absolute/app-codex-home" });
 const kernel = createKernelService({ home, endpoint,
   adapters: [createCodexAdapter({ engine: owner.provider })],
   serviceProcesses: () => owner.processes(),

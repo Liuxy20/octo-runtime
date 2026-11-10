@@ -16,10 +16,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { mcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
+import { createMcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
 
 const executor = new AgentExecutor();
-executor.register(mcodeAdapter);
+executor.register(createMcodeAdapter({ command: "/absolute/path/mcode", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 | Item         | Value                                                                                                                                   |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Adapter type | `mcode`                                                                                                                                 |
-| Export       | `mcodeAdapter`                                                                                                                          |
+| Export       | `createMcodeAdapter`                                                                                                                          |
 | Command      | `mcode acp`                                                                                                                             |
 | Output       | canonical events only                                                                                                                   |
 | Session      | MiniMax advertises `loadSession: false`; an empty `session/load` result counts as missing and falls back to the caller's recovery input |

@@ -8,10 +8,8 @@ import { fileURLToPath } from "node:url";
 import { spawnGrokBuildAcpClient as spawnAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";
 import { spawnAcpClient as spawnStandardAcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
-import {
-  createGrokBuildAdapter,
-  grokBuildAdapter
-} from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+const grokBuildAdapter = createGrokBuildAdapter({ command: process.execPath, env: process.env });
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { preparedFrames, invokeRequest } from "./runtime-fixture.js";
 import { observeGrokFixture, withGrokOutputPipe } from "../test-support/grok-build-fixture.mjs";
@@ -35,6 +33,8 @@ async function fixture(t, mode = "success", { cleanupFailure = false } = {}) {
     await rm(directory, { recursive: true, force: true });
   });
   const adapter = createGrokBuildAdapter({
+    command: process.execPath,
+    env: process.env,
     acpClientFactory(options) {
       spawns.push(options);
       const spawnClient = () =>
@@ -427,26 +427,40 @@ test("SDK host suppresses success until Grok cleanup completes and reports clean
 });
 test("Grok command and version probes give actionable diagnostics; CLI catalog includes its package", async (t) => {
   const missing = await createGrokBuildAdapter({
+    env: process.env,
     command: join(tmpdir(), "missing-grok-95")
   }).probe();
   assert.equal(missing.available, false);
-  assert.match(missing.reason, /install Grok Build/);
-  const incompatible = await createGrokBuildAdapter({ command: process.execPath }).probe();
+  assert.equal(missing.reason, "command_not_found");
+  const incompatible = await createGrokBuildAdapter({
+    env: process.env,
+    command: process.execPath
+  }).probe();
   assert.equal(incompatible.available, false);
   assert.match(incompatible.reason, /grok_version_unsupported/);
   if (process.platform !== "win32") {
     const directory = await mkdtemp(join(tmpdir(), "grok-probe-"));
     t.after(() => rm(directory, { recursive: true, force: true }));
     const command = join(directory, "grok");
-    await writeFile(command, '#!/bin/sh\nprintf "grok 1.0.67 (fixture)\\n"\n', { mode: 0o700 });
-    assert.equal((await createGrokBuildAdapter({ command }).probe()).version, "1.0.67");
+    await writeFile(command, 'console.log("grok 1.0.67 (fixture)");\n');
+    assert.equal(
+      (
+        await createGrokBuildAdapter({
+          env: process.env,
+          command: process.execPath,
+          commandArgsPrefix: [command]
+        }).probe()
+      ).version,
+      "1.0.67"
+    );
   }
   const manifest = JSON.parse(
     await readFile(new URL("../apps/cli/src/manifest.json", import.meta.url), "utf8")
   );
   assert.ok(
     manifest.adapters.some(
-      (entry) => entry.type === "grok-build" && entry.export === "grokBuildAdapter"
+      (entry) =>
+        entry.type === "grok-build" && entry.export === "createCliGrokBuildAdapter" && entry.factory
     )
   );
 });

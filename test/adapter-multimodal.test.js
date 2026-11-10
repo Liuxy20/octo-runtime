@@ -110,7 +110,7 @@ for (const [approvalMode, approvalPolicy, sandbox] of [
 ]) {
   test(`Codex maps ${approvalMode} to native approval and sandbox parameters`, async () => {
     const server = codexFixture();
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const events = await collect(
       adapter.invoke(
         invokeRequest({
@@ -129,7 +129,7 @@ for (const [approvalMode, approvalPolicy, sandbox] of [
 for (const fallback of [false, true]) {
   test(`Codex preserves mixed native input order and redacts image captures${fallback ? " after resume fallback" : ""}`, async () => {
     const server = codexFixture({ fallback });
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const events = await collect(
       adapter.invoke(
         invokeRequest({
@@ -248,7 +248,7 @@ for (const imageCapability of [false, null, "true", "missing"]) {
 }
 test("Codex and ACP accept a pure-image turn without inventing user text", async () => {
   const server = codexFixture();
-  const codex = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+  const codex = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
   const codexEvents = await collect(
     codex.invoke(invokeRequest({ modelInput: "", modelInputParts: images }))
   );
@@ -324,11 +324,28 @@ for (const recoveryOnly of [false, true]) {
     });
   }
   for (const [name, factory] of [
-    ["Claude", () => createClaudeCodeAdapter({ command: "/provider-must-not-start" })],
-    ["CodeBuddy", (mustNotStart) => createCodeBuddyAdapter({ acpClientFactory: mustNotStart })],
-    ["OpenCode", () => createOpenCodeAdapter({ command: "/provider-must-not-start" })],
+    [
+      "Claude",
+      () => createClaudeCodeAdapter({ env: process.env, command: "/provider-must-not-start" })
+    ],
+    [
+      "CodeBuddy",
+      (mustNotStart) =>
+        createCodeBuddyAdapter({
+          command: process.execPath,
+          env: process.env,
+          acpClientFactory: mustNotStart
+        })
+    ],
+    [
+      "OpenCode",
+      () => createOpenCodeAdapter({ env: process.env, command: "/provider-must-not-start" })
+    ],
     ["OpenClaw", (mustNotStart) => createOpenClawAdapter({ clientFactory: mustNotStart })],
-    ["Antigravity", () => createAntigravityAdapter({ command: "/provider-must-not-start" })]
+    [
+      "Antigravity",
+      () => createAntigravityAdapter({ env: process.env, command: "/provider-must-not-start" })
+    ]
   ]) {
     test(`${name} invocation rejects ${variant} images before Provider work`, async () => {
       let starts = 0;
@@ -345,7 +362,10 @@ for (const recoveryOnly of [false, true]) {
     });
   }
   test(`OpenCode ask rejects ${variant} images before its ACP path`, async () => {
-    const adapter = createOpenCodeAdapter({ command: "/provider-must-not-start" });
+    const adapter = createOpenCodeAdapter({
+      env: process.env,
+      command: "/provider-must-not-start"
+    });
     await assert.rejects(
       collect(
         adapter.invoke({
@@ -447,7 +467,7 @@ test(
 for (const scenario of ["first", "resume", "reset", "missing-session"]) {
   test(`Codex forwards caller prompts as ordinary parts without injection: ${scenario}`, async () => {
     const server = codexFixture({ fallback: scenario === "missing-session" });
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const events = await collect(
       adapter.invoke(
         invokeRequest({

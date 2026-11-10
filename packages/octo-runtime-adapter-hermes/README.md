@@ -16,10 +16,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { hermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
+import { createHermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
 
 const executor = new AgentExecutor();
-executor.register(hermesAdapter);
+executor.register(createHermesAdapter({ command: "/absolute/path/hermes", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ Consume the events as described in [Runtime Protocol](../octo-runtime-protocol/R
 | Item         | Value                                                                                                                     |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------- |
 | Adapter type | `hermes`                                                                                                                  |
-| Export       | `hermesAdapter`                                                                                                           |
+| Export       | `createHermesAdapter`                                                                                                           |
 | Command      | `hermes acp`                                                                                                              |
 | Output       | canonical events only                                                                                                     |
 | Session      | explicit resume; an empty `session/load` result counts as a missing session and falls back to the caller's recovery input |

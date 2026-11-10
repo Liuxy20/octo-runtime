@@ -17,10 +17,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { claudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
+import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 
 const executor = new AgentExecutor();
-executor.register(claudeCodeAdapter);
+executor.register(createClaudeCodeAdapter({ command: "/absolute/path/claude", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | Item         | Value                                                                            |
 | ------------ | -------------------------------------------------------------------------------- |
 | Adapter type | `claude-code`                                                                    |
-| Exports      | `claudeCodeAdapter`, `createClaudeCodeAdapter`                                   |
+| Exports      | `createClaudeCodeAdapter`                                   |
 | Protocol     | `claude.stream-json`, modes `native` and `canonical`                             |
 | Transport    | one `claude` NDJSON stdio subprocess per invocation                              |
 | Session      | explicit Provider session; a new session is generated only when none is supplied |

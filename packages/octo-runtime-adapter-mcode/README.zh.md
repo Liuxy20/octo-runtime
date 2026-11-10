@@ -16,10 +16,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { mcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
+import { createMcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
 
 const executor = new AgentExecutor();
-executor.register(mcodeAdapter);
+executor.register(createMcodeAdapter({ command: "/absolute/path/mcode", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                                                             |
 | ------------ | ---------------------------------------------------------------------------------------------- |
 | Adapter 类型 | `mcode`                                                                                        |
-| 导出         | `mcodeAdapter`                                                                                 |
+| 导出         | `createMcodeAdapter`                                                                                 |
 | 命令         | `mcode acp`                                                                                    |
 | 输出         | 仅 canonical 事件                                                                              |
 | 会话         | MiniMax 广告 `loadSession: false`；`session/load` 返回空即视为会话丢失，改用调用方给的恢复输入 |

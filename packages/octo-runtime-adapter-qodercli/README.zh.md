@@ -16,10 +16,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { qoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
+import { createQoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
 
 const executor = new AgentExecutor();
-executor.register(qoderCliAdapter);
+executor.register(createQoderCliAdapter({ command: "/absolute/path/qodercli", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                           |
 | ------------ | ------------------------------------------------------------ |
 | Adapter 类型 | `qodercli`                                                   |
-| 导出         | `qoderCliAdapter`                                            |
+| 导出         | `createQoderCliAdapter`                                            |
 | 命令         | `qodercli --acp`；`full_access` 时为 `qodercli --yolo --acp` |
 | 输出         | 仅 canonical 事件                                            |
 | 会话         | 走 `session/load` 续接，不需要新会话兜底                     |

@@ -22,7 +22,7 @@ for (const scenario of ["fresh", "resumed", "resume-fallback", "turn-fallback", 
         ...(scenario === "turn-fallback" ? { firstTurnStartError: "thread not found" } : {}),
         ...(scenario === "name-unavailable" ? { nameError: "method not found" } : {})
       });
-      const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+      const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
       const events = [];
       const req = invokeRequest({
         sessionName: "webui-caller-readable-name",
@@ -379,7 +379,7 @@ test(
   { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const events = [];
     const iterator = adapter.invoke(request)[Symbol.asyncIterator]();
@@ -446,7 +446,7 @@ test(
   { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const request = invokeRequest({
       signal: AbortSignal.timeout(4000),
       agentEnv: withAgentEnvItems(undefined, [
@@ -510,7 +510,7 @@ test(
   { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture({ holdResponseWrites: true });
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const request = invokeRequest({
       signal: AbortSignal.timeout(4000),
       agentEnv: withAgentEnvItems(undefined, [
@@ -563,7 +563,7 @@ test(
   async () => {
     const servers = [];
     const adapter = createCodexAdapter({
-      command: "fixture",
+      command: process.execPath,
       spawnFn: () => {
         const server = codexAppServerFixture();
         servers.push(server);
@@ -604,7 +604,7 @@ test(
   { timeout: 5000 },
   async () => {
     const server = codexAppServerFixture();
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const interactionIds = [];
     const events = [];
@@ -659,7 +659,7 @@ test(
   async (testContext) => {
     testContext.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
     const server = codexAppServerFixture();
-    const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+    const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
     const request = invokeRequest({ signal: AbortSignal.timeout(4000) });
     const events = [];
     for await (const event of adapter.invoke(request)) {
@@ -695,7 +695,7 @@ for (const termination of ["process_death", "cancellation"]) {
     { timeout: 5000 },
     async () => {
       const server = codexAppServerFixture();
-      const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+      const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
       const controller = new AbortController();
       const request = invokeRequest({
         signal: AbortSignal.any([controller.signal, AbortSignal.timeout(4000)])
@@ -738,7 +738,7 @@ for (const approvalMode of ["ask", "assisted", "full_access"]) {
     { timeout: 5000 },
     async () => {
       const server = codexAppServerFixture({ method: "item/permissions/requestApproval" });
-      const adapter = createCodexAdapter({ command: "fixture", spawnFn: server.spawnFn });
+      const adapter = createCodexAdapter({ command: process.execPath, spawnFn: server.spawnFn });
       const events = [];
       for await (const event of adapter.invoke(
         invokeRequest({

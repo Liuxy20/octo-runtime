@@ -16,10 +16,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { kimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
+import { createKimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
 
 const executor = new AgentExecutor();
-executor.register(kimiCodeAdapter);
+executor.register(createKimiCodeAdapter({ command: "/absolute/path/kimi", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 | Item         | Value                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | Adapter type | `kimi-code`                                                                                   |
-| Export       | `kimiCodeAdapter`                                                                             |
+| Export       | `createKimiCodeAdapter`                                                                             |
 | Command      | `kimi acp`                                                                                    |
 | Output       | canonical events only                                                                         |
 | Session      | new session, or an explicit Provider session resumed by the ACP Adapter                       |

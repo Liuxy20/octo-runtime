@@ -47,6 +47,8 @@ export function codeBuddyFixture({
 } = {}) {
   const state = { calls: [], promptCalls: 0, closes: 0 };
   const adapter = createCodeBuddyAdapter({
+    command: process.execPath,
+    env: process.env,
     acpClientFactory: () => {
       let nextId = 0;
       let closed = false;

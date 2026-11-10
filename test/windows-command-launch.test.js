@@ -12,7 +12,10 @@ import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude
 import { spawnAcpClient } from "../packages/octo-runtime-acp-client/dist/index.js";
 import { spawnGrokBuildAcpClient } from "../packages/octo-runtime-adapter-grok-build/dist/client.js";
 import { invokeRequest } from "./runtime-fixture.js";
-import { resolveProcessLaunch } from "../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
+import {
+  resolveProcessLaunch,
+  resolveHostProviderLaunch
+} from "../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
 const windows = process.platform === "win32";
 const source = fileURLToPath(new URL("./fixtures/windows-command-provider.mjs", import.meta.url));
 const shimHeader =
@@ -56,8 +59,9 @@ async function fixture(t, name = "provider") {
   return { root, command, entry, env };
 }
 async function lines(command, args, f, extra = {}) {
+  const launch = resolveHostProviderLaunch(command, { args, env: f.env, cwd: f.root });
   return Array.fromAsync(
-    spawnJsonLines({ command, args, cwd: f.root, env: f.env, parseLine: JSON.parse, ...extra })
+    spawnJsonLines({ ...launch, cwd: f.root, parseLine: JSON.parse, ...extra })
   );
 }
 test(
@@ -81,16 +85,29 @@ test(
   async (t) => {
     const f = await fixture(t);
     for (const command of ["provider", f.command, join(f.root, "provider")]) {
-      const probe = await probeCommand(command, { env: f.env, cwd: f.root });
+      const launch = resolveHostProviderLaunch(command, { env: f.env, cwd: f.root });
+      const probe = await probeCommand(launch.command, {
+        args: launch.args,
+        env: launch.env,
+        cwd: f.root
+      });
       assert.equal(probe.available, true);
       assert.equal(probe.version, "1.2.3");
-      assert.deepEqual((await lines(probe.command, ["json", "selected"], f))[0].args, ["selected"]);
+      assert.deepEqual((await lines(command, ["json", "selected"], f))[0].args, ["selected"]);
     }
   }
 );
 for (const [name, create] of [
-  ["codex", (env) => createCodexAdapter({ env })],
-  ["claude", () => createClaudeCodeAdapter()]
+  [
+    "codex",
+    (env, launch) =>
+      createCodexAdapter({ env, command: launch.command, commandArgsPrefix: launch.args })
+  ],
+  [
+    "claude",
+    (env, launch) =>
+      createClaudeCodeAdapter({ env, command: launch.command, commandArgsPrefix: [...launch.args] })
+  ]
 ]) {
   test(
     `Windows default ${name} Adapter completes through its npm shim and closes its process`,
@@ -109,7 +126,8 @@ for (const [name, create] of [
           { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
         ])
       });
-      const events = await Array.fromAsync(create(f.env).invoke(request));
+      const launch = resolveHostProviderLaunch(name, { env: f.env, cwd: f.root });
+      const events = await Array.fromAsync(create(f.env, launch).invoke(request));
       assert.equal(events.filter((event) => event.type === "run.completed").length, 1);
       assert.ok(!events.some((event) => ["run.failed", "run.cancelled"].includes(event.type)));
       const pid = Number(await readFile(f.env.FIXTURE_PID_FILE, "utf8"));
@@ -127,9 +145,10 @@ for (const [label, create] of [
     async (t) => {
       const f = await fixture(t);
       for (const command of ["provider", f.command]) {
+        const launch = resolveHostProviderLaunch(command, { env: f.env, cwd: f.root });
         const client = create({
-          command,
-          args: ["acp"],
+          command: launch.command,
+          args: [...launch.args, "acp"],
           env: f.env,
           cwd: f.root,
           signal: AbortSignal.timeout(5000)
@@ -195,10 +214,15 @@ test(
     const f = await fixture(t);
     const controller = new AbortController();
     let pid;
+    const launch = resolveHostProviderLaunch("provider", {
+      args: ["hold"],
+      env: f.env,
+      cwd: f.root
+    });
     try {
       for await (const line of spawnJsonLines({
-        command: "provider",
-        args: ["hold"],
+        command: launch.command,
+        args: [...launch.args],
         env: f.env,
         cwd: f.root,
         signal: controller.signal,

@@ -126,6 +126,8 @@ test("CodeBuddy cancellation while selecting a model closes transport without pr
   let prompts = 0,
     closes = 0;
   const adapter = createCodeBuddyAdapter({
+    command: process.execPath,
+    env: process.env,
     acpClientFactory: ({ signal }) => {
       let nextId = 0,
         closed = false;

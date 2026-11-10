@@ -21,6 +21,8 @@ afterEach(async () => {
 });
 export function createScopedCodexAdapter(options = {}) {
   const owner = createManagedCodexEngine({
+    command: process.execPath,
+    env: process.env,
     ...options,
     codexHome:
       options.codexHome ??
@@ -51,6 +53,8 @@ export function createScopedCodexAdapter(options = {}) {
 
 export function createOwnedCodexAdapter(options = {}) {
   const owner = createManagedCodexEngine({
+    command: process.execPath,
+    env: process.env,
     ...options,
     codexHome:
       options.codexHome ??

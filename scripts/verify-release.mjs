@@ -250,12 +250,17 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       assert.equal(events.at(-1)?.type, "run.completed", mode);
     }
     const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
-    assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");
+    assert.equal(grokEntry?.module, "./providers.js");
+    assert.equal(grokEntry.factory, true);
     const grokModule = await import(
-      pathToFileURL(join(installed, "node_modules", grokEntry.module, "dist/index.js")).href
+      pathToFileURL(join(installed, "apps/cli/dist", grokEntry.module)).href
     );
-    assert.equal(grokModule[grokEntry.export].metadata.type, "grok-build");
-    assert.deepEqual(grokModule[grokEntry.export].metadata.protocolSupport.modes, ["canonical"]);
+    const grokAdapter = grokModule[grokEntry.export](
+      { command: process.execPath },
+      { env: process.env }
+    );
+    assert.equal(grokAdapter.metadata.type, "grok-build");
+    assert.deepEqual(grokAdapter.metadata.protocolSupport.modes, ["canonical"]);
     assert.equal(moduleManifest.extras, undefined);
     await assert.rejects(access(join(installed, "apps/cli/dist/default_adapters.json")), {
       code: "ENOENT"

@@ -10,8 +10,8 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-codex";
 
 /** 宿主已准备两种 Home；持有 owner 的宿主负责回滚和最终关闭。 */
-export async function startOwnedCodex(home: string, codexHome: string) {
-  const owner = createManagedCodexEngine({ codexHome });
+export async function startOwnedCodex(home: string, codexHome: string, command: string) {
+  const owner = createManagedCodexEngine({ command, env: process.env, codexHome });
   let kernel: KernelService | undefined;
   const close = async () => {
     const deadline = performance.now() + 5000;

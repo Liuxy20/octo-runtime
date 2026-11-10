@@ -1,3 +1,4 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { invocationApprovalMode } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
@@ -13,12 +14,25 @@ import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
  * fallback. Per-session model selection follows the standard ACP path when the
  * runtime configures a model that Qoder advertises.
  */
-export const qoderCliAdapter = createAcpAdapter({
+export const qoderCliMetadata: AdapterMetadata = {
   type: "qodercli",
-  provider: "qodercli",
-  command: "qodercli",
-  args: (request) =>
-    invocationApprovalMode(request) === "full_access" ? ["--yolo", "--acp"] : ["--acp"]
-});
+  mcp: true,
+  agentSources: ["provisioned"]
+};
 
-export default qoderCliAdapter;
+/** 宿主交付所选命令或 client factory；本模块仅维护 ACP 协议要求。 */
+export function createQoderCliAdapter(
+  options: NonNullable<Parameters<typeof createAcpAdapter>[1]> & { command: string }
+) {
+  return createAcpAdapter(
+    {
+      metadata: qoderCliMetadata,
+      type: "qodercli",
+      provider: "qodercli",
+      command: options.command,
+      args: (request) =>
+        invocationApprovalMode(request) === "full_access" ? ["--yolo", "--acp"] : ["--acp"]
+    },
+    options
+  );
+}

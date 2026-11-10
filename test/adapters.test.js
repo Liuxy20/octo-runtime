@@ -18,11 +18,16 @@ import {
   createAcpAdapter,
   normalizeAcpUpdate
 } from "@mininglamp-oss/octo-runtime-adapter-acp";
-import { hermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
-import { kimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
-import { mcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
-import { qoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
-import { qoderCliCnAdapter } from "@mininglamp-oss/octo-runtime-adapter-qoderclicn";
+import { createHermesAdapter } from "@mininglamp-oss/octo-runtime-adapter-hermes";
+import { createKimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
+import { createMcodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-mcode";
+import { createQoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
+import { createQoderCliCnAdapter } from "@mininglamp-oss/octo-runtime-adapter-qoderclicn";
+const hermesAdapter = createHermesAdapter({ command: process.execPath, env: process.env });
+const kimiCodeAdapter = createKimiCodeAdapter({ command: process.execPath, env: process.env });
+const mcodeAdapter = createMcodeAdapter({ command: process.execPath, env: process.env });
+const qoderCliAdapter = createQoderCliAdapter({ command: process.execPath, env: process.env });
+const qoderCliCnAdapter = createQoderCliCnAdapter({ command: process.execPath, env: process.env });
 import {
   buildCodexCommand,
   CodexEventNormalizer,
@@ -437,9 +442,9 @@ test("Codex command starts app-server over stdio", async (t) => {
              completed.push(scenario.name);
              continue;
            }
-           const command = await buildCodexCommand(request);
+           const command = await buildCodexCommand(request, process.execPath, undefined, process.env);
            try {
-             assert.equal(command.command, "codex", scenario.name);
+             assert.equal(command.command, process.execPath, scenario.name);
              assert.deepEqual(command.args, ["app-server", "--listen", "stdio://"], scenario.name);
              assert.equal(command.cwd, request.agentEnv.items.find(item => item.name === "workspace").payload.path, scenario.name);
              assert.equal(command.env.CODEX_HOME, scenario.expectedHome, scenario.name);
@@ -710,8 +715,12 @@ test("Claude explicitly maps all permission modes; OpenCode routes human approva
       await spec.cleanup();
     }
   }
-  assert.equal(typeof createOpenCodeAdapter().respondInteraction, "function");
-  const adapter = createOpenCodeAdapter({ command: "/provider-must-not-launch" });
+  assert.equal(
+    typeof createOpenCodeAdapter({ command: process.execPath, env: process.env })
+      .respondInteraction,
+    "function"
+  );
+  const adapter = createOpenCodeAdapter({ env: process.env, command: "/provider-must-not-launch" });
   await assert.rejects(async () => {
     for await (const event of adapter.invoke({
       ...request,
@@ -1956,11 +1965,11 @@ test("OpenClaw Gateway adapter fails reconciliation when non-terminal timeouts r
 test("built-in Adapters expose execution metadata without feature catalogues", () => {
   for (const adapter of [
     createCodexAdapter(),
-    createClaudeCodeAdapter(),
-    createCodeBuddyAdapter(),
-    createOpenCodeAdapter(),
+    createClaudeCodeAdapter({ command: process.execPath, env: process.env }),
+    createCodeBuddyAdapter({ command: process.execPath, env: process.env }),
+    createOpenCodeAdapter({ command: process.execPath, env: process.env }),
     createOpenClawAdapter(),
-    createAntigravityAdapter(),
+    createAntigravityAdapter({ command: process.execPath, env: process.env }),
     hermesAdapter,
     kimiCodeAdapter,
     mcodeAdapter,
@@ -2219,7 +2228,11 @@ test("CodeBuddy preserves a cancelled ACP prompt as an interrupted run", async (
     },
     close: async () => {}
   };
-  const adapter = createCodeBuddyAdapter({ acpClientFactory: () => client });
+  const adapter = createCodeBuddyAdapter({
+    command: process.execPath,
+    env: process.env,
+    acpClientFactory: () => client
+  });
   const events = [];
   for await (const event of adapter.invoke(request)) events.push(event);
   assert.equal(
@@ -2255,7 +2268,11 @@ test("CodeBuddy keeps an end_turn ACP prompt as a completed run", async () => {
     },
     close: async () => {}
   };
-  const adapter = createCodeBuddyAdapter({ acpClientFactory: () => client });
+  const adapter = createCodeBuddyAdapter({
+    command: process.execPath,
+    env: process.env,
+    acpClientFactory: () => client
+  });
   const events = [];
   for await (const event of adapter.invoke(request)) events.push(event);
   assert.equal(events.at(-1).type, "run.completed");

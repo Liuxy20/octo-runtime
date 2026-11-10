@@ -17,10 +17,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { codebuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
+import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
 
 const executor = new AgentExecutor();
-executor.register(codebuddyAdapter);
+executor.register(createCodeBuddyAdapter({ command: "/absolute/path/codebuddy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | Item         | Value                                                                     |
 | ------------ | ------------------------------------------------------------------------- |
 | Adapter type | `codebuddy`                                                               |
-| Exports      | `codebuddyAdapter`, `createCodeBuddyAdapter`                              |
+| Exports      | `createCodeBuddyAdapter`                              |
 | Command      | `codebuddy --acp --permission-mode <mode>`                                |
 | Output       | canonical events only                                                     |
 | Session      | new session, or an explicit one loaded by id                              |

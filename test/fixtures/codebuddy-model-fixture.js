@@ -39,6 +39,8 @@ export function codeBuddyModelFixture({
           };
   };
   const adapter = createCodeBuddyAdapter({
+    command: process.execPath,
+    env: process.env,
     acpClientFactory: ({ cwd }) => {
       let closed = false;
       let nextId = 0;

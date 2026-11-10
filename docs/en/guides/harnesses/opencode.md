@@ -11,7 +11,7 @@
 opencode --version
 ```
 
-The Adapter requires `>=2.1.3 <3`. `full_access` uses `opencode run --format json --thinking --auto --standalone`; `ask` uses `opencode acp`. `assisted` and images are unsupported. Models use `provider/model`; network settings follow that version's native behavior.
+The Adapter does not gate execution by version or run `--version` before invocation. `full_access` uses `opencode run --format json --thinking --auto --standalone`; `ask` uses `opencode acp`. Actual protocol failures remain execution errors. `assisted` and images are unsupported. Models use `provider/model`; network settings follow the installed provider's native behavior.
 
 ## Channel Integration
 

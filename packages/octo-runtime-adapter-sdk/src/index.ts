@@ -2,7 +2,7 @@ import { invocationEffort, invocationWorkdir } from "./agent-env.js";
 import { execFile, spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
-import { delimiter, isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import type { AdapterInvocationContext } from "./activity.js";
@@ -13,11 +13,7 @@ export type {
   CreateAdapterExecutionScope,
   ServiceProcessSnapshot
 } from "./execution-scope.js";
-import {
-  invocationEnvironment,
-  mergeProcessEnvironment,
-  processEnvironmentValue
-} from "./environment.js";
+import { invocationEnvironment, mergeProcessEnvironment } from "./environment.js";
 import { createProcessCleanup } from "./process-cleanup.js";
 import {
   defaultAgentEnv,
@@ -29,7 +25,12 @@ import {
   invocationRuntimeLimits
 } from "./agent-env.js";
 export * from "./agent-env.js";
-import { resolveProcessLaunch } from "./process-launch.js";
+import { assertProviderCommand } from "./provider-launch.js";
+export {
+  snapshotProviderLaunch,
+  assertProviderCommand,
+  type ProviderLaunch
+} from "./provider-launch.js";
 import { watchLineLimit } from "./line-limit.js";
 import { mapReasoningEffort, reasoningLevelMap, type ReasoningLevelMap } from "./reasoning.js";
 export type { AdapterInvocationContext, ProviderActivity } from "./activity.js";
@@ -345,9 +346,9 @@ export async function* spawnJsonLines<TNative>(
   options: SpawnJsonLinesOptions<TNative>
 ): AsyncGenerator<TNative> {
   const { command, args = [], cwd, env, input, signal, parseLine, onInputWritten } = options;
-  const processEnv = mergeProcessEnvironment(process.env, env ?? {});
-  const launch = resolveProcessLaunch(command, args, { cwd, env: processEnv });
-  const child = spawn(launch.command, launch.args, {
+  assertProviderCommand(command);
+  const processEnv = mergeProcessEnvironment(env ?? {});
+  const child = spawn(command, args, {
     cwd,
     env: processEnv,
     stdio: ["pipe", "pipe", "pipe"],
@@ -509,7 +510,7 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
           for await (const native of spawnJsonLines({
             ...spec,
             cwd: spec.cwd ?? invocationWorkdir(request),
-            env: invocationEnvironment(request, spec.env),
+            env: invocationEnvironment(request, spec.env, {}),
             signal: request.signal,
             rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
             parseLine: parseJsonLine as (line: string) => TNative | null
@@ -538,53 +539,59 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
 }
 
 /**
- * Resolve whether a command is runnable. A path-qualified command is checked
- * directly; a bare name is searched across `PATH` (`;`-separated on Windows).
- * Returns the first executable match, else `command_not_found`.
+ * 探测宿主已绑定的绝对启动链；不搜索安装，版本参数接在宿主前缀参数之后。
+ * 返回目标可执行性和可选版本；版本命令失败不等于目标不可用，版本门禁由 Provider 决定。
+ * 文件缺失与权限不足分别报告，失败不选择其他安装，也不解释前缀参数中的入口。
  */
 export async function probeCommand(
   command: string,
-  { env = process.env, cwd }: { env?: NodeJS.ProcessEnv; cwd?: string } = {}
+  {
+    env = {},
+    cwd,
+    args = []
+  }: { env?: NodeJS.ProcessEnv; cwd?: string; args?: readonly string[] } = {}
 ): Promise<ProbeResult> {
-  const candidates =
-    isAbsolute(command) || command.includes("/") || command.includes("\\")
-      ? [command]
-      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter).flatMap((directory) => {
-          const extensions =
-            process.platform === "win32" && !/\.[^\\/]+$/.test(command)
-              ? [
-                  "",
-                  ...(processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
-                ]
-              : [""];
-          return extensions.map((extension) => resolve(directory, command + extension));
-        });
-  for (const candidate of candidates) {
+  assertProviderCommand(command);
+  const candidate = command;
+  try {
+    await access(candidate, constants.X_OK);
+    if (!(await stat(candidate)).isFile())
+      return { available: false, command, reason: "invalid_executable" };
+    let version: string | null = null;
     try {
-      await access(candidate, constants.X_OK);
-      if (!(await stat(candidate)).isFile()) continue;
-      let version: string | null = null;
-      try {
-        const launch = resolveProcessLaunch(resolve(candidate), ["--version"], { env, cwd });
-        const { stdout } = await promisify(execFile)(launch.command, launch.args, {
-          env,
-          cwd,
-          timeout: 2_000,
-          maxBuffer: 4096,
-          windowsHide: true
-        });
-        const output = stdout.trim();
-        // Keep a version label, not arbitrary CLI banners or diagnostics.
-        version =
-          output.match(/(?:^|\s)v?(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)(?=\s|$)/)?.[1] ??
-          null;
-      } catch {
-        // Executable availability does not imply support for --version.
-      }
-      return { available: true, command: resolve(candidate), version };
-    } catch {
-      // Current candidate is not executable; keep scanning the next PATH entry.
+      const { stdout } = await promisify(execFile)(candidate, [...args, "--version"], {
+        env,
+        cwd,
+        timeout: 2_000,
+        maxBuffer: 4096,
+        windowsHide: true
+      });
+      const output = stdout.trim();
+      // Keep a version label, not arbitrary CLI banners or diagnostics.
+      version =
+        output.match(/(?:^|\s)v?(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)(?=\s|$)/)?.[1] ?? null;
+    } catch (error) {
+      const { code, syscall } = error as NodeJS.ErrnoException;
+      // spawn 的系统错误表明目标不能启动；非零退出、超时或输出过大只使版本未知。
+      if (syscall?.startsWith("spawn"))
+        return {
+          available: false,
+          command,
+          reason:
+            code === "EACCES" || code === "EPERM"
+              ? "permission_denied"
+              : code === "ENOENT" || code === "ENOTDIR"
+                ? "command_not_found"
+                : "command_launch_failed"
+        };
     }
+    return { available: true, command: resolve(candidate), version };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return {
+      available: false,
+      command,
+      reason: code === "EACCES" || code === "EPERM" ? "permission_denied" : "command_not_found"
+    };
   }
-  return { available: false, command, reason: "command_not_found" };
 }

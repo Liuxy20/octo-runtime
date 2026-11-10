@@ -37,7 +37,11 @@ const request = {
 };
 const fixture = fileURLToPath(new URL("./fixtures/antigravity-cli.mjs", import.meta.url));
 const create = () =>
-  createAntigravityAdapter({ command: process.execPath, commandArgsPrefix: [fixture] });
+  createAntigravityAdapter({
+    env: process.env,
+    command: process.execPath,
+    commandArgsPrefix: [fixture]
+  });
 const collect = async (iterable) => {
   const events = [];
   for await (const event of iterable) {
@@ -146,7 +150,10 @@ test("Antigravity rejects unsupported permissions and managed arguments before s
   assert.match(rejected.at(-1).payload.message, /APPROVAL_MODE_UNSUPPORTED/);
 });
 test("Antigravity probe reports a missing executable without invoking a user CLI", async () => {
-  const probe = await createAntigravityAdapter({ command: "/missing-octo-fixture-agy" }).probe();
+  const probe = await createAntigravityAdapter({
+    env: process.env,
+    command: "/missing-octo-fixture-agy"
+  }).probe();
   assert.equal(probe.available, false);
   assert.equal(probe.reason, "command_not_found");
 });

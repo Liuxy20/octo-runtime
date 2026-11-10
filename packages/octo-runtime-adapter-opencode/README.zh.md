@@ -2,11 +2,11 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-通过 OpenCode v2 CLI 跑一轮，传输方式随审批模式切换：`full_access` 用 JSON 输出，`ask` 走 ACP。两条路最后都落到 `CanonicalEvent`。版本检查、配置映射和完成判定都留在这里，不漏进 Core。
+通过 OpenCode CLI 跑一轮，传输方式随审批模式切换：`full_access` 用 JSON 输出，`ask` 走 ACP。两条路最后都落到 `CanonicalEvent`。配置映射和完成判定都留在这里，不漏进 Core。
 
 ## 什么时候用它
 
-- 机器上装好 OpenCode 2.1.3 或更新版本（低于 3.0），并且已认证。
+- 机器上装好并认证 OpenCode，具备下述 CLI JSON 或 ACP 协议。
 - 你希望 `ask` 走 ACP，无人值守时走更简单的 CLI JSON。
 - 你不需要图片输入；`assisted` 也不支持。
 
@@ -17,10 +17,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { opencodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-opencode";
+import { createOpenCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-opencode";
 
 const executor = new AgentExecutor();
-executor.register(opencodeAdapter);
+executor.register(createOpenCodeAdapter({ command: "/absolute/path/opencode", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | 项            | 值                                                                                      |
 | ------------- | --------------------------------------------------------------------------------------- |
 | Adapter 类型  | `opencode`                                                                              |
-| 导出          | `opencodeAdapter`、`createOpenCodeAdapter`                                              |
+| 导出          | `createOpenCodeAdapter`                                              |
 | `full_access` | `opencode run --format json --thinking --auto --standalone`                             |
 | `ask`         | `opencode acp`，复用通用 ACP Adapter                                                    |
 | 输出          | 仅 canonical 事件                                                                       |
@@ -53,9 +53,9 @@ const input = InvokeInput.check({
 
 ## 限制
 
-- 支持的版本是探测到的 `>=2.1.3 <3`。读不出或不在范围内直接失败；这个区间只代表兼容范围，不代表每个 release 都验过。
+- 版本只作为可选诊断信息。升级、预发布版本及未知版本不会被拒绝，调用前不执行 `--version`；协议或进程错误按实际执行结果报告。
 - `assisted` 和图片输入都会被拒绝。
-- 检查的是本次调用 cwd 与环境里真正被选中的可执行文件。
+- probe 与调用使用宿主绑定的 executable、runtime、前缀参数和环境；请求 PATH/cwd 不重新选择安装。
 - 配置通过 `OPENCODE_CONFIG_CONTENT` 合并，不改用户文件，`cwd` 与 `PWD` 保持一致。
 - CLI 路径的成功要求正常退出**且**有最终文本。工具或 step 停下来不算 Run 成功。
 - 原生权限拒绝依然生效。

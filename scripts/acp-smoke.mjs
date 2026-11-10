@@ -1,17 +1,28 @@
 #!/usr/bin/env node
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { AgentExecutor } from "../packages/octo-runtime-executor-core/dist/index.js";
 const adapterType = process.argv[2];
 const adapters = {
-  hermes: async () => (await import("@mininglamp-oss/octo-runtime-adapter-hermes")).hermesAdapter,
+  hermes: async () =>
+    (await import("@mininglamp-oss/octo-runtime-adapter-hermes")).createHermesAdapter,
   "kimi-code": async () =>
-    (await import("@mininglamp-oss/octo-runtime-adapter-kimi-code")).kimiCodeAdapter
+    (await import("@mininglamp-oss/octo-runtime-adapter-kimi-code")).createKimiCodeAdapter
 };
 if (!adapters[adapterType]) {
   console.error("usage: node scripts/acp-smoke.mjs <hermes|kimi-code>");
   process.exit(2);
 }
-const adapter = await adapters[adapterType]();
+const launch = resolveHostProviderLaunch(adapterType === "hermes" ? "hermes" : "kimi", {
+  env: process.env,
+  cwd: process.cwd()
+});
+const factory = await adapters[adapterType]();
+const adapter = factory({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
+  env: launch.env
+});
 const executor = new AgentExecutor();
 executor.register(adapter);
 const controller = new AbortController();

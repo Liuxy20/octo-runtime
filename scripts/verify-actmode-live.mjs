@@ -5,32 +5,55 @@ import { join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { AgentExecutor } from "../packages/octo-runtime-executor-core/dist/index.js";
 import { reportVerificationStartup } from "./verification-startup.mjs";
-import codex from "../packages/octo-runtime-adapter-codex/dist/index.js";
-import claude from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
-import kimi from "../packages/octo-runtime-adapter-kimi-code/dist/index.js";
-import opencode from "../packages/octo-runtime-adapter-opencode/dist/index.js";
-import mcode from "../packages/octo-runtime-adapter-mcode/dist/index.js";
+import { createCliCodexAdapter } from "../apps/cli/dist/codex.js";
+import {
+  createCliClaudeCodeAdapter,
+  createCliKimiCodeAdapter,
+  createCliOpenCodeAdapter,
+  createCliMcodeAdapter
+} from "../apps/cli/dist/providers.js";
 
-// live 与离线入口共用装配；执行器及其调用由脚本拥有，结束时由脚本 shutdown。
-function createHost() {
+// 脚本复用 CLI 宿主的安装选择与环境快照；同时拥有 Executor 和 Codex owner，依次关闭。
+async function createHost() {
   const host = new AgentExecutor();
-  for (const adapter of [codex, claude, kimi, opencode, mcode]) host.register(adapter);
-  return host;
+  const context = { env: { ...process.env } };
+  const codex = createCliCodexAdapter({}, context);
+  async function shutdown() {
+    try {
+      return await host.shutdown();
+    } finally {
+      codex.beginShutdown?.();
+      assert.equal((await codex.close(performance.now() + 5000)).complete, true);
+    }
+  }
+  try {
+    host.register(codex.adapter);
+    for (const factory of [
+      createCliClaudeCodeAdapter,
+      createCliKimiCodeAdapter,
+      createCliOpenCodeAdapter,
+      createCliMcodeAdapter
+    ])
+      host.register(factory({}, context));
+    return { host, shutdown };
+  } catch (error) {
+    await shutdown();
+    throw error;
+  }
 }
 
 if (process.argv.includes("--check-startup")) {
-  await reportVerificationStartup(createHost(), import.meta.url, [
-    "codex",
-    "claude-code",
-    "kimi-code",
-    "opencode",
-    "mcode"
-  ]);
+  const owned = await createHost();
+  await reportVerificationStartup(
+    { list: () => owned.host.list(), shutdown: owned.shutdown },
+    import.meta.url,
+    ["codex", "claude-code", "kimi-code", "opencode", "mcode"]
+  );
   process.exit(0);
 }
 
 // 测试调用方显式选择模式与续接；不让 Runtime 决定产品策略。
-const host = createHost();
+const { host, shutdown } = await createHost();
 try {
   const workdir = await mkdtemp(join(tmpdir(), "octo-actmode-live-"));
   const results = [];
@@ -125,5 +148,5 @@ try {
     "One or more real Provider cases failed; inspect recorded results"
   );
 } finally {
-  assert.equal((await host.shutdown()).cleanup, "complete");
+  assert.equal((await shutdown()).cleanup, "complete");
 }

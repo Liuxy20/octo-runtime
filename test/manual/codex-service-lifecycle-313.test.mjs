@@ -1,4 +1,5 @@
 import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { resolveHostProviderLaunch } from "../../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -78,6 +79,7 @@ test("scope close observes late cleanup without starting another cleanup attempt
 test("CLI doctor reads resident PIDs without starting a Provider and shares its text/JSON source", async () => {
   const home = await mkdtemp(join(tmpdir(), "octo-313-doctor-"));
   const owner = createManagedCodexEngine({
+    env: process.env,
     codexHome: home,
     command: process.execPath,
     appServerArgs: [fixture, join(home, "rpc.ndjson")]
@@ -151,6 +153,7 @@ async function setup(t) {
   const dir = await mkdtemp(join(tmpdir(), "octo-313-"));
   const log = join(dir, "rpc.ndjson");
   const owner = createManagedCodexEngine({
+    env: process.env,
     codexHome: dir,
     command: process.execPath,
     appServerArgs: [fixture, log]
@@ -192,10 +195,18 @@ for (const command of ["./codex", "bin/codex"])
       const binary = join(directory, command);
       const replacement = binary + ".next";
       const program = "#!/usr/bin/env node\n" + (await readFile(fixture, "utf8"));
+      await mkdir(join(directory, "bin"), { recursive: true });
+      await writeFile(binary, program, { mode: 0o700 });
+      const launch = resolveHostProviderLaunch(`./${relative(process.cwd(), binary)}`, {
+        env: process.env,
+        cwd: process.cwd()
+      });
       const owner = createManagedCodexEngine({
+        env: launch.env,
         codexHome: directory,
-        // 相对可执行文件从宿主目录解析，不再把 CODEX_HOME 或本轮 cwd 作为启动目录。
-        command: `./${relative(process.cwd(), binary)}`,
+        // 宿主先解析相对安装，owner 只消费固定的运行器和入口。
+        command: launch.command,
+        commandArgsPrefix: launch.args,
         appServerArgs: []
       });
       const local = createCodexAdapter({ engine: owner.provider }).createExecutionScope({
@@ -213,8 +224,6 @@ for (const command of ["./codex", "bin/codex"])
         assert.equal((await scope.close({ deadline: performance.now() + 2500 })).complete, true);
         await rm(directory, { recursive: true, force: true });
       });
-      await mkdir(join(directory, "bin"), { recursive: true });
-      await writeFile(binary, program, { mode: 0o700 });
       const invoke = () =>
         Array.fromAsync(
           scope.invoke(
@@ -491,6 +500,8 @@ test("doctor lists resident ownership and merges same PID without turn fields", 
 test("unbound invocation rejects without spawning", async () => {
   let launches = 0;
   const owner = createManagedCodexEngine({
+    command: process.execPath,
+    env: process.env,
     codexHome: process.cwd(),
     spawnFn: () => {
       launches++;

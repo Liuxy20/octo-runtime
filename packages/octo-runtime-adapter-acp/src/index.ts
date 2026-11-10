@@ -21,6 +21,9 @@ import {
   assertMcpOptions,
   normalizeAcpToolUpdate,
   probeCommand,
+  snapshotProviderLaunch,
+  type ProbeResult,
+  type AdapterMetadata,
   type AdapterInvocationContext,
   type CanonicalEvent,
   type InvokeRequest
@@ -43,6 +46,7 @@ export class AcpInvocationError extends Error {
 }
 
 export interface AcpAdapterDefinition {
+  metadata?: AdapterMetadata;
   type: string;
   provider: string;
   command: string;
@@ -241,21 +245,35 @@ export function createAcpAdapter(
   definition: AcpAdapterDefinition,
   {
     acpClientFactory = spawnAcpClient,
-    command = definition.command
+    command = definition.command,
+    commandArgsPrefix = [],
+    env = {},
+    probe
   }: {
     acpClientFactory?: typeof spawnAcpClient;
     command?: string;
+    commandArgsPrefix?: readonly string[];
+    env?: NodeJS.ProcessEnv;
+    probe?: () => Promise<ProbeResult>;
   } = {}
 ) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
   return defineAdapter(
     {
-      metadata: {
+      metadata: definition.metadata ?? {
         mcp: true,
         type: definition.type,
         agentSources: ["provisioned"]
       },
-      probe: () => probeCommand(command),
+      probe:
+        probe ??
+        (acpClientFactory === spawnAcpClient
+          ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+          : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
       async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
         const bridge = responders.get(invocationId);
         if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -293,7 +311,7 @@ export function createAcpAdapter(
       typeof definition.args === "function"
         ? definition.args(request)
         : (definition.args ?? ["acp"]);
-    const runEnv = invocationEnvironment(request, definition.env?.(request));
+    const runEnv = invocationEnvironment(request, definition.env?.(request), launch.env);
     const mcp = invocationMcpServers(request, runEnv);
     assertMcpOptions(mcp, definition.type, []);
     const servers = Object.entries(mcp).map(([name, server]) =>
@@ -312,8 +330,8 @@ export function createAcpAdapter(
           }
     );
     const client = acpClientFactory({
-      command,
-      args: [...args],
+      command: launch.command,
+      args: [...launch.args, ...args],
       env: runEnv,
       cwd: invocationWorkdir(request),
       permissionHandler: (params) => bridge.requestPermission(params),
@@ -407,7 +425,7 @@ export function createAcpAdapter(
           payload: {
             noticeId: `${request.invocationId}:session-name`,
             code: "provider_diagnostic",
-            severity: "info",
+            severity: "warning",
             params: {
               adapter: definition.type,
               diagnosticId: "session-name-unsupported",

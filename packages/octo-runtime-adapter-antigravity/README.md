@@ -17,10 +17,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { antigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
+import { createAntigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 
 const executor = new AgentExecutor();
-executor.register(antigravityAdapter);
+executor.register(createAntigravityAdapter({ command: "/absolute/path/agy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -47,7 +47,7 @@ const input = InvokeInput.check({
 | Item         | Value                                                                     |
 | ------------ | ------------------------------------------------------------------------- |
 | Adapter type | `antigravity`                                                             |
-| Exports      | `antigravityAdapter`, `createAntigravityAdapter`                          |
+| Exports      | `createAntigravityAdapter`                          |
 | Command      | `agy` with `--dangerously-skip-permissions --mode accept-edits`           |
 | Output       | canonical events only                                                     |
 | Session      | an explicit Provider session selects the conversation and stays resumable |

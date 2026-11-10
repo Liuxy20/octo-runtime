@@ -17,10 +17,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
 const executor = new AgentExecutor();
-executor.register(grokBuildAdapter);
+executor.register(createGrokBuildAdapter({ command: "/absolute/path/grok", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | 项            | 值                                                       |
 | ------------- | -------------------------------------------------------- |
 | Adapter 类型  | `grok-build`                                             |
-| 导出          | `grokBuildAdapter`、`createGrokBuildAdapter`             |
+| 导出          | `createGrokBuildAdapter`             |
 | 命令          | `grok --no-auto-update agent --no-leader stdio`          |
 | 输出          | 仅 canonical 事件                                        |
 | 认证          | 广告出来的 `xai.api_key` 或 `cached_token`，按其顺序尝试 |

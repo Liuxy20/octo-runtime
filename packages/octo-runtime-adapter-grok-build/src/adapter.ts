@@ -1,3 +1,4 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   invocationModel,
   invocationApprovalMode,
@@ -28,6 +29,7 @@ import {
   invocationMcpServers,
   assertMcpOptions,
   probeCommand,
+  snapshotProviderLaunch,
   type ProbeResult,
   type ReasoningLevelMap,
   type AdapterInvocationContext,
@@ -44,6 +46,7 @@ import {
 type JsonRecord = Record<string, unknown>;
 
 export interface AcpAdapterDefinition {
+  metadata?: AdapterMetadata;
   type: string;
   provider: string;
   command: string;
@@ -111,21 +114,33 @@ export function createGrokBuildAcpAdapter(
   definition: AcpAdapterDefinition,
   {
     acpClientFactory = spawnAcpClient,
-    command = definition.command
+    command = definition.command,
+    commandArgsPrefix = [],
+    env = {}
   }: {
     acpClientFactory?: typeof spawnAcpClient;
     command?: string;
+    commandArgsPrefix?: readonly string[];
+    env?: NodeJS.ProcessEnv;
   } = {}
 ) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
   return defineAdapter(
     {
-      metadata: {
+      metadata: definition.metadata ?? {
         mcp: true,
         type: definition.type,
         agentSources: ["provisioned"]
       },
-      probe: definition.probe ?? (() => probeCommand(command)),
+      probe:
+        definition.probe ??
+        (acpClientFactory === spawnAcpClient
+          ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+          : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
       async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
         const bridge = responders.get(invocationId);
         if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -163,7 +178,7 @@ export function createGrokBuildAcpAdapter(
       typeof definition.args === "function"
         ? definition.args(request)
         : (definition.args ?? ["acp"]);
-    const runEnv = invocationEnvironment(request, definition.env?.(request));
+    const runEnv = invocationEnvironment(request, definition.env?.(request), launch.env);
     const mcp = invocationMcpServers(request, runEnv);
     assertMcpOptions(mcp, definition.type, []);
     const servers = Object.entries(mcp).map(([name, server]) =>
@@ -182,8 +197,8 @@ export function createGrokBuildAcpAdapter(
           }
     );
     const client = acpClientFactory({
-      command,
-      args: [...args],
+      command: launch.command,
+      args: [...launch.args, ...args],
       env: runEnv,
       cwd: invocationWorkdir(request),
       ...definition.clientOptions?.(request, bridge),

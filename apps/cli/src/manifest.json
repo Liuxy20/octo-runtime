@@ -14,38 +14,45 @@
     },
     {
       "type": "claude-code",
-      "module": "@mininglamp-oss/octo-runtime-adapter-claude-code",
-      "export": "claudeCodeAdapter"
+      "module": "./providers.js",
+      "export": "createCliClaudeCodeAdapter",
+      "factory": true
     },
     {
       "type": "codebuddy",
-      "module": "@mininglamp-oss/octo-runtime-adapter-codebuddy",
-      "export": "codebuddyAdapter"
+      "module": "./providers.js",
+      "export": "createCliCodeBuddyAdapter",
+      "factory": true
     },
     {
       "type": "grok-build",
-      "module": "@mininglamp-oss/octo-runtime-adapter-grok-build",
-      "export": "grokBuildAdapter"
+      "module": "./providers.js",
+      "export": "createCliGrokBuildAdapter",
+      "factory": true
     },
     {
       "type": "hermes",
-      "module": "@mininglamp-oss/octo-runtime-adapter-hermes",
-      "export": "hermesAdapter"
+      "module": "./providers.js",
+      "export": "createCliHermesAdapter",
+      "factory": true
     },
     {
       "type": "kimi-code",
-      "module": "@mininglamp-oss/octo-runtime-adapter-kimi-code",
-      "export": "kimiCodeAdapter"
+      "module": "./providers.js",
+      "export": "createCliKimiCodeAdapter",
+      "factory": true
     },
     {
       "type": "mcode",
-      "module": "@mininglamp-oss/octo-runtime-adapter-mcode",
-      "export": "mcodeAdapter"
+      "module": "./providers.js",
+      "export": "createCliMcodeAdapter",
+      "factory": true
     },
     {
       "type": "opencode",
-      "module": "@mininglamp-oss/octo-runtime-adapter-opencode",
-      "export": "opencodeAdapter"
+      "module": "./providers.js",
+      "export": "createCliOpenCodeAdapter",
+      "factory": true
     },
     {
       "type": "openclaw",
@@ -54,18 +61,21 @@
     },
     {
       "type": "qodercli",
-      "module": "@mininglamp-oss/octo-runtime-adapter-qodercli",
-      "export": "qoderCliAdapter"
+      "module": "./providers.js",
+      "export": "createCliQoderCliAdapter",
+      "factory": true
     },
     {
       "type": "qoderclicn",
-      "module": "@mininglamp-oss/octo-runtime-adapter-qoderclicn",
-      "export": "qoderCliCnAdapter"
+      "module": "./providers.js",
+      "export": "createCliQoderCliCnAdapter",
+      "factory": true
     },
     {
       "type": "antigravity",
-      "module": "@mininglamp-oss/octo-runtime-adapter-antigravity",
-      "export": "antigravityAdapter"
+      "module": "./providers.js",
+      "export": "createCliAntigravityAdapter",
+      "factory": true
     }
   ]
 }

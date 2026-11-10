@@ -16,10 +16,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { qoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
+import { createQoderCliAdapter } from "@mininglamp-oss/octo-runtime-adapter-qodercli";
 
 const executor = new AgentExecutor();
-executor.register(qoderCliAdapter);
+executor.register(createQoderCliAdapter({ command: "/absolute/path/qodercli", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 | Item         | Value                                                                              |
 | ------------ | ---------------------------------------------------------------------------------- |
 | Adapter type | `qodercli`                                                                         |
-| Export       | `qoderCliAdapter`                                                                  |
+| Export       | `createQoderCliAdapter`                                                                  |
 | Command      | `qodercli --acp`; `qodercli --yolo --acp` for `full_access`                        |
 | Output       | canonical events only                                                              |
 | Session      | resumed through `session/load`; no fresh fallback needed                           |

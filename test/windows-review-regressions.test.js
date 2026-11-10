@@ -1,4 +1,5 @@
 import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { resolveHostProviderLaunch } from "../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { basename, dirname, join } from "node:path";
@@ -128,7 +129,15 @@ test(
       {},
       { PATH: "missing", PATHEXT: ".WRONG" }
     );
-    assert.equal((await probeCommand(basename(process.execPath, ".exe"), { env })).available, true);
+    const selected = resolveHostProviderLaunch(basename(process.execPath, ".exe"), {
+      env,
+      cwd: process.cwd()
+    });
+    assert.equal(selected.command.toLowerCase(), process.execPath.toLowerCase());
+    assert.equal(
+      (await probeCommand(selected.command, { args: selected.args, env: selected.env })).available,
+      true
+    );
     const launch = await resolveDshLaunch(
       {
         dshBin: fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url))

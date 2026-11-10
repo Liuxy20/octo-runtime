@@ -36,7 +36,11 @@ for (const provider of ["ACP", "CodeBuddy"]) {
             { type: "fixture", provider: "fixture", command: "fixture" },
             { acpClientFactory: () => client }
           )
-        : createCodeBuddyAdapter({ acpClientFactory: () => client });
+        : createCodeBuddyAdapter({
+            command: process.execPath,
+            env: process.env,
+            acpClientFactory: () => client
+          });
     const request = {
       protocolVersion: 2,
       invocationId: "i",

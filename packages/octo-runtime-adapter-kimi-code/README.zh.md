@@ -16,10 +16,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { kimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
+import { createKimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
 
 const executor = new AgentExecutor();
-executor.register(kimiCodeAdapter);
+executor.register(createKimiCodeAdapter({ command: "/absolute/path/kimi", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -45,7 +45,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                                                     |
 | ------------ | -------------------------------------------------------------------------------------- |
 | Adapter 类型 | `kimi-code`                                                                            |
-| 导出         | `kimiCodeAdapter`                                                                      |
+| 导出         | `createKimiCodeAdapter`                                                                      |
 | 命令         | `kimi acp`                                                                             |
 | 输出         | 仅 canonical 事件                                                                      |
 | 会话         | 新会话，或由 ACP Adapter 显式续接的 Provider 会话                                      |

@@ -1,5 +1,7 @@
 # Octo Runtime 工程知识目录
 
+- [Issue 346：宿主选择执行依赖](tasks/346-host-execution/brief.md)：最新 main `c7ae0256` 独立 worktree 已实施，无兼容层，CLI 发现 executable；[逐模块改动与 metadata 复用](tasks/346-host-execution/design.md)、[验收矩阵](tasks/346-host-execution/plan.md)、[方案自评 96/100](tasks/346-host-execution/assessment.md)。全量、65 项专项、真实 Codex/OpenCode 与包外验证见[记录](tasks/346-host-execution/validation.md)，双轴 [review](tasks/346-host-execution/review.md)无未关闭问题；Windows/Electron 实机未验。
+
 - [Issue 341：AgentEnv 直传 Adapter](tasks/341-adapter-agentenv/brief.md)：移除配置投影，私有配置归宿主与 Adapter，共性 bean 保留公共类型；整合 #339 后双轴及测试/验证 JS 审查通过，[验收](tasks/341-adapter-agentenv/validation.md)记录全量、手动专项和双包验证。仅创建 main PR，禁止自动合并，不扩大 CI。
 
 - [Issue 343：CLI 默认同类型 Harness 单实例](tasks/343-single-harness/brief.md)：修正 #342 保留的配置分池；[方案](tasks/343-single-harness/design.md)定义单 app-server 与逐线程配置，[验证](tasks/343-single-harness/validation.md)记录 100 路专项和真实原生边界，不扩大 CI。

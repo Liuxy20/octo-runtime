@@ -279,7 +279,11 @@ for (const mode of ["ask", "full_access"])
       return original.apply(this, args);
     };
     const host = hostFor(
-      createClaudeCodeAdapter({ command: process.execPath, commandArgsPrefix: [claude] })
+      createClaudeCodeAdapter({
+        env: process.env,
+        command: process.execPath,
+        commandArgsPrefix: [claude]
+      })
     );
     const request = input("normal", {
       agentEnv: withAgentEnvItems(undefined, [

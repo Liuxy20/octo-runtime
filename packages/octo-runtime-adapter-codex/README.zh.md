@@ -20,7 +20,7 @@ import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { createCodexAdapter, createManagedCodexEngine } from "@mininglamp-oss/octo-runtime-adapter-codex";
 
 const executor = new AgentExecutor();
-const owner = createManagedCodexEngine({ codexHome: "/absolute/host-codex-home" });
+const owner = createManagedCodexEngine({ command: "/absolute/path/codex", env: process.env, codexHome: "/absolute/host-codex-home" });
 executor.register(createCodexAdapter({ engine: owner.provider }));
 
 const input = InvokeInput.check({

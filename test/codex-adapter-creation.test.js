@@ -37,7 +37,7 @@ test("Codex import and adapter creation do not inspect Home for computer-use lab
 
     const module = await import(${JSON.stringify(moduleUrl)});
     for (configError of [undefined, "ENOENT", "EACCES"]) {
-      const owner = module.createManagedCodexEngine({ codexHome: home, env: {} });
+      const owner = module.createManagedCodexEngine({ command: process.execPath, codexHome: home, env: {} });
       const adapter = module.createCodexAdapter({ engine: owner.provider });
       assert.equal(adapter.metadata.type, "codex");
       assert.equal(Object.hasOwn(adapter.metadata, "executionFeatures"), false);

@@ -17,10 +17,10 @@
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { claudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
+import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 
 const executor = new AgentExecutor();
-executor.register(claudeCodeAdapter);
+executor.register(createClaudeCodeAdapter({ command: "/absolute/path/claude", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                 |
 | ------------ | -------------------------------------------------- |
 | Adapter 类型 | `claude-code`                                      |
-| 导出         | `claudeCodeAdapter`、`createClaudeCodeAdapter`     |
+| 导出         | `createClaudeCodeAdapter`     |
 | 协议         | `claude.stream-json`，模式 `native` 与 `canonical` |
 | 传输         | 每次调用一个 `claude` NDJSON stdio 子进程          |
 | 会话         | 显式 Provider 会话；没给才新开                     |

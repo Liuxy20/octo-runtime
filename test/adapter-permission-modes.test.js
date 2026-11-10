@@ -31,7 +31,7 @@ test("default adapters reject unsupported approval modes at their execution boun
   for (const declaration of manifest.adapters) {
     const entry = {
       ...declaration,
-      options: {},
+      options: ["dsh", "openclaw"].includes(declaration.type) ? {} : { command: process.execPath },
       sourceManifest: fileURLToPath(new URL("../apps/cli/dist/manifest.json", import.meta.url))
     };
     const assembly = await loadCliAdapters([entry]);
@@ -144,6 +144,7 @@ for (const [provider, factory] of [
     "Claude",
     () =>
       createClaudeCodeAdapter({
+        env: process.env,
         command: process.execPath,
         commandArgsPrefix: [
           fileURLToPath(new URL("../test-support/claude/fake-permission-cli.js", import.meta.url))

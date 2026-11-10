@@ -1,3 +1,12 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const antigravityMetadata: AdapterMetadata = {
+  type: "antigravity",
+  agentSources: ["provisioned"],
+  processModel: "subprocess-per-invocation",
+  transport: "ndjson/stdio"
+};
+
 import {
   invocationEffort,
   invocationModel,
@@ -11,6 +20,7 @@ import {
   mapReasoningEffort,
   parseJsonLine,
   probeCommand,
+  snapshotProviderLaunch,
   providerInputText,
   spawnJsonLines,
   type CanonicalEvent,
@@ -403,18 +413,19 @@ export function antigravityLogError(log: string): string | undefined {
 }
 
 export function createAntigravityAdapter({
-  command = "agy",
-  commandArgsPrefix = []
-}: { command?: string; commandArgsPrefix?: string[] } = {}) {
+  command,
+  commandArgsPrefix = [],
+  env = {}
+}: {
+  command: string;
+  commandArgsPrefix?: string[];
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch = snapshotProviderLaunch({ command, args: commandArgsPrefix, env });
   return defineAdapter({
-    metadata: {
-      type: "antigravity",
-      agentSources: ["provisioned"],
-      processModel: "subprocess-per-invocation",
-      transport: "ndjson/stdio"
-    },
+    metadata: antigravityMetadata,
     probe: async () => {
-      const result = await probeCommand(command);
+      const result = await probeCommand(launch.command, { args: launch.args, env: launch.env });
       if (result.available && (!result.version || compareVersion(result.version, "1.3.3") < 0))
         return { ...result, available: false, reason: "provider_version_unsupported" };
       return result;
@@ -423,7 +434,7 @@ export function createAntigravityAdapter({
       request: InvokeRequest,
       context?: AdapterInvocationContext
     ): AsyncGenerator<CanonicalEvent> {
-      buildAntigravityCommand(request, command, commandArgsPrefix);
+      buildAntigravityCommand(request, launch.command, [...launch.args]);
       const directory = await mkdtemp(join(tmpdir(), "octo-runtime-antigravity-"));
       const logPath = join(directory, "cli.log");
       const controller = new AbortController();
@@ -460,11 +471,11 @@ export function createAntigravityAdapter({
         void checkLog();
       }, 250);
       timer.unref();
-      const spec = buildAntigravityCommand(request, command, commandArgsPrefix, logPath);
+      const spec = buildAntigravityCommand(request, launch.command, [...launch.args], logPath);
       try {
         for await (const native of spawnJsonLines({
           ...spec,
-          env: invocationEnvironment(request, spec.env),
+          env: invocationEnvironment(request, spec.env, launch.env),
           signal: controller.signal,
           rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
           parseLine: (line): AntigravityNativeEvent | null => {
@@ -505,6 +516,3 @@ function compareVersion(version: string, minimum: string): number {
   }
   return 0;
 }
-
-export const antigravityAdapter = createAntigravityAdapter();
-export default antigravityAdapter;

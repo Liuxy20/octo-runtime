@@ -3,7 +3,7 @@ import { approvalFixture, until } from "./codex-approval-fixture.js";
 
 export function createApprovalHost() {
   const host = createFixtureCodexHost({
-    command: "fixture",
+    command: process.execPath,
     spawnFn: () => {
       const f = approvalFixture({ hold: true });
       void (async () => {

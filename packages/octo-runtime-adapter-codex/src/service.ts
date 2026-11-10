@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { setTimeout as delay } from "node:timers/promises";
 import { createProcessCleanup } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-cleanup";
-import { resolveProcessLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
+import { assertProviderCommand } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   watchLineLimit,
   type ServiceProcessSnapshot
@@ -685,8 +685,8 @@ function ownedSpawn(
   args: readonly string[],
   options: { cwd?: string; env: NodeJS.ProcessEnv }
 ): ChildProcessWithoutNullStreams {
-  const launch = resolveProcessLaunch(command, args, options);
-  const child = spawn(launch.command, [...launch.args], {
+  assertProviderCommand(command);
+  const child = spawn(command, [...args], {
     ...options,
     stdio: "pipe",
     detached: process.platform !== "win32",

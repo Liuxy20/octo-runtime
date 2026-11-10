@@ -1,3 +1,4 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   assertAdapterAgentEnv,
   assertAdapterWorkdir,
@@ -13,6 +14,7 @@ import {
   invocationEnvironment,
   invocationMcpServers,
   probeCommand,
+  snapshotProviderLaunch,
   type CanonicalEvent,
   type InvokeRequest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -20,6 +22,11 @@ import type { InteractionResponse } from "@mininglamp-oss/octo-runtime-protocol"
 
 type JsonRecord = Record<string, unknown>;
 export const GROK_BUILD_TESTED_VERSION = "1.0.67";
+export const grokBuildMetadata: AdapterMetadata = {
+  type: "grok-build",
+  mcp: true,
+  agentSources: ["provisioned"]
+};
 const levels = { low: "low", medium: "medium", high: "high", xhigh: "xhigh" } as const;
 
 function supportedVersion(version: unknown): boolean {
@@ -30,23 +37,33 @@ function supportedVersion(version: unknown): boolean {
 
 /** 宿主可指定已安装命令；每次调用拥有独立 ACP 子进程，不连接用户常驻 leader。 */
 export function createGrokBuildAdapter({
-  command = "grok",
-  acpClientFactory = spawnGrokBuildAcpClient
-}: { command?: string; acpClientFactory?: typeof spawnGrokBuildAcpClient } = {}) {
+  command,
+  acpClientFactory = spawnGrokBuildAcpClient,
+  commandArgsPrefix = [],
+  env = {}
+}: {
+  command: string;
+  acpClientFactory?: typeof spawnGrokBuildAcpClient;
+  commandArgsPrefix?: readonly string[];
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch =
+    acpClientFactory === spawnGrokBuildAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const adapter = createGrokBuildAcpAdapter(
     {
       type: "grok-build",
+      metadata: grokBuildMetadata,
       provider: "grok-build",
       command,
       args: ["--no-auto-update", "agent", "--no-leader", "stdio"],
       reasoningLevels: levels,
       async probe() {
-        const result = await probeCommand(command);
-        if (!result.available)
-          return {
-            ...result,
-            reason: "command_not_found: install Grok Build and put grok on PATH"
-          };
+        if (acpClientFactory !== spawnGrokBuildAcpClient)
+          return { available: false, command, reason: "probe_missing" };
+        const result = await probeCommand(launch.command, { args: launch.args, env: launch.env });
+        if (!result.available) return result;
         return supportedVersion(result.version)
           ? result
           : {
@@ -55,9 +72,12 @@ export function createGrokBuildAdapter({
               reason: `grok_version_unsupported: install Grok Build ${GROK_BUILD_TESTED_VERSION} or a compatible 1.x release`
             };
       },
-      async initialize(client, init, _request, env) {
+      async initialize(client, init) {
         const version =
-          record(init._meta).agentVersion ?? (await probeCommand(command, { env })).version;
+          record(init._meta).agentVersion ??
+          (acpClientFactory === spawnGrokBuildAcpClient
+            ? (await probeCommand(launch.command, { args: launch.args, env: launch.env })).version
+            : undefined);
         if (init.protocolVersion !== 1 || !supportedVersion(version))
           throw new Error(
             `GROK_VERSION_UNSUPPORTED: expected ACP v1 and Grok Build >= ${GROK_BUILD_TESTED_VERSION}, < 2.0.0`
@@ -211,7 +231,7 @@ export function createGrokBuildAdapter({
           : [];
       }
     },
-    { command, acpClientFactory }
+    { command: launch.command, acpClientFactory, commandArgsPrefix: launch.args, env: launch.env }
   );
 
   return Object.freeze({
@@ -229,7 +249,7 @@ export function createGrokBuildAdapter({
             "SANDBOX_UNSUPPORTED: grok-build ACP has no per-session sandbox override"
           );
         // 纯模板校验在 Provider 操作前完成；预算和 notice 仍只由内层 SDK 应用一次。
-        env = invocationEnvironment(request);
+        env = invocationEnvironment(request, {}, launch.env);
         const mcp = invocationMcpServers(request, env);
         if (JSON.stringify(mcp).includes("${"))
           throw new Error("MCP_LITERAL_UNSUPPORTED: grok-build");
@@ -342,6 +362,3 @@ function record(value: unknown): JsonRecord {
     ? (value as JsonRecord)
     : {};
 }
-
-export const grokBuildAdapter = createGrokBuildAdapter();
-export default grokBuildAdapter;

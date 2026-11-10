@@ -67,7 +67,11 @@ function acpFixture(type, missing) {
   };
   const adapter =
     type === "grok-build"
-      ? createGrokBuildAdapter({ acpClientFactory: () => client })
+      ? createGrokBuildAdapter({
+          command: process.execPath,
+          env: process.env,
+          acpClientFactory: () => client
+        })
       : createAcpAdapter(
           { type, provider: type, command: "fixture" },
           { acpClientFactory: () => client }
@@ -134,7 +138,7 @@ function codexFixture(missing) {
     return true;
   };
   return {
-    adapter: createScopedCodexAdapter({ command: "fixture", spawnFn: () => child }),
+    adapter: createScopedCodexAdapter({ command: process.execPath, spawnFn: () => child }),
     frames
   };
 }

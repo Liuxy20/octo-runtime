@@ -57,6 +57,8 @@ supersedes: []
 
 协议和执行快照保留列表结构；适配器在启动进程时才将列表转换成系统 API 所需的环境字典。每次调用都创建独立的环境对象：继承宿主环境，覆盖本次 Run 的 envs，最后应用适配器为其传输设置的固定变量。不得修改宿主的全局 `process.env`。并发 Run 的覆盖值不共享。
 
+命令 Adapter 的基础环境由宿主构造时显式交付并复制；执行层不在最终 spawn 时重新读取 process.env。CLI 负责 PATH、npm shim 与 Node 的选择，Adapter 仅使用固定的绝对 executable 和前缀 argv。本轮 PATH 可影响 Provider 内部工具，但不能重新选择 Provider 或其运行器。缺省 env 为显式空环境，不提供隐式继承兼容层。
+
 | 执行路径 | 行为 |
 | --- | --- |
 | Codex | app-server 仅继承 owner 固定环境；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 的实际 env 值。配置读取失败则停止调用，不伪装为已应用。 |

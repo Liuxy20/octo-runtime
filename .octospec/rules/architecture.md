@@ -44,6 +44,16 @@ Codex managed owner 只监督一个 app-server，多 Agent 使用不同 thread/t
 
 并发接纳和资源配额由宿主决定。owner 不设置 Agent 数量、估算 lease 内存、累计 thread 数或交互总数配额，不新增资源预算配置。只保留当前执行的临时 RPC/thread/turn 路由，释放时删除，不保存已结束 thread 历史或业务 session 映射；清理未确认时保留原归属事实。未知 thread 的早到通知仅在待决 thread/start 期间暂存，最后一个 start 结算后释放仍无法关联的通知并拒绝孤立反向请求。既有传输队列与单条消息限制继续执行，不同调用的流限额在路由后分别执行。故障恢复回收旧代再替换，不重放已接纳动作。doctor 显示 CLI Host 拥有平级的 Kernel（in-process，共用 PID）与 app-server，不制造不存在的 Kernel 进程。任务和实际证据见 [343 简报](../tasks/343-single-harness/brief.md)。
 
+### 执行依赖选择归宿主（Issue 346）
+
+2026-11-09 用户确认：既然 Engine 生命周期归宿主，Provider executable、安装来源和执行环境也由宿主选择并注入。该原则统一适用于 Codex app-server、OpenCode 和 ACP command；不要求相同构造签名或相同常驻进程模型。Adapter 不自行扫描 PATH/安装目录、下载、安装或失败后改选程序；协议要求、原生参数映射、对所选目标的兼容校验及调用级 transport 释放继续归 Adapter。CLI 可以在自己的装配层提供发现便利，不将策略放回 Adapter 或 Kernel。
+
+现有 metadata 用于执行描述与 probe 状态，不承载执行依赖和 owner。宿主可传入已解析启动描述、具体 client、factory 或 Provider 专用访问接口；可委托传输层创建和清理本轮独占进程，但引用不赋予共享 Engine 的关闭权。Windows shim/Node、探针与恢复也须使用宿主绑定的目标，逐轮 PATH/cwd 不得重新选择 Provider。协议配置环境变量及本轮工具环境继续遵守原合同。
+
+2026-11-10 用户进一步明确 OpenCode 升级不应要求 octo-runtime 跟随修改版本准入：不设置最低版本、主版本名单或未知版本拒绝，调用前不执行版本探针。probe 中版本仅为可选展示信息；不能将版本命令非零退出或超时推导为已选 executable 不可用。OpenCode 按宿主绑定直接进入 JSON/ACP 协议，实际启动、协议和清理失败仍按本次结果报告。此原则不承诺任意上游协议变更自动兼容，也不添加旧版本适配层。
+
+内置命令工厂要求显式绝对 command，可传 commandArgsPrefix 与基础 env；删除默认实例和裸命令兼容入口。CLI 使用宿主解析 helper，最终执行不再解析安装。源码审计、metadata 复用与实施验收见 [Issue 346 方案](../tasks/346-host-execution/design.md)。保留主线 #345 的 Codex 单实例与共享生命周期。
+
 ### KernelClient 与 AgentExecutor 的选型合同
 
 接入场景分为 CLI 执行服务 + 独立 App，以及应用内纯原生嵌入。前者由 octo-runtime CLI 拥有 Kernel/内置 Harness，App 仅依赖 octo-runtime-client，经 RPC 调用，不加载 Adapter。后者统一从源码 workspace 依赖 Kernel/Core、公共辅助包与所选 Adapter，按需 import 或动态 import，初始化前完成注册；仅用 Codex 不引入 OpenClaw，反之亦然。private 源码包不单独 npm 发布；删除完整包的 /adapters/codex、/adapters/dsh 聚合入口，不以 CLI 全量依赖作为原生 SDK 接入方式。现有 CLI 仍加载 manifest 的全部装配项，Codex 进程在首次调用时启动，不能把进程惰性启动说成首次请求才加载模块。具体场景、依赖和所有权见 [SDK 入门](../../docs/zh-CN/getting-started/sdk.md)。

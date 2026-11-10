@@ -12,7 +12,7 @@ import { approvalFixture, until } from "./codex-approval-fixture.js";
 async function running(t, mode, approvalMode, options) {
   const fixture = approvalFixture(options);
   const adapter = createCodexAdapter({
-    command: "fixture",
+    command: process.execPath,
     spawnFn: () => fixture.child
   });
   const controller = new AbortController();

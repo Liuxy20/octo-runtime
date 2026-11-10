@@ -17,10 +17,10 @@ This excerpt registers the Adapter and prepares its input. Execute with `executo
 ```ts
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
-import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
 const executor = new AgentExecutor();
-executor.register(grokBuildAdapter);
+executor.register(createGrokBuildAdapter({ command: "/absolute/path/grok", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
@@ -44,7 +44,7 @@ const input = InvokeInput.check({
 | Item             | Value                                                                      |
 | ---------------- | -------------------------------------------------------------------------- |
 | Adapter type     | `grok-build`                                                               |
-| Exports          | `grokBuildAdapter`, `createGrokBuildAdapter`                               |
+| Exports          | `createGrokBuildAdapter`                               |
 | Command          | `grok --no-auto-update agent --no-leader stdio`                            |
 | Output           | canonical events only                                                      |
 | Auth             | advertised `xai.api_key` or `cached_token`, in advertised order            |

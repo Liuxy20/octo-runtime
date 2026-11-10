@@ -50,7 +50,11 @@ for (const name of [
   test(`${name}: each defaultAgentEnv read owns its complete object graph`, async (t) => {
     let adapter;
     if (name === "codex") {
-      const owner = createManagedCodexEngine({ codexHome: process.cwd() });
+      const owner = createManagedCodexEngine({
+        command: process.execPath,
+        env: process.env,
+        codexHome: process.cwd()
+      });
       t.after(async () => {
         assert.equal((await owner.close({ deadline: performance.now() + 1000 })).complete, true);
       });
@@ -84,7 +88,7 @@ async function assertPreparationFailure(adapter, value, pattern) {
 
 test("OpenCode rejects missing cwd before a version probe and confirms cleanup", async () => {
   await assertPreparationFailure(
-    createOpenCodeAdapter({ command: process.execPath }),
+    createOpenCodeAdapter({ env: process.env, command: process.execPath }),
     input("opencode", [
       item("octo.execution", "workspace", {
         path: join(tmpdir(), `octo-missing-341-${randomUUID()}`)
@@ -96,7 +100,7 @@ test("OpenCode rejects missing cwd before a version probe and confirms cleanup",
 
 test("OpenCode rejects malformed private configuration before a version probe", async () => {
   await assertPreparationFailure(
-    createOpenCodeAdapter({ command: process.execPath }),
+    createOpenCodeAdapter({ env: process.env, command: process.execPath }),
     input("opencode", [
       item("octo.execution", "envs", {
         env_variables: [{ key: "OPENCODE_CONFIG_CONTENT", value: "invalid JSON" }]
@@ -123,6 +127,8 @@ for (const [name, options, pattern] of [
   test(`Grok rejects ${name} before Provider allocation and confirms cleanup`, async () => {
     let spawns = 0;
     const adapter = createGrokBuildAdapter({
+      command: process.execPath,
+      env: process.env,
       acpClientFactory() {
         spawns++;
         throw new Error("must not allocate Provider");
@@ -136,6 +142,8 @@ for (const [name, options, pattern] of [
 test("Grok preserves inner SDK preparation evidence while sanitizing errors", async () => {
   let spawns = 0;
   const adapter = createGrokBuildAdapter({
+    command: process.execPath,
+    env: process.env,
     acpClientFactory() {
       spawns++;
       throw new Error("must not allocate Provider");
@@ -178,12 +186,15 @@ process.stdin.resume();process.stdin.on("end",()=>{
     ]);
     const configurations = [];
     const events = await Array.fromAsync(
-      createOpenCodeAdapter({ command }).invoke(prepareInvokeInput(value).request, {
-        configureRuntimeLimits(limits) {
-          configurations.push(structuredClone(limits));
-          writeFileSync(configured, "configured");
+      createOpenCodeAdapter({ env: process.env, command }).invoke(
+        prepareInvokeInput(value).request,
+        {
+          configureRuntimeLimits(limits) {
+            configurations.push(structuredClone(limits));
+            writeFileSync(configured, "configured");
+          }
         }
-      })
+      )
     );
     assert.equal(events.at(-1).type, "run.completed");
     assert.equal(configurations.length, 2);
