@@ -82,3 +82,19 @@ Gateway 默认 TS 7.0.2 构建失败：可选 `@typescript/typescript-win32-x64`
 | Node 24.19.0 / Node 26.13.0，四个既有 DSH 文件加手动专项 | 各 129 项：124 passed / 0 failed / 5 既有 POSIX skips；手动专项各 13 passed |
 
 独立 Gateway 测试通过 OCTO_GATEWAY_CHECKOUT 显式启用；没有该环境时 skip 是既有手动合同，本轮不把它加入 CI。仍为 fixture 验证，没有增加真实模型或 IM 请求。前述全量失败和真实验收缺口继续有效。
+
+# 2026-11-10 实际 child 活动修复验证
+
+复核 `04bdb746` 的重复 child 终态现象成立，但生命周期分支在修复前基线已相同。官方 rc.5 的 lifecycle factory 为两个合法运行生成不同 runId，实际 SDK notification callbacks 却输出相同 started/finished 载荷；cold resume 会重新 announce 同一 durable session，不能永久屏蔽。以上是锁定发行代码的控制上下文回放，不是真实模型运行。
+
+本轮仅修复当前 DSH adapter 的活动身份/终态配对。活动中重复 started 不重复创建；finished 在本次活动内只发布一次，无新 started 的迟到 child 帧忽略；重新挂载的原生 started 创建新的 canonical 活动代次，seq/digest 和 lineage 保留。没有增加必须出现新 turn 的条件，也没有修改 root final 缓冲或 Gateway。
+
+| 验证 | 结果 |
+| --- | --- |
+| 五项新增回归运行于修复前构建 | 全部失败，覆盖 ok/error 重复终态、重挂载、SDK/Core 两条 child 路径 |
+| Node 24.19.0 与 26.13.0，四个既有 DSH 文件加手动专项 | 各 134 项：129 passed / 0 failed / 5 既有 POSIX skips；手动专项各 18 passed |
+| 同一原始 rc.5 factory / SDK callbacks 控制回放 | canonical 由 1 started / 2 finished 变为 2 started / 2 finished；两次 child 文本均接纳，final 事件为零 |
+| 重挂载资源边界 | 4096 次重挂载后按原有 object_limit 明确拒绝，不扩张会话 Map 或保存运行历史 |
+| format:check、lint、lint:names、typecheck（含完整构建） | 通过 |
+
+本次未修改其他 Adapter、Core、Gateway、CI 或六项基线失败；没有重新执行无关全量测试。真实模型、IM、跨平台验收仍未执行。SDK 未透传 activation ID，跨新 started 边界的旧 finish 不能与当前运行的同载荷 finish 区分；实现只保证已知运行边界内的幂等，不伪造跨运行重放识别能力。

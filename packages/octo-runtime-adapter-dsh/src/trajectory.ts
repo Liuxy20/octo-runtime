@@ -27,9 +27,16 @@ interface Step {
   interrupted: boolean;
 }
 
+interface SessionState {
+  parent?: string;
+  seq: number;
+  digest: string;
+  activity?: { generation: number; finished: boolean };
+}
+
 /** 只保留当前工作和序号摘要；不存轨迹历史，不把 child 文本合并进 root final。 */
 export class DshTrajectory {
-  readonly #sessions = new Map<string, { parent?: string; seq: number; digest: string }>();
+  readonly #sessions = new Map<string, SessionState>();
   readonly #steps = new Map<string, Step>();
   readonly #turns = new Map<string, number>();
   readonly #tools = new Map<string, { id: string; stepId: string; time: number }>();
@@ -93,22 +100,31 @@ export class DshTrajectory {
   accept(notification: HarnessNotification): CanonicalEvent[] {
     const { method, params } = notification;
     if (method === "subagent.started") {
-      if (!this.#sessions.has(String(params.parentSessionId))) return [];
+      const parent = this.#sessions.get(String(params.parentSessionId));
+      if (!parent || parent.activity?.finished) return [];
       required(identifier(params.childSessionId) && identifier(params.parentSessionId));
       const child = this.#sessions.get(params.childSessionId);
+      let generation = 0;
       if (child) {
         required(child.parent === params.parentSessionId);
-        return [];
+        if (!child.activity?.finished) return [];
+        // SDK 的 started 也用于 cold resume：它开启新运行，而非永久重建 durable 身份。
+        // 代次仅区分 canonical 活动，不冒充未透传的原生 runId；仍消费同一有界对象预算。
+        this.#bound();
+        generation = child.activity.generation + 1;
+        child.activity = { generation, finished: false };
+      } else {
+        required(this.#sessions.size < 128 && params.childSessionId !== this.sessionId);
+        this.#sessions.set(params.childSessionId, {
+          parent: params.parentSessionId,
+          seq: -1,
+          digest: "",
+          activity: { generation, finished: false }
+        });
       }
-      required(this.#sessions.size < 128 && params.childSessionId !== this.sessionId);
-      this.#sessions.set(params.childSessionId, {
-        parent: params.parentSessionId,
-        seq: -1,
-        digest: ""
-      });
       return [
         event("activity.started", {
-          activityId: this.#id(params.childSessionId, "agent", 0),
+          activityId: this.#id(params.childSessionId, "agent", generation),
           kind: "working",
           subject: { type: "run" },
           source: "provider",
@@ -126,13 +142,15 @@ export class DshTrajectory {
         typeof params.childSessionId === "string"
           ? this.#sessions.get(params.childSessionId)
           : undefined;
-      if (!child) return [];
+      if (!child?.activity) return [];
       required(
         child.parent === params.parentSessionId && ["ok", "error"].includes(String(params.status))
       );
+      if (child.activity.finished) return [];
+      child.activity.finished = true;
       return [
         event("activity.finished", {
-          activityId: this.#id(String(params.childSessionId), "agent", 0),
+          activityId: this.#id(String(params.childSessionId), "agent", child.activity.generation),
           status: params.status === "ok" ? "completed" : "failed"
         })
       ];
@@ -141,7 +159,8 @@ export class DshTrajectory {
     required(identifier(params.sessionId));
     const sessionId = params.sessionId;
     const state = this.#sessions.get(sessionId);
-    if (!state) return [];
+    // 已结束运行的迟到帧不复活工作；新的原生 started 可显式恢复同一会话，序号不重置。
+    if (!state || state.activity?.finished) return [];
     const source = params.event;
     required(
       record(source) &&

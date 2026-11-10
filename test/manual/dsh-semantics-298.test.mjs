@@ -21,12 +21,130 @@ const finalText = (events) =>
     .filter((e) => e.type === "message.delta" && e.payload.channel === "final")
     .map((e) => e.payload.text)
     .join("");
+const commentaryText = (events) =>
+  events
+    .filter((event) => event.type === "message.delta" && event.payload.channel === "commentary")
+    .map((event) => event.payload.text)
+    .join("");
 const terminal = (events) =>
   events.filter((e) => /^run\.(completed|failed|cancelled)$/.test(e.type));
 function settle(trajectory) {
   const result = trajectory.finish("receipt");
   return Array.isArray(result) ? result : [result];
 }
+
+for (const status of ["ok", "error"])
+  test(`DSH child ${status} finish is idempotent without closing its durable identity`, () => {
+    const trajectory = new DshTrajectory("root", 8192);
+    const started = {
+      method: "subagent.started",
+      params: { parentSessionId: "root", childSessionId: "child" }
+    };
+    const finished = { method: "subagent.finished", params: { ...started.params, status } };
+    const first = trajectory.accept(started);
+    assert.deepEqual(trajectory.accept(started), []);
+    const end = trajectory.accept(finished);
+    assert.equal(end[0].payload.activityId, first[0].payload.activityId);
+    assert.equal(end[0].payload.status, status === "ok" ? "completed" : "failed");
+    assert.deepEqual(trajectory.accept(finished), []);
+    const late = {
+      method: "session.event",
+      params: {
+        sessionId: "child",
+        event: { type: "turn/start", seq: 0, time: 1000, data: { turn: 0 } }
+      }
+    };
+    assert.deepEqual(trajectory.accept(late), []);
+    const resumed = trajectory.accept(started);
+    assert.equal(resumed.length, 1);
+    assert.notEqual(resumed[0].payload.activityId, first[0].payload.activityId);
+    assert.equal(trajectory.accept(finished)[0].payload.activityId, resumed[0].payload.activityId);
+    assert.deepEqual(trajectory.accept(finished), []);
+  });
+
+test("DSH native child reattachment creates paired activities and preserves root final", () => {
+  const trajectory = new DshTrajectory("root", 8192);
+  const events = scenario("child-reattach").flatMap((notification) =>
+    trajectory.accept(notification)
+  );
+  events.push(...settle(trajectory));
+  events.forEach(assertCanonicalEvent);
+  const starts = events.filter(
+    (event) => event.type === "activity.started" && event.payload.activityId.includes(":agent:")
+  );
+  assert.equal(starts.length, 2);
+  assert.notEqual(starts[0].payload.activityId, starts[1].payload.activityId);
+  for (const start of starts)
+    assert.equal(
+      events.filter(
+        (event) =>
+          event.type === "activity.finished" &&
+          event.payload.activityId === start.payload.activityId
+      ).length,
+      1
+    );
+  assert.ok(commentaryText(events).includes("子代理续跑结果"));
+  assert.ok(!commentaryText(events).includes("LATE_CHILD_REPLAY"));
+  assert.equal(finalText(events), "检查完成。");
+});
+
+for (const mode of ["child-late", "child-reattach"])
+  test(`official SDK/Core child activity boundaries: ${mode}`, async (t) => {
+    const directory = await mkdtemp(join(tmpdir(), "dsh-298-child-"));
+    const core = new AgentExecutor();
+    core.register(createDshAdapter());
+    t.after(async () => {
+      await core.shutdown();
+      await rm(directory, { recursive: true, force: true });
+    });
+    const request = invokeRequest({
+      workdir: directory,
+      approvalMode: "full_access",
+      agentConfig: {
+        providerOptions: {
+          dshBin: fileURLToPath(new URL("./fixtures/dsh-semantics-298.mjs", import.meta.url))
+        }
+      }
+    });
+    const events = await Array.fromAsync(
+      core.invoke(invocationInput(request, "canonical", "dsh"), {
+        executionEnvOverrides: { env_variables: [{ key: "OCTO_DSH_SEMANTICS_MODE", value: mode }] }
+      })
+    );
+    assert.equal(terminal(events).length, 1);
+    assert.equal(terminal(events)[0].type, "run.completed");
+    assert.equal(finalText(events), "检查完成。");
+    assert.ok(!commentaryText(events).includes("LATE_CHILD_REPLAY"));
+    const starts = events.filter(
+      (event) => event.type === "activity.started" && event.payload.activityId.includes(":agent:")
+    );
+    assert.equal(starts.length, mode === "child-reattach" ? 2 : 1);
+    for (const start of starts)
+      assert.equal(
+        events.filter(
+          (event) =>
+            event.type === "activity.finished" &&
+            event.payload.activityId === start.payload.activityId
+        ).length,
+        1
+      );
+    if (process.env.OCTO_GATEWAY_CHECKOUT) {
+      const { ImRunProjector } = await import(
+        pathToFileURL(
+          join(
+            resolve(process.env.OCTO_GATEWAY_CHECKOUT),
+            "dist/packages/gateway/src/presentation/run-projector.js"
+          )
+        )
+      );
+      const projector = new ImRunProjector(request.runId);
+      events.forEach((event) => projector.accept(event));
+      assert.equal(projector.finalReply.text, "检查完成。");
+      assert.equal(projector.snapshot().terminal, "completed");
+      projector.dispose();
+    }
+  });
+
 for (const mode of ["multi", "final", "chunks", "turns"])
   test(`DSH ${mode}: terminal confirmation owns the only root final`, () => {
     const trajectory = new DshTrajectory("root", 8192);

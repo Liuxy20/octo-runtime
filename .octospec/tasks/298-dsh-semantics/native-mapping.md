@@ -26,6 +26,10 @@ Runtime main `157fabb7d680df1ee72d9d9e5ed40cfc6c22b336`，官方 `@deepseek-ai/d
 | 一个活动区间可有多个 turn | 后续 root step/turn 使上一候选成为 commentary；最后合格 root commit 才是 final |
 | 子会话始终独立 | child 公开文字只为 commentary，analysis 维持 private_reasoning，绝不拼入 root final |
 
+`subagent.finished` 结束的是一次运行，不是 durable child 会话。rc.4/rc.5 的 SDK server 将 session/created 转为 started；rc.5 AgentLoop 的 create 与 cold resume 都会 announce session，因此相同 childId 可再次合法 started。底层 subagent 有不同 runId，但 SDK 没有透传，两个合法运行的 started/finished 载荷可以完全相同。
+
+Adapter 以这些原生运行边界配对 canonical 活动：活动期间的重复 started 忽略；finished 只结算一次，后续无新 started 的迟到 session.event 不进入工作状态；再次 started 为同一 durable session 建立新活动代次。代次只提供 canonical 唯一身份，不冒充原生 runId；会话 seq/digest 和 lineage 保留，重挂载仍使用既有对象预算。不按载荷相同永久屏蔽 child，也不额外要求 turn/start 作为恢复前提。SDK 缺少 activation 身份时，不能判断跨新 started 边界的相同 finished 是否为旧运行重放；不声称修复协议本身无法区分的情况。
+
 # 延迟分类与边界
 
 根会话尚未确定用途的 create/delta/update 最多暂存 4096 条，正文最多本 invocation 的 rawMessageMaxBytes；只保留一个候选步骤。工具到来先发其前的 commentary，再发 tool_call；后续步骤/turn 先结算旧候选，再开始新步骤。只有成功 finish 才按原 chunk 边界发布 final，保留原 messageId；延后的 model_step.finished 仍携带原生 endedAtMs。

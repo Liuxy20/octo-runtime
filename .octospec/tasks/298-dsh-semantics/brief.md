@@ -18,6 +18,7 @@ upstream: https://github.com/Mininglamp-OSS/octo-runtime/issues/298
 - 暂存未确认用途的 root 公开文字；工具/后续步骤或 turn 证明其为 commentary，receipt + durable terminal + idle 后才发布最后合格回答为 final。保持 chunk 边界和 commit 前缀核对，不重分类已发布正文。
 - 保持工具身份、原生顺序、步骤时间、子会话 lineage、私有 reasoning、失败/取消；缓存有字节和条数上限。子会话绝不成为 root final。
 - 原生 SDK 不打补丁，Core/协议不增加 DSH 特例；不改变 native 准入或资源回收承诺。
+- child 活动按原生 started/finished 运行边界逐次配对：重复结束不重复投影；结束后无新 started 的帧不重启工作。新的 started 可合法重新挂载同一 durable child，须分配新的 canonical 活动身份；不增加“必须有新 turn 才允许恢复”的推断条件，不永久屏蔽 child。
 
 # 验收
 

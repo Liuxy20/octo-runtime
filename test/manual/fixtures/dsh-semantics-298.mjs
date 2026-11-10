@@ -85,6 +85,31 @@ export function scenario(mode = "multi", root = "root") {
       method: "subagent.finished",
       params: { parentSessionId: root, childSessionId: "child", status: "ok" }
     });
+    if (mode === "child-late" || mode === "child-reattach") {
+      const finished = {
+        method: "subagent.finished",
+        params: { parentSessionId: root, childSessionId: "child", status: "ok" }
+      };
+      result.push(finished);
+      notify("turn/start", { turn: 1 }, "child");
+      notify("step/start", { turn: 1, step: 0 }, "child");
+      message("LATE_CHILD_REPLAY", 0, "child", 1);
+      notify("step/end", { turn: 1, step: 0 }, "child");
+      notify("turn/end", { turn: 1, reason: { kind: "completed" } }, "child");
+      if (mode === "child-reattach") {
+        const started = {
+          method: "subagent.started",
+          params: { parentSessionId: root, childSessionId: "child" }
+        };
+        result.push(started, started);
+        notify("turn/start", { turn: 1 }, "child");
+        notify("step/start", { turn: 1, step: 0 }, "child");
+        message("子代理续跑结果", 0, "child", 1);
+        notify("step/end", { turn: 1, step: 0 }, "child");
+        notify("turn/end", { turn: 1, reason: { kind: "completed" } }, "child");
+        result.push(finished, finished);
+      }
+    }
     notify("step/start", { turn: 0, step: 1 });
   }
   const step = ["final", "chunks", "cancel", "error", "max-tokens"].includes(mode) ? 0 : 1;

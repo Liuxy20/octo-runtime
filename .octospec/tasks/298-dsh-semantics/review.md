@@ -34,3 +34,13 @@ PR 交付前将手动 fixture 的直接运行判断统一为 pathToFileURL，避
 负向验证只临时移除本任务构建 JS 中的既有守卫，两项新增回归均失败；finally 恢复产物后，Node 24/26 各 124 passed / 5 skipped，启用独立 Gateway 的手动专项各 13 passed。该证据证明新增测试能检出评审描述的缺陷，而非通过更改生产语义使断言成立。Gateway 专项需要显式环境变量的观察属实；本轮已显式启用，未扩大默认 CI。
 
 此结论为代码和执行证据的复核，不等同于外部 reviewer 已批准；不自行撤销 CHANGES_REQUESTED。
+
+# 2026-11-10 child 运行边界最小修复
+
+针对 [review 5824793219](https://github.com/Mininglamp-OSS/octo-runtime/pull/340#pullrequestreview-5824793219) 分别核查“能否复现”“是否由本 PR 引入”“原生合同是否支持建议”。重复 finish 会重复投影，且相关分支与基线完全相同；这是实存问题。永久屏蔽 finished child 或禁止同 ID 的新 started 不符合官方可续跑会话合同，未采用。
+
+独立核查执行了 rc.5 的原始 lifecycle factory 和实际 SDK notification callbacks（控制上下文、不调用模型）：两个不同 native runId 的合法 activation 产生相同 started/finished 载荷，SDK 不透传 runId。修复前 canonical 为 1 started / 2 finished，修复后为 2 started / 2 finished；child 文本均为 commentary、无 final。
+
+用户要求实际修复成立的问题后，仅在现有 DSH 映射中增加当前 child 活动代次和已结束位：同一运行的 finish 幂等；无新挂载的迟到帧不启动工作；新的原生 started 建立新的 canonical 活动身份。seq/digest 不重置，不增加新的通用生命周期、Gateway parser、turn 推断或永久关闭策略。
+
+五项新增回归在修复前全部失败，分别覆盖 ok/error 重复终态、合法重挂载，以及官方 SDK/Core 的迟到和重挂载两条路径。独立 Gateway 开关开启时，新增 Core 用例还验证消费者最终回复仍只含 root 回答。跨新 started 边界的陈旧 finish 无原生 runId 可区分，明确保留该协议限制，不伪造识别保证。
