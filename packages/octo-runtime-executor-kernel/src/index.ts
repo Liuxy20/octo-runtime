@@ -2,10 +2,7 @@
 export {
   type HostedAdapter,
   type HostedAdapterMetadata,
-  DEFAULT_RUNTIME_LIMITS,
-  prepareRunContext,
-  type PreparedRunContext,
-  type WorkspaceAssignments
+  DEFAULT_RUNTIME_LIMITS
 } from "@mininglamp-oss/octo-runtime-executor-core";
 export { HostRunService } from "./host-run-service.js";
 export {

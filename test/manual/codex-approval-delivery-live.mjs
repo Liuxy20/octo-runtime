@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
@@ -5,20 +6,18 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
-
 if (process.env.OCTO_RUN_CODEX_APPROVAL_LIVE !== "1")
   throw new Error("Explicit live opt-in required");
 const directory = await mkdtemp(join(process.platform === "win32" ? tmpdir() : "/tmp", "oa-"));
+const host = await import("./codex-approval-live-worker.mjs");
 const kernel = createKernelService({
   home: directory,
   endpoint: process.platform === "win32" ? componentEndpoint(directory) : join(directory, "k.sock"),
-  adapters: (
-    await import(
-      (await import("node:url")).pathToFileURL(
-        resolve("test/manual/codex-approval-live-worker.mjs")
-      ).href
-    )
-  ).adapters
+  adapters: host.adapters,
+  async finalizeHostResources(deadline) {
+    if (!(await host.owner.close({ deadline })).complete)
+      throw new Error("ENGINE_CLEANUP_INCOMPLETE");
+  }
 });
 let passed = true;
 try {
@@ -58,14 +57,21 @@ try {
           kernel.client,
           {
             inputs: [{ type: "text", text: input }],
-            agentEnv: {
-              ...{ schema: "octo.context-envelope/v3", items },
-              approvalMode: "full_access",
-              workdir: directory,
-              runtimeLimits: { runTimeoutMs: 120000 }
-            },
+            agentEnv: withAgentEnvItems(
+              {
+                ...{ schema: "octo.context-envelope/v3", items }
+              },
+              [
+                { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+                {
+                  namespace: "octo.security",
+                  name: "approval_policy",
+                  payload: { mode: "full_access" }
+                },
+                { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 120000 } }
+              ]
+            ),
             protocol_mode: mode,
-
             invocationId: randomUUID(),
             runId: randomUUID()
           },
@@ -133,6 +139,7 @@ try {
     }
   }
 } finally {
+  host.owner.beginShutdown();
   const cleanup = await kernel.close();
   console.log(JSON.stringify({ cleanupComplete: cleanup.complete }));
   if (cleanup.complete) await rm(directory, { recursive: true, force: true });

@@ -1,7 +1,6 @@
 import { assertJsonValue } from "./context.js";
-import { assertExecutionEvidence } from "./actmode.js";
 import { assertCanonicalEvent, assertFailureEnvelope, type CanonicalEvent } from "./index.js";
-import { safeCapacityEvidence, isCodexLocalFailure } from "./failure.js";
+import { safeCapacityEvidence, isCodexLocalFailure, isWorkdirFailureReason } from "./failure.js";
 import { isStreamCapacityReason } from "./stream-limits.js";
 import type {
   ProtocolMode,
@@ -128,18 +127,6 @@ export function assertHostControl(value: unknown): asserts value is HostControl 
   if (!isRecord(value)) throw protocolError("HOST_CONTROL_INVALID");
   if (
     value.type === "evidence" &&
-    value.name === "execution" &&
-    exactKeys(value, ["type", "name", "payload"])
-  ) {
-    try {
-      assertExecutionEvidence(value.payload);
-    } catch {
-      throw protocolError("HOST_CONTROL_INVALID");
-    }
-    return;
-  }
-  if (
-    value.type === "evidence" &&
     exactKeys(value, ["type", "name", "payload"]) &&
     value.name === "session" &&
     isRecord(value.payload)
@@ -166,7 +153,8 @@ export function assertHostControl(value: unknown): asserts value is HostControl 
           value.code === "HOST_EXECUTION_FAILED" && isCodexLocalFailure(value.failure);
         if (
           (!localCodex &&
-            (!isStreamCapacityReason(value.code) || value.failure.reasonCode !== value.code)) ||
+            ((!isStreamCapacityReason(value.code) && !isWorkdirFailureReason(value.code)) ||
+              value.failure.reasonCode !== value.code)) ||
           !exactKeys(
             value.failure,
             [

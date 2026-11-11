@@ -1,10 +1,10 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { InvocationExperience } from "../packages/octo-runtime-executor-core/dist/experience.js";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-
 const metadata = {
   messageId: "thought",
   channel: "analysis",
@@ -42,7 +42,6 @@ test("streaming message snapshots keep one activity until an explicit terminal",
   assert.equal(end[0].type, "activity.finished");
   assert.equal(end[0].payload.status, "cancelled");
 });
-
 test("Host closes a still-streaming snapshot on root completion", async () => {
   const host = new AgentExecutor();
   host.register({
@@ -52,8 +51,7 @@ test("Host closes a still-streaming snapshot on root completion", async () => {
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "snapshot",
-      agentSources: ["provisioned"]
+      type: "snapshot"
     },
     async *invoke() {
       yield {
@@ -74,12 +72,11 @@ test("Host closes a still-streaming snapshot on root completion", async () => {
       runId: "r",
       prompt: "p",
       modelInput: "p",
-      workdir: process.cwd(),
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
-      approvalMode: "full_access",
-      agentSource: "provisioned",
-      agentConfig: {}
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ])
     },
     { protocolMode: "canonical" }
   ))

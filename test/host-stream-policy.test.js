@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -14,19 +15,17 @@ import {
   resolveStreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest, waitFor } from "./runtime-fixture.js";
-
 const MIB = 1024 * 1024;
 const reducedPolicy = resolveStreamLimitPolicy({
   hostFrameMaxBytes: 4096,
   replayRunMaxBytes: 8192,
   replayGlobalMaxBytes: 16384
 });
-
 function createPolicyAdapter({ type }) {
   return {
     metadata: {
       type,
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "fixture.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke(request, context) {
@@ -54,16 +53,14 @@ function createPolicyAdapter({ type }) {
     }
   };
 }
-
 function largeToolOutput() {
-  return "大".repeat(476_921) + "xy";
+  return "大".repeat(476921) + "xy";
 }
-
 function createSdkAdapter({ type }) {
   return {
     metadata: {
       type,
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "fixture.sdk",
         modes: ["canonical", "native"],
@@ -128,20 +125,20 @@ function createSdkAdapter({ type }) {
     }
   };
 }
-
 function input(adapterType, prompt = "policy", protocolMode = "canonical") {
   return invocationInput(
     invokeRequest({
       runId: randomUUID(),
       invocationId: randomUUID(),
-      approvalMode: "full_access",
-      prompt
+      prompt,
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
     }),
     protocolMode,
     adapterType
   );
 }
-
 function assertReducedReplay(host, runId) {
   const info = host.get(runId);
   assert.equal(info.terminal.control.state, "completed");
@@ -154,7 +151,6 @@ function assertReducedReplay(host, runId) {
     retained.reduce((bytes, event) => bytes + event.bytes, 0) <= reducedPolicy.replayRunMaxBytes
   );
 }
-
 test("HostRunService resolves trusted limits once and freezes before transport starts", async (context) => {
   const provider = new AgentExecutor();
   provider.register(createPolicyAdapter({ type: "limited" }));

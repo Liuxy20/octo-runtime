@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -10,7 +11,6 @@ import {
   resolveStreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest } from "./runtime-fixture.js";
-
 test("stream limit policy freezes defaults and rejects unsafe overrides", () => {
   const defaults = resolveStreamLimitPolicy(undefined);
   assert.deepEqual(defaults, DEFAULT_STREAM_LIMIT_POLICY);
@@ -31,7 +31,6 @@ test("stream limit policy freezes defaults and rejects unsafe overrides", () => 
     /rawMessageMaxBytes exceeds adapterQueueItemMaxBytes/
   );
 });
-
 test("managed adapter configuration maps and validates trusted stream_limits", () => {
   const configurations = readAdapterConfigurations("/tmp/runtime-profile", {
     codex: {
@@ -60,7 +59,6 @@ test("managed adapter configuration maps and validates trusted stream_limits", (
     /stream_limits.unexpected_bytes is unknown/
   );
 });
-
 test("capacity failures have stable non-retryable public classifications and safe evidence", () => {
   const cases = [
     ["PROVIDER_MESSAGE_TOO_LARGE", "OH-PRV-4009"],
@@ -95,14 +93,13 @@ test("capacity failures have stable non-retryable public classifications and saf
     assert.doesNotMatch(JSON.stringify(payload.failure), /must-not-leak|secret/);
   }
 });
-
 test("default HostFrame policy accepts the observed 1.43 MB completion payload", async () => {
   const host = new AgentExecutor();
-  const text = "x".repeat(1_430_765);
+  const text = "x".repeat(1430765);
   host.register({
     metadata: {
       type: "large-output",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "large-output.canonical",
         modes: ["canonical"],
@@ -119,7 +116,11 @@ test("default HostFrame policy accepts the observed 1.43 MB completion payload",
     }
   });
   const input = invocationInput(
-    invokeRequest({ approvalMode: "full_access" }),
+    invokeRequest({
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    }),
     "canonical",
     "large-output"
   );
@@ -134,13 +135,12 @@ test("default HostFrame policy accepts the observed 1.43 MB completion payload",
   assert.equal(frames.at(-1).control.state, "completed");
   await host.shutdown();
 });
-
 test("HostFrame capacity failures retain their precise control reason", async () => {
   const host = new AgentExecutor();
   host.register({
     metadata: {
       type: "oversized-frame",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "oversized-frame.canonical",
         modes: ["canonical"],
@@ -156,7 +156,11 @@ test("HostFrame capacity failures retain their precise control reason", async ()
     }
   });
   const input = invocationInput(
-    invokeRequest({ approvalMode: "full_access" }),
+    invokeRequest({
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    }),
     "canonical",
     "oversized-frame"
   );

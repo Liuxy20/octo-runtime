@@ -1,10 +1,13 @@
-import { attachKernel } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { attachKernel } from "@mininglamp-oss/octo-runtime-client";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-client/protocol";
 import { randomUUID } from "node:crypto";
 import { invokeOnce } from "./invoke.mts";
 
-const [endpoint, adapterType = "codex"] = process.argv.slice(2);
-if (!endpoint) throw new Error("Usage: node attach.mts <endpoint> [adapter-type]");
+const [endpoint, adapterType = "codex", workdir] = process.argv.slice(2);
+if (!endpoint || (adapterType !== "openclaw" && !workdir))
+  throw new Error(
+    "Usage: node attach.mts <endpoint> <adapter-type> <absolute-existing-workdir>; omit workdir for openclaw"
+  );
 const input = InvokeInput.check({
   invocationId: randomUUID(),
   inputs: [{ type: "text", text: "Reply with a short greeting." }],
@@ -15,10 +18,15 @@ const input = InvokeInput.check({
         namespace: "octo.execution",
         name: "adapter",
         payload: {
-          type: adapterType,
-          ...(adapterType === "openclaw" ? { provider_agent_id: "main" } : {})
+          type: adapterType
         }
-      }
+      },
+      ...(workdir
+        ? [{ namespace: "octo.execution", name: "workspace", payload: { path: workdir } }]
+        : []),
+      ...(adapterType === "openclaw"
+        ? [{ namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }]
+        : [])
     ]
   }
 });

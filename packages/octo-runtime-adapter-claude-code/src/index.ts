@@ -1,13 +1,32 @@
+import { claudePlanMode } from "./agent-env.js";
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const claudeCodeMetadata: AdapterMetadata = {
+  mcp: true,
+  protocolSupport: {
+    protocol: "claude.stream-json",
+    modes: ["native", "canonical"],
+    nativeMethods: ["managed-turn", "can_use_tool", "control_response", "cancel"]
+  },
+  type: "claude-code",
+  processModel: "subprocess-per-invocation",
+  transport: "ndjson/stdio"
+};
+
 import {
-  initialControlInstructions,
+  invocationModel,
+  invocationEffort,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   hasImageInput,
   invocationEnvironment,
   invocationMcpServers,
   assertMcpOptions,
-  actmodeEvidence,
   mapReasoningEffort
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
-import { canonicalTerminalStatus, contextActmode } from "@mininglamp-oss/octo-runtime-protocol";
+import { canonicalTerminalStatus } from "@mininglamp-oss/octo-runtime-protocol";
 /**
  * Claude Code local CLI transport and event normalization layer.
  *
@@ -26,6 +45,7 @@ import {
   defineAdapter,
   parseJsonLine,
   probeCommand,
+  snapshotProviderLaunch,
   providerInputText,
   spawnJsonLines,
   type CanonicalEvent,
@@ -90,22 +110,20 @@ interface ClaudeNativeEvent {
 }
 
 /**
- * Build the Claude CLI argv and stdin for one invocation.
- *
- * The system/control prompt is written to a private temp file passed via
- * `--append-system-prompt-file`, while the user prompt stays on stdin, so the
- * two never get conflated. Returns a `cleanup` that removes the temp directory.
+ * 构造本轮 Claude CLI 参数和普通输入；临时文件仅承载显式 MCP 配置，
+ * 返回的 cleanup 负责回收该配置目录。
  */
 export async function buildClaudeCommand(
   req: InvokeRequest,
   command = "claude",
-  commandArgsPrefix: string[] = []
+  commandArgsPrefix: string[] = [],
+  inherited: NodeJS.ProcessEnv = {}
 ) {
   if (hasImageInput(req))
     throw new Error("UNSUPPORTED_INPUT_MODALITY: claude-code does not encode image input");
   const mode =
-    contextActmode(req.context) === "plan" ? "plan" : claudePermissionMode(req.approvalMode);
-  const servers = invocationMcpServers(req);
+    claudePlanMode(req) === "plan" ? "plan" : claudePermissionMode(invocationApprovalMode(req));
+  const servers = invocationMcpServers(req, invocationEnvironment(req, {}, inherited));
   assertMcpOptions(servers, "claude-code", []);
   // Native Claude expands placeholders again at connection time. Reject values
   // it cannot preserve instead of silently changing a resolved literal/token.
@@ -113,12 +131,9 @@ export async function buildClaudeCommand(
     throw new Error(
       "MCP_LITERAL_UNSUPPORTED: claude-code cannot preserve resolved placeholder text"
     );
-  const directory = await mkdtemp(join(tmpdir(), "octo-runtime-claude-"));
-  const promptFile = join(directory, "system-prompt.txt");
-  // The control prompt goes through Claude's dedicated file argument while the
-  // user prompt is still fed via stdin, so the two never get conflated.
-  await writeFile(promptFile, initialControlInstructions(req), { mode: 0o600 });
+  let directory: string | undefined;
   if (Object.keys(servers).length) {
+    directory = await mkdtemp(join(tmpdir(), "octo-runtime-claude-"));
     const mcpFile = join(directory, "mcp.json");
     const mcpServers = Object.fromEntries(
       Object.entries(servers).map(([name, server]) => [
@@ -133,7 +148,26 @@ export async function buildClaudeCommand(
           : { type: "http", url: server.url, headers: server.headers ?? {} }
       ])
     );
-    await writeFile(mcpFile, JSON.stringify({ mcpServers }), { mode: 0o600 });
+    // 临时文件只承载本轮 MCP；准备失败由本层回收，成功后归命令执行者清理。
+    try {
+      await writeFile(mcpFile, JSON.stringify({ mcpServers }), { mode: 0o600 });
+    } catch (error) {
+      let cleanupFailure: { error: unknown } | undefined;
+      try {
+        await rm(directory, { recursive: true, force: true });
+      } catch (cleanupError) {
+        cleanupFailure = { error: cleanupError };
+      }
+      if (cleanupFailure)
+        throw new AggregateError(
+          [error, cleanupFailure.error],
+          "Claude MCP preparation and cleanup failed",
+          {
+            cause: error
+          }
+        );
+      throw error;
+    }
     commandArgsPrefix = [...commandArgsPrefix, "--mcp-config", mcpFile];
   }
   // Only --include-partial-messages produces thinking/text/input_json deltas;
@@ -147,14 +181,14 @@ export async function buildClaudeCommand(
     "--output-format",
     "stream-json",
     "--verbose",
-    "--include-partial-messages",
-    ...(initialControlInstructions(req) ? ["--append-system-prompt-file", promptFile] : [])
+    "--include-partial-messages"
   ];
   if (req.providerSession?.sessionId) args.push("--resume", req.providerSession.sessionId);
   // --name 是展示标题；不能替换原生 UUID，也不在 resume 时覆盖既有名称。
   else if (req.sessionName) args.push("--name", req.sessionName);
-  if (req.agentConfig?.model) args.push("--model", req.agentConfig.model);
-  const effort = mapReasoningEffort("claude-code", req.agentConfig?.effort);
+  const model = invocationModel(req);
+  if (model) args.push("--model", model);
+  const effort = mapReasoningEffort("claude-code", invocationEffort(req));
   if (effort) args.push("--effort", effort);
   args.push("--permission-mode", mode);
   args.push("--permission-prompt-tool", "stdio");
@@ -164,11 +198,13 @@ export async function buildClaudeCommand(
     command,
     args,
     input,
-    cleanup: () => rm(directory, { recursive: true, force: true })
+    cleanup: async () => {
+      if (directory) await rm(directory, { recursive: true, force: true });
+    }
   };
 }
 
-export function claudePermissionMode(mode: InvokeRequest["approvalMode"]): string {
+export function claudePermissionMode(mode: "ask" | "assisted" | "full_access"): string {
   switch (mode) {
     case "ask":
       return "default";
@@ -640,28 +676,20 @@ function claudeToolResultOutput(content: unknown): unknown {
 
 /** Create a Claude Code adapter bound to a resolved CLI command and optional argv prefix. */
 export function createClaudeCodeAdapter({
-  command = "claude",
-  commandArgsPrefix = []
+  command,
+  commandArgsPrefix = [],
+  env = {}
 }: {
-  command?: string;
+  command: string;
   commandArgsPrefix?: string[];
-} = {}) {
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch = snapshotProviderLaunch({ command, args: commandArgsPrefix, env });
   const responders = new Map<string, AcpApprovalBridge>();
   const nativeResponders = new Map<string, NativeInteractionBridge>();
   return defineAdapter({
-    metadata: {
-      mcp: true,
-      protocolSupport: {
-        protocol: "claude.stream-json",
-        modes: ["native", "canonical"],
-        nativeMethods: ["managed-turn", "can_use_tool", "control_response", "cancel"]
-      },
-      type: "claude-code",
-      agentSources: ["provisioned"],
-      processModel: "subprocess-per-invocation",
-      transport: "ndjson/stdio"
-    },
-    probe: () => probeCommand(command),
+    metadata: claudeCodeMetadata,
+    probe: () => probeCommand(launch.command, { args: launch.args, env: launch.env }),
     async respondNative(invocationId: string, response: NativeInteractionResponse): Promise<void> {
       const bridge = nativeResponders.get(invocationId);
       if (!bridge) throw protocolError("INTERACTION_NOT_ACTIVE");
@@ -712,11 +740,11 @@ export function createClaudeCodeAdapter({
     permissions: AcpApprovalBridge | NativeInteractionBridge,
     context?: AdapterInvocationContext
   ): AsyncGenerator<AdapterOutput> {
-    const spec = await buildClaudeCommand(request, command, commandArgsPrefix);
+    const spec = await buildClaudeCommand(request, launch.command, [...launch.args], launch.env);
     // The normalizer must not be hoisted to an adapter singleton: one adapter may run several invocations concurrently.
     const normalizer =
       permissions instanceof NativeInteractionBridge ? undefined : new ClaudeEventNormalizer();
-    const requestedMode = contextActmode(request.context);
+    const requestedMode = claudePlanMode(request);
     let modeReported = false;
     try {
       if (normalizer)
@@ -727,8 +755,8 @@ export function createClaudeCodeAdapter({
         };
       for await (const native of spawnJsonLines<ClaudeNativeEvent>({
         ...spec,
-        cwd: request.workdir,
-        env: invocationEnvironment(request),
+        cwd: invocationWorkdir(request),
+        env: invocationEnvironment(request, {}, launch.env),
         signal: request.signal,
         rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
         onSpawn: (close) => permissions.bindTransport(close),
@@ -779,7 +807,7 @@ export function createClaudeCodeAdapter({
               native,
               write,
               validate,
-              request.approvalMode === "full_access"
+              invocationApprovalMode(request) === "full_access"
                 ? {
                     type: "control_response",
                     response: {
@@ -840,33 +868,28 @@ export function createClaudeCodeAdapter({
         if (
           requestedMode !== undefined &&
           !modeReported &&
-          native.type === "system" &&
-          native.subtype === "init"
+          ((native.type === "system" && native.subtype === "init") || native.type === "result")
         ) {
           modeReported = true;
           const nativeMode =
             typeof native.permissionMode === "string" ? native.permissionMode : undefined;
-          const effective =
-            nativeMode === "plan"
-              ? "plan"
-              : nativeMode &&
-                  ["default", "auto", "bypassPermissions", "acceptEdits", "dontAsk"].includes(
-                    nativeMode
-                  )
-                ? "default"
-                : null;
-          yield actmodeEvidence(
-            {
-              requested: requestedMode,
-              effective,
-              status: effective === requestedMode ? "applied" : "unknown",
-              ...(nativeMode ? { nativeMode } : {}),
-              ...(effective !== requestedMode
-                ? { effective: null, reason: "provider_unconfirmed" as const }
-                : {})
-            },
-            context?.protocolMode
-          );
+          // 原生模式是否确认由本包解释；不再发布统一 execution evidence。
+          if (nativeMode !== requestedMode && context?.protocolMode !== "native")
+            yield {
+              protocolVersion: 2,
+              type: "run.notice",
+              payload: {
+                noticeId: `${request.invocationId}:permission-mode`,
+                code: "provider_diagnostic",
+                severity: "warning",
+                params: {
+                  adapter: "claude-code",
+                  diagnosticId: "permission-mode-unconfirmed",
+                  category: "permission_mode_unconfirmed",
+                  message: "Claude did not confirm the requested plan permission mode."
+                }
+              }
+            };
         }
         if (native.type === "system" && native.subtype === "init")
           context?.reportActivity?.({ kind: "turn_started", method: "turn_start" });
@@ -931,6 +954,3 @@ export function createClaudeCodeAdapter({
     }
   }
 }
-
-export const claudeCodeAdapter = createClaudeCodeAdapter();
-export default claudeCodeAdapter;

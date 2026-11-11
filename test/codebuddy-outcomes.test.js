@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../test-support/invoke-client.js";
 import { adapters } from "./fixtures/codebuddy-worker.mjs";
 import assert from "node:assert/strict";
@@ -16,13 +17,11 @@ import {
   scenarios,
   subscriptionResult
 } from "./fixtures/codebuddy-fixture.js";
-
 async function collect(source) {
   const values = [];
   for await (const value of source) values.push(value);
   return values;
 }
-
 const terminals = (events) =>
   events.filter((e) => /^run\.(completed|failed|cancelled)$/.test(e.type));
 const sessionEvent = (events) =>
@@ -31,8 +30,7 @@ const selection = [
   { namespace: "octo.execution", name: "adapter", payload: { type: "codebuddy" } }
 ];
 const acpFailureMessage = (meta) => `${failureMessage("OH-PRV-4010")}\n${JSON.stringify(meta)}`;
-
-for (const fields of [{ agentConfig: {} }]) {
+for (const fields of [{ agentEnv: withAgentEnvItems(undefined, []) }]) {
   for (const resume of [false, true]) {
     test(`CodeBuddy JSON-safe unknown model receipt (${JSON.stringify(fields)}, resume=${resume})`, async () => {
       const f = codeBuddyFixture();
@@ -49,11 +47,15 @@ for (const fields of [{ agentConfig: {} }]) {
       assert.equal(f.state.promptCalls, 1);
       assert.equal(f.state.closes, 1);
       assert.equal(f.state.calls[0].method, resume ? "session/load" : "session/new");
-      assert.equal(f.state.calls[0].params.model, resume ? undefined : fields.agentConfig?.model);
+      assert.equal(
+        f.state.calls[0].params.model,
+        resume
+          ? undefined
+          : fields.agentEnv.items.find((item) => item.name === "model")?.payload.selection?.id
+      );
     });
   }
 }
-
 for (const model of [
   { model: "confirmed-model" },
   { models: { currentModelId: "confirmed-model" } },
@@ -66,8 +68,12 @@ for (const model of [
       const events = await collect(
         f.adapter.invoke(
           invokeRequest({
-            agentConfig: {},
-            ...(resume ? { providerSession: { sessionId: "resumed", model: "stale-model" } } : {})
+            ...(resume ? { providerSession: { sessionId: "resumed", model: "stale-model" } } : {}),
+            agentEnv: withAgentEnvItems(
+              (resume ? { providerSession: { sessionId: "resumed", model: "stale-model" } } : {})
+                .agentEnv,
+              []
+            )
           })
         )
       );
@@ -76,7 +82,6 @@ for (const model of [
     });
   }
 }
-
 for (const [name, updates] of Object.entries(scenarios)) {
   test(`CodeBuddy Core validates ${name} and preserves its terminal`, async () => {
     const f = codeBuddyFixture({ updates });
@@ -86,7 +91,13 @@ for (const [name, updates] of Object.entries(scenarios)) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "who are you" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: withAgentEnvItems(
+            {
+              schema: "octo.context-envelope/v3",
+              items: selection
+            },
+            [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+          ),
           protocol_mode: "canonical"
         })
       );
@@ -119,7 +130,6 @@ for (const [name, updates] of Object.entries(scenarios)) {
     assert.equal(f.state.closes, 1);
   });
 }
-
 for (const errorMessage of [
   undefined,
   "{broken",
@@ -147,7 +157,6 @@ for (const errorMessage of [
     assert.equal(f.state.closes, 1);
   });
 }
-
 test("CodeBuddy preserves the original metadata without parsing, redaction or field selection", async () => {
   const secret = randomUUID();
   const f = codeBuddyFixture({
@@ -193,7 +202,6 @@ test("CodeBuddy preserves the original metadata without parsing, redaction or fi
   assert.equal(events.at(-1).payload.message, acpFailureMessage(expected));
   assert.equal(events.at(-1).payload.providerError, undefined);
 });
-
 for (const stopReason of [42, {}, null]) {
   test(`CodeBuddy malformed stopReason still emits an ACP failure (${JSON.stringify(stopReason)})`, async () => {
     const update = { ...subscriptionResult, stopReason };
@@ -204,7 +212,13 @@ for (const stopReason of [42, {}, null]) {
       const values = await collect(
         executor.invokeFrames({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: withAgentEnvItems(
+            {
+              schema: "octo.context-envelope/v3",
+              items: selection
+            },
+            [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+          ),
           protocol_mode: "canonical"
         })
       );
@@ -226,7 +240,6 @@ for (const stopReason of [42, {}, null]) {
     assert.equal(f.state.closes, 1);
   });
 }
-
 test("CodeBuddy Core keeps raw metadata strings and unknown fields byte-for-byte", async () => {
   const value = randomUUID();
   for (const meta of [
@@ -249,7 +262,13 @@ test("CodeBuddy Core keeps raw metadata strings and unknown fields byte-for-byte
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: withAgentEnvItems(
+            {
+              schema: "octo.context-envelope/v3",
+              items: selection
+            },
+            [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+          ),
           protocol_mode: "canonical"
         })
       );
@@ -261,7 +280,6 @@ test("CodeBuddy Core keeps raw metadata strings and unknown fields byte-for-byte
     }
   }
 });
-
 test("CodeBuddy successful responses may carry metadata without becoming failures", async () => {
   const meta = { "codebuddy.ai/outcome": "SUCCESS", trace: { native: true } };
   const events = await collect(
@@ -274,7 +292,6 @@ test("CodeBuddy successful responses may carry metadata without becoming failure
     ["run.completed"]
   );
 });
-
 for (const updates of [
   [{ type: "prompt_result", stopReason: "refusal" }],
   [
@@ -303,7 +320,6 @@ for (const updates of [
     assert.notEqual(events.at(-1).payload.code, "ACP_NO_FINAL_OUTPUT");
   });
 }
-
 test("CodeBuddy result-body text fills missing final output without duplicating streamed text", async () => {
   for (const content of [
     "result answer",
@@ -321,7 +337,6 @@ test("CodeBuddy result-body text fills missing final output without duplicating 
     }
   }
 });
-
 test("CodeBuddy failure closes running tool and model step without a success terminal", async () => {
   const events = await collect(
     codeBuddyFixture({
@@ -339,7 +354,6 @@ test("CodeBuddy failure closes running tool and model step without a success ter
   assert.ok(events.some((e) => e.type === "tool_call.update" && e.payload.status === "failed"));
   assert.ok(events.some((e) => e.type === "model_step.finished" && e.payload.status === "failed"));
 });
-
 test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and failed outcomes", async (t) => {
   const { client } = await kernelFixture(t, {
     adapters: adapters
@@ -358,7 +372,9 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
       ...kernelInput(`fixture:${scenario}`),
       inputs: [{ type: "text", text: `fixture:${scenario}` }],
       modelInput: `fixture:${scenario}`,
-      agentEnv: { schema: "octo.context-envelope/v3", items: selection }
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: selection }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }
+      ])
     });
     const { ref } = await client.submit(makeInput());
     const source = await frames(client, ref);
@@ -400,9 +416,20 @@ test("CodeBuddy Kernel public submit/subscribe and invoke preserve default and f
     }
   }
 });
-
 test("CodeBuddy public default/empty/explicit model requests reach the prompt", async () => {
-  for (const config of [{}, { agentConfig: {} }, { agentConfig: { model: "explicit-model" } }]) {
+  for (const config of [
+    {},
+    { agentEnv: withAgentEnvItems(undefined, []) },
+    {
+      agentEnv: withAgentEnvItems(undefined, [
+        {
+          namespace: "octo.execution",
+          name: "model",
+          payload: { selection: { id: "explicit-model" } }
+        }
+      ])
+    }
+  ]) {
     const f = codeBuddyFixture({
       sessionResult: {
         sessionId: "fixture-session",
@@ -417,7 +444,13 @@ test("CodeBuddy public default/empty/explicit model requests reach the prompt", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection, ...config },
+          agentEnv: withAgentEnvItems(
+            {
+              schema: "octo.context-envelope/v3",
+              items: [...selection, ...(config.agentEnv?.items ?? [])]
+            },
+            [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+          ),
           protocol_mode: "canonical"
         })
       );
@@ -428,7 +461,6 @@ test("CodeBuddy public default/empty/explicit model requests reach the prompt", 
     }
   }
 });
-
 test("CodeBuddy 429 and quota metadata use the same explicit ACP failure code", async () => {
   for (const quota of [false, true]) {
     const f = codeBuddyFixture({
@@ -451,7 +483,13 @@ test("CodeBuddy 429 and quota metadata use the same explicit ACP failure code", 
       const events = await collect(
         executor.invoke({
           inputs: [{ type: "text", text: "hello" }],
-          agentEnv: { schema: "octo.context-envelope/v3", items: selection },
+          agentEnv: withAgentEnvItems(
+            {
+              schema: "octo.context-envelope/v3",
+              items: selection
+            },
+            [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+          ),
           protocol_mode: "canonical"
         })
       );
@@ -464,7 +502,6 @@ test("CodeBuddy 429 and quota metadata use the same explicit ACP failure code", 
     }
   }
 });
-
 test("CodeBuddy cancellation keeps its terminal unless a provider failure was declared", async () => {
   for (const failed of [false, true]) {
     const controller = new AbortController();
@@ -484,7 +521,6 @@ test("CodeBuddy cancellation keeps its terminal unless a provider failure was de
     );
   }
 });
-
 test("CodeBuddy usage without optional model remains JSON-safe", async () => {
   const events = await collect(
     codeBuddyFixture({

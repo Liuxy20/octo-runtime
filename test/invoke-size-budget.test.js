@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -14,30 +15,32 @@ import { readBoundedLines } from "../packages/octo-runtime-adapter-sdk/dist/inde
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { invokeRequest } from "./runtime-fixture.js";
 import { fileURLToPath } from "node:url";
-
 const input = () => ({
   inputs: [{ type: "text", text: "test" }],
-  agentEnv: {
-    ...{
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "size-fixture" } }]
+  agentEnv: withAgentEnvItems(
+    {
+      ...{
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "size-fixture" } }]
+      }
     },
-    approvalMode: "full_access"
-  },
-
+    [
+      { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+    ]
+  ),
   protocol_mode: "canonical",
   invocationId: randomUUID(),
   runId: randomUUID(),
   sessionId: randomUUID()
 });
-
 async function fixture(t, invoke) {
   return kernelFixture(t, {
     adapters: [
       {
         metadata: {
           type: "size-fixture",
-          agentSources: ["provisioned"],
+
           protocolSupport: { protocol: "size-fixture", modes: ["canonical"], nativeMethods: [] }
         },
         invoke:
@@ -54,7 +57,6 @@ const collect = async (source) => {
   for await (const e of source) events.push(e);
   return events;
 };
-
 test("Kernel RPC accepts a bounded request and rejects oversized input before execution", async (t) => {
   let calls = 0;
   const { client } = await fixture(t, async function* () {
@@ -70,7 +72,6 @@ test("Kernel RPC accepts a bounded request and rejects oversized input before ex
   assert.equal(calls, 1);
   assert.equal((await collect(invokeClient(client, input()))).at(-1).type, "run.completed");
 });
-
 test("oversized raw line does not abort an active run or the next invocation", async (t) => {
   let started, finish;
   const ready = new Promise((resolve) => {
@@ -102,7 +103,6 @@ test("oversized raw line does not abort an active run or the next invocation", a
   assert.equal((await active).at(-1).type, "run.completed");
   assert.equal((await collect(invokeClient(client, input()))).at(-1).type, "run.completed");
 });
-
 test("bounded receiver preserves split UTF-8 and recovers after discarded records", () => {
   const stream = new PassThrough(),
     lines = [];
@@ -123,7 +123,6 @@ test("bounded receiver preserves split UTF-8 and recovers after discarded record
   assert.equal(overflow, 1);
   stop();
 });
-
 test("unterminated oversized record has a finite discard timeout", async () => {
   const stream = new PassThrough();
   let error;
@@ -147,7 +146,6 @@ test("unterminated oversized record has a finite discard timeout", async () => {
     clearTimeout(keepAlive);
   }
 });
-
 test("Codex canonical accepts bounded image echoes and excludes hydrated resume history", async () => {
   const bytes = randomBytes(2 * 1024 * 1024);
   Buffer.from("89504e470d0a1a0a", "hex").copy(bytes);

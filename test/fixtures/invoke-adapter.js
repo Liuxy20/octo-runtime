@@ -1,12 +1,14 @@
+import { invocationRuntimeLimits } from "@mininglamp-oss/octo-runtime/adapter-sdk";
 import { appendFile } from "node:fs/promises";
 const pending = new Map();
 export const testAdapter = {
   metadata: {
     type: "test",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "test.invoke", modes: ["native", "canonical"], nativeMethods: [] }
   },
   async *invoke(request, context) {
+    context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
     if (request.runMetadata?.startsFile)
       await appendFile(request.runMetadata.startsFile, "start\n");
     const native = context.protocolMode === "native";
@@ -54,7 +56,7 @@ export const testAdapter = {
         payload: {
           exact: { future: [1, "retained"] },
           inputs: request.modelInputParts,
-          agentEnv: request.context,
+          agentEnv: request.agentEnv,
           ...(request.executionEnvOverrides ? { environment: request.executionEnvOverrides } : {})
         }
       };

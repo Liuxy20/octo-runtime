@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -18,6 +18,13 @@ try {
     ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", resolve(archive)],
     { cwd: consumer, timeout: 60000 }
   );
+  const metadata = JSON.parse(
+    await readFile(join(consumer, "node_modules/@mininglamp-oss/octo-runtime/package.json"), "utf8")
+  );
+  assert.equal(metadata.exports["./adapters/codex"], undefined);
+  assert.equal(metadata.exports["./adapters/dsh"], undefined);
+  // 发行边界只检查无聚合入口；原生执行使用本 checkout 的源码包构建产物。
+  const sourceEntry = (name) => JSON.stringify(join(root, "packages", name, "dist/index.js"));
   await cp(
     new URL("./fixtures/codex-service-313.mjs", import.meta.url),
     join(consumer, "provider.mjs")
@@ -28,17 +35,18 @@ try {
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { mkdir } from "node:fs/promises";
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { createCodexAdapter } from "@mininglamp-oss/octo-runtime/adapters/codex";
-import { createKernelService } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import type { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from ${sourceEntry("octo-runtime-executor-core")};
+import { createCodexAdapter, createManagedCodexEngine } from ${sourceEntry("octo-runtime-adapter-codex")};
+import { createKernelService } from ${sourceEntry("octo-runtime-executor-kernel")};
+import { componentEndpoint } from ${sourceEntry("octo-runtime-host-sdk")};
+import type { InvokeInput } from ${sourceEntry("octo-runtime-protocol")};
 const home = process.cwd();
-const makeAdapter = () => createCodexAdapter({ command: process.execPath, appServerArgs: [join(home, "provider.mjs"), join(home, "rpc.ndjson")] });
-const input: InvokeInput & { protocol_mode: "canonical" } = { inputs: [{ type: "text", text: "hello" }], workdir: home, protocol_mode: "canonical",
-  agentEnv: { schema: "octo.context-envelope/v3", items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }] } };
+const makeOwner = () => createManagedCodexEngine({ codexHome: home, command: process.execPath, appServerArgs: [join(home, "provider.mjs"), join(home, "rpc.ndjson")] });
+const input: InvokeInput & { protocol_mode: "canonical" } = { inputs: [{ type: "text", text: "hello" }], protocol_mode: "canonical",
+  agentEnv: { schema: "octo.context-envelope/v3", items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },{namespace:"octo.execution",name:"workspace",payload:{path:home}}] } };
 const core = new AgentExecutor();
-core.register(makeAdapter());
+const owner = makeOwner();
+core.register(createCodexAdapter({ engine: owner.provider }));
 try {
   assert.deepEqual(core.processes(), []);
   let pid: number | undefined;
@@ -46,27 +54,32 @@ try {
     let terminal = "";
     for await (const event of core.invoke(input)) if (event.type.startsWith("run.")) terminal = event.type;
     assert.equal(terminal, "run.completed");
-    const service = core.processes()[0]!;
+    const service = owner.processes()[0]!;
     if (pid) assert.equal(service.pid, pid);
     pid = service.pid;
   }
-} finally { assert.equal((await core.shutdown()).cleanup, "complete"); }
+} finally { try { assert.equal((await core.shutdown()).cleanup, "complete"); } finally { assert.equal((await owner.close({ deadline: performance.now()+2500 })).complete, true); } }
 const kernelHome = join(home, "kernel");
 await mkdir(kernelHome);
-const kernel = createKernelService({ home: kernelHome, endpoint: componentEndpoint(kernelHome), adapters: [makeAdapter()] });
+const kernelOwner = makeOwner();
+const kernel = createKernelService({ home: kernelHome, endpoint: componentEndpoint(kernelHome), adapters: [createCodexAdapter({ engine: kernelOwner.provider })],
+  serviceProcesses: () => kernelOwner.processes(), async finalizeHostResources(deadline) {
+    assert.equal((await kernelOwner.close({ deadline })).complete, true);
+  } });
 try {
   await kernel.initialize();
   let pid: number | undefined;
   for (let i = 0; i < 3; i++) {
     let terminal = "";
-    for await (const event of kernel.client.invoke(input)) if (event.type.startsWith("run.")) terminal = event.type;
+    const { inputs: parts, sessionId, providerSession, agentEnv, ...content } = input;
+    for await (const event of kernel.client.invoke({ ...content, parts }, sessionId, providerSession, agentEnv)) if (event.type.startsWith("run.")) terminal = event.type;
     assert.equal(terminal, "run.completed");
     const service = (await kernel.client.status()).service_processes![0]!;
     if (pid) assert.equal(service.pid, pid);
     pid = service.pid;
   }
-} finally { assert.equal((await kernel.close()).complete, true); }
-console.log(JSON.stringify({ installedPackages: 1, strictTypes: "passed", directTurns: 3, ipcTurns: 3, pidReuse: "passed", ownerCleanup: "passed" }));
+} finally { try { assert.equal((await kernel.close()).complete, true); } finally { assert.equal((await kernelOwner.close({ deadline: performance.now()+2500 })).complete, true); } }
+console.log(JSON.stringify({ installedPackages: 1, adapterAggregateExports: "absent", nativeExecution: "source-workspace", strictTypes: "passed", directTurns: 3, ipcTurns: 3, pidReuse: "passed", ownerCleanup: "passed" }));
 `
   );
   await execute(

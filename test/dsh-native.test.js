@@ -26,19 +26,23 @@ test(
     );
     const { client } = await kernelFixture(t, {
       adapterConfigurations,
-      adapters: await (
-        await import("../apps/cli/dist/adapters.js")
-      ).loadCliAdapters([
-        {
-          type: "dsh",
-          module: new URL("../packages/octo-runtime-adapter-dsh/dist/index.js", import.meta.url)
-            .href,
-          export: "dshAdapter",
-          factory: false,
-          options: {},
-          sourceManifest: fileURLToPath(new URL("../apps/cli/dist/manifest.json", import.meta.url))
-        }
-      ])
+      adapters: (
+        await (
+          await import("../apps/cli/dist/adapters.js")
+        ).loadCliAdapters([
+          {
+            type: "dsh",
+            module: new URL("../packages/octo-runtime-adapter-dsh/dist/index.js", import.meta.url)
+              .href,
+            export: "dshAdapter",
+            factory: false,
+            options: {},
+            sourceManifest: fileURLToPath(
+              new URL("../apps/cli/dist/manifest.json", import.meta.url)
+            )
+          }
+        ])
+      ).adapters
     });
     const discovered = (await client.list()).find((entry) => entry.type === "dsh");
     assert.equal(discovered.available, true, JSON.stringify(discovered));

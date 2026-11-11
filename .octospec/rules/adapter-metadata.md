@@ -2,7 +2,7 @@
 type: Rule
 title: Adapter 执行元数据与可用状态
 description: 宿主管理 Adapter 支持范围，Adapter 按执行合同适配转发，不维护自建能力声明。
-tags: ["adapter","agent-source"]
+tags: ["adapter","agent-env"]
 timestamp: 2026-10-16T00:00:00Z
 implementation_baseline: df63c8f
 id: runtime-adapter-metadata
@@ -11,7 +11,7 @@ priority: 90
 load_bearing: true
 inject_when:
   paths: ["packages/octo-runtime-adapter-*/**","packages/octo-runtime-executor-core/**","config/**"]
-  touches: ["adapter","agent-source"]
+  touches: ["adapter","agent-env"]
 source: self
 supersedes: []
 ---
@@ -21,6 +21,10 @@ supersedes: []
 Agent 定义由业务方管理。Adapter 元数据与 probe 分别描述执行实现及实际可用状态；本地 SDK 不创建业务 Agent，也不读取 Worker Agent defaults／mandatory。当前仓库没有 Worker 接入注册工厂。
 
 ## 宿主掌握支持范围，Adapter 适配转发
+
+Adapter 构造方法和参数不受 Runtime 限制：类、任意签名工厂、闭包或直接对象均可，允许具体 client、函数、配置、多个对象及任意其他依赖。统一的是构造结果的注册执行合同。CodexEngineProvider 仅为 Codex 专用接口；CLI manifest 工厂 (options, {env}) 仅为 CLI 装配约定，不能施加到 SDK。注入引用不转移 Engine、连接或 Home 的关闭/权限管理权。
+
+Issue 346 进一步明确：executable、安装来源、运行器和执行位置由宿主选择，Adapter 消费显式依赖，不依据 PATH/cwd/环境另选安装。复用现有 metadata 的类型、来源、协议及描述字段，并复用 probe 的实际状态；不得把可执行依赖配置、client、owner 或关闭方法加入发现元数据，也不新增统一依赖/功能标签目录。内置模块导出同一份静态 metadata，供宿主在缺安装时构造 unavailable Adapter；注册仍须满足完整 protocolSupport 合同。逐模块实现、CLI 缺安装处理及底层启动器迁移见 [Issue 346](../tasks/346-host-execution/design.md)。
 
 2026-10-16 用户明确：CLI、desktop 及其他 SDK 宿主选择并交付具体 Adapter 和版本，功能支持范围由宿主管理。Adapter 将宿主的显式请求转换为 Provider 原生操作并返回真实结果；Runtime 不再额外维护一套功能标签供宿主发现、匹配或准入。
 
@@ -42,22 +46,16 @@ Adapter 仍按现有执行合同消费显式模型，完成原生映射及必要
 
 [#294](architecture.md#sdk-原生装配与统一-rpc)要求宿主完成 import 和对象构造，再向 createKernelService 注入 Adapter。模块 manifest、来源解析、动态 import 和选中工厂调用全部归 CLI 这类宿主，executor-kernel 不参与。Electron 原生 import 与 CLI 动态 import 只影响装配来源；执行都经过 KernelClient/RPC，由 Kernel 本进程的唯一 AgentExecutor 使用已注入对象。当前工作树已按此边界实施，验证范围见 #294 任务。
 
-## 来源
+## Agent 目标归属
 
-| 值 | 语义 |
-| --- | --- |
-| `preset` | 调用 Provider 中已有的 Agent；调用方提供有效目标 |
-| `provisioned` | 由基础执行方承载调用方提供的定义及本轮执行配置；不要求持久创建 Provider Agent |
+AgentSource、metadata.agentSources 和 octo.execution/agent.source 已删除。defineAdapter 只声明执行实现及实际使用的元数据，不要求来源分类；默认信封不再附加来源条目。需要选择 Provider 目标时，由调用方与对应 Adapter 私有约定，见 [OpenClaw 包文档](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。
 
-来源与传输、部署位置、权限和工作区相互独立。Adapter 通过 `metadata.agentSources` 声明支持范围；执行计划冻结 `agent_source` 和需要的 `provider_agent_id`，映射到 `InvokeRequest.agentSource` 与 `agentConfig.providerAgentId`。不能根据 Provider 名称猜测来源。
-
-OpenClaw 声明两种来源，Adapter 边界都要求有效目标；公共 `InvokeInput` 的准备层在省略目标时补 `main`，不能将此默认值理解为创建 Agent。当前实现验证并调用已有 Agent，不创建受控 runner、不修改 Agent 配置。它声明 `metadata.workspace: false`，使用原生工作区。详见 [OpenClaw 合同](openclaw.md)。
+本地工作目录是否必需只由 metadata.workspace 决定。只有 workspace:false 免除本地目录要求，不再根据 preset/provisioned 分支豁免。
 
 ## 执行支持与可用状态
 
 当前源码的 [AdapterMetadata](../../packages/octo-runtime-adapter-sdk/src/index.ts) 包含以下字段：
 
-- `agentSources`：支持的 Agent 来源。
 - `protocolSupport`：native／canonical 输出模式及原生协议标识。
 - `mcp`、`workspace`：本地 MCP 配置支持和工作目录行为。
 
@@ -81,19 +79,19 @@ Provider 的 `available`、认证、目标 Agent、当前输入可执行性与�
 
 产品选择的加载集合也独立于以上状态。CLI 与 SDK 嵌入代码分别决定集合；Host 不因框架支持更多类型或机器上探测到更多 Provider 就自行加载。默认来源拆分已实施，SDK 不读取 CLI 清单，见 [方案及影响](../tasks/adapter-composition-ownership/brief.md)。
 
-Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。公开 `/adapter` authoring 入口仍为[历史待办](../tasks/public-plugin-contracts/brief.md)，不据此恢复 Extra API 或发布 private 包。
+Issue 328 后，CLI 默认 `apps/cli/src/manifest.json` 与 `<home>/manifest.json` 只声明 Adapter，按 type 内置优先，忽略同名扩展且不解析或执行其模块；同一文件重复键报错。SDK 原生 import 并注入 Adapter，不读取 manifest，不以外部 Node 代启顶层服务。具体装配见[整体架构约束](architecture.md#sdk-原生装配与统一-rpc)。纯原生 authoring 与通用帮助类从源码 workspace 的 `@mininglamp-oss/octo-runtime-adapter-sdk` 引入，按需依赖所选 Adapter，不依赖 CLI 聚合包；private 包不单独 npm 发布，不恢复 Extra API。
 
-Host 按执行合同校验来源、输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
+Host 按执行合同校验输出模式和实际交互 responder；审批参数映射、图片编码及不支持的输入由具体 Adapter 处理。watchdog 在本次调用实际收到合法原生进度后采用原生进度，此前使用有效 canonical 工作事件；不依赖静态标签。非空 MCP 配置在未支持的 Adapter 上明确报错。SDK 的 `mcp` 是当前本地实现字段，不新增远程 Runtime 能力准入门槛；其他元数据字段是否简化不在本次决定中实施。
 
 ## 协议删除边界
 
-- 执行计划不再定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知执行计划字段拒绝，不进行改名转换。
-- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。通过既有 adapter 选择执行实现，Provider Agent 目标仍使用 `providerAgentId`。
+- 当前协议不定义 `required_capabilities`、`required_execution_features` 或 `provider_compatibility`；schema、生成类型和运行时字段白名单同步删除。提交这些字段按未知公共字段拒绝，不进行改名转换。
+- 删除整个 `ExecutionTarget` 类型及校验器，不保留 `standard_harness_agent` / `ability_provider` 分支、`executor_id`、`provider_binding_ref`。公共 adapter item 仅选择执行实现；Provider Agent 目标由宿主与目标 Adapter 通过私有 item 约定，详见 [OpenClaw 包文档](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。
 - SDK、宿主加载、发现和桌面映射不再输出或要求自有 capabilities 或 executionFeatures 字段；旧额外标签不参与执行判断，也不作为新合同的一部分。
 - ACP 的 `agentCapabilities` / `clientCapabilities`、MCP 握手和 Codex app-server 初始化中的 capabilities 属于 Provider 原生协议，按原协议处理。
 - Run=7、Context=v3、Adapter transport=2 不变。此次删除不触发 Home、Runtime 身份、profile、认证配置或 Provider 状态重建。
 
-业务材料由 Gateway/应用自行准备 inputs；Host 只解析 agentEnv，模型业务 Context 不由 Host 渲染。
+业务材料由 Gateway/应用自行准备 inputs；Host 透传 agentEnv，Adapter 直接读取，模型业务 Context 不由 Host 渲染。
 
 ## 实现与验证入口
 
@@ -117,7 +115,7 @@ manifest.module 的本机绝对路径（Windows 包含盘符与 UNC）和以点�
 当前开发者入口及 SDK/CLI 边界见 [Adapter 载入](../../docs/zh-CN/concepts/module-loading.md)。早期[飞书开发指南](https://my.feishu.cn/docx/IW30d2KL6o137ExHKHRc2yrJngh)中的 Extra 示例为历史材料，不属于当前公开合同。
 
 - [Adapter SDK](../../packages/octo-runtime-adapter-sdk/src/index.ts)、[Adapter Host](../../packages/octo-runtime-executor-kernel/src/index.ts)。
-- [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[本地执行配置解析](../../packages/octo-runtime-executor-core/src/context.ts)。
+- [Protocol Schema](../../packages/octo-runtime-protocol/schema/protocol.schema.json)及[Adapter SDK item 读取与校验](../../packages/octo-runtime-adapter-sdk/src/agent-env.ts)。
 - [context-mcp.test.js](../../test/context-mcp.test.js)、[native-host.test.js](../../test/native-host.test.js)。
 
 真实 Provider 与线上测试环境的验收范围以对应验证记录为准，支持声明和 fixture 测试不等于真实调用成功。

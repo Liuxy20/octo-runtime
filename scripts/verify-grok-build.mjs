@@ -1,3 +1,5 @@
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -5,9 +7,13 @@ import { tmpdir, platform, arch } from "node:os";
 import { join } from "node:path";
 import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-
 // 显式手动运行：使用本机 Grok 登录和网络，仅验证文本对话，不自动批准工具。
-const adapter = createGrokBuildAdapter();
+const launch = resolveHostProviderLaunch("grok", { env: process.env, cwd: process.cwd() });
+const adapter = createGrokBuildAdapter({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
+  env: launch.env
+});
 const probe = await adapter.probe();
 assert.equal(probe.available, true, probe.reason);
 console.log(JSON.stringify({ platform: platform(), arch: arch(), version: probe.version }));
@@ -20,7 +26,7 @@ try {
     const invocationId = randomUUID();
     const previousSessionId = providerSession?.sessionId;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort("grok_live_timeout"), 120_000);
+    const timer = setTimeout(() => controller.abort("grok_live_timeout"), 120000);
     let text = "";
     const terminals = [];
     let failure;
@@ -29,10 +35,9 @@ try {
         {
           invocationId,
           protocol_mode: "canonical",
-          workdir,
-
           ...(providerSession ? { providerSession } : {}),
           inputs: [
+            { type: "text", text: "Read-only verification. Do not use tools." },
             {
               type: "text",
               text:
@@ -41,17 +46,25 @@ try {
                   : "Repeat the marker from my previous message, with no other text. Do not use tools."
             }
           ],
-          agentEnv: {
-            ...{
-              schema: "octo.context-envelope/v3",
-              items: [
-                { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } },
-                { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
-              ]
+          agentEnv: withAgentEnvItems(
+            {
+              ...{
+                schema: "octo.context-envelope/v3",
+                items: [
+                  { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } },
+                  { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+                ]
+              }
             },
-            agentConfig: { effort: "low" },
-            controlInstructions: "Read-only verification. Do not use tools."
-          }
+            [
+              { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+              {
+                namespace: "octo.execution",
+                name: "model",
+                payload: { reasoning: { effort: "low" } }
+              }
+            ]
+          )
         },
         { signal: controller.signal }
       )) {

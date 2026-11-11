@@ -31,10 +31,9 @@ supersedes: []
 | Provider 类型 | 标识执行实现，例如 `openclaw`。当前协议沿用 `adapter_type` / `provider_type`；本次不新增含义重复的 `provider_id`。每个 本地 Runtime 对每个 Provider 类型保存一份连接配置。 |
 | Adapter | 把 Provider 的执行协议转换成统一 Host 事件的实现。OpenClaw 使用认证 WebSocket Gateway RPC，不使用 SSE。 |
 | Provider 连接配置 | 属于 本地 Runtime 的本地信息，包括连接来源、地址、凭据引用和设备身份。由本地宿主管理，不属于 Agent 定义或模型上下文。 |
-| 目标 Agent | Provider 内的执行目标，由 Context 的 `provider_agent_id` 指定。多个 Agent 可共享一个 Runtime 的同一连接。 |
-| Agent 来源 | `preset` 表示调用已有 Agent；`provisioned` 表示按该来源合同执行。来源与传输方式、连接配置相互独立；来源声明不意味着 Runtime 可以隐式安装 Runtime 或创建 OpenClaw Agent。 |
+| 目标 Agent | Provider 内的执行目标，私有选项见 [包级 README](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。多个 Agent 可共享同一连接。 |
 
-Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。
+Runtime 的安装决策继续归 HostApp。OpenClaw Agent 的人格、记忆、插件和原生 workspace 继续归 OpenClaw 管理。Issue 335 删除公共 workspace.mode；调用 OpenClaw 不需要为 Runtime 制造本地目录。metadata.workspace:false 不把 Provider 工作区当本地路径校验，不覆盖远端工作区，不恢复随机分配或缺失补建，也不新增忽略告警。
 
 ## 本地初始化与连接配置
 
@@ -69,7 +68,7 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 该文件属于实例共享环境，所有继承该环境的 Agent/工具使用最后写入的身份，不提供多 Bot 按轮隔离。OpenClaw Gateway 的每轮 Context envs 仍按现有不支持合同处理；CLI 落盘不是对该协议能力的实现，也不将这两个变量回填到 Context 或每轮执行覆盖。
 
 ```text
-业务方提交 Context（Provider 类型 + provider_agent_id）
+业务方提交 AgentEnv（公共路由 item + 私有配置 item）
   → 本地 SDK 或业务扩展提交共享 Host
   → Runtime 读取自己 profile 的 Provider 连接配置
   → Adapter 建立认证连接、验证目标 Agent、发起执行
@@ -78,18 +77,8 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 
 目标引用示例：
 
-```json
-{
-  "schema": "octo.context-envelope/v3",
-  "items": [{
-    "namespace": "octo.execution",
-    "name": "adapter",
-    "payload": { "type": "openclaw", "provider_agent_id": "researcher" }
-  }]
-}
-```
+私有 AgentEnv.Item 的字段、缺省、目标校验与组合示例统一维护在 [OpenClaw 包 README](../../packages/octo-runtime-adapter-openclaw/README.zh.md)。Core 保序透传，不理解私有字段；连接凭据仍由本地可信上下文传递。Gateway 探测不要求存在默认目标，执行时校验本轮目标，缺失明确失败，不查找其他 Agent。
 
-`provider_agent_id` 随执行计划解析和冻结，不进入模型提示词。本地连接配置不得设置或覆盖目标 Agent。Gateway 探测检查协议与公开执行能力，不要求存在名为 `main` 的 Agent；执行时验证本轮指定的目标。目标缺失必须明确失败，不切换到其他 Agent。
 
 统一执行接口不表示各 Provider 能力相同。OpenClaw Adapter 声明 `metadata.workspace: false`，忽略 `octo.execution/workspace` 和 `workdir`，不检查或创建本地工作区、不分配随机目录、不覆盖目标 Agent 的原生工作区。本地调用不增加 Worker 回执门槛。Context 快照不改写，审批模式、环境变量和恢复等能力按实际支持范围校验。业务上下文由每轮发起方决定，显式重复照常传递，不自动补齐、缓存或追加。
 
@@ -102,7 +91,7 @@ SDK 不读取 OpenClaw 配置或进程环境、不扫描端口。宿主可调用
 - Adapter 不调用 IM 业务接口；Gateway 继续负责交付限制、附件上传、链接改写、文件卡、去重、取消及失败反馈。远端资源如何被 Gateway 拉取并交付也属本项待办，不能把普通网页链接都当成附件。
 - 远端文件 API、URL 有效期及访问方式需在实施前核实。提示词可说明输出约定，但不能代替确定性的转换与验证；IPv6、代理/隧道、容器及共享目录映射另行确认，不扩充本次用户指定的 hostname 规则。
 
-两个 TODO 槽位位于 [Adapter](../../packages/octo-runtime-adapter-openclaw/src/index.ts) 的连接参数解析处和最终消息出口。待办与验收边界见 [Issue #243 记录](../tasks/234-context-lifecycle/remote-artifact-backlog.md)。本次不新增配置、协议字段或运行时分支，不删除 `agentSource`。
+两个 TODO 槽位位于 [Adapter](../../packages/octo-runtime-adapter-openclaw/src/index.ts) 的连接参数解析处和最终消息出口。待办与验收边界见 [Issue #243 记录](../tasks/234-context-lifecycle/remote-artifact-backlog.md)。本次不新增配置、协议字段或运行时分支；来源分类已由 #348 删除。
 
 ## Gateway 版本与会话权限
 
@@ -110,7 +99,7 @@ probe、invocation 和取消／断线对账新连接共用 Adapter 内部合同�
 
 标准 `openclaw` Adapter 只维护标准 Gateway 协议和功能 stage，不叠加 LobsterAI 等 fork 的产品私有协议、版本名单或特殊分支。非标准版本元数据不作为拒绝理由，仅表示尝试现有标准合同，不代表已适配该 fork。确有协议差异时单独新建 Provider Adapter，复用通用能力并独立验证，不混入标准实现。FDE 固定版本部署可对所选 Provider/版本定制开发和验收，固定版本由该交付配置与独立实现负责，不要求通用 Adapter 为此维护每日版本名单或兼容所有未来版本。
 
-创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model、可信系统指令和 deliver:false。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
+创建参数在实际握手后生成。6.11 和 7.x 仅发送 key/agentId/可选 model，在本次隔离会话 patch full/off 并确认 key 与保存字段后执行；不能发送新版创建 permissionMode/idempotencyKey/thinkingLevel。8.x 起使用原生会话权限创建字段，不能调用已退休的旧权限 patch。所有版本保留执行 agent.idempotencyKey、thinking、model 和 deliver:false。应用提示词已由调用方放入普通输入，不通过额外系统提示字段注入。创建、patch、接纳状态未知时，不删除字段循环重试、不重建会话或重发 agent；普通 INVALID_REQUEST 不表示无副作用的可重试信号。
 
 权限按业务意图兼容：可用的新版 ask 使用 guarded，ask 通道／授权不可用时直接采用已授权的 full_access；旧版会话参数无法确认人工 reviewer，当前按此原因回退 full/off。回退通过一次 run.notice/provider_diagnostic 告知实际版本、requested、effective 和原因；不额外询问、不改原请求／Context hash，审批桥单独按 effective full 处理本次 allow-once。full 不代表绕过宿主禁止、sandbox 或 harness 限制，不改全局策略；全部已知权限路径不可用时返回真实错误。assisted 仍不支持。
 
@@ -149,17 +138,17 @@ octo-runtime --home /path/to/runtime --profile work adapter probe openclaw
 
 ## 目标省略的当前实现
 
-严格 Context adapter 校验和 OpenClaw Adapter 要求目标 Agent。统一公共输入解析在 OpenClaw adapter item 省略 `provider_agent_id` 时补入 `main`；这是当前输入入口的执行默认值，不是本地连接配置自动覆盖目标。需要确定目标的业务方应显式传值，`main` 不存在时执行失败，不查找其他 Agent。
+OpenClaw Adapter 暴露包含私有 `agentId: main` 的 defaultAgentEnv；宿主可据此构造请求。省略目标时由 OpenClaw Adapter 内部读取默认值 `main`，不向原信封追加条目。公共输入解析和 Core 不认识目标字段或该默认值。需要确定目标的宿主显式构造私有 item；`main` 不存在时执行失败，不查找其他 Agent。
 
 ## 核对入口
 
 2026-10-16 起，单次调用在生产回调中按真实 runId/sessionKey/审批 ID 过滤广播，再进入有界 DriverQueue：最多 4096 项、累计 4 MiB、单项 256 KiB。溢出清空积压并立即取消所属请求/订阅和关闭客户端，不等待消费者恢复，不重启共享 Host，不将容量失败对账为成功。正常结束保序，提前停止消费取消未完成调用。实现与真实 Gateway 时序证据见[队列容量交付](../journal/shared/2026-10-16-openclaw-queue-bounds-delivery.md)。
 
-[连接解析与私密文件](../../packages/octo-runtime-adapter-openclaw/src/local-gateway.ts)、[Gateway 执行](../../packages/octo-runtime-adapter-openclaw/src/index.ts)、[公共输入默认值](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[目录准备](../../packages/octo-runtime-executor-core/src/execution-preparation.ts)、[连接测试](../../test/openclaw-runtime-connection.test.js)。
+[连接解析与私密文件](../../packages/octo-runtime-adapter-openclaw/src/local-gateway.ts)、[Gateway 执行](../../packages/octo-runtime-adapter-openclaw/src/index.ts)、[公共输入解析](../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[目录检查与执行](../../packages/octo-runtime-executor-core/src/index.ts)、[连接测试](../../test/openclaw-runtime-connection.test.js)。
 
 新逻辑会话创建可读 `agent:{agentId}:{encoded-sessionName}-{uuid}` key，独立随机后缀防止同名合并；Provider 包装保留冒号。缺省名称仅由 Core 生成 UUID，Adapter 不决定渠道命名策略。
 
-续聊必须原样复用 `providerSession.sessionId`，先校验 Agent 前缀与扩展归属，再用 hello 实际广告的 `sessions.describe({key})` 只读确认存在及 key，按版本 patch 本轮权限并确认后订阅、执行；不得逐 Run 新建。旧版 patch full/off，新版 patch permissionMode full/guarded。缺失、错归属或 RPC 失败明确失败，不隐式新建、不自动重发；旧 `resumable:false` 的已存在 key 可被显式续接。新回执 resumable:true，续接回执 resumeOutcome:resumed。系统指令仅在实际新建时发送。
+续聊必须原样复用 `providerSession.sessionId`，先校验 Agent 前缀与扩展归属，再用 hello 实际广告的 `sessions.describe({key})` 只读确认存在及 key，按版本 patch 本轮权限并确认后订阅、执行；不得逐 Run 新建。旧版 patch full/off，新版 patch permissionMode full/guarded。缺失、错归属或 RPC 失败明确失败，不隐式新建、不自动重发；旧 `resumable:false` 的已存在 key 可被显式续接。新回执 resumable:true，续接回执 resumeOutcome:resumed。新建和续接均只使用本次调用方准备的普通输入，不另行注入系统指令。
 
 每轮仍独立生成 run/idempotency key，通过 `sessions.messages.subscribe` 取流、`agent.wait` 确认终态、`sessions.abort` 取消，不能因共享 session 而接受前一轮广播。连接验证、执行完成和渠道投递分别判断；`deliver: false` 的本地验证不证明 IM 发消息成功。27 版本新增请求投影与 9.4 真实续接见 [Issue 224](../tasks/224-session-names/validation.md)。
 

@@ -6,7 +6,7 @@
 
 ## 什么时候用它
 
-整轮期限默认 24 小时，最大七天。72 小时调用显式传 `runtimeLimits: { runTimeoutMs: 259200000 }` 或 Context `octo.execution/limits` 的 `run_timeout_ms: 259200000`。首帧、模型空闲和工具空闲检测保持独立，见[输入优先级与范围](../../docs/zh-CN/reference/invoke-input.md)。
+整轮期限默认 24 小时，最大七天。72 小时调用显式传 Context `octo.execution/limits` 的 `run_timeout_ms: 259200000`。首帧、模型空闲和工具空闲检测保持独立，见[输入优先级与范围](../../docs/zh-CN/reference/invoke-input.md)。
 
 - Core 供内核实现及执行语义测试使用；同进程不构成绕过 Kernel 的理由。
 - 标准宿主接入使用 [Kernel](../octo-runtime-executor-kernel/README.zh.md)，保留 RPC、Run 接纳与观察管理。
@@ -15,9 +15,9 @@
 ## 发起一次调用
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throws
@@ -25,9 +25,16 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 
@@ -51,7 +58,9 @@ try {
 
 ## 它对你的输入做了什么
 
-校验并冻结请求，渲染本轮的模型输入，解析本地执行环境，然后接纳这次 Run。接纳发生在 Provider 启动之前：身份、容量、关闭状态都在这一步检查。业务 Context 只来自本次调用，Core 不会从会话历史里补。
+应用在调用前准备 `/absolute/prepared/project`。本地执行通过 仅含 path 的 workspace item 显式提供已存在的绝对目录。Core 不继承 cwd、不创建应用目录、不分配随机工作区，也不在续接/fresh recovery 时重建。声明 `metadata.workspace: false` 的 Adapter 可以省略覆盖。缺失或非法目录返回稳定 `WORKDIR_*` 原因码，分类为 `OH-ADP-3004`；见[输入校验](../../docs/zh-CN/reference/invoke-input.md)。`prepareRunContext` 与 `WorkspaceAssignments` 已删除；Runtime 自有运维状态另行管理。
+
+Core 校验并复制本次输入和 AgentEnv，仅读取 Adapter 路由，将调用方已准备的文本/图片与配置 items 保序交给对应 Adapter。配置语义校验、默认值、环境合并和 Provider 原生映射归 Adapter，Core 不生成 agentConfig 或另一份配置投影，也不渲染业务 Context 或补入会话历史。身份、容量和关闭状态在执行接纳时检查，早于 Provider 启动。
 
 `invokeFrames` 同步校验，请求不合法时在调用点就抛；`invoke` 是异步生成器，它的检查都落在第一次 `next()`。所以要把整个消费循环包进 try，而不是只包一次调用——没有被消费的迭代器不占容量，也不会拉起 Provider。
 
@@ -59,6 +68,7 @@ try {
 
 - `signal`——本次 Run 的取消信号。
 - `executionEnvOverrides`——宿主注入的可信值。
+- `providerOptions`——宿主注入的可信连接选项，由本地 Adapter 绑定消费，不写回 AgentEnv。
 - `streamLimits`——本地流预算；Kernel 会拒绝它（`KERNEL_STREAM_LIMITS_UNSUPPORTED`）。
 
 ## API
@@ -83,7 +93,7 @@ canonical 模式下只有 `run.completed` 算成功。最终消息发出不算�
 
 `shutdown()` 返回一份不可变快照。`state: "closed"` 只说明不再接纳新 Run；只有 `cleanup: "complete"` 才代表它拥有的资源都真的释放了。结果是 `incomplete` 时，`unresolvedInvocationIds` 和 `failedCleanupInvocationIds` 会指出还挂着谁。
 
-每次注册 Adapter 可创建独立执行作用域。Core 将调用和交互绑定到该 scope；shutdown 同步停止其恢复和接纳，再等待服务清理。`unresolvedServiceIds`、`failedCleanupServiceIds` 单独报告服务所有权，即使已无 invocation 也不能忽略。`processes()` 只读经过校验的常驻服务快照，不启动 Provider 或 probe。Codex 在轮次间保留健康服务，只由 owner 关闭。
+每次注册 Adapter 可创建独立执行作用域。Core 将调用和交互绑定到该 scope；shutdown 同步停止 scope 接纳，再等待本地调用/lease 清理。常驻 Engine 的恢复和关闭归宿主 owner，Core 不关闭注入的共享 Engine。`unresolvedServiceIds`、`failedCleanupServiceIds` 单独报告服务所有权，即使已无 invocation 也不能忽略。`processes()` 只读经过校验的常驻服务快照，不启动 Provider 或 probe。Codex 在轮次间保留健康服务，只由 owner 关闭。
 
 接纳一旦关闭就不再打开，失败的 finalizer 也不会重试——再调一次 `shutdown()` 只会重新等待，不会复活上一次尝试。`next()` 被拒、`return()` 返回 `done: false`、或者生成器没有可用的 finalizer，都不等于资源已释放。
 
@@ -108,7 +118,7 @@ Electron、Node SDK 与 CLI 宿主统一使用 KernelClient 经本地 RPC 调用
 
 ## 导入与分发
 
-private workspace 包：源码和子模块宿主从 `@mininglamp-oss/octo-runtime-executor-core` 导入。发行版使用者走 `@mininglamp-oss/octo-runtime/executor-core`。
+private workspace 包：原生宿主从源码引入 `@mininglamp-oss/octo-runtime-executor-core`，按需依赖所选 Adapter；不需要安装包含所有内置 Adapter 的 CLI 包。独立应用使用 `octo-runtime-client` 连接已有 Kernel。
 
 ## 延伸阅读
 

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { testAdapter } from "./fixtures/test-adapter.js";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -48,18 +49,26 @@ export async function kernelFixture(t, overrides = {}) {
     throw error;
   }
 }
-export const kernelInput = (prompt = "kernel fixture", fields = {}) =>
-  invocationInput(
+export const kernelInput = (prompt = "kernel fixture", fields = {}) => {
+  if (fields.agentEnv !== undefined) withAgentEnvItems(fields.agentEnv, []);
+  return invocationInput(
     invokeRequest({
       prompt,
       runId: randomUUID(),
       invocationId: randomUUID(),
-      approvalMode: "full_access",
-      ...fields
+      ...fields,
+      // full_access 是测试调用方基线；调用者显式提交的审批条目拥有最终决定权。
+      agentEnv: withAgentEnvItems(
+        withAgentEnvItems(undefined, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ]),
+        fields.agentEnv?.items ?? []
+      )
     }),
     "canonical",
     "test"
   );
+};
 export async function frames(client, ref, cursor = 0) {
   const result = [];
   for await (const frame of client.subscribe(ref, cursor)) result.push(frame);

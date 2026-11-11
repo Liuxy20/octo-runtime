@@ -32,7 +32,7 @@ const removed = [
   "ContextCommitResult"
 ];
 
-test("schema directory contains only two definitions; all seven test assets remain", async () => {
+test("schema directory contains only two definitions; six current test assets remain", async () => {
   assert.deepEqual((await readdir(join(protocolRoot, "schema"))).sort(), [
     "kernel-ipc.schema.json",
     "protocol.schema.json"
@@ -43,7 +43,6 @@ test("schema directory contains only two definitions; all seven test assets rema
     "kernel-ipc-fixtures.json",
     "native-invoke-fixtures.json",
     "run-protocol-fixtures.json",
-    "runtime-selection-fixtures.json",
     "session-name-fixtures.json"
   ]);
 });

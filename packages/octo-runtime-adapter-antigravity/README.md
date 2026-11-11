@@ -15,32 +15,39 @@ Runs one Runtime invocation through the Antigravity `agy` CLI: prepared input go
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { antigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createAntigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 
 const executor = new AgentExecutor();
-executor.register(antigravityAdapter);
+executor.register(createAntigravityAdapter({ command: "/absolute/path/agy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }
+    ]
   }
 });
 ```
 
-`approvalMode` must already be `full_access` before the call — there is no `ask` path.
+`octo.security/approval_policy.payload.mode` must be `full_access` before the call; there is no `ask` path.
 
 ## What it binds
 
 | Item         | Value                                                                     |
 | ------------ | ------------------------------------------------------------------------- |
 | Adapter type | `antigravity`                                                             |
-| Exports      | `antigravityAdapter`, `createAntigravityAdapter`                          |
+| Exports      | `createAntigravityAdapter`                          |
 | Command      | `agy` with `--dangerously-skip-permissions --mode accept-edits`           |
 | Output       | canonical events only                                                     |
 | Session      | an explicit Provider session selects the conversation and stays resumable |
@@ -50,7 +57,7 @@ const input = InvokeInput.check({
 
 - `ask` and `assisted` fail instead of escalating to full access.
 - Probe requires a detected version of at least 1.3.3; a missing version fails the probe.
-- Trusted control instructions travel as tagged text inside the user input, not as a separate system role.
+- Application prompts are ordinary caller-prepared input. The Adapter does not add prompt tags or expose a separate system/trusted instruction role.
 - Success needs a native `SUCCESS` result **and** a non-empty answer. Exit code zero alone is not success.
 - Each invocation owns its process; cancellation and cleanup are the invocation's responsibility.
 

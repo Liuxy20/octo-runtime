@@ -14,19 +14,26 @@ Binds Kimi Code (`kimi acp`) to Runtime through the shared ACP Adapter. One prep
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { kimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createKimiCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-kimi-code";
 
 const executor = new AgentExecutor();
-executor.register(kimiCodeAdapter);
+executor.register(createKimiCodeAdapter({ command: "/absolute/path/kimi", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "kimi-code" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "kimi-code" } }
+    ]
   }
 });
 ```
@@ -38,7 +45,7 @@ Event semantics live in [Runtime Protocol](../octo-runtime-protocol/README.md).
 | Item         | Value                                                                                         |
 | ------------ | --------------------------------------------------------------------------------------------- |
 | Adapter type | `kimi-code`                                                                                   |
-| Export       | `kimiCodeAdapter`                                                                             |
+| Export       | `createKimiCodeAdapter`                                                                             |
 | Command      | `kimi acp`                                                                                    |
 | Output       | canonical events only                                                                         |
 | Session      | new session, or an explicit Provider session resumed by the ACP Adapter                       |
@@ -60,3 +67,15 @@ Private workspace package, with no public Kimi subpath.
 
 - [Implementation](src/index.ts), [ACP Adapter](../octo-runtime-adapter-acp/README.md), [Provider matrix](../../.octospec/guides/providers.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package uses `adapter.kimi-code/options` with optional `modeId: string`, an exact Provider-native ID. This is a package-local contract, not registered in public protocol; adapter.xxx is not a public namespace standard.
+
+Omission performs no mode discovery or setter and does not reset a resumed session. Explicit values must be nonblank strings and match the current Provider advertisement exactly, without trimming or mapping default to build. A mode config option (including grouped options) and its actual configId take precedence; otherwise modes.availableModes is used. Missing advertisements, unsupported IDs, missing configId and RPC rejection fail without selecting another mode. No setter is sent when the current value already matches; otherwise session/set_config_option or session/set_mode is called. Setter success is acceptance, not fabricated confirmation. modeId does not change approval authorization.
+
+Add the following item alongside the caller-prepared workspace and shared adapter/model items. Choose modeId from the native advertisement; the example does not promise Provider support. Keep existing options in the same payload. Old actmode is not converted.
+
+```json
+{ "namespace": "adapter.kimi-code", "name": "options", "payload": { "modeId": "plan" } }
+```

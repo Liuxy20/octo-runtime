@@ -111,7 +111,7 @@
     }
   },
   {
-    "name": "model-provider-default-replaces-entire-selection",
+    "name": "explicit-model-replaces-entire-selection",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -143,7 +143,7 @@
           "name": "model",
           "payload": {
             "selection": {
-              "use_provider_default": true
+              "id": "new"
             }
           }
         }
@@ -157,7 +157,7 @@
           "name": "model",
           "payload": {
             "selection": {
-              "use_provider_default": true
+              "id": "new"
             },
             "reasoning": {
               "effort": "low"
@@ -177,7 +177,6 @@
             "namespace": "octo.execution",
             "name": "workspace",
             "payload": {
-              "mode": "fixed",
               "path": "/old"
             }
           }
@@ -195,7 +194,7 @@
           "namespace": "octo.execution",
           "name": "workspace",
           "payload": {
-            "mode": "random"
+            "path": "/new"
           }
         }
       ]
@@ -207,7 +206,7 @@
           "namespace": "octo.execution",
           "name": "workspace",
           "payload": {
-            "mode": "random"
+            "path": "/new"
           }
         }
       ]
@@ -223,8 +222,7 @@
             "namespace": "octo.execution",
             "name": "adapter",
             "payload": {
-              "type": "openclaw",
-              "provider_agent_id": "main"
+              "type": "openclaw"
             }
           }
         ]
@@ -260,7 +258,7 @@
     }
   },
   {
-    "name": "persistent-inline-forbidden",
+    "name": "caller-inline-default-is-opaque",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -287,10 +285,25 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "inline",
+          "payload": {
+            "entries": [
+              {
+                "text": "request only"
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
-    "name": "reference-request-replaces-default-by-identity",
+    "name": "opaque-references-replace-whole-item",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -345,10 +358,33 @@
         }
       ]
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "references",
+          "payload": {
+            "entries": [
+              {
+                "resource_ref": "task:1",
+                "resolver": "mcp",
+                "locator": {
+                  "server_ref": "octo_task",
+                  "tool": "task_get_materials"
+                },
+                "params": {
+                  "expected_version": 2
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
-    "name": "mandatory-reference-conflict",
+    "name": "mandatory-reference-overrides-request",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -403,7 +439,30 @@
         }
       ]
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "references",
+          "payload": {
+            "entries": [
+              {
+                "resource_ref": "task:1",
+                "resolver": "mcp",
+                "locator": {
+                  "server_ref": "octo_task",
+                  "tool": "task_get_materials"
+                },
+                "params": {
+                  "expected_version": 1
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
     "name": "empty",
@@ -529,164 +588,7 @@
     }
   },
   {
-    "name": "mandatory-runtime-authoritative",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-b"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "mandatory-runtime-override-outside",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-c"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "mandatory-offline-override",
-    "configuration": {
-      "defaults": {
-        "schema": "octo.context-envelope/v3",
-        "items": []
-      },
-      "mandatory": {
-        "schema": "octo.context-envelope/v3",
-        "items": [
-          {
-            "namespace": "octo.runtime",
-            "name": "selection",
-            "payload": {
-              "mode": "candidates",
-              "runtime_ids": ["device-a", "device-b"],
-              "strategy": "preferred_failover",
-              "offline_behavior": "wait"
-            }
-          }
-        ]
-      }
-    },
-    "request": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "explicit",
-            "runtime_id": "device-a",
-            "offline_behavior": "fail"
-          }
-        }
-      ]
-    },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.runtime",
-          "name": "selection",
-          "payload": {
-            "mode": "candidates",
-            "runtime_ids": ["device-a", "device-b"],
-            "strategy": "preferred_failover",
-            "offline_behavior": "wait"
-          }
-        }
-      ]
-    }
-  },
-  {
-    "name": "random-workspace",
+    "name": "workspace-payload-semantics-belong-to-adapter",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -723,7 +625,7 @@
     }
   },
   {
-    "name": "ephemeral-default-forbidden",
+    "name": "caller-content-default-is-opaque",
     "configuration": {
       "defaults": {
         "schema": "octo.context-envelope/v3",
@@ -750,7 +652,22 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "expected": {
+      "schema": "octo.context-envelope/v3",
+      "items": [
+        {
+          "namespace": "octo.content",
+          "name": "inline",
+          "payload": {
+            "entries": [
+              {
+                "text": "ephemeral"
+              }
+            ]
+          }
+        }
+      ]
+    }
   },
   {
     "name": "envs-merge-per-key",
@@ -1038,7 +955,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1050,22 +967,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.control",
-          "name": "instructions",
-          "payload": {
-            "entries": [
-              {
-                "text": "我是个人助理"
-              }
-            ]
-          }
-        }
-      ]
-    }
+    "valid": false,
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   },
   {
     "name": "system-instructions-default-forbidden",
@@ -1079,7 +982,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1095,7 +998,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_CONFIGURATION_TYPE_FORBIDDEN"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-instructions-cannot-claim-revision",
@@ -1113,7 +1017,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理",
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406",
                   "source": "revision"
                 }
               ]
@@ -1126,7 +1030,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-instructions-rejects-legacy-source",
@@ -1144,7 +1049,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理",
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406",
                   "source": "platform_policy"
                 }
               ]
@@ -1157,7 +1062,8 @@
       "schema": "octo.context-envelope/v3",
       "items": []
     },
-    "error": "CONTEXT_SCHEMA_INVALID"
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts",
+    "valid": false
   },
   {
     "name": "mandatory-system-instructions-override",
@@ -1175,7 +1081,7 @@
             "payload": {
               "entries": [
                 {
-                  "text": "我是个人助理"
+                  "text": "\u6211\u662f\u4e2a\u4eba\u52a9\u7406"
                 }
               ]
             }
@@ -1192,28 +1098,14 @@
           "payload": {
             "entries": [
               {
-                "text": "覆盖系统提示词"
+                "text": "\u8986\u76d6\u7cfb\u7edf\u63d0\u793a\u8bcd"
               }
             ]
           }
         }
       ]
     },
-    "expected": {
-      "schema": "octo.context-envelope/v3",
-      "items": [
-        {
-          "namespace": "octo.control",
-          "name": "instructions",
-          "payload": {
-            "entries": [
-              {
-                "text": "我是个人助理"
-              }
-            ]
-          }
-        }
-      ]
-    }
+    "valid": false,
+    "error": "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
   }
 ]

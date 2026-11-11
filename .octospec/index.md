@@ -1,5 +1,23 @@
 # Octo Runtime 工程知识目录
 
+- [PR352 静默通知交付竞态](tasks/352-silence-notice-delivery/brief.md)：保留已生成通知，输出仅重置未来区间；[专项复核](tasks/352-silence-notice-delivery/review.md)与[验证](tasks/352-silence-notice-delivery/validation.md)记录真实竞态及计时回归。
+
+- [删除全局 watchdog enforcement 开关](tasks/remove-limits-enforcement/brief.md)：Schema、类型、解析、默认值与兼容分支已删除；保留有限预算和model_idle_policy。[专项复核](tasks/remove-limits-enforcement/review.md)与[验证](tasks/remove-limits-enforcement/validation.md)通过；提交状态见Git历史及issue交付评论。
+
+- [Runtime 模型输出静默通知](tasks/runtime-model-output-idle/brief.md)：复用 agent_run.event/run.notice，真实输出恢复后重新计满60秒，native不新增类型；三组专项发现已修复复核，见[审查](tasks/runtime-model-output-idle/review.md)和[验证](tasks/runtime-model-output-idle/validation.md)。Gateway #34仅建issue。
+
+- [Issue 348–351：执行信封与 Adapter 私有配置边界清理](tasks/348-351-context-envelope/brief.md)：最新 main `7892ebdf` 独立 worktree 已实施；来源分类、业务公共内容、默认值哨兵和公共 actmode 已删除。私有 item 及文档归各 Adapter 包，adapter.xxx 不登记公共 protocol。[验证](tasks/348-351-context-envelope/validation.md)记录全量、手动、真实 Provider 和双包结果及 Grok 网络限制，[自查](tasks/348-351-context-envelope/review.md)记录合同及 CI 范围。[规划自评 97/100](tasks/348-351-context-envelope/assessment.md)。CI范围未扩大；后续另行授权[删除 limits.enforcement](tasks/remove-limits-enforcement/brief.md)。
+
+- [Issue 346：宿主选择执行依赖](tasks/346-host-execution/brief.md)：最新 main `c7ae0256` 独立 worktree 已实施，无兼容层，CLI 发现 executable；[逐模块改动与 metadata 复用](tasks/346-host-execution/design.md)、[验收矩阵](tasks/346-host-execution/plan.md)、[方案自评 96/100](tasks/346-host-execution/assessment.md)。全量、65 项专项、真实 Codex/OpenCode 与包外验证见[记录](tasks/346-host-execution/validation.md)，双轴 [review](tasks/346-host-execution/review.md)无未关闭问题；Windows/Electron 实机未验。
+
+- [Issue 341：AgentEnv 直传 Adapter](tasks/341-adapter-agentenv/brief.md)：移除配置投影，私有配置归宿主与 Adapter，共性 bean 保留公共类型；整合 #339 后双轴及测试/验证 JS 审查通过，[验收](tasks/341-adapter-agentenv/validation.md)记录全量、手动专项和双包验证。仅创建 main PR，禁止自动合并，不扩大 CI。
+
+- [Issue 343：CLI 默认同类型 Harness 单实例](tasks/343-single-harness/brief.md)：修正 #342 保留的配置分池；[方案](tasks/343-single-harness/design.md)定义单 app-server 与逐线程配置，[验证](tasks/343-single-harness/validation.md)记录 100 路专项和真实原生边界，不扩大 CI。
+
+- [Issue 334：应用提示词归调用方](tasks/334-caller-owned-prompts/brief.md) 与 [Issue 335：调用方预建工作目录](tasks/335-caller-owned-workspace/brief.md)：两个方案准备度 96 分并经实施前审查，直接删除旧抽象，不提供兼容；缺目录返回稳定错误码。[联合验收](tasks/334-caller-owned-prompts/validation.md)记录全量、显式专项、双包和真实 Codex/Claude 结果；Gateway #23 已取消，仅记录消费者升级缺口。
+
+- [Issue 339：常驻 Engine 与 Adapter 生命周期边界细化](tasks/339-engine-lifecycle/brief.md)：独立 worktree、[95 分规划](tasks/339-engine-lifecycle/assessment.md)后按授权实施，无兼容层；默认托管归 CLI，业务 Engine 与 Home 归宿主，Adapter 构造方式不限。模块对象与接口见[方案](tasks/339-engine-lifecycle/design.md)，实际检查见[验证](tasks/339-engine-lifecycle/validation.md)。
+
 - [Issue 332：Schema 职责清理](tasks/332-schema-ownership/brief.md)：最新 main 独立 worktree、96 分规划后实施；协议/默认值/测试分离，13 个闲置定义清理，双包验收与审查见[验证](tasks/332-schema-ownership/validation.md)。不扩大 CI；正式 PR/main 状态以远端为准。
 
 - [CLI 生命周期命令平铺](tasks/flatten-runtime-cli/brief.md)：删除 executor-kernel 前缀，[实施前可执行性 96 分](tasks/flatten-runtime-cli/assessment.md)，实际验证单独记录。
@@ -26,7 +44,7 @@
 
 当前修复：[REST 使用 Manager 生效凭据](tasks/channel-rest-manager-credentials/brief.md)、[长任务跨连接恢复后的最终回复](tasks/channel-reconnect-final-delivery/brief.md)、[切网后 REST 进度卡继续更新](tasks/channel-rest-card-lifetime/brief.md)。
 
-当前实现基准为 Git `df63c8f` 与本次工作树。当前合同依据源码核对，历史证据独立记录；不把旧设计或曾经通过的测试当作现有功能。工程说明使用中文。
+现行合同以 `.octospec/rules/` 及当前源码为准；各任务记录自己的 Git 基线和未提交改动范围，不再用早期 `df63c8f` 作为整个目录的当前实现基线。历史证据独立记录，不把旧设计或曾经通过的测试当作现有功能。工程说明使用中文。
 
 ## 当前规则
 

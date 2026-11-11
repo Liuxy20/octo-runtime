@@ -1,7 +1,8 @@
+import { invocationEffort, invocationWorkdir } from "./agent-env.js";
 import { execFile, spawn } from "node:child_process";
 import { constants } from "node:fs";
 import { access, stat } from "node:fs/promises";
-import { delimiter, isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { promisify } from "node:util";
 import type { AdapterInvocationContext } from "./activity.js";
@@ -12,13 +13,23 @@ export type {
   CreateAdapterExecutionScope,
   ServiceProcessSnapshot
 } from "./execution-scope.js";
-import {
-  invocationEnvironment,
-  mergeProcessEnvironment,
-  processEnvironmentValue
-} from "./environment.js";
+import { invocationEnvironment, mergeProcessEnvironment } from "./environment.js";
 import { createProcessCleanup } from "./process-cleanup.js";
-import { resolveProcessLaunch } from "./process-launch.js";
+import {
+  defaultAgentEnv,
+  assertAdapterAgentEnv,
+  assertAdapterWorkdir,
+  bindInvocationConnection,
+  invocationApprovalMode,
+  invocationRuntimeLimits
+} from "./agent-env.js";
+export * from "./agent-env.js";
+import { assertProviderCommand } from "./provider-launch.js";
+export {
+  snapshotProviderLaunch,
+  assertProviderCommand,
+  type ProviderLaunch
+} from "./provider-launch.js";
 import { watchLineLimit } from "./line-limit.js";
 import { mapReasoningEffort, reasoningLevelMap, type ReasoningLevelMap } from "./reasoning.js";
 export type { AdapterInvocationContext, ProviderActivity } from "./activity.js";
@@ -29,7 +40,6 @@ export {
   processEnvironmentValue
 } from "./environment.js";
 export { invocationMcpServers, expandMcpValue, assertMcpOptions } from "./mcp.js";
-export { actmodeEvidence } from "./actmode.js";
 
 import {
   DEFAULT_STREAM_LIMIT_POLICY,
@@ -40,12 +50,14 @@ import {
   type HostControl,
   type NativeHostFrame,
   type InvokeRequest,
+  type AgentEnv,
+  type InteractionResponse,
+  type NativeInteractionResponse,
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 
 export {
   freshFallbackInputText,
-  initialControlInstructions,
   hasImageInput,
   providerInputParts,
   providerInputText
@@ -92,7 +104,6 @@ export interface AdapterMetadata {
   /** 仅编写输入可省略；这是执行时消费的协议描述，不能作为业务能力标签。 */
   protocolSupport?: AdapterProtocolSupport;
   type: string;
-  agentSources: ("preset" | "provisioned")[];
   processModel?: string;
   transport?: string;
 }
@@ -113,14 +124,16 @@ export interface ProbeResult {
 /** 工厂的编写输入；直接交给 Core 注册时须满足完整的 HostedAdapter 合同。 */
 export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
   metadata: AdapterMetadata;
+  defaultAgentEnv?: AgentEnv;
+  respondInteraction?(invocationId: string, response: InteractionResponse): Promise<void>;
+  respondNative?(invocationId: string, response: NativeInteractionResponse): Promise<void>;
   createExecutionScope?: CreateAdapterExecutionScope;
   probe?: (options?: AdapterProbeOptions) => Promise<ProbeResult>;
   /**
-   * Execute one provider turn, optionally reporting watchdog progress.
-   * Iteration may throw on contract rejection (including defineAdapter's protocol/MCP checks).
-   * Core rejects unsupported approval/protocol before admission; after admission it converts
-   * iteration errors to failure events and independently verifies cleanup. Canonical adapters
-   * should yield a failure terminal after confirmed cleanup for expected execution failures.
+   * 消费本轮请求并输出 Provider 事件，可通过 context 报告 watchdog 进度。
+   * Core 在受理前核对传输模式，配置校验由 Adapter 负责，拒绝时迭代可抛错。
+   * 受理后 Core 将异常转换为失败事件，并独立核实资源回收；预期执行失败应在
+   * Adapter 确认清理完成后输出失败终态，不能把执行终态当成清理完成的证明。
    */
   invoke(request: InvokeRequest, context?: AdapterInvocationContext): AsyncIterable<TOutput>;
 }
@@ -130,7 +143,8 @@ export interface Adapter<TOutput extends AdapterOutput = AdapterOutput> {
  * 禁止与允许省略字段的编写输入混用，否则会把注册前的类型错误推迟到运行时。
  */
 export type DefinedAdapter<TAdapter extends Adapter = Adapter> = Readonly<
-  Omit<TAdapter, "metadata"> & {
+  Omit<TAdapter, "metadata" | "defaultAgentEnv"> & {
+    readonly defaultAgentEnv: AgentEnv;
     metadata: Omit<TAdapter["metadata"], "protocolSupport"> & {
       protocolSupport: AdapterProtocolSupport;
     };
@@ -142,6 +156,40 @@ export type DriverFrame =
   | Pick<NativeHostFrame, "kind" | "messageKind" | "payload">
   | { kind: "control"; control: HostControl };
 export type AdapterOutput = CanonicalEvent | DriverFrame;
+
+const preparationFailures = new WeakMap<object, WeakSet<AdapterInvocationContext>>();
+
+/**
+ * 执行尚未启动 Provider 的纯配置/目录校验；返回后才能开始探针或执行。
+ * 回调不得创建 Provider 资源。失败证据只绑定本次 context，供 Core 核对清理责任。
+ */
+export async function runAdapterPreparation(
+  context: AdapterInvocationContext | undefined,
+  prepare: () => void | Promise<void>
+): Promise<void> {
+  try {
+    await prepare();
+  } catch (error) {
+    if (context && error !== null && typeof error === "object") {
+      const contexts = preparationFailures.get(error) ?? new WeakSet<AdapterInvocationContext>();
+      contexts.add(context);
+      preparationFailures.set(error, contexts);
+    }
+    throw error;
+  }
+}
+
+/** SDK 尚未调用 Provider 的准备失败；Core 可确认此路径没有 Provider 资源待回收。 */
+export function isAdapterPreparationFailure(
+  error: unknown,
+  context: AdapterInvocationContext
+): boolean {
+  if (error === null || typeof error !== "object") return false;
+  const contexts = preparationFailures.get(error);
+  if (!contexts?.has(context)) return false;
+  contexts.delete(context);
+  return true;
+}
 
 /** The fully materialized subprocess contract produced immediately before spawn. */
 export interface CommandSpec {
@@ -200,8 +248,12 @@ export function defineAdapter<TAdapter extends Adapter>(
     modes: ["canonical"],
     nativeMethods: []
   };
+  const defaults = structuredClone(adapter.defaultAgentEnv ?? defaultAgentEnv(metadata.type));
   return Object.freeze({
     ...adapter,
+    get defaultAgentEnv(): AgentEnv {
+      return structuredClone(defaults);
+    },
     metadata: {
       ...metadata,
       protocolSupport
@@ -210,16 +262,35 @@ export function defineAdapter<TAdapter extends Adapter>(
       request: InvokeRequest,
       context?: AdapterInvocationContext
     ): AsyncGenerator<AdapterOutput> {
-      assertProtocolSupport(protocolSupport, {
-        protocolMode: context?.protocolMode ?? "canonical"
+      // 可信连接归本次调用；同一低层请求被并发复用时也不能相互覆盖。
+      if (context?.providerOptions) request = { ...request };
+      bindInvocationConnection(request, context?.providerOptions);
+      let requested: string | undefined;
+      let native: string | undefined;
+      await runAdapterPreparation(context, async () => {
+        assertAdapterAgentEnv(request);
+        context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
+        if (
+          invocationApprovalMode(request) !== "full_access" &&
+          (context?.protocolMode === "native"
+            ? !adapter.respondNative
+            : !adapter.respondInteraction)
+        )
+          throw new Error(
+            `APPROVAL_MODE_UNSUPPORTED: ${metadata.type} does not implement execution-time approval responses`
+          );
+        await assertAdapterWorkdir(request, metadata.workspace !== false);
+        assertProtocolSupport(protocolSupport, {
+          protocolMode: context?.protocolMode ?? "canonical"
+        });
+        const mcp = request.agentEnv.items.find(
+          (item) => item.namespace === "octo.execution" && item.name === "mcp"
+        );
+        if (mcp && Object.keys(mcp.payload.mcpServers as object).length && !adapter.metadata.mcp)
+          throw new Error(`MCP_UNSUPPORTED: ${adapter.metadata.type}`);
+        requested = invocationEffort(request);
+        native = mapReasoningEffort(adapter.metadata.type, requested, levels);
       });
-      const mcp = request.context.items.find(
-        (item) => item.namespace === "octo.execution" && item.name === "mcp"
-      );
-      if (mcp && Object.keys(mcp.payload.mcpServers as object).length && !adapter.metadata.mcp)
-        throw new Error(`MCP_UNSUPPORTED: ${adapter.metadata.type}`);
-      const requested = request.agentConfig.effort;
-      const native = mapReasoningEffort(adapter.metadata.type, requested, levels);
       if (requested !== undefined && context?.protocolMode !== "native") {
         if (native === undefined || native !== requested)
           yield {
@@ -259,9 +330,9 @@ export async function* spawnJsonLines<TNative>(
   options: SpawnJsonLinesOptions<TNative>
 ): AsyncGenerator<TNative> {
   const { command, args = [], cwd, env, input, signal, parseLine, onInputWritten } = options;
-  const processEnv = mergeProcessEnvironment(process.env, env ?? {});
-  const launch = resolveProcessLaunch(command, args, { cwd, env: processEnv });
-  const child = spawn(launch.command, launch.args, {
+  assertProviderCommand(command);
+  const processEnv = mergeProcessEnvironment(env ?? {});
+  const child = spawn(command, args, {
     cwd,
     env: processEnv,
     stdio: ["pipe", "pipe", "pipe"],
@@ -422,8 +493,8 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
           };
           for await (const native of spawnJsonLines({
             ...spec,
-            cwd: spec.cwd ?? request.workdir,
-            env: invocationEnvironment(request, spec.env),
+            cwd: spec.cwd ?? invocationWorkdir(request),
+            env: invocationEnvironment(request, spec.env, {}),
             signal: request.signal,
             rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
             parseLine: parseJsonLine as (line: string) => TNative | null
@@ -452,53 +523,59 @@ export function createJsonCliAdapter<TNative = Record<string, unknown>>(
 }
 
 /**
- * Resolve whether a command is runnable. A path-qualified command is checked
- * directly; a bare name is searched across `PATH` (`;`-separated on Windows).
- * Returns the first executable match, else `command_not_found`.
+ * 探测宿主已绑定的绝对启动链；不搜索安装，版本参数接在宿主前缀参数之后。
+ * 返回目标可执行性和可选版本；版本命令失败不等于目标不可用，版本门禁由 Provider 决定。
+ * 文件缺失与权限不足分别报告，失败不选择其他安装，也不解释前缀参数中的入口。
  */
 export async function probeCommand(
   command: string,
-  { env = process.env, cwd }: { env?: NodeJS.ProcessEnv; cwd?: string } = {}
+  {
+    env = {},
+    cwd,
+    args = []
+  }: { env?: NodeJS.ProcessEnv; cwd?: string; args?: readonly string[] } = {}
 ): Promise<ProbeResult> {
-  const candidates =
-    isAbsolute(command) || command.includes("/") || command.includes("\\")
-      ? [command]
-      : (processEnvironmentValue(env, "PATH") ?? "").split(delimiter).flatMap((directory) => {
-          const extensions =
-            process.platform === "win32" && !/\.[^\\/]+$/.test(command)
-              ? [
-                  "",
-                  ...(processEnvironmentValue(env, "PATHEXT") ?? ".EXE;.CMD;.BAT;.COM").split(";")
-                ]
-              : [""];
-          return extensions.map((extension) => resolve(directory, command + extension));
-        });
-  for (const candidate of candidates) {
+  assertProviderCommand(command);
+  const candidate = command;
+  try {
+    await access(candidate, constants.X_OK);
+    if (!(await stat(candidate)).isFile())
+      return { available: false, command, reason: "invalid_executable" };
+    let version: string | null = null;
     try {
-      await access(candidate, constants.X_OK);
-      if (!(await stat(candidate)).isFile()) continue;
-      let version: string | null = null;
-      try {
-        const launch = resolveProcessLaunch(resolve(candidate), ["--version"], { env, cwd });
-        const { stdout } = await promisify(execFile)(launch.command, launch.args, {
-          env,
-          cwd,
-          timeout: 2_000,
-          maxBuffer: 4096,
-          windowsHide: true
-        });
-        const output = stdout.trim();
-        // Keep a version label, not arbitrary CLI banners or diagnostics.
-        version =
-          output.match(/(?:^|\s)v?(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)(?=\s|$)/)?.[1] ??
-          null;
-      } catch {
-        // Executable availability does not imply support for --version.
-      }
-      return { available: true, command: resolve(candidate), version };
-    } catch {
-      // Current candidate is not executable; keep scanning the next PATH entry.
+      const { stdout } = await promisify(execFile)(candidate, [...args, "--version"], {
+        env,
+        cwd,
+        timeout: 2_000,
+        maxBuffer: 4096,
+        windowsHide: true
+      });
+      const output = stdout.trim();
+      // Keep a version label, not arbitrary CLI banners or diagnostics.
+      version =
+        output.match(/(?:^|\s)v?(\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.-]+)?)(?=\s|$)/)?.[1] ?? null;
+    } catch (error) {
+      const { code, syscall } = error as NodeJS.ErrnoException;
+      // spawn 的系统错误表明目标不能启动；非零退出、超时或输出过大只使版本未知。
+      if (syscall?.startsWith("spawn"))
+        return {
+          available: false,
+          command,
+          reason:
+            code === "EACCES" || code === "EPERM"
+              ? "permission_denied"
+              : code === "ENOENT" || code === "ENOTDIR"
+                ? "command_not_found"
+                : "command_launch_failed"
+        };
     }
+    return { available: true, command: resolve(candidate), version };
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return {
+      available: false,
+      command,
+      reason: code === "EACCES" || code === "EPERM" ? "permission_denied" : "command_not_found"
+    };
   }
-  return { available: false, command, reason: "command_not_found" };
 }

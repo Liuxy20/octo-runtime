@@ -3,10 +3,8 @@ import assert from "node:assert/strict";
 import { setImmediate as tick } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { CodexAsyncQuestions } from "../../packages/octo-runtime-adapter-codex/dist/async-questions.js";
-import {
-  normalizeCodexEvent,
-  createCodexAdapter
-} from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { normalizeCodexEvent } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createOwnedCodexAdapter as createCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import {
   assertCanonicalEvent,
   assertQuestionResponse,

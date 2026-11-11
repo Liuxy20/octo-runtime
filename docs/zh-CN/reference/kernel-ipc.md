@@ -6,21 +6,21 @@ Kernel IPC 是应用与本地 Kernel 服务之间的通信协议。TypeScript �
 
 首次接入可先阅读 [SDK 快速开始](../getting-started/sdk.md)。本页分别介绍公开导入路径、客户端方法和底层协议。
 
-## 公开包入口
+## 独立 App 的客户端入口
 
 | 导入子路径                           | 用途                                                            |
 | ------------------------------------ | --------------------------------------------------------------- |
-| `/host`                              | 创建 Kernel 服务，管理初始化和关闭，生成组件 endpoint           |
-| `/executor-kernel`                   | `attachKernel`、KernelClient 类型、KernelError、Kernel 服务工厂 |
-| `/executor-core`                     | 在调用进程中直接使用 AgentExecutor                              |
+| 包根                                 | `attachKernel`、KernelClient、KernelError；不构造服务或 Adapter |
 | `/protocol`                          | InvokeInput、输出/Context 类型与公开校验器                      |
 | `/protocol/schema.json`              | 共享协议 Schema                                                 |
-| `/executor-kernel/ipc-schema.json`   | IPC v2 Schema                                                   |
-| `/executor-kernel/ipc-fixtures.json` | 刻意公开的一致性样本，与协议定义分开                            |
+| `/protocol/ipc-schema.json`          | IPC v2 Schema                                                   |
+| `/protocol/ipc-fixtures.json`        | 刻意公开的一致性样本，与协议定义分开                            |
 
-上述路径都位于 `@mininglamp-oss/octo-runtime` 下。例如，导入客户端使用 `@mininglamp-oss/octo-runtime/executor-kernel`。仓库内部的 workspace 包是私有包，应用使用上表中的公开路径。
+上述路径都位于 `@mininglamp-oss/octo-runtime-client` 下。独立 App 通过 RPC 使用已启动 Kernel；不导入 Adapter，也不依赖完整 CLI 包。
 
 仅消费已有 Kernel 的应用可只安装 `@mininglamp-oss/octo-runtime-client`，从包根导入 `attachKernel`，无需完整 Runtime 包或 Runtime checkout。
+
+纯原生宿主则从源码 workspace 引入 `octo-runtime-executor-kernel` 的服务工厂、`octo-runtime-host-sdk` 的 endpoint helper 和实际使用的 Adapter。需要直接 Core 时显式依赖 `octo-runtime-executor-core`。这些是 private 源码包，不单独 npm 发布；依赖配置及按需加载约束见 [SDK 接入](../getting-started/sdk.md)。完整 CLI 包保留的通用入口不改变此场景划分，也不提供 Adapter 聚合导出。
 
 独立 client 在 `/protocol/schema.json` 和 `/protocol/ipc-schema.json` 提供相同的两个 Schema，并保留 `/protocol/ipc-fixtures.json` 一致性样本入口。仓库样本位于 `packages/octo-runtime-protocol/test/fixtures/`，仅 IPC 样本进入发行包。客户端默认值由客户端实现维护，`/protocol/behavior.json` 已删除。
 
@@ -129,8 +129,24 @@ macOS/Linux 使用 Unix domain socket，Windows 使用 Named Pipe。每条连接
       "sessionId": "example-session",
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
-      "inputs": [{ "type": "text", "text": "Say hello." }],
-      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
+      "inputs": [
+        {
+          "type": "text",
+          "text": "Say hello."
+        }
+      ],
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": [
+          {
+            "namespace": "octo.execution",
+            "name": "workspace",
+            "payload": {
+              "path": "/absolute/prepared/project"
+            }
+          }
+        ]
+      }
     }
   }
 }

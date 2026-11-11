@@ -3,15 +3,12 @@ import type {
   ContextEnvsPayload,
   ContextEnvelope,
   ContextItem,
-  McpServers,
-  ResolvedExecutionPlan
+  McpServers
 } from "./generated/protocol-types.js";
-import { RUNTIME_SELECTION_SCHEMA } from "./runtime-selection.js";
 
 export const CONTEXT_SCHEMA = "octo.context-envelope/v3" as const;
 export const RUNTIME_RUN_CONTRACT = Object.freeze({
   schema_version: 7,
-  routing_schema: RUNTIME_SELECTION_SCHEMA,
   context_schema: CONTEXT_SCHEMA,
   approval_schema: "octo.approval-request/v1"
 } as const);
@@ -21,10 +18,6 @@ export const CONTEXT_MAX_ITEMS = 32;
 export const DEFAULT_RUN_TIMEOUT_MS = 86_400_000;
 export const MAX_RUN_TIMEOUT_MS = 604_800_000;
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["ask", "assisted", "full_access"];
-
-export function assertAgentSource(value: unknown): asserts value is "preset" | "provisioned" {
-  if (value !== "preset" && value !== "provisioned") throw new TypeError("AGENT_SOURCE_INVALID");
-}
 
 export function assertApprovalMode(value: unknown): asserts value is ApprovalMode {
   if (!APPROVAL_MODES.includes(value as ApprovalMode))
@@ -41,7 +34,11 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
   const keys = new Set<string>();
   for (const item of value.items) {
     object(item, "CONTEXT_SCHEMA_INVALID");
-    fields(item, ["namespace", "name", "guidance", "data_format", "payload"]);
+    if (item.namespace === "octo.control" && item.name === "instructions")
+      throw new TypeError(
+        "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
+      );
+    fields(item, ["namespace", "name", "payload"]);
     for (const property of ["namespace", "name"]) {
       const text = item[property];
       if (typeof text !== "string" || text.length > 96 || !/^[a-z0-9][a-z0-9._-]*$/.test(text))
@@ -50,23 +47,7 @@ export function assertContextEnvelope(value: unknown): asserts value is ContextE
     const key = JSON.stringify([item.namespace, item.name]);
     if (keys.has(key)) throw new TypeError("CONTEXT_KEY_DUPLICATED");
     keys.add(key);
-    if (item.guidance !== undefined) {
-      if (typeof item.guidance !== "string") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-      if (
-        ["octo.execution", "octo.runtime", "octo.security", "octo.control"].includes(
-          String(item.namespace)
-        )
-      )
-        throw new TypeError("CONTEXT_GUIDANCE_FORBIDDEN");
-    }
     object(item.payload, "CONTEXT_SCHEMA_INVALID");
-    if (item.data_format !== undefined) {
-      if (item.data_format !== "text" || !String(item.namespace).startsWith("extra."))
-        throw new TypeError("CONTEXT_SCHEMA_INVALID");
-      fields(item.payload, ["text"]);
-      if (typeof item.payload.text !== "string") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    }
-    publicPayload(item.namespace as string, item.name as string, item.payload);
   }
   if (new TextEncoder().encode(JSON.stringify(value)).length > CONTEXT_MAX_BYTES)
     throw new TypeError("CONTEXT_BUDGET_EXCEEDED");
@@ -117,75 +98,11 @@ export function mergeContext(
           ...(next.payload.mcpServers as McpServers)
         }
       };
-    if (previous && item.namespace === "octo.runtime" && item.name === "selection") {
-      for (const field of ["offline_behavior", "failover"])
-        if (next.payload[field] === undefined && previous.payload[field] !== undefined)
-          next.payload[field] = previous.payload[field];
-    }
-    if (previous && item.namespace === "octo.content" && item.name === "references")
-      next.payload.entries = mergeReferences(
-        previous.payload.entries as Record<string, unknown>[],
-        next.payload.entries as Record<string, unknown>[]
-      );
     items.set(key, next);
   }
   const result: ContextEnvelope = { schema: CONTEXT_SCHEMA, items: [...items.values()] };
   assertContextEnvelope(result);
   return JSON.parse(canonicalContext(result)) as ContextEnvelope;
-}
-
-export function assertResolvedExecutionPlan(
-  value: unknown
-): asserts value is ResolvedExecutionPlan {
-  object(value, "RESOLVED_EXECUTION_PLAN_REQUIRED");
-  assertJsonValue(value);
-  fields(value, [
-    "agent_source",
-    "adapter_type",
-    "provider_agent_id",
-    "workdir",
-    "workspace",
-    "approval_mode",
-    "model",
-    "effort",
-    "actmode",
-    "runtime_limits",
-    "envs",
-    "mcp"
-  ]);
-  if (value.envs !== undefined) assertContextEnvs(value.envs);
-  if (value.mcp !== undefined) assertContextMcp(value.mcp);
-  assertAgentSource(value.agent_source);
-  if (value.actmode !== undefined && value.actmode !== "default" && value.actmode !== "plan")
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-  text(value.adapter_type);
-  assertProviderAgent(value.adapter_type, value.provider_agent_id);
-  if (typeof value.workdir !== "string") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-  if (value.workspace !== undefined) {
-    object(value.workspace, "RESOLVED_EXECUTION_PLAN_INVALID");
-    executionField("octo.execution", "workspace", value.workspace);
-  }
-  if (
-    !value.workdir &&
-    value.agent_source !== "preset" &&
-    (!isObject(value.workspace) || value.workspace.mode !== "random")
-  )
-    throw new TypeError("RESOLVED_EXECUTION_PLAN_INVALID");
-  if (
-    isObject(value.workspace) &&
-    value.workspace.mode === "none" &&
-    (value.agent_source !== "preset" || value.workdir !== "")
-  )
-    throw new TypeError("RESOLVED_EXECUTION_PLAN_INVALID");
-  if (value.agent_source === "preset" && typeof value.provider_agent_id !== "string")
-    throw new TypeError("PRESET_AGENT_TARGET_REQUIRED");
-  assertApprovalMode(value.approval_mode);
-  for (const property of ["model", "effort"])
-    if (value[property] !== undefined) text(value[property]);
-  if (value.runtime_limits !== undefined) {
-    object(value.runtime_limits, "RESOLVED_EXECUTION_PLAN_INVALID");
-    limits(value.runtime_limits);
-  }
 }
 
 export function assertContextMcp(value: unknown): asserts value is { mcpServers: McpServers } {
@@ -311,236 +228,8 @@ export function assertJsonValue(value: unknown): void {
   json(value, 0);
 }
 
-export function mergeReferences(
-  base: Record<string, unknown>[],
-  next: Record<string, unknown>[]
-): Record<string, unknown>[] {
-  const entries = new Map(
-    [...base, ...next].map((entry) => [String(entry.resource_ref), structuredClone(entry)])
-  );
-  return [...entries].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, entry]) => entry);
-}
-
-function publicPayload(namespace: string, name: string, value: Record<string, unknown>): void {
-  if (namespace === "octo.execution" && name === "actmode") {
-    fields(value, ["mode"]);
-    if (value.mode !== "default" && value.mode !== "plan")
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    return;
-  }
-  if (namespace === "octo.execution" && name === "mcp") {
-    assertContextMcp(value);
-    return;
-  }
-  if (namespace === "octo.execution" && name === "envs") {
-    assertContextEnvs(value);
-    return;
-  }
-  if (namespace === "octo.resources") throw new TypeError("CONTEXT_TYPE_REMOVED");
-  if (namespace === "octo.execution" && name === "model") {
-    fields(value, ["selection", "reasoning"]);
-    if (!Object.keys(value).length) throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    for (const [key, setting] of Object.entries(value)) {
-      object(setting, "CONTEXT_SCHEMA_INVALID");
-      executionField("octo.execution", key === "selection" ? "model" : "reasoning", setting);
-    }
-    return;
-  }
-  if (
-    (namespace === "octo.execution" && ["adapter", "workspace", "limits"].includes(name)) ||
-    (namespace === "octo.runtime" && name === "selection") ||
-    (namespace === "octo.security" && name === "approval_policy")
-  ) {
-    executionField(namespace, name, value);
-    return;
-  }
-  if (
-    (namespace === "octo.content" && ["inline", "references"].includes(name)) ||
-    (namespace === "octo.control" && name === "instructions")
-  ) {
-    fields(value, ["entries"]);
-    if (!Array.isArray(value.entries) || (name !== "instructions" && value.entries.length === 0))
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    const refs = new Set<string>();
-    for (const entry of value.entries) {
-      object(entry, "CONTEXT_SCHEMA_INVALID");
-      if (name === "instructions") {
-        fields(entry, ["text"]);
-        text(entry.text);
-      } else if (name === "references") {
-        resource(entry);
-        const ref = String(entry.resource_ref);
-        if (refs.has(ref)) throw new TypeError("CONTEXT_SCHEMA_INVALID");
-        refs.add(ref);
-      } else if (name === "inline") {
-        fields(entry, ["text", "resource_ref", "source", "summary"]);
-        text(entry.text);
-        if (entry.resource_ref !== undefined) text(entry.resource_ref);
-        if (
-          entry.source !== undefined &&
-          typeof entry.source !== "string" &&
-          !isObject(entry.source)
-        )
-          throw new TypeError("CONTEXT_SCHEMA_INVALID");
-        if (entry.summary !== undefined && typeof entry.summary !== "string")
-          throw new TypeError("CONTEXT_SCHEMA_INVALID");
-      } else throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    }
-    return;
-  }
-  // Unknown optional types remain opaque until a consumer explicitly supports them.
-}
-
-function executionField(namespace: string, name: string, value: Record<string, unknown>): void {
-  if (namespace === "octo.execution") {
-    if (name === "adapter") {
-      fields(value, ["type", "provider_agent_id"]);
-      text(value.type);
-      assertProviderAgent(value.type, value.provider_agent_id);
-      return;
-    }
-    if (name === "model" || name === "reasoning") {
-      const property = name === "model" ? "id" : "effort";
-      fields(value, [property, "use_provider_default"]);
-      if (value.use_provider_default === true && value[property] === undefined) return;
-      if (value.use_provider_default !== undefined) throw new TypeError("CONTEXT_SCHEMA_INVALID");
-      text(value[property]);
-      return;
-    }
-    if (name === "workspace") {
-      fields(value, ["mode", "path"]);
-      if (value.mode === "none" && value.path === undefined) return;
-      if (value.mode === "fixed") {
-        text(value.path);
-        return;
-      }
-      if (value.mode === "random" && value.path === undefined) return;
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    }
-    if (name === "limits") {
-      limits(value);
-      return;
-    }
-  }
-  if (namespace === "octo.runtime" && name === "selection") {
-    fields(value, [
-      "mode",
-      "runtime_id",
-      "runtime_ids",
-      "strategy",
-      "offline_behavior",
-      "failover"
-    ]);
-    if (
-      value.offline_behavior !== undefined &&
-      value.offline_behavior !== "wait" &&
-      value.offline_behavior !== "fail"
-    )
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    if (
-      value.failover !== undefined &&
-      value.failover !== "none" &&
-      value.failover !== "candidates"
-    )
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    if (value.mode === "explicit" && value.failover !== undefined && value.failover !== "none")
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    if (
-      value.mode === "explicit" &&
-      value.runtime_ids === undefined &&
-      value.strategy === undefined
-    ) {
-      text(value.runtime_id);
-      return;
-    }
-    if (
-      value.mode === "candidates" &&
-      value.runtime_id === undefined &&
-      value.strategy === "preferred_failover"
-    ) {
-      stringList(value.runtime_ids, 64, 1);
-      return;
-    }
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-  }
-  if (namespace === "octo.security" && name === "approval_policy") {
-    fields(value, ["mode"]);
-    assertApprovalMode(value.mode);
-    return;
-  }
-  throw new TypeError("CONTEXT_TYPE_UNSUPPORTED");
-}
-
-function limits(value: Record<string, unknown>): void {
-  const bounds: Record<string, number> = {
-    first_frame_timeout_ms: 1_800_000,
-    model_idle_timeout_ms: 3_600_000,
-    model_idle_warning_ms: 3_600_000,
-    tool_timeout_ms: 86_400_000,
-    tool_wall_timeout_ms: 86_400_000,
-    run_timeout_ms: MAX_RUN_TIMEOUT_MS,
-    cancel_grace_ms: 60_000
-  };
-  fields(value, [...Object.keys(bounds), "model_idle_policy", "enforcement"]);
-  for (const [key, setting] of Object.entries(value)) {
-    if (key === "model_idle_policy" || key === "enforcement") {
-      if (setting !== "enforce" && setting !== "observe")
-        throw new TypeError("CONTEXT_SCHEMA_INVALID");
-    } else integer(setting, 100, bounds[key]);
-  }
-  if (
-    value.enforcement === "observe" &&
-    ["model_idle_policy", "model_idle_warning_ms", "tool_wall_timeout_ms"].some(
-      (key) => key in value
-    )
-  )
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-}
-
-function resource(value: Record<string, unknown>): void {
-  fields(value, ["resource_ref", "resolver", "locator", "params", "authorization_ref", "revision"]);
-  text(value.resource_ref);
-  for (const property of ["authorization_ref", "revision"])
-    if (value[property] !== undefined) text(value[property]);
-  if (value.params !== undefined) object(value.params, "CONTEXT_SCHEMA_INVALID");
-  const locator = value.locator;
-  object(locator, "CONTEXT_SCHEMA_INVALID");
-  if (value.resolver !== "mcp") throw new TypeError("CONTEXT_SCHEMA_INVALID");
-  fields(locator, ["server_ref", "tool"]);
-  text(locator.server_ref);
-  text(locator.tool);
-}
-
-function integer(value: unknown, minimum: number, maximum = Number.MAX_SAFE_INTEGER): void {
-  if (!Number.isSafeInteger(value) || Number(value) < minimum || Number(value) > maximum)
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-}
-
-function stringList(value: unknown, maximum: number, minimum = 0): asserts value is string[] {
-  if (
-    !Array.isArray(value) ||
-    value.length < minimum ||
-    value.length > maximum ||
-    value.some((item) => typeof item !== "string" || !item) ||
-    new Set(value).size !== value.length
-  )
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-}
-
-function assertProviderAgent(type: string, id: unknown): void {
-  if (type === "openclaw") {
-    if (typeof id !== "string" || !/^[a-z0-9_][a-z0-9_-]{0,63}$/.test(id))
-      throw new TypeError("CONTEXT_SCHEMA_INVALID");
-  } else if (id !== undefined) throw new TypeError("CONTEXT_SCHEMA_INVALID");
-}
-
 function fields(value: Record<string, unknown>, allowed: string[]): void {
   if (Object.keys(value).some((key) => !allowed.includes(key)))
-    throw new TypeError("CONTEXT_SCHEMA_INVALID");
-}
-
-function text(value: unknown): asserts value is string {
-  if (typeof value !== "string" || value.length === 0)
     throw new TypeError("CONTEXT_SCHEMA_INVALID");
 }
 

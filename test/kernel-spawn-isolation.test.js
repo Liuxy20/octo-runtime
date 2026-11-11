@@ -1,4 +1,5 @@
 import { testAdapter as faultAdapter } from "./fixtures/pipe-fault-adapter.mjs";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdir, writeFile } from "node:fs/promises";
@@ -38,7 +39,13 @@ test(
       let longCwd = f.directory;
       while (longCwd.length < 277) longCwd = join(longCwd, "long-cwd-segment");
       await mkdir(longCwd, { recursive: true });
-      const native = await f.client.submit(kernelInput("normal", { workdir: longCwd }));
+      const native = await f.client.submit(
+        kernelInput("normal", {
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: longCwd } }
+          ])
+        })
+      );
       const result = await frames(f.client, native.ref);
       const state = result.at(-1).control.state;
       assert.ok(["failed", "completed"].includes(state), JSON.stringify(result));

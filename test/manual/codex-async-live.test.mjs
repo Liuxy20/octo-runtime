@@ -1,13 +1,13 @@
+import { withAgentEnvItems } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../../test-support/invoke-client.js";
 // 显式手动运行：pnpm build && node --test test/manual/codex-async-live.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createCodexAdapter } from "../../packages/octo-runtime-adapter-codex/dist/index.js";
+import { createOwnedCodexAdapter as createCodexAdapter } from "../../test-support/scoped-codex-adapter.mjs";
 import { randomUUID } from "node:crypto";
 import { invocationInput } from "../../packages/octo-runtime-protocol/dist/index.js";
 import { kernelFixture } from "../kernel-fixture.js";
 import { invokeRequest } from "../runtime-fixture.js";
-
 for (const custom of [false, true]) {
   test(
     `real Codex Default canonical form and ${custom ? "custom" : "selected"} answer`,
@@ -22,10 +22,12 @@ for (const custom of [false, true]) {
       const request = invokeRequest({
         runId: randomUUID(),
         invocationId: randomUUID(),
-        workdir: f.directory,
         prompt,
         modelInput: prompt,
-        approvalMode: "full_access"
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: f.directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
       });
       const input = invocationInput(request, "canonical", "codex");
       let answer,

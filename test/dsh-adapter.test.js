@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  withAgentEnvItems
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -19,14 +23,12 @@ import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { RuntimeLogging } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
 import { terminateFixtureProcess } from "../test-support/fixture-process.mjs";
-
 const adapterRequire = createRequire(
   new URL("../packages/octo-runtime-adapter-dsh/package.json", import.meta.url)
 );
 const { HarnessClient } = await import(
   pathToFileURL(adapterRequire.resolve("@deepseek-ai/dsh-sdk-client"))
 );
-
 const fixturePath = fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url));
 const terminals = (events) =>
   events.filter((e) => ["run.completed", "run.failed", "run.cancelled"].includes(e.type));
@@ -46,17 +48,7 @@ async function fixture(t, mode = "success") {
   const trace = join(directory, "trace.jsonl");
   const canary = randomUUID();
   const request = invokeRequest({
-    workdir: directory,
-    approvalMode: "full_access",
     modelInput: "hello",
-    controlInstructions: "control-only",
-    agentConfig: {
-      providerOptions: {
-        dshBin: fixturePath,
-        initializeTimeoutMs: 2000,
-        requestTimeoutMs: 2000
-      }
-    },
     executionEnvOverrides: {
       env_variables: [
         { key: "OCTO_DSH_FIXTURE", value: mode },
@@ -64,7 +56,22 @@ async function fixture(t, mode = "success") {
         { key: "OCTO_DSH_CANARY", value: canary },
         { key: "OCTO_DSH_VALUE", value: canary }
       ]
-    }
+    },
+    agentEnv: withAgentEnvItems(undefined, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      {
+        namespace: "adapter.dsh",
+        name: "options",
+        payload: {
+          ...{
+            dshBin: fixturePath,
+            initializeTimeoutMs: 2000,
+            requestTimeoutMs: 2000
+          }
+        }
+      }
+    ])
   });
   return {
     request,
@@ -78,7 +85,6 @@ async function fixture(t, mode = "success") {
   };
 }
 const collect = (request, adapter = createDshAdapter()) => Array.fromAsync(adapter.invoke(request));
-
 for (const [version, serverVersion] of [
   ["0.2.1-rc.4", "0.0.1"],
   ["0.2.1-rc.10", "0.0.2"],
@@ -98,7 +104,6 @@ for (const [version, serverVersion] of [
       ["run.completed"]
     );
   });
-
 test("DSH older versions reach Core as upgrade errors without sending input", async (t) => {
   const f = await fixture(t);
   f.request.executionEnvOverrides.env_variables.push({
@@ -127,7 +132,6 @@ test("DSH older versions reach Core as upgrade errors without sending input", as
     await core.shutdown();
   }
 });
-
 for (const [key, value] of [
   ["OCTO_DSH_FIXTURE_SERVER_NAME", "different-runtime"],
   ["OCTO_DSH_FIXTURE_SERVER_VERSION", ""]
@@ -139,15 +143,21 @@ for (const [key, value] of [
     assert.equal(failed.payload.code, "DSH_PROTOCOL_ERROR");
     assert.ok(!(await f.trace()).some((message) => message.method === "session/prompt"));
   });
-
 test("DSH accepts the official dshBin module option and rejects conflicting launch inputs", async (t) => {
   const f = await fixture(t);
-  f.request.agentConfig.providerOptions = { dshBin: fixturePath };
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    { namespace: "adapter.dsh", name: "options", payload: { dshBin: fixturePath } }
+  ]);
   assert.equal(terminals(await collect(f.request))[0].type, "run.completed");
-  f.request.agentConfig.providerOptions.command = process.execPath;
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    {
+      namespace: "adapter.dsh",
+      name: "options",
+      payload: { dshBin: fixturePath, command: process.execPath }
+    }
+  ]);
   assert.equal(terminals(await collect(f.request))[0].payload.code, "DSH_CONFIG_INVALID");
 });
-
 for (const [name, options] of [
   ["conflicting launchers", { dshBin: fixturePath, command: process.execPath }],
   ["args without command", { args: [fixturePath] }],
@@ -169,8 +179,25 @@ for (const [name, options] of [
   test(`DSH Core reports ${name} as configuration failure and releases the session`, async (t) => {
     const f = await fixture(t);
     f.request.providerSession = { sessionId: "config-recovery" };
-    const validOptions = f.request.agentConfig.providerOptions;
-    f.request.agentConfig.providerOptions = options;
+    const validAgentEnv = f.request.agentEnv;
+    const invalidItem = { namespace: "adapter.dsh", name: "options", payload: options };
+    if (name === "oversized arg") {
+      assert.throws(
+        () => withAgentEnvItems(validAgentEnv, [invalidItem]),
+        /CONTEXT_BUDGET_EXCEEDED/
+      );
+      // 绕过构造器只用于核验 Core 的不可信输入边界。
+      f.request.agentEnv = {
+        ...validAgentEnv,
+        items: validAgentEnv.items.map((item) =>
+          item.namespace === invalidItem.namespace && item.name === invalidItem.name
+            ? invalidItem
+            : item
+        )
+      };
+    } else {
+      f.request.agentEnv = withAgentEnvItems(validAgentEnv, [invalidItem]);
+    }
     const core = new AgentExecutor();
     core.register(createDshAdapter());
     const invoke = () =>
@@ -185,6 +212,12 @@ for (const [name, options] of [
         )
       );
     try {
+      if (name === "oversized arg") {
+        await assert.rejects(async () => invoke(), /CONTEXT_BUDGET_EXCEEDED/);
+        f.request.agentEnv = validAgentEnv;
+        assert.equal(terminals(await invoke())[0].type, "run.completed");
+        return;
+      }
       const events = await invoke();
       events.forEach(assertCanonicalEvent);
       assert.deepEqual(
@@ -194,13 +227,12 @@ for (const [name, options] of [
       assert.equal(terminals(events)[0].payload.failure.reasonCode, "DSH_CONFIG_INVALID");
       assert.equal(JSON.stringify(events).includes("private-value"), false);
       await assert.rejects(f.trace(), { code: "ENOENT" });
-      f.request.agentConfig.providerOptions = validOptions;
+      f.request.agentEnv = validAgentEnv;
       assert.equal(terminals(await invoke())[0].type, "run.completed");
     } finally {
       assert.equal((await core.shutdown()).cleanup, "complete");
     }
   });
-
 test("DSH canonical contract: committed stream, Unicode, CRLF, usage and independent execution environment", async (t) => {
   const f = await fixture(t);
   const events = await collect(f.request);
@@ -223,12 +255,11 @@ test("DSH canonical contract: committed stream, Unicode, CRLF, usage and indepen
   );
   assert.equal(trace[0].permission, "danger-full-access");
   assert.equal(trace[0].value, f.canary);
-  assert.equal(trace[1].params.contentBlocks[0].text, "control-only");
+  assert.deepEqual(trace[1].params.contentBlocks, [{ type: "text", text: "hello" }]);
   assert.equal(JSON.stringify(events).includes(f.canary), false);
   assert.equal(process.env.OCTO_DSH_VALUE, undefined);
   assert.throws(() => process.kill(trace[0].pid, 0), /ESRCH/);
 });
-
 for (const path of ["Adapter", "Core"])
   test(`DSH ${path} accepts a raw-budget notification whose normalized numbers grow`, async (t) => {
     const f = await fixture(t, "numeric-notification");
@@ -256,7 +287,6 @@ for (const path of ["Adapter", "Core"])
       assert.equal((await core.shutdown()).cleanup, "complete");
     }
   });
-
 for (const [mode, code] of [
   ["provider-error", "DSH_EXECUTION_FAILED"],
   ["no-receipt", "DSH_TRAJECTORY_INVALID"],
@@ -285,7 +315,6 @@ for (const [mode, code] of [
     });
     assert.equal(classified.failure.reasonCode, code);
   });
-
 test("DSH resume is explicit, never sends new prompt after restoration rejection", async (t) => {
   const f = await fixture(t, "resume-error");
   f.request.providerSession = { sessionId: "missing-session", resumable: true };
@@ -300,7 +329,6 @@ test("DSH resume is explicit, never sends new prompt after restoration rejection
     false
   );
 });
-
 test("DSH successful follow-up uses original session and omits first-session control text", async (t) => {
   const f = await fixture(t);
   f.request.providerSession = { sessionId: "existing-session", resumable: true };
@@ -313,7 +341,6 @@ test("DSH successful follow-up uses original session and omits first-session con
   assert.equal(trace[2].params.path, f.directory);
   assert.equal(trace.find((e) => e.method === "session/prompt").params.contentBlocks.length, 1);
 });
-
 for (const kind of ["symlink", "case", "subdirectory"])
   test(`DSH resume directory comparison handles ${kind} without changing the requested root`, async (t) => {
     const f = await fixture(t, "resume-directory");
@@ -339,7 +366,9 @@ for (const kind of ["symlink", "case", "subdirectory"])
       returned = join(directory, "child");
       await mkdir(returned);
     }
-    f.request.workdir = directory;
+    f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: directory } }
+    ]);
     f.request.providerSession = { sessionId: "existing-session", resumable: true };
     f.request.executionEnvOverrides.env_variables.push({
       key: "OCTO_DSH_RETURNED_CWD",
@@ -354,7 +383,6 @@ for (const kind of ["symlink", "case", "subdirectory"])
       );
     } else assert.equal(terminals(events)[0].type, "run.completed");
   });
-
 test("DSH child lineage and failed tool remain scoped and do not fail successful root", async (t) => {
   const child = await fixture(t, "child");
   const childEvents = await collect(child.request);
@@ -372,21 +400,29 @@ test("DSH child lineage and failed tool remain scoped and do not fail successful
   assert.equal(toolEvents.find((e) => e.type === "tool_call.update").payload.status, "failed");
   assert.equal(terminals(toolEvents)[0].type, "run.completed");
 });
-
 test("DSH text deltas reconcile with a committed snapshot exactly once", async (t) => {
   const f = await fixture(t, "legacy-chunk");
   assert.equal(text(await collect(f.request)), "hello 世界");
 });
-
 test("DSH startup/request timeouts close the official SDK runtime", async (t) => {
   const f = await fixture(t, "startup-timeout");
-  f.request.agentConfig.providerOptions.initializeTimeoutMs = 40;
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    {
+      namespace: "adapter.dsh",
+      name: "options",
+      payload: {
+        ...agentEnvItem(f.request.agentEnv, "adapter.dsh", "options"),
+        initializeTimeoutMs: 40
+      }
+    }
+  ]);
   assert.equal(terminals(await collect(f.request))[0].payload.code, "DSH_INITIALIZE_TIMEOUT");
   const waiting = await fixture(t, "cancel");
-  waiting.request.runtimeLimits = { runTimeoutMs: 40 };
+  waiting.request.agentEnv = withAgentEnvItems(waiting.request.agentEnv, [
+    { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 1000 } }
+  ]);
   assert.equal(terminals(await collect(waiting.request))[0].payload.code, "DSH_REQUEST_TIMEOUT");
 });
-
 for (const mode of ["oversized-initialize", "oversized-fragmented"])
   test(`DSH unmodified SDK accepts ${mode} independently of Runtime projection budgets`, async (t) => {
     const { DEFAULT_STREAM_LIMIT_POLICY, invocationInput } =
@@ -413,10 +449,18 @@ for (const mode of ["oversized-initialize", "oversized-fragmented"])
     }
     for (const entry of await f.trace()) assert.throws(() => process.kill(entry.pid, 0), /ESRCH/);
   });
-
 test("DSH unterminated SDK input reaches the official initialize timeout", async (t) => {
   const f = await fixture(t, "raw-no-newline");
-  f.request.agentConfig.providerOptions.initializeTimeoutMs = 100;
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    {
+      namespace: "adapter.dsh",
+      name: "options",
+      payload: {
+        ...agentEnvItem(f.request.agentEnv, "adapter.dsh", "options"),
+        initializeTimeoutMs: 100
+      }
+    }
+  ]);
   const events = await Array.fromAsync(
     createDshAdapter().invoke(f.request, {
       streamLimits: { ...DEFAULT_STREAM_LIMIT_POLICY, rawMessageMaxBytes: 1024 }
@@ -424,7 +468,6 @@ test("DSH unterminated SDK input reaches the official initialize timeout", async
   );
   assert.equal(terminals(events)[0].payload.code, "DSH_INITIALIZE_TIMEOUT");
 });
-
 test("DSH cancellation reclaims its process while an independent sibling completes", async (t) => {
   const f = await fixture(t, "cancel");
   const sibling = await fixture(t, "delayed");
@@ -448,51 +491,63 @@ test("DSH cancellation reclaims its process while an independent sibling complet
   const trace = await f.trace();
   assert.throws(() => process.kill(trace[0].pid, 0), /ESRCH/);
 });
-
 test("DSH pre-abort, unsupported policy and missing executable do not invoke model", async (t) => {
   const f = await fixture(t);
-  f.request.approvalMode = "ask";
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+  ]);
   await assert.rejects(collect(f.request), /APPROVAL_MODE_UNSUPPORTED/);
-  f.request.approvalMode = "full_access";
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+  ]);
   f.request.signal = AbortSignal.abort();
   assert.equal(terminals(await collect(f.request))[0].type, "run.cancelled");
   f.request.signal = undefined;
-  f.request.agentConfig.providerOptions.dshBin = join(f.directory, "missing.mjs");
+  f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+    {
+      namespace: "adapter.dsh",
+      name: "options",
+      payload: {
+        ...agentEnvItem(f.request.agentEnv, "adapter.dsh", "options"),
+        dshBin: join(f.directory, "missing.mjs")
+      }
+    }
+  ]);
   assert.equal(terminals(await collect(f.request))[0].payload.code, "DSH_EXECUTABLE_NOT_FOUND");
 });
-
 test("DSH same provider session concurrency is rejected without disturbing owner", async (t) => {
   const f = await fixture(t, "delayed");
   f.request.providerSession = { sessionId: "same" };
   const adapter = createDshAdapter();
   const owner = collect(f.request, adapter);
+  await untilFile(join(f.directory, "trace.jsonl"));
   assert.equal(terminals(await collect(f.request, adapter))[0].payload.code, "DSH_SESSION_BUSY");
   assert.equal(terminals(await owner)[0].type, "run.completed");
 });
-
 const preflightCases = [
-  {
-    name: "actmode",
-    code: "DSH_ACTMODE_UNSUPPORTED",
-    change: (request) =>
-      request.context.items.push({
-        namespace: "octo.execution",
-        name: "actmode",
-        payload: { mode: "plan" }
-      })
-  },
   {
     name: "sandbox",
     code: "DSH_CONFIG_INVALID",
     change: (request) => {
-      request.agentConfig.sandbox = "read-only";
+      request.agentEnv = withAgentEnvItems(request.agentEnv, [
+        {
+          namespace: "adapter.dsh",
+          name: "options",
+          payload: {
+            ...agentEnvItem(request.agentEnv, "adapter.dsh", "options"),
+            sandbox: "read-only"
+          }
+        }
+      ]);
     }
   },
   {
     name: "provider options",
     code: "DSH_CONFIG_INVALID",
     change: (request) => {
-      request.agentConfig.providerOptions = [];
+      request.agentEnv = withAgentEnvItems(request.agentEnv, [
+        { namespace: "adapter.dsh", name: "options", payload: { dshBin: false } }
+      ]);
     }
   },
   {
@@ -510,7 +565,6 @@ const preflightCases = [
     }
   }
 ];
-
 for (const entry of preflightCases)
   test(`DSH ${entry.name} preflight produces one safe failure without starting the protocol`, async (t) => {
     const f = await fixture(t);
@@ -525,7 +579,6 @@ for (const entry of preflightCases)
     assert.equal(JSON.stringify(events).includes(f.canary), false);
     await assert.rejects(f.trace(), { code: "ENOENT" });
   });
-
 for (const entry of preflightCases.slice(0, 2))
   test(`DSH Core ${entry.name} preflight keeps cleanup complete`, async (t) => {
     const f = await fixture(t);
@@ -548,7 +601,6 @@ for (const entry of preflightCases.slice(0, 2))
       assert.equal((await core.shutdown()).cleanup, "complete");
     }
   });
-
 test("DSH Core rejects duplicate sessions without releasing the active owner", async (t) => {
   const f = await fixture(t, "cancel");
   f.request.providerSession = { sessionId: "owned-session" };
@@ -588,28 +640,27 @@ test("DSH Core rejects duplicate sessions without releasing the active owner", a
     assert.equal((await core.shutdown()).cleanup, "complete");
   }
 });
-
 for (const approvalMode of ["ask", "assisted"])
-  test(`DSH Core rejects ${approvalMode} before admission and keeps cleanup complete`, async (t) => {
+  test(`DSH Adapter rejects ${approvalMode} before Provider work and keeps cleanup complete`, async (t) => {
     const f = await fixture(t);
-    f.request.approvalMode = approvalMode;
+    f.request.agentEnv = withAgentEnvItems(f.request.agentEnv, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+    ]);
     const core = new AgentExecutor();
     core.register(createDshAdapter());
     try {
-      await assert.rejects(
-        Array.fromAsync(
-          core.invoke(invocationInput(f.request, "canonical", "dsh"), {
-            executionEnvOverrides: f.request.executionEnvOverrides
-          })
-        ),
-        /APPROVAL_MODE_UNSUPPORTED/
+      const events = await Array.fromAsync(
+        core.invoke(invocationInput(f.request, "canonical", "dsh"), {
+          executionEnvOverrides: f.request.executionEnvOverrides
+        })
       );
+      assert.equal(events.at(-1).type, "run.failed");
+      assert.match(events.at(-1).payload.message, /APPROVAL_MODE_UNSUPPORTED/);
       await assert.rejects(f.trace(), { code: "ENOENT" });
     } finally {
       assert.equal((await core.shutdown()).cleanup, "complete");
     }
   });
-
 test("DSH duplicate sequence is ignored, conflicting duplicate fails", () => {
   const trajectory = new DshTrajectory("root", 1024);
   const notification = {
@@ -621,7 +672,6 @@ test("DSH duplicate sequence is ignored, conflicting duplicate fails", () => {
   notification.params.event.data.turn = 1;
   assert.throws(() => trajectory.accept(notification), /DSH_TRAJECTORY_INVALID/);
 });
-
 test("DSH accepts forward sequence jumps after an arbitrary initial resume offset", () => {
   const trajectory = new DshTrajectory("root", 1024);
   const notify = (type, seq, data) => ({
@@ -631,7 +681,6 @@ test("DSH accepts forward sequence jumps after an arbitrary initial resume offse
   assert.equal(trajectory.accept(notify("turn/start", 40, { turn: 0 })).length, 1);
   assert.equal(trajectory.accept(notify("step/start", 42, { turn: 0, step: 0 })).length, 1);
 });
-
 test("DSH sequence tracking is independent for interleaved parent and child sessions", () => {
   const trajectory = new DshTrajectory("root", 1024);
   trajectory.accept({
@@ -652,7 +701,6 @@ test("DSH sequence tracking is independent for interleaved parent and child sess
       1
     );
 });
-
 for (const path of ["Adapter", "Core"])
   test(`DSH ${path} accepts native sequence jumps and completes cleanup`, async (t) => {
     const f = await fixture(t, "sequence-jump");
@@ -686,7 +734,6 @@ for (const path of ["Adapter", "Core"])
       assert.equal((await core.shutdown()).cleanup, "complete");
     }
   });
-
 test("DSH cleanup failure suppresses completed and retains primary plus cleanup failures", async (t) => {
   const f = await fixture(t, "provider-error");
   const original = HarnessClient.prototype.close;
@@ -702,7 +749,6 @@ test("DSH cleanup failure suppresses completed and retains primary plus cleanup 
     HarnessClient.prototype.close = original;
   }
 });
-
 test("DSH AgentExecutor path normalizes public failure and preserves stable DSH reason", async (t) => {
   const f = await fixture(t, "provider-error");
   const logs = [];
@@ -731,7 +777,6 @@ test("DSH AgentExecutor path normalizes public failure and preserves stable DSH 
     assert.notEqual((await core.shutdown()).cleanup, "incomplete");
   }
 });
-
 test("DSH default Core sink persists bounded native RPC diagnostics without provider secrets", async (t) => {
   const f = await fixture(t, "resume-error");
   f.request.providerSession = { sessionId: "missing-session", resumable: true };
@@ -765,7 +810,6 @@ test("DSH default Core sink persists bounded native RPC diagnostics without prov
     await logging.close();
   }
 });
-
 test("DSH a later caller abort cannot hide an already observed execution failure", async (t) => {
   const f = await fixture(t, "provider-error");
   const controller = new AbortController();
@@ -781,7 +825,6 @@ test("DSH a later caller abort cannot hide an already observed execution failure
     HarnessClient.prototype.close = original;
   }
 });
-
 async function untilFile(path) {
   for (let attempt = 0; attempt < 200; attempt++) {
     try {
@@ -794,7 +837,6 @@ async function untilFile(path) {
   }
   throw new Error("fixture pid was not written");
 }
-
 test("DSH version mismatch refuses input; abort also reclaims the version probe", async (t) => {
   const wrong = await fixture(t, "version");
   assert.equal(terminals(await collect(wrong.request))[0].payload.code, "DSH_VERSION_UNSUPPORTED");
@@ -813,7 +855,6 @@ test("DSH version mismatch refuses input; abort also reclaims the version probe"
   assert.equal(terminals(await pending)[0].type, "run.cancelled");
   assert.throws(() => process.kill(pid, 0), /ESRCH/);
 });
-
 test("DSH version probe retains a nonzero process exit independently of the public code", async (t) => {
   const f = await fixture(t, "version-exit");
   const failed = terminals(await collect(f.request))[0];
@@ -821,7 +862,6 @@ test("DSH version probe retains a nonzero process exit independently of the publ
   assert.equal(failed.payload.diagnostics.exitCode, 23);
   await assert.rejects(f.trace(), { code: "ENOENT" });
 });
-
 test(
   "DSH version probe retains primary and cleanup errors when process-group confirmation is denied",
   {
@@ -845,7 +885,6 @@ test(
     }
   }
 );
-
 test(
   "DSH cancellation closes the SDK runtime while the test owns descendant cleanup",
   {
@@ -868,7 +907,6 @@ test(
     assert.throws(() => process.kill(parentPid, 0), /ESRCH/);
   }
 );
-
 test(
   "DSH unexpected SDK runtime exit reports failure while the test owns orphan cleanup",
   {
@@ -888,7 +926,6 @@ test(
     assert.throws(() => process.kill(parentPid, 0), /ESRCH/);
   }
 );
-
 test("DSH rejects a terminal or model step from a different or unstarted turn", () => {
   const trajectory = new DshTrajectory("root", 1024);
   const notify = (type, seq, data) => ({
@@ -905,7 +942,6 @@ test("DSH rejects a terminal or model step from a different or unstarted turn", 
     /DSH_TRAJECTORY_INVALID/
   );
 });
-
 test("DSH queue overflow preserves common capacity code and cannot report success", async (t) => {
   const f = await fixture(t);
   const { DEFAULT_STREAM_LIMIT_POLICY } = await import("@mininglamp-oss/octo-runtime-protocol");

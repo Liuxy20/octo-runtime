@@ -1,4 +1,10 @@
 import {
+  agentEnvItem,
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   acpLoadSessionParams,
   acpNewSessionParams,
   acpPromptParams,
@@ -6,8 +12,6 @@ import {
   type AcpUpdate
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import {
-  initialControlInstructions,
-  actmodeEvidence,
   AcpApprovalBridge,
   AcpTurnNormalizer,
   acpToolTerminalStatus,
@@ -17,13 +21,15 @@ import {
   assertMcpOptions,
   normalizeAcpToolUpdate,
   probeCommand,
+  snapshotProviderLaunch,
+  type ProbeResult,
+  type AdapterMetadata,
   type AdapterInvocationContext,
   type CanonicalEvent,
   type InvokeRequest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
-  contextActmode,
   providerInputParts,
   type InteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -39,6 +45,7 @@ export class AcpInvocationError extends Error {
 }
 
 export interface AcpAdapterDefinition {
+  metadata?: AdapterMetadata;
   type: string;
   provider: string;
   command: string;
@@ -68,14 +75,13 @@ export interface AcpModelSelectionRequest {
 }
 
 /** 只使用 Provider 发布的模式 ID；不从产品名称、审批档位或正文猜测。 */
-export function acpActmodeSelectionRequest(
+export function acpModeSelectionRequest(
   session: JsonRecord,
   sessionId: string,
-  requested: "default" | "plan"
+  requested: string
 ): {
   method: "session/set_config_option" | "session/set_mode";
   params: JsonRecord;
-  effective: "default" | "plan";
   nativeMode: string;
   unchanged: boolean;
 } {
@@ -93,20 +99,17 @@ export function acpActmodeSelectionRequest(
         })
         .map((value) => stringField(value, "value"))
     : arrayField(modes, "availableModes").map((value) => stringField(recordValue(value), "id"));
-  const ordinary = available.includes("default")
-    ? "default"
-    : available.includes("build")
-      ? "build"
-      : undefined;
-  const nativeMode = requested === "plan" && available.includes("plan") ? "plan" : ordinary;
-  if (!nativeMode) throw new Error("ACTMODE_UNSUPPORTED: ACP did not advertise an applicable mode");
+  if (!requested.trim() || !available.includes(requested))
+    throw new Error("ACP_MODE_UNSUPPORTED: Provider did not advertise the requested mode ID");
+  if (option && !stringField(option, "id"))
+    throw new Error("ACP_MODE_INVALID: mode config option has no ID");
+  const nativeMode = requested;
   return {
     method: option ? "session/set_config_option" : "session/set_mode",
     params: option
       ? { sessionId, configId: stringField(option, "id"), value: nativeMode }
       : { sessionId, modeId: nativeMode },
     nativeMode,
-    effective: nativeMode === "plan" ? "plan" : "default",
     unchanged:
       (option ? stringField(option, "currentValue") : stringField(modes, "currentModeId")) ===
       nativeMode
@@ -237,21 +240,34 @@ export function createAcpAdapter(
   definition: AcpAdapterDefinition,
   {
     acpClientFactory = spawnAcpClient,
-    command = definition.command
+    command = definition.command,
+    commandArgsPrefix = [],
+    env = {},
+    probe
   }: {
     acpClientFactory?: typeof spawnAcpClient;
     command?: string;
+    commandArgsPrefix?: readonly string[];
+    env?: NodeJS.ProcessEnv;
+    probe?: () => Promise<ProbeResult>;
   } = {}
 ) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
+  // 私有条目按最终注册身份读取；宿主可复用传输定义并覆盖 metadata.type。
+  // 固定构造时的 metadata，避免调用方后来修改定义对象改变本包读取的命名空间。
+  const metadata = { ...(definition.metadata ?? { mcp: true, type: definition.type }) };
   return defineAdapter(
     {
-      metadata: {
-        mcp: true,
-        type: definition.type,
-        agentSources: ["provisioned"]
-      },
-      probe: () => probeCommand(command),
+      metadata,
+      probe:
+        probe ??
+        (acpClientFactory === spawnAcpClient
+          ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+          : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
       async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
         const bridge = responders.get(invocationId);
         if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -261,7 +277,10 @@ export function createAcpAdapter(
         request: InvokeRequest,
         context?: AdapterInvocationContext
       ): AsyncGenerator<CanonicalEvent> {
-        if (request.approvalMode !== "ask" && request.approvalMode !== "full_access")
+        if (
+          invocationApprovalMode(request) !== "ask" &&
+          invocationApprovalMode(request) !== "full_access"
+        )
           throw new Error("APPROVAL_MODE_UNSUPPORTED: this ACP adapter has no assisted policy");
         if (responders.has(request.invocationId)) throw new Error("INVOCATION_ALREADY_ACTIVE");
         const bridge = new AcpApprovalBridge(request);
@@ -286,7 +305,7 @@ export function createAcpAdapter(
       typeof definition.args === "function"
         ? definition.args(request)
         : (definition.args ?? ["acp"]);
-    const runEnv = invocationEnvironment(request, definition.env?.(request));
+    const runEnv = invocationEnvironment(request, definition.env?.(request), launch.env);
     const mcp = invocationMcpServers(request, runEnv);
     assertMcpOptions(mcp, definition.type, []);
     const servers = Object.entries(mcp).map(([name, server]) =>
@@ -305,10 +324,10 @@ export function createAcpAdapter(
           }
     );
     const client = acpClientFactory({
-      command,
-      args: [...args],
+      command: launch.command,
+      args: [...launch.args, ...args],
       env: runEnv,
-      cwd: request.workdir,
+      cwd: invocationWorkdir(request),
       permissionHandler: (params) => bridge.requestPermission(params),
       onPermissionResponseWritten: (params) => bridge.responseWritten(params),
       onPermissionResponseFailed: (params, error) => bridge.responseFailed(params, error),
@@ -356,8 +375,8 @@ export function createAcpAdapter(
       let resumeFallback: string | undefined;
       let sessionMethod = requestedSessionId ? "session/load" : "session/new";
       let sessionParams = requestedSessionId
-        ? acpLoadSessionParams(requestedSessionId, { cwd: request.workdir })
-        : acpNewSessionParams({ cwd: request.workdir });
+        ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(request) })
+        : acpNewSessionParams({ cwd: invocationWorkdir(request) });
       sessionParams.mcpServers = servers;
       let sessionRequestId = client.reserveRequestId();
       let sessionResult: JsonRecord = {};
@@ -378,7 +397,7 @@ export function createAcpAdapter(
       if (missingLoadedSession) {
         resumeFallback = "session_load_not_found";
         sessionMethod = "session/new";
-        sessionParams = acpNewSessionParams({ cwd: request.workdir });
+        sessionParams = acpNewSessionParams({ cwd: invocationWorkdir(request) });
         sessionParams.mcpServers = servers;
         sessionRequestId = client.reserveRequestId();
         result = await client.request<JsonRecord>(sessionMethod, sessionParams, {
@@ -400,7 +419,7 @@ export function createAcpAdapter(
           payload: {
             noticeId: `${request.invocationId}:session-name`,
             code: "provider_diagnostic",
-            severity: "info",
+            severity: "warning",
             params: {
               adapter: definition.type,
               diagnosticId: "session-name-unsupported",
@@ -410,21 +429,12 @@ export function createAcpAdapter(
             }
           }
         };
-      const requestedMode = contextActmode(request.context);
+      const requestedMode = acpModeId(request, metadata.type);
       if (requestedMode !== undefined) {
-        const selection = acpActmodeSelectionRequest(sessionResult, sessionId, requestedMode);
+        const selection = acpModeSelectionRequest(sessionResult, sessionId, requestedMode);
         if (!selection.unchanged) await client.request(selection.method, selection.params);
-        yield actmodeEvidence({
-          requested: requestedMode,
-          effective: selection.effective,
-          nativeMode: selection.nativeMode,
-          status: selection.effective === requestedMode ? "applied" : "fallback",
-          ...(selection.effective !== requestedMode
-            ? { reason: "provider_unsupported" as const }
-            : {})
-        });
       }
-      const requestedModel = nonEmptyString(request.agentConfig?.model);
+      const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {
         const selection = acpModelSelectionRequest(sessionResult, sessionId, requestedModel);
         if (selection) {
@@ -463,26 +473,7 @@ export function createAcpAdapter(
 
       const input = providerInputParts(request, resumeFallback !== undefined);
       // Preserve the legacy text call while mixed prompts retain every block's position.
-      const prompt =
-        input.length === 1 && input[0]?.type === "text"
-          ? `${input[0].text}${initialControlInstructions(request, !requestedSessionId || resumeFallback !== undefined) ? `\n\n${initialControlInstructions(request, !requestedSessionId || resumeFallback !== undefined)}` : ""}`
-          : [
-              ...input,
-              ...(initialControlInstructions(
-                request,
-                !requestedSessionId || resumeFallback !== undefined
-              )
-                ? [
-                    {
-                      type: "text" as const,
-                      text: initialControlInstructions(
-                        request,
-                        !requestedSessionId || resumeFallback !== undefined
-                      )
-                    }
-                  ]
-                : [])
-            ];
+      const prompt = input.length === 1 && input[0]?.type === "text" ? input[0].text : input;
       const promptParams = acpPromptParams(sessionId, prompt);
       const promptRequestId = client.reserveRequestId();
       let stopReason: string | undefined;
@@ -698,4 +689,13 @@ function nonEmptyString(value: unknown): string | undefined {
 
 function stringField(value: JsonRecord, key: string): string | undefined {
   return typeof value[key] === "string" ? value[key] : undefined;
+}
+
+/** ACP 包私有约定；派生 Adapter 以自己的类型命名空间选取原生 modeId。 */
+export function acpModeId(request: InvokeRequest, type: string): string | undefined {
+  const value = agentEnvItem(request.agentEnv, `adapter.${type}`, "options")?.modeId;
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || !value.trim())
+    throw new TypeError("ADAPTER_OPTION_INVALID: modeId");
+  return value;
 }

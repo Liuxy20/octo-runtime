@@ -11,7 +11,6 @@ export const DSH_VERSION = DSH_MIN_VERSION;
 
 const messages = {
   DSH_CONFIG_INVALID: "DeepSeek Harness configuration is invalid for this invocation.",
-  DSH_ACTMODE_UNSUPPORTED: "DeepSeek Harness supports only the default actmode.",
   PROVIDER_MESSAGE_TOO_LARGE: "DeepSeek Harness protocol line exceeded the configured limit.",
   STREAM_QUEUE_ITEM_TOO_LARGE: "DeepSeek Harness event exceeded the configured queue item limit.",
   STREAM_QUEUE_BYTES_EXCEEDED: "DeepSeek Harness event queue exceeded the configured byte limit.",

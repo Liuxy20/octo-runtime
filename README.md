@@ -20,7 +20,7 @@ octo-runtime logs --lines 200 --follow
 
 Applications consuming an existing Kernel install `@mininglamp-oss/octo-runtime-client` and call `attachKernel({endpoint})`. Protocol types and helpers come from `/protocol`. Owners drain their accepted invocations and finish business delivery before closing their client; closing a connection does not stop the Kernel.
 
-Applications owning an execution service use `createKernelService({home, endpoint, adapters})` from `@mininglamp-oss/octo-runtime/host`. Desktop applications use the SDK directly. Explicit in-process execution remains available from `/executor-core`.
+Native applications owning an execution service integrate Kernel/Core, shared helpers and selected Adapters from source workspace, then construct `createKernelService({home, endpoint, adapters})`. Declare only the Adapter dependencies that the product needs; the CLI package exposes no Adapter aggregate entries. See [SDK integration](docs/en/getting-started/sdk.md). Explicit direct Core remains an advanced choice with host-owned lifecycle.
 
 ## Channel Gateway
 

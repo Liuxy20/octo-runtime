@@ -1,0 +1,28 @@
+task: 341-adapter-agentenv
+baseline: d5aeae707fcda0b138b360136f164c085c9a5e87
+integrated_main: 4d7e272d1bb30957c815410f68758a9d2445d708
+read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .claude/skills/octospec-workflow/SKILL.md
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/local-execution.md
+  - .octospec/tasks/339-engine-lifecycle/brief.md
+precedence:
+  - User decisions in this conversation supersede historical configuration projection rules.
+  - No compatibility layer or GitHub CI scope expansion.
+  - User authorized English commit, push and PR to main after review passes; no merge or release.

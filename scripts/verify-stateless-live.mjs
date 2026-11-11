@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -7,7 +8,6 @@ import { attachKernel } from "../packages/octo-runtime-executor-kernel/dist/inde
 import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
 import { readStatelessComponentStatus } from "../test-support/stateless-live-probes.mjs";
-
 // 此探针连接已启动的测试设备，不创建 Home，也不默认连接共享临时路径。
 const home = process.env.OCTO_STATELESS_LIVE_HOME;
 assert.ok(home && isAbsolute(home), "Set OCTO_STATELESS_LIVE_HOME to the test Runtime Home");
@@ -23,7 +23,7 @@ await new Promise((resolve, reject) => {
 });
 try {
   const environment = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("CDP timeout")), 15_000);
+    const timer = setTimeout(() => reject(new Error("CDP timeout")), 15000);
     cdp.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
       if (message.id !== 1) return;
@@ -71,13 +71,11 @@ try {
     sessionGeneration: 0,
     prompt,
     modelInput: prompt,
-    controlInstructions: "",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    approvalMode: "full_access",
-    agentSource: "provisioned",
-    agentConfig: {},
-    workdir: process.cwd(),
-    signal: AbortSignal.timeout(90_000)
+    signal: AbortSignal.timeout(90000),
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+    ])
   };
   const { ref } = await client.submit(invocationInput(request, "canonical", "codex"), {
     signal: request.signal

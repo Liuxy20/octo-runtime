@@ -6,7 +6,7 @@ import {
 
 /** Read only the frozen execution context; never expose its values as model input. */
 export function invocationEnvs(request: InvokeRequest): Record<string, string> {
-  const envs = contextItem(request.context, "octo.execution", "envs")?.payload ?? {
+  const envs = contextItem(request.agentEnv, "octo.execution", "envs")?.payload ?? {
     env_variables: []
   };
   assertContextEnvs(envs);

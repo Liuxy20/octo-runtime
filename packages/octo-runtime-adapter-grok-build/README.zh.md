@@ -15,19 +15,26 @@
 以下节选负责注册与输入准备。实际执行使用 `executor.invoke(input)`；完整的消费、终态判断和 `shutdown()` 示例见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
 const executor = new AgentExecutor();
-executor.register(grokBuildAdapter);
+executor.register(createGrokBuildAdapter({ command: "/absolute/path/grok", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }
+    ]
   }
 });
 ```
@@ -37,7 +44,7 @@ const input = InvokeInput.check({
 | 项            | 值                                                       |
 | ------------- | -------------------------------------------------------- |
 | Adapter 类型  | `grok-build`                                             |
-| 导出          | `grokBuildAdapter`、`createGrokBuildAdapter`             |
+| 导出          | `createGrokBuildAdapter`             |
 | 命令          | `grok --no-auto-update agent --no-leader stdio`          |
 | 输出          | 仅 canonical 事件                                        |
 | 认证          | 广告出来的 `xai.api_key` 或 `cached_token`，按其顺序尝试 |
@@ -65,3 +72,15 @@ private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，�
 
 - [实现](src/index.ts)、[原生 Kernel 示例](examples/worker.mts)、[测试夹具](../../test/grok-build-adapter.test.js)。
 - [真实验证记录](../../.octospec/tasks/95-grok-build-acp/reference.md)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)。
+
+## 私有 AgentEnv.Item
+
+以下条目由本包私有定义，名称与 payload 均不登记公共 Schema、catalog 或生成类型。已有 options 可放在同一 payload 中；非法显式值由本 Adapter 拒绝。
+
+可选 `modeId` 仅接受 `"default"` 或 `"plan"`。只有显式值才发送原生 `session/set_mode`；本包不要求 ACP modes 广告。非法值与 setter 失败直接失败，不做模式降级。省略不发 setter，也不重置续接会话。此选项不改变 approval_policy/yoloMode 或原生 exit_plan_mode 交互。
+
+```json
+{ "namespace": "adapter.grok-build", "name": "options", "payload": { "modeId": "plan" } }
+```
+
+将该条目加入上方示例的 `agentEnv.items`，与 Adapter 路由和已准备的 workspace 一起传入。已有 options 放入同一条目；重复 namespace/name 非法。model/effort 仍使用公共 model item。已删除的公共 actmode 不会自动转换。

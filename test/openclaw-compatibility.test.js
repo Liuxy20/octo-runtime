@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -8,7 +9,6 @@ import {
   resolveGatewayContract
 } from "../packages/octo-runtime-adapter-openclaw/dist/compatibility.js";
 import { assertCanonicalEvent } from "../packages/octo-runtime-protocol/dist/index.js";
-
 const contracts = JSON.parse(
   readFileSync(new URL("../test-support/openclaw-request-contracts.json", import.meta.url))
 );
@@ -50,23 +50,35 @@ function request(overrides = {}) {
     runId: "run",
     prompt: "hello",
     modelInput: "hello",
-    controlInstructions: "trusted system instruction",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    approvalMode: "ask",
-    agentSource: "preset",
-    workdir: "",
-    agentConfig: {
-      providerAgentId: "main",
-      model: "fixture/model",
-      effort: "high",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://localhost:1",
-        OPENCLAW_GATEWAY_TOKEN: "secret-fixture",
-        OPENCLAW_GATEWAY_DEVICE_ID: "d",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
+      {
+        namespace: "octo.execution",
+        name: "model",
+        payload: { selection: { id: "fixture/model" }, reasoning: { effort: "high" } }
+      },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "main",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://localhost:1",
+            OPENCLAW_GATEWAY_TOKEN: "secret-fixture",
+            OPENCLAW_GATEWAY_DEVICE_ID: "d",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+          }
+        }
       }
-    },
+    ]),
     ...overrides
   };
 }
@@ -213,15 +225,29 @@ async function invoke(f, req = request()) {
   }
   return events;
 }
-
 for (const { tag } of contracts.versions)
   for (const approvalMode of ["ask", "full_access"])
     test(`OpenClaw ${tag} resumes an existing session with verified ${approvalMode} requests`, async () => {
+      const policy = withAgentEnvItems(request().agentEnv, [
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: approvalMode } }
+      ]);
+      const assertNativePermission = (calls) => {
+        const params =
+          calls.find((call) => call.method === "sessions.patch")?.params ??
+          calls.find((call) => call.method === "sessions.create").params;
+        if (resolveGatewayContract(hello(tag)).family === "legacy") {
+          assert.equal(params.execSecurity, "full");
+          assert.equal(params.execAsk, "off");
+        } else {
+          assert.equal(params.permissionMode, approvalMode === "ask" ? "guarded" : "full");
+        }
+      };
       const first = fixture({ version: tag });
       const firstEvents = await invoke(
         first,
-        request({ sessionName: "octo-dm-user-visible", approvalMode })
+        request({ sessionName: "octo-dm-user-visible", agentEnv: policy })
       );
+      assertNativePermission(first.calls);
       const providerSession = firstEvents.find((event) => event.type === "session.update").payload
         .providerSession;
       assert.equal(providerSession.resumable, true);
@@ -233,10 +259,11 @@ for (const { tag } of contracts.versions)
           request({
             sessionName: "a-different-display-name",
             runId: `run-${turn}`,
-            approvalMode,
+            agentEnv: policy,
             providerSession: { ...providerSession, resumable: false }
           })
         );
+        assertNativePermission(resumed.calls);
         assert.equal(events.at(-1).type, "run.completed");
         const update = events.find((event) => event.type === "session.update").payload
           .providerSession;
@@ -261,14 +288,14 @@ for (const { tag } of contracts.versions)
       const sameName = fixture({ version: tag });
       const fresh = await invoke(
         sameName,
-        request({ sessionName: "octo-dm-user-visible", approvalMode })
+        request({ sessionName: "octo-dm-user-visible", agentEnv: policy })
       );
+      assertNativePermission(sameName.calls);
       assert.notEqual(
         fresh.find((event) => event.type === "session.update").payload.providerSession.sessionId,
         providerSession.sessionId
       );
     });
-
 test("OpenClaw never creates or dispatches when a recovery handle is missing or mismatched", async () => {
   for (const fail of [
     (method) => (method === "sessions.describe" ? { session: null } : undefined),
@@ -287,7 +314,9 @@ test("OpenClaw never creates or dispatches when a recovery handle is missing or 
     const events = await invoke(
       f,
       request({
-        approvalMode: "full_access",
+        agentEnv: withAgentEnvItems(request().agentEnv, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ]),
         providerSession: { sessionId: "agent:main:existing" }
       })
     );
@@ -302,12 +331,18 @@ test("OpenClaw never creates or dispatches when a recovery handle is missing or 
   );
   assert.equal(f.calls.length, 0);
 });
-
 for (const { tag, schemas } of contracts.versions)
   for (const mode of ["ask", "full_access"]) {
     test(`OpenClaw ${tag} ${mode} executes once with source-derived strict requests`, async () => {
       const f = fixture({ version: tag });
-      const events = await invoke(f, request({ approvalMode: mode }));
+      const events = await invoke(
+        f,
+        request({
+          agentEnv: withAgentEnvItems(request().agentEnv, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode } }
+          ])
+        })
+      );
       assert.equal(events.at(-1).type, "run.completed");
       const legacy = Boolean(schemas.SessionsPatchParamsSchema);
       assert.deepEqual(
@@ -325,7 +360,7 @@ for (const { tag, schemas } of contracts.versions)
       const agent = f.calls.find((call) => call.method === "agent").params;
       assert.equal(agent.thinking, "high");
       assert.equal(agent.model, "fixture/model");
-      assert.match(agent.extraSystemPrompt, /trusted system instruction/);
+      assert.equal(Object.hasOwn(agent, "extraSystemPrompt"), false);
       assert.match(agent.idempotencyKey, /^octo-runtime-run-/);
       assert.equal(create.thinkingLevel, legacy ? undefined : "high");
       assert.equal(create.permissionMode, legacy ? undefined : mode === "ask" ? "guarded" : "full");
@@ -343,7 +378,6 @@ for (const { tag, schemas } of contracts.versions)
       assert.equal(f.detached, 1);
     });
   }
-
 test("legacy strict requests reproduce the regression when any modern-only create field leaks", () => {
   const entry = contracts.versions[0];
   const validate = validators[entry.schemas.SessionsCreateParamsSchema];
@@ -356,7 +390,6 @@ test("legacy strict requests reproduce the regression when any modern-only creat
     assert.equal(validate.errors[0].keyword, "additionalProperties");
   }
 });
-
 test("version metadata does not reject compatible Gateway connections", async () => {
   for (const version of [
     "v2026.7.1-1",
@@ -374,7 +407,6 @@ test("version metadata does not reject compatible Gateway connections", async ()
     );
   }
 });
-
 test("probe and invocation revalidate their own connection in both version directions", async () => {
   for (const versions of [
     ["2026.7.1", "2026.10.5"],
@@ -387,7 +419,13 @@ test("probe and invocation revalidate their own connection in both version direc
       clientFactory: () => (count++ === 0 ? first.client : second.client)
     });
     assert.equal(
-      (await adapter.probe({ providerOptions: request().agentConfig.providerOptions })).available,
+      (
+        await adapter.probe({
+          providerOptions: request().agentEnv.items.find(
+            (item) => item.namespace === "adapter.openclaw"
+          ).payload
+        })
+      ).available,
       true
     );
     assert.deepEqual(
@@ -407,7 +445,6 @@ test("probe and invocation revalidate their own connection in both version direc
     );
   }
 });
-
 test("missing core capabilities fail before session creation while absent approval transport falls back", async () => {
   for (const method of methods.filter(
     (method) => !["sessions.patch", "sessions.describe"].includes(method)
@@ -430,7 +467,6 @@ test("missing core capabilities fail before session creation while absent approv
     /approval_transport_unavailable/
   );
 });
-
 test("OpenClaw requires read and patch methods only when resuming", async () => {
   for (const method of ["sessions.describe", "sessions.patch"]) {
     const handshake = hello("2026.10.5");
@@ -446,7 +482,6 @@ test("OpenClaw requires read and patch methods only when resuming", async () => 
     );
   }
 });
-
 test("insufficient native scope is not misreported as an available full fallback", async () => {
   const handshake = {
     ...hello("2026.10.5", false),
@@ -458,7 +493,6 @@ test("insufficient native scope is not misreported as an available full fallback
   assert.match(events.at(-1).payload.message, /full requires operator.admin/);
   assert.deepEqual(f.calls, []);
 });
-
 test(
   "effective full automatically resolves legacy approvals while retaining requested ask and context identity",
   { timeout: 3000 },
@@ -480,7 +514,6 @@ test(
     assert.doesNotMatch(notice, /secret-fixture|trusted system instruction|fixture answer/);
   }
 );
-
 test("create, permission patch and subscription failures never dispatch or replay agent", async () => {
   for (const method of ["sessions.create", "sessions.patch", "sessions.messages.subscribe"]) {
     const f = fixture({
@@ -506,7 +539,6 @@ test("create, permission patch and subscription failures never dispatch or repla
     assert.equal(f.calls.filter((call) => call.method === "agent").length, 0);
   }
 });
-
 for (const stopReason of ["rpc", "stop", "restart"])
   test(`native ${stopReason} cancellation reconciles without duplicate abort`, async () => {
     const controller = new AbortController();
@@ -520,7 +552,6 @@ for (const stopReason of ["rpc", "stop", "restart"])
     assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 1);
     assert.equal(f.calls.filter((call) => call.method === "agent").length, 1);
   });
-
 test("a nonterminal final receipt waits through pendingError and wait timeout", async () => {
   const f = fixture({
     result: { status: "queued" },
@@ -536,7 +567,6 @@ test("a nonterminal final receipt waits through pendingError and wait timeout", 
   assert.equal(events.filter((event) => event.type === "model_step.started").length, 1);
   assert.equal(events.filter((event) => event.type === "model_step.finished").length, 1);
 });
-
 test("a pending lifecycle error does not finish the model step before the final receipt", async () => {
   const f = fixture({ lifecycle: { phase: "error", pendingError: true } });
   const events = await invoke(f);
@@ -545,7 +575,6 @@ test("a pending lifecycle error does not finish the model step before the final 
   assert.equal(finishes.length, 1);
   assert.equal(finishes[0].payload.status, "completed");
 });
-
 test("cancellation after dispatch but before ACK requires native terminal confirmation", async () => {
   const controller = new AbortController();
   const f = fixture({
@@ -560,7 +589,6 @@ test("cancellation after dispatch but before ACK requires native terminal confir
   assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 1);
   assert.equal(f.calls.filter((call) => call.method === "agent.wait").length, 1);
 });
-
 test("abort ACK alone cannot turn a completed native run into confirmed cancellation", async () => {
   for (const cancelBeforeAccepted of [false, true]) {
     const controller = new AbortController();
@@ -576,7 +604,6 @@ test("abort ACK alone cannot turn a completed native run into confirmed cancella
     assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 1);
   }
 });
-
 for (const lifecycle of [undefined, { phase: "end" }])
   for (const abortAt of ["model_step.finished", "message.update"])
     test(`late cancellation preserves native completion: ${lifecycle ? "lifecycle" : "final receipt"}, ${abortAt}`, async () => {
@@ -595,7 +622,6 @@ for (const lifecycle of [undefined, { phase: "end" }])
       assert.equal(events.filter((event) => event.payload.status === "stopped").length, 0);
       assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 0);
     });
-
 test("terminal interpretation distinguishes normal stop, cancellation cleanup and provider timeout", () => {
   for (const source of ["wait", "final"]) {
     for (const stopReason of ["rpc", "stop"]) {
@@ -641,7 +667,6 @@ test("terminal interpretation distinguishes normal stop, cancellation cleanup an
     /unsupported Gateway protocol/
   );
 });
-
 test("lost acknowledgement never replays an agent request", async () => {
   const f = fixture({
     fail: (method) => (method === "agent" ? new Error("ACK lost: state unknown") : undefined)
@@ -651,7 +676,6 @@ test("lost acknowledgement never replays an agent request", async () => {
   assert.equal(f.calls.filter((call) => call.method === "agent").length, 1);
   assert.equal(f.calls.filter((call) => call.method === "sessions.create").length, 1);
 });
-
 test("disconnect reconciliation rechecks contracts and preserves the actual terminal without replay", async () => {
   for (const [status, stopReason, expected] of [
     ["ok", undefined, "run.completed"],
@@ -685,7 +709,6 @@ test("disconnect reconciliation rechecks contracts and preserves the actual term
   assert.match(events.at(-1).payload.message, /COMPATIBILITY_UNSUPPORTED/);
   assert.deepEqual(second.calls, []);
 });
-
 for (const path of ["lifecycle", "final receipt", "reconnect"])
   for (const staleOutcome of ["ok", "error"])
     test(`confirmed cancellation wins over an older ${path} wait: ${staleOutcome}`, async () => {
@@ -728,7 +751,6 @@ for (const path of ["lifecycle", "final receipt", "reconnect"])
       assert.equal(first.calls.filter((call) => call.method === "sessions.abort").length, 1);
       assert.equal(factories, path === "reconnect" ? 2 : 1);
     });
-
 test("late cancellation preserves confirmed native failure and its diagnostic", async () => {
   const controller = new AbortController();
   const f = fixture({ result: { status: "error", summary: "native failure retained" } });
@@ -741,7 +763,6 @@ test("late cancellation preserves confirmed native failure and its diagnostic", 
   assert.equal(events.at(-1).payload.message, "native failure retained");
   assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 0);
 });
-
 test("confirmed cancellation does not hide transport cleanup failure", async () => {
   const controller = new AbortController();
   const f = fixture({ cancel: controller, waits: [{ status: "error", stopReason: "rpc" }] });
@@ -751,7 +772,6 @@ test("confirmed cancellation does not hide transport cleanup failure", async () 
   await assert.rejects(invoke(f, request({ signal: controller.signal })), /fixture cleanup failed/);
   assert.equal(f.calls.filter((call) => call.method === "sessions.abort").length, 1);
 });
-
 for (const [status, stopReason, expected] of [
   ["ok", undefined, "completed"],
   ["error", undefined, "failed"],

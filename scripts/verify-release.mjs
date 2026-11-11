@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  withAgentEnvItems
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { access, cp, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
@@ -10,13 +14,12 @@ import {
   stopReleaseProcess,
   withReleaseDirectory
 } from "./release-process.mjs";
-
 export async function verifyRelease(archiveInput, { expectedCommit, requireClean = false } = {}) {
   if (expectedCommit !== undefined && !/^[a-f0-9]{40,64}$/.test(expectedCommit))
     throw new Error("Invalid expected commit");
   const archive = resolve(archiveInput);
   // Windows 外层验收须覆盖 40 秒身份查询、后续 15 秒就绪与资源关闭，不能提前杀掉 owner。
-  const runtimeCheckTimeout = process.platform === "win32" ? 60_000 : 30_000;
+  const runtimeCheckTimeout = process.platform === "win32" ? 60000 : 30000;
   const root = resolve(import.meta.dirname, "..");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "orc-"));
   const npm = join(
@@ -41,7 +44,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--no-audit",
         "--no-fund"
       ],
-      { cwd: directory, timeout: 60_000, label: `Offline npm ${args[0]}` }
+      { cwd: directory, timeout: 60000, label: `Offline npm ${args[0]}` }
     );
   await withReleaseDirectory(directory, async () => {
     await npmRun(["install", archive]);
@@ -119,10 +122,10 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     assert.equal(moduleManifest.adapters.length, 13);
     const dshEntry = moduleManifest.adapters.find((entry) => entry.type === "dsh");
     assert.equal(dshEntry?.module, "@mininglamp-oss/octo-runtime-adapter-dsh");
-    const dshModule = await import(`${pathToFileURL(installed).href}/dist/public/dsh.js`);
+    const dshDirectory = join(installed, "node_modules", dshEntry.module);
+    const dshModule = await import(pathToFileURL(join(dshDirectory, "dist/index.js")).href);
     assert.equal(dshModule[dshEntry.export].metadata.type, "dsh");
     assert.deepEqual(dshModule[dshEntry.export].metadata.protocolSupport.modes, ["canonical"]);
-    const dshDirectory = join(installed, "node_modules", dshEntry.module);
     const dshNotice = await readFile(join(dshDirectory, "dist/dsh-sdk-NOTICE.txt"), "utf8");
     const dshSource = JSON.parse(
       await readFile(join(root, "packages/octo-runtime-adapter-dsh/package.json"), "utf8")
@@ -156,9 +159,15 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     const dshEvents = await Array.fromAsync(
       dshModule.createDshAdapter().invoke(
         invokeRequest({
-          workdir: directory,
-          approvalMode: "full_access",
-          agentConfig: { providerOptions: { dshBin: dshFixture } }
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            },
+            { namespace: "adapter.dsh", name: "options", payload: { ...{ dshBin: dshFixture } } }
+          ])
         })
       )
     );
@@ -175,39 +184,31 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
     );
     const dshRequest = (mode, extraEnv = []) =>
       invokeRequest({
-        workdir: directory,
-        approvalMode: "full_access",
-        agentConfig: { providerOptions: { dshBin: dshFixture } },
         executionEnvOverrides: {
           env_variables: [{ key: "OCTO_DSH_FIXTURE", value: mode }, ...extraEnv]
-        }
+        },
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+          { namespace: "adapter.dsh", name: "options", payload: { ...{ dshBin: dshFixture } } }
+        ])
       });
     for (const [change, expected] of [
       [
         (request) => {
-          request.agentConfig.sandbox = "read-only";
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").sandbox = "read-only";
         },
         "DSH_CONFIG_INVALID"
       ],
       [
         (request) => {
-          request.context.items.push({
-            namespace: "octo.execution",
-            name: "actmode",
-            payload: { mode: "plan" }
-          });
-        },
-        "DSH_ACTMODE_UNSUPPORTED"
-      ],
-      [
-        (request) => {
-          request.agentConfig.providerOptions.requestTimeoutMs = 0;
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").requestTimeoutMs = 0;
         },
         "DSH_CONFIG_INVALID"
       ],
       [
         (request) => {
-          request.agentConfig.providerOptions.args = ["界".repeat(1366)];
+          agentEnvItem(request.agentEnv, "adapter.dsh", "options").args = ["界".repeat(1366)];
         },
         "DSH_CONFIG_INVALID"
       ]
@@ -239,12 +240,17 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       assert.equal(events.at(-1)?.type, "run.completed", mode);
     }
     const grokEntry = moduleManifest.adapters.find((entry) => entry.type === "grok-build");
-    assert.equal(grokEntry?.module, "@mininglamp-oss/octo-runtime-adapter-grok-build");
+    assert.equal(grokEntry?.module, "./providers.js");
+    assert.equal(grokEntry.factory, true);
     const grokModule = await import(
-      pathToFileURL(join(installed, "node_modules", grokEntry.module, "dist/index.js")).href
+      pathToFileURL(join(installed, "apps/cli/dist", grokEntry.module)).href
     );
-    assert.equal(grokModule[grokEntry.export].metadata.type, "grok-build");
-    assert.deepEqual(grokModule[grokEntry.export].metadata.protocolSupport.modes, ["canonical"]);
+    const grokAdapter = grokModule[grokEntry.export](
+      { command: process.execPath },
+      { env: process.env }
+    );
+    assert.equal(grokAdapter.metadata.type, "grok-build");
+    assert.deepEqual(grokAdapter.metadata.protocolSupport.modes, ["canonical"]);
     assert.equal(moduleManifest.extras, undefined);
     await assert.rejects(access(join(installed, "apps/cli/dist/default_adapters.json")), {
       code: "ENOENT"
@@ -254,7 +260,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       execute(process.execPath, [cli, ...args, "--home", home], {
         cwd: consumer,
         // Windows service inspection can issue two sequential 30-second native queries.
-        timeout: process.platform === "win32" ? 75_000 : 10_000,
+        timeout: process.platform === "win32" ? 75000 : 10000,
         label: `CLI ${args.join(" ") || "help"}`
       });
     const version = `${metadata.version}\ncommit:${build.commit.slice(0, 12)}${build.dirty ? " (dirty)" : ""}\nbuild:${build.buildTime}`;
@@ -308,17 +314,18 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       { code: "ENOENT" }
     );
     await writeFile(join(consumer, "package.json"), '{"type":"module"}\n');
-    await cp(join(root, "docs/examples"), join(consumer, "docs-examples"), { recursive: true });
+    // 原生文档已统一源码 workspace 接入，不能用仅安装 CLI 包的目录解析其依赖。
+    // 下方 public-sdk fixtures 继续独立验证发行物保留的通用公开入口。
     await execute(
       process.execPath,
       [
         join(root, "node_modules/typescript/bin/tsc"),
         "-p",
-        "docs-examples/tsconfig.json",
+        join(root, "docs/examples/tsconfig.json"),
         "--typeRoots",
         join(root, "node_modules/@types")
       ],
-      { cwd: consumer, timeout: 30_000, label: "Compile documentation examples" }
+      { cwd: consumer, timeout: 30000, label: "Compile documentation examples" }
     );
     await cp(join(root, "test/fixtures/invoke-adapter.js"), join(consumer, "docs-adapter.mjs"));
     await execute(
@@ -331,7 +338,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       import { resolve } from "node:path";
       import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
       import { testAdapter } from "./docs-adapter.mjs";
-      import { runOwnedInvocation } from "./docs-examples/service.mts";
+      import { runOwnedInvocation } from ${JSON.stringify(pathToFileURL(join(root, "docs/examples/service.mts")).href)};
       const home = resolve("docs-home");
       await (await import("node:fs/promises")).mkdir(home, {recursive:true});
       let completed = false;
@@ -342,6 +349,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       }, {
         inputs: [{type: "text", text: "documentation package example"}],
         agentEnv: {schema: "octo.context-envelope/v3", items: [
+          {namespace: "octo.execution", name: "workspace", payload: {path: process.cwd()}},
           {namespace: "octo.execution", name: "adapter", payload: {type: "test"}}
         ]}
       }, event => { if (event.type === "run.completed") completed = true; });
@@ -378,7 +386,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
         "--outDir",
         "compiled"
       ],
-      { cwd: consumer, timeout: 30_000, label: "Compile public SDK fixtures" }
+      { cwd: consumer, timeout: 30000, label: "Compile public SDK fixtures" }
     );
     await execute(
       process.execPath,
@@ -427,7 +435,7 @@ export async function verifyRelease(archiveInput, { expectedCommit, requireClean
       await Promise.race([
         exited,
         new Promise((_, reject) => {
-          const timer = setTimeout(() => reject(new Error("CLI shutdown timeout")), 10_000);
+          const timer = setTimeout(() => reject(new Error("CLI shutdown timeout")), 10000);
           timer.unref();
         })
       ]);

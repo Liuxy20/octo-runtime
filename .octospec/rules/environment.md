@@ -38,7 +38,7 @@ supersedes: []
 }
 ```
 
-`payload.env_variables` 必须是 `{ key, value }` 条目列表。环境变量名放在条目的 `key` 值中，不作为协议 JSON 属性名。字典形状不再接受。业务方使用的 `ContextConfiguration.defaults`、`mandatory` 以及单次 Run 的请求 context 均使用同一格式；Worker 不再保存 Agent 配置。
+`payload.env_variables` 必须是 `{ key, value }` 条目列表。环境变量名放在条目的 `key` 值中，不作为协议 JSON 属性名。字典形状不再接受。业务方使用的 `ContextConfiguration.defaults`、`mandatory` 以及单次 Run 的请求 context 均使用同一格式；Core 不保存业务 Agent 配置。
 
 - key 必须匹配 `[A-Za-z_][A-Za-z0-9_]*`；value 必须是字符串且不含 NUL。
 - 同一列表内的 `key` 不得重复，即使值相同也拒绝。条目不得缺少 `key` 或 `value`，不得增加未知字段。
@@ -49,24 +49,26 @@ supersedes: []
 
 ## 合并与冻结
 
-业务发起方使用 `resolveContextConfiguration` 按 key 依次合并 defaults、request、mandatory。请求中的同名 key 覆盖默认值，mandatory 中的同名 key 最后覆盖请求值；即使请求显式提交不同值，也不因此返回 `CONTEXT_MANDATORY_CONFLICT`。未被覆盖的默认项和请求新增项保留；空列表不删除低优先级变量。例如 defaults `A=base`、request `A=request`、mandatory `A=locked` 得到 `A=locked`。这是 envs 合并规则，不取消其他输入、权限或冻结一致性校验。本地 `resolveLocalContext` 提供 defaults 与 request 的解析；不要据此要求执行层读取业务 Agent 配置。
+业务发起方使用 `resolveContextConfiguration` 按 key 依次合并 defaults、request、mandatory。请求中的同名 key 覆盖默认值，mandatory 中的同名 key 最后覆盖请求值；即使请求显式提交不同值，也不因此返回 `CONTEXT_MANDATORY_CONFLICT`。未被覆盖的默认项和请求新增项保留；空列表不删除低优先级变量。例如 defaults `A=base`、request `A=request`、mandatory `A=locked` 得到 `A=locked`。这是 envs 合并规则，不取消其他输入、权限或冻结一致性校验。业务在提交前完成所需合并；Core 只透传 AgentEnv，Adapter 直接读取 envs。
 
-有效值以同一列表结构进入 `effective_context` 与 `resolved_execution_plan.envs`，参与 context hash。Runtime 在准备阶段检查两份数据是否一致，防止冻结后篡改。会话复用策略由调用方按执行配置决定；不再使用 Compiler 或 compiled hash。
+有效值仅保留在本轮 AgentEnv 的 envs item 列表中；Core 为整份信封复制快照并透传，Adapter 直接消费，不产生另一份执行配置或核对两份投影。会话复用策略由调用方按执行配置决定；不使用 Compiler 或 compiled hash。
 
 ## 运行时范围与优先级
 
 协议和执行快照保留列表结构；适配器在启动进程时才将列表转换成系统 API 所需的环境字典。每次调用都创建独立的环境对象：继承宿主环境，覆盖本次 Run 的 envs，最后应用适配器为其传输设置的固定变量。不得修改宿主的全局 `process.env`。并发 Run 的覆盖值不共享。
 
+命令 Adapter 的基础环境由宿主构造时显式交付并复制；执行层不在最终 spawn 时重新读取 process.env。CLI 负责 PATH、npm shim 与 Node 的选择，Adapter 仅使用固定的绝对 executable 和前缀 argv。本轮 PATH 可影响 Provider 内部工具，但不能重新选择 Provider 或其运行器。缺省 env 为显式空环境，不提供隐式继承兼容层。
+
 | 执行路径 | 行为 |
 | --- | --- |
-| Codex | 注入 app-server 进程；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 变量白名单。配置读取失败则停止调用，不伪装为已应用。 |
+| Codex | app-server 仅继承 owner 固定环境；读取原生有效配置，在 thread/start 和 thread/resume 中设置本次 shell 环境与本地 stdio MCP 的实际 env 值。配置读取失败则停止调用，不伪装为已应用。 |
 | Claude Code、CodeBuddy、通用 ACP、Antigravity、通用 CLI | 注入每次调用新建的 Provider 子进程。Provider 启动的 CLI/stdio MCP 依其原生继承规则获得变量。 |
 | OpenClaw Gateway | 非空 envs 返回 `CONTEXT_ENVS_UNSUPPORTED`，因为当前 Gateway 没有本次调用的环境变量载体。空 envs 不影响调用。 |
 | 远程 HTTP MCP、远程 executor MCP | 不把本机环境直接传给远端进程。HTTP MCP 可以通过 Provider 已配置的环境变量引用取得客户端认证信息；不会自动新增 header。 |
 
-Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 include 白名单。本地 MCP 保留原有配置，追加变量名白名单；MCP 自己显式配置的同名 `env` 仍按 Provider 原生优先级生效。因此 mandatory 约束的是 Run 注入值，并不改写用户的 MCP 专用配置。不会重新安装、同步或修改 MCP/插件文件。
+Codex 的 shell 覆盖保留已有环境策略，仅补入指定值和必要的 include 白名单。本地 MCP 经本轮 thread 配置传实际 env 值，不从其他调用或共享进程读取；MCP 自己显式配置的同名 `env` 仍按 Provider 原生优先级生效。因此 mandatory 约束的是 Run 注入值，并不改写用户的 MCP 专用配置。账户/Provider 启动认证属于 owner 固定环境；Run envs 不是切换账户或更改共享服务环境的入口。不会重新安装、同步或修改 MCP/插件文件。
 
-环境变量中的值不会被编译成模型材料或控制指令。Host 调试日志会剔除 envs payload、执行计划 envs 和 Codex 原生 shell 注入值，不依赖变量名是否包含 token/secret。请求和执行快照仍保存这些值；此能力不是凭据保险库，也不承诺阻止工具主动输出环境变量。
+环境变量中的值不会被编译成模型材料或控制指令。Host 调试日志会剔除 envs payload 和 Codex 原生 shell 注入值，不依赖变量名是否包含 token/secret。请求和执行快照仍保存这些值；此能力不是凭据保险库，也不承诺阻止工具主动输出环境变量。
 
 ## Channel Gateway 的工具环境
 

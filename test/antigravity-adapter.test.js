@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  withAgentEnvItems
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
@@ -18,7 +22,6 @@ import {
   buildAntigravityCommand,
   createAntigravityAdapter
 } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
-
 const request = {
   protocolVersion: 2,
   invocationId: "inv-agy",
@@ -26,16 +29,19 @@ const request = {
   runId: "run-agy",
   prompt: "display",
   modelInput: "actual user input",
-  workdir: process.cwd(),
-  context: { schema: "octo.context-envelope/v3", items: [] },
-  controlInstructions: "CONTROL",
-  approvalMode: "full_access",
-  agentSource: "provisioned",
-  agentConfig: {}
+  agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+    { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 };
 const fixture = fileURLToPath(new URL("./fixtures/antigravity-cli.mjs", import.meta.url));
 const create = () =>
-  createAntigravityAdapter({ command: process.execPath, commandArgsPrefix: [fixture] });
+  createAntigravityAdapter({
+    env: process.env,
+    command: process.execPath,
+    commandArgsPrefix: [fixture]
+  });
 const collect = async (iterable) => {
   const events = [];
   for await (const event of iterable) {
@@ -48,7 +54,6 @@ const step = (index, overrides = {}) => ({
   event: "step_update",
   step_update: { step_index: index, step_type: "agent_response", state: "ACTIVE", ...overrides }
 });
-
 test("Antigravity preserves non-retryable provider capacity evidence through the Host", async (context) => {
   const host = new AgentExecutor();
   host.register(create());
@@ -73,13 +78,18 @@ test("Antigravity preserves non-retryable provider capacity evidence through the
   assert.ok(failure.params.measuredBytes > 64);
   assert.equal(frames.at(-1).control.state, "failed");
 });
-
 test("Antigravity builds an isolated stdin carrier, exact model and explicit yolo mode", () => {
   const spec = buildAntigravityCommand({
     ...request,
-    agentConfig: { model: "Gemini Model (High)", effort: "high" }
+    agentEnv: withAgentEnvItems(request.agentEnv, [
+      {
+        namespace: "octo.execution",
+        name: "model",
+        payload: { selection: { id: "Gemini Model (High)" }, reasoning: { effort: "high" } }
+      }
+    ])
   });
-  assert.equal(spec.cwd, request.workdir);
+  assert.equal(spec.cwd, agentEnvItem(request.agentEnv, "octo.execution", "workspace").path);
   assert.ok(spec.args.includes("--dangerously-skip-permissions"));
   assert.equal(spec.args[spec.args.indexOf("--mode") + 1], "accept-edits");
   assert.ok(!spec.args.includes("--conversation"));
@@ -89,15 +99,7 @@ test("Antigravity builds an isolated stdin carrier, exact model and explicit yol
   assert.ok(!spec.args.includes("--continue"));
   assert.deepEqual(JSON.parse(spec.input), {
     event: "user",
-    message: {
-      content: [
-        {
-          type: "text",
-          text: "Runtime control instructions (apply throughout this session):\nCONTROL"
-        },
-        { type: "text", text: "User input:\nactual user input" }
-      ]
-    }
+    message: { content: "actual user input" }
   });
   const resumed = buildAntigravityCommand({
     ...request,
@@ -110,11 +112,16 @@ test("Antigravity builds an isolated stdin carrier, exact model and explicit yol
     message: { content: "actual user input" }
   });
 });
-
 test("Antigravity rejects unsupported permissions and managed arguments before spawn", async () => {
   for (const mode of ["ask", "assisted"])
     assert.throws(
-      () => buildAntigravityCommand({ ...request, approvalMode: mode }),
+      () =>
+        buildAntigravityCommand({
+          ...request,
+          agentEnv: withAgentEnvItems(request.agentEnv, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: mode } }
+          ])
+        }),
       /APPROVAL_MODE_UNSUPPORTED/
     );
   for (const flag of [
@@ -127,24 +134,29 @@ test("Antigravity rejects unsupported permissions and managed arguments before s
     assert.throws(() => buildAntigravityCommand(request, "agy", [flag]), /MANAGED_ARGUMENT/);
   const host = new AgentExecutor();
   host.register(create());
-  await assert.rejects(
-    collect(
-      preparedTestInvoke((...args) => preparedFrames(host, ...args))(
-        "antigravity",
-        { ...request, approvalMode: "ask" },
-        { protocolMode: "canonical" }
-      )
-    ),
-    /APPROVAL_MODE_UNSUPPORTED/
+  const rejected = await collect(
+    preparedTestInvoke((...args) => preparedFrames(host, ...args))(
+      "antigravity",
+      {
+        ...request,
+        agentEnv: withAgentEnvItems(request.agentEnv, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+        ])
+      },
+      { protocolMode: "canonical" }
+    )
   );
+  assert.equal(rejected.at(-1).type, "run.failed");
+  assert.match(rejected.at(-1).payload.message, /APPROVAL_MODE_UNSUPPORTED/);
 });
-
 test("Antigravity probe reports a missing executable without invoking a user CLI", async () => {
-  const probe = await createAntigravityAdapter({ command: "/missing-octo-fixture-agy" }).probe();
+  const probe = await createAntigravityAdapter({
+    env: process.env,
+    command: "/missing-octo-fixture-agy"
+  }).probe();
   assert.equal(probe.available, false);
   assert.equal(probe.reason, "command_not_found");
 });
-
 test("Antigravity preserves segmented text, snapshot corrections and only one root terminal", () => {
   const n = new AntigravityEventNormalizer("inv");
   const events = [
@@ -168,7 +180,6 @@ test("Antigravity preserves segmented text, snapshot corrections and only one ro
   );
   assert.deepEqual(n.normalize(step(3, { text_delta: "late" })), []);
 });
-
 test("Antigravity tool snapshots keep activity until DONE and deduplicate terminal-only tools", () => {
   const n = new AntigravityEventNormalizer("inv");
   const native = step(4, {
@@ -208,7 +219,6 @@ test("Antigravity tool snapshots keep activity until DONE and deduplicate termin
   );
   assert.equal(terminalOnly[0].payload.id, terminalOnly[1].payload.id);
 });
-
 test("Antigravity sums invocation step usage without cumulative resumed usage or thinking double count", () => {
   const n = new AntigravityEventNormalizer("resume", true);
   const native = step(1, {
@@ -243,7 +253,6 @@ test("Antigravity sums invocation step usage without cumulative resumed usage or
     false
   );
 });
-
 test("Antigravity suppresses private and unidentified reasoning", () => {
   const n = new AntigravityEventNormalizer("inv");
   assert.deepEqual(
@@ -251,7 +260,6 @@ test("Antigravity suppresses private and unidentified reasoning", () => {
     []
   );
 });
-
 test("Antigravity distinguishes canceled, incomplete and empty successful results", () => {
   for (const status of ["ERROR", "INVALID", "WAITING", "RUNNING", "SUCCESS"]) {
     const n = new AntigravityEventNormalizer(status);
@@ -264,7 +272,6 @@ test("Antigravity distinguishes canceled, incomplete and empty successful result
     assert.equal(n.finish().at(-1).type, "run.cancelled");
   }
 });
-
 test("Antigravity rejects malformed results before accepting a terminal snapshot", () => {
   const n = new AntigravityEventNormalizer("malformed");
   assert.throws(
@@ -278,7 +285,6 @@ test("Antigravity rejects malformed results before accepting a terminal snapshot
   assert.equal(n.hasResult, false);
   assert.equal(n.finish().at(-1).type, "run.failed");
 });
-
 test("Antigravity ignores transient startup login diagnostics but surfaces explicit loop errors", () => {
   assert.equal(
     antigravityLogError("Cache refresh failed: You are not logged into Antigravity."),
@@ -289,7 +295,6 @@ test("Antigravity ignores transient startup login diagnostics but surfaces expli
     /AUTH_REQUIRED/
   );
 });
-
 test("Antigravity subprocess runs and resumes without changing AGENTS.md", async () => {
   const directory = await mkdtemp(join(tmpdir(), "octo-agy-test-"));
   try {
@@ -297,8 +302,10 @@ test("Antigravity subprocess runs and resumes without changing AGENTS.md", async
     const events = await collect(
       create().invoke({
         ...request,
-        workdir: directory,
-        providerSession: { sessionId: "resume-specific" }
+        providerSession: { sessionId: "resume-specific" },
+        agentEnv: withAgentEnvItems(request.agentEnv, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: directory } }
+        ])
       })
     );
     assert.equal(events.at(-1).type, "run.completed");
@@ -312,15 +319,20 @@ test("Antigravity subprocess runs and resumes without changing AGENTS.md", async
     await rm(directory, { recursive: true, force: true });
   }
 });
-
 for (const model of ["empty", "bad-json", "exit-error", "provider-error", "log-error"]) {
   test(`Antigravity cannot report success for ${model}`, async () => {
-    const events = await collect(create().invoke({ ...request, agentConfig: { model } }));
+    const events = await collect(
+      create().invoke({
+        ...request,
+        agentEnv: withAgentEnvItems(request.agentEnv, [
+          { namespace: "octo.execution", name: "model", payload: { selection: { id: model } } }
+        ])
+      })
+    );
     assert.equal(events.at(-1).type, "run.failed");
     assert.equal(events.filter((e) => e.type.startsWith("run.")).length, 1);
   });
 }
-
 test(
   "Antigravity cancels and reclaims a TERM-resistant provider process tree",
   { skip: process.platform === "win32" },
@@ -330,8 +342,10 @@ test(
     const events = [];
     for await (const event of create().invoke({
       ...request,
-      agentConfig: { model: "hang" },
-      signal: controller.signal
+      signal: controller.signal,
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        { namespace: "octo.execution", name: "model", payload: { selection: { id: "hang" } } }
+      ])
     })) {
       events.push(event);
       if (event.type === "tool_call.create") {

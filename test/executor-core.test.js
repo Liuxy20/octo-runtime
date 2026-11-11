@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { getEventListeners, once } from "node:events";
@@ -10,17 +11,19 @@ import { nativeHost } from "./native-host-fixture.js";
 import { assertHostFrame, isHostTerminal } from "@mininglamp-oss/octo-runtime-protocol";
 import { createExecutorFixture } from "../test-support/executor-adapter.mjs";
 import { deferred } from "./runtime-fixture.js";
-
 const collect = async (source) => Array.fromAsync(source);
 const input = (id = "one", mode = "native", text = "answer") => ({
   inputs: [{ type: "text", text }],
-  agentEnv: {
-    schema: "octo.context-envelope/v3",
-    items: [
-      { namespace: "octo.execution", name: "adapter", payload: { type: "executor-fixture" } },
-      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
-    ]
-  },
+  agentEnv: withAgentEnvItems(
+    {
+      schema: "octo.context-envelope/v3",
+      items: [
+        { namespace: "octo.execution", name: "adapter", payload: { type: "executor-fixture" } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ]
+    },
+    [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+  ),
   protocol_mode: mode,
   invocationId: `invoke-${id}`,
   runId: `run-${id}`,
@@ -35,7 +38,6 @@ const executor = (t, invoke) => {
   return core;
 };
 const raw = { kind: "native", messageKind: "notification", payload: { exact: true } };
-
 test("Core probe preserves synchronous values and tracks a thenable only once through shutdown", async () => {
   const core = new AgentExecutor();
   const value = { available: true, command: "fixture" };
@@ -71,7 +73,6 @@ test("Core probe preserves synchronous values and tracks a thenable only once th
   assert.equal((await core.shutdown()).cleanup, "complete");
   assert.equal(thenCalls, 1);
 });
-
 const progress = (mode) =>
   mode === "native"
     ? raw
@@ -95,7 +96,6 @@ const resource = async (t) => {
   });
   return server;
 };
-
 for (const mode of ["native", "canonical"]) {
   test(`${mode}: a failed generator finalizer never becomes successful on another shutdown`, async (t) => {
     const server = await resource(t);
@@ -125,7 +125,6 @@ for (const mode of ["native", "canonical"]) {
     assert.equal(getEventListeners(caller.signal, "abort").length, 0);
     assert.equal((await core.shutdown()).cleanup, "incomplete");
   });
-
   for (const candidate of [false, true]) {
     test(`${mode}: natural finalizer failure retains ownership with candidate=${candidate}`, async (t) => {
       const server = await resource(t);
@@ -150,7 +149,6 @@ for (const mode of ["native", "canonical"]) {
       }
     });
   }
-
   test(`${mode}: yielding from a finalizer does not prove cleanup finished`, async (t) => {
     const server = await resource(t);
     let started = false,
@@ -177,7 +175,6 @@ for (const mode of ["native", "canonical"]) {
     }
     await source.return();
   });
-
   test(`${mode}: missing iterator return cannot confirm cancellation cleanup`, async (t) => {
     const server = await resource(t);
     let started = false;
@@ -198,7 +195,6 @@ for (const mode of ["native", "canonical"]) {
     assert.equal(server.listening, true);
     await source.return();
   });
-
   test(`${mode}: successful generator cleanup releases its actual resource`, async (t) => {
     const server = await resource(t);
     const caller = new AbortController();
@@ -225,7 +221,6 @@ for (const mode of ["native", "canonical"]) {
     assert.equal((await core.shutdown()).cleanup, "complete");
     assert.equal(attempts, 1);
   });
-
   test(`${mode}: a naturally exhausted iterator needs no return method`, async (t) => {
     let index = 0;
     const values = [progress(mode), completed(mode)];
@@ -243,7 +238,6 @@ for (const mode of ["native", "canonical"]) {
     );
     assert.equal((await core.shutdown()).cleanup, "complete");
   });
-
   test(`${mode}: cancelled abandoned receipts release capacity after their TTL`, async (t) => {
     t.mock.timers.enable({ apis: ["Date"], now: 1000 });
     let starts = 0;
@@ -263,7 +257,6 @@ for (const mode of ["native", "canonical"]) {
     assert.equal(starts, 0);
     assert.equal((await core.shutdown()).cleanup, "complete");
   });
-
   test(`${mode}: consuming the final Host state releases capacity without another next`, async (t) => {
     t.mock.timers.enable({ apis: ["Date"], now: 1000 });
     const core = executor(t);
@@ -286,7 +279,6 @@ for (const mode of ["native", "canonical"]) {
     await reused.return();
     assert.equal((await core.shutdown()).cleanup, "complete");
   });
-
   test(`${mode}: a late cancelled iterator cannot affect a reused invocation ID`, async (t) => {
     t.mock.timers.enable({ apis: ["Date"], now: 1000 });
     const core = executor(t);
@@ -306,7 +298,6 @@ for (const mode of ["native", "canonical"]) {
     assert.equal((await core.shutdown()).cleanup, "complete");
   });
 }
-
 test("canonical terminal event consumers release capacity and cannot affect reused identities", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1000 });
   const core = executor(t);
@@ -328,7 +319,6 @@ test("canonical terminal event consumers release capacity and cannot affect reus
   await reused.return();
   assert.equal((await core.shutdown()).cleanup, "complete");
 });
-
 test("public Core is the only execution class and has no transport or process setup", async () => {
   assert.equal(
     "AdapterHost" in (await import("@mininglamp-oss/octo-runtime-executor-kernel")),
@@ -350,7 +340,6 @@ test("public Core is the only execution class and has no transport or process se
   }
   assert.equal((await core.shutdown()).cleanup, "complete");
 });
-
 for (const mode of ["native", "canonical"]) {
   test(`${mode}: receipt owns cancellation before Provider starts`, async (t) => {
     let calls = 0;
@@ -372,7 +361,6 @@ for (const mode of ["native", "canonical"]) {
     }
   });
 }
-
 test("invalid policies are rejected without reserving identities or calling the Adapter", async (t) => {
   let calls = 0;
   const fixture = createExecutorFixture();
@@ -386,7 +374,6 @@ test("invalid policies are rejected without reserving identities or calling the 
   assert.equal((await collect(core.invokeFrames(value))).at(-1).control.state, "completed");
   assert.equal(calls, 1);
 });
-
 test("unconsumed iterators reserve no capacity and snapshot caller input", async (t) => {
   const core = executor(t);
   for (let i = 0; i < 1100; i++) core.invokeFrames(input());
@@ -400,7 +387,6 @@ test("unconsumed iterators reserve no capacity and snapshot caller input", async
   assert.equal(snapshot.modelInput, "answer");
   assert.doesNotMatch(snapshot.modelInput, /mutated/);
 });
-
 test("competing iterators accept one identity; closing an unused one cannot cancel it", async (t) => {
   const core = executor(t);
   const accepted = core.invokeFrames(input());
@@ -410,7 +396,6 @@ test("competing iterators accept one identity; closing an unused one cannot canc
   await rejected.return();
   assert.equal((await collect(accepted)).at(-1).control.state, "completed");
 });
-
 test("active paused receipts are not TTL-evicted and the invocation limit is bounded", async (t) => {
   t.mock.timers.enable({ apis: ["Date"], now: 1000 });
   const core = executor(t);
@@ -430,7 +415,6 @@ test("active paused receipts are not TTL-evicted and the invocation limit is bou
   assert.equal((await core.shutdown()).cleanup, "complete");
   await Promise.all(sources.map((source) => source.return()));
 });
-
 test("shutdown immediately gates admission, shares attempts and cancels receipt-only calls", async (t) => {
   let calls = 0;
   const core = executor(t, async function* () {
@@ -448,7 +432,6 @@ test("shutdown immediately gates admission, shares attempts and cancels receipt-
   assert.equal(calls, 0);
   assert.throws(() => core.shutdown("bad", 0), /positive safe integer/);
 });
-
 test("shutdown timeout retains ownership; late completion changes only the next snapshot", async (t) => {
   t.mock.timers.enable({ apis: ["setTimeout"] });
   const cleanup = deferred();
@@ -481,7 +464,6 @@ test("shutdown timeout retains ownership; late completion changes only the next 
   assert.deepEqual(result.unresolvedInvocationIds, ["invoke-one"]);
   await source.return();
 });
-
 test("failed cleanup stays owned and does not skip sibling cleanup or reopen admission", async (t) => {
   const attempts = new Map();
   const core = executor(t, (request) => ({
@@ -512,7 +494,6 @@ test("failed cleanup stays owned and does not skip sibling cleanup or reopen adm
   await assert.rejects(core.invokeFrames(input("new")).next(), /EXECUTOR_CLOSED/);
   await Promise.all(sources.map((source) => source.return()));
 });
-
 for (const mode of ["native", "canonical"]) {
   test(`${mode}: direct and native Kernel RPC route original interactions and cancel receipt-only runs`, async (t) => {
     const core = executor(t);
@@ -569,7 +550,6 @@ for (const mode of ["native", "canonical"]) {
       assert.equal(cancelled.filter(isHostTerminal).length, 1);
     }
   });
-
   test(`${mode}: native socket RPC uses identical Core and preserves frame identity and input`, async (t) => {
     const core = executor(t);
     const worker = await nativeHost([createExecutorFixture()]);
@@ -617,7 +597,6 @@ for (const mode of ["native", "canonical"]) {
     }
   });
 }
-
 test("a failed terminal ends cancellation while unresolved cleanup remains owned", async (t) => {
   let next = 0,
     cleanups = 0;

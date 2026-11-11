@@ -1,7 +1,15 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const codeBuddyMetadata: AdapterMetadata = {
+  type: "codebuddy"
+};
+
 import {
-  initialControlInstructions,
-  invocationEnvironment
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { invocationEnvironment } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
   failureMessage,
@@ -27,6 +35,8 @@ import {
   defineAdapter,
   normalizeAcpToolUpdate,
   probeCommand,
+  snapshotProviderLaunch,
+  type ProbeResult,
   providerInputText,
   type AdapterInvocationContext,
   type CanonicalEvent,
@@ -228,15 +238,29 @@ function promptResultText(update: AcpUpdate): string | undefined {
  */
 export function createCodeBuddyAdapter({
   acpClientFactory = spawnAcpClient,
-  command = "codebuddy"
-}: { acpClientFactory?: typeof spawnAcpClient; command?: string } = {}) {
+  command,
+  commandArgsPrefix = [],
+  env = {},
+  probe
+}: {
+  acpClientFactory?: typeof spawnAcpClient;
+  command: string;
+  commandArgsPrefix?: readonly string[];
+  env?: NodeJS.ProcessEnv;
+  probe?: () => Promise<ProbeResult>;
+}) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
   return defineAdapter({
-    metadata: {
-      type: "codebuddy",
-      agentSources: ["provisioned"]
-    },
-    probe: () => probeCommand(command),
+    metadata: codeBuddyMetadata,
+    probe:
+      probe ??
+      (acpClientFactory === spawnAcpClient
+        ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+        : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
     async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
       const bridge = responders.get(invocationId);
       if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -254,10 +278,15 @@ export function createCodeBuddyAdapter({
       async function* execute(): AsyncGenerator<CanonicalEvent> {
         const client = await Promise.resolve(
           acpClientFactory({
-            command,
-            args: ["--acp", "--permission-mode", codeBuddyPermissionMode(req.approvalMode)],
-            env: invocationEnvironment(req),
-            cwd: req.workdir,
+            command: launch.command,
+            args: [
+              ...launch.args,
+              "--acp",
+              "--permission-mode",
+              codeBuddyPermissionMode(invocationApprovalMode(req))
+            ],
+            env: invocationEnvironment(req, {}, launch.env),
+            cwd: invocationWorkdir(req),
             signal: req.signal,
             permissionHandler: (params) => permissions.requestPermission(params),
             onPermissionResponseWritten: (params) => permissions.responseWritten(params),
@@ -272,8 +301,8 @@ export function createCodeBuddyAdapter({
           const requestedSessionId = req.providerSession?.sessionId;
           const sessionMethod = requestedSessionId ? "session/load" : "session/new";
           const sessionParams = requestedSessionId
-            ? acpLoadSessionParams(requestedSessionId, { cwd: req.workdir })
-            : acpNewSessionParams({ cwd: req.workdir });
+            ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(req) })
+            : acpNewSessionParams({ cwd: invocationWorkdir(req) });
           const sessionRequestId = client.reserveRequestId();
           let session: { id: string };
 
@@ -293,7 +322,7 @@ export function createCodeBuddyAdapter({
             session = { id: sessionId };
           }
           let model = confirmedSessionModel(sessionResult);
-          const requestedModel = req.agentConfig?.model;
+          const requestedModel = invocationModel(req);
           if (requestedModel) {
             const selection = modelSelection(sessionResult, session.id, requestedModel);
             if (selection) {
@@ -320,7 +349,7 @@ export function createCodeBuddyAdapter({
               }
             }
           };
-          const prompt = `${providerInputText(req)}\n\n${initialControlInstructions(req)}`;
+          const prompt = providerInputText(req);
           const promptParams = acpPromptParams(session.id, prompt);
           const promptRequestId = client.reserveRequestId();
 
@@ -433,7 +462,7 @@ export function createCodeBuddyAdapter({
   });
 }
 
-export function codeBuddyPermissionMode(mode: InvokeRequest["approvalMode"]): string {
+export function codeBuddyPermissionMode(mode: "ask" | "assisted" | "full_access"): string {
   switch (mode) {
     case "ask":
       return "default";
@@ -450,6 +479,3 @@ export function codeBuddyPermissionMode(mode: InvokeRequest["approvalMode"]): st
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
-
-export const codebuddyAdapter = createCodeBuddyAdapter();
-export default codebuddyAdapter;

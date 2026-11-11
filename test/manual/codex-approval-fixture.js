@@ -69,6 +69,9 @@ export function approvalFixture({ hold = false, highWaterMark = 16 * 1024 } = {}
       held = undefined;
       callback?.();
     },
+    hold() {
+      hold = true;
+    },
     request(id, method = "item/commandExecution/requestApproval", extra = {}) {
       send({
         id,

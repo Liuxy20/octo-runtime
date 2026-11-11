@@ -4,7 +4,7 @@ export const adapters = [
   {
     metadata: {
       type: "test",
-      agentSources: ["provisioned"],
+
       protocolSupport: { protocol: "test.canonical", modes: ["canonical"], nativeMethods: [] }
     },
     async *invoke(request) {

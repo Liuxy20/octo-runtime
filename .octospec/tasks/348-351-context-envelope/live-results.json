@@ -1,0 +1,200 @@
+{
+  "date": "2026-11-10",
+  "sourceCommit": "7892ebdf2ed9b1fa859bd51f15da6d7f03c247e2",
+  "dirty": true,
+  "platform": "macOS 26.6.2 arm64",
+  "node": "24.22.2",
+  "providerVersions": {
+    "codex": "0.164.0",
+    "claude-code": "2.1.306",
+    "opencode": "2.1.3",
+    "grok-build": "1.0.67"
+  },
+  "scope": "Explicit local non-gating real Provider verification; no IM or external Gateway migration.",
+  "cases": [
+    {
+      "type": "codex",
+      "mode": "plan",
+      "runId": "actmode_6cad4213-cef9-4b1a-b0bb-c5f6b2810a24",
+      "resumed": false,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "01a1c525-a889-7962-ada2-d7117188381a"
+    },
+    {
+      "type": "codex",
+      "mode": "default",
+      "runId": "actmode_2e5b28be-a2dc-485d-acc1-e86b71d7abf1",
+      "resumed": true,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "01a1c525-a889-7962-ada2-d7117188381a"
+    },
+    {
+      "type": "codex",
+      "mode": "omitted",
+      "runId": "actmode_a75c0b66-e31b-4e09-83d2-4815984b2fb0",
+      "resumed": true,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "01a1c525-a889-7962-ada2-d7117188381a"
+    },
+    {
+      "type": "claude-code",
+      "mode": "plan",
+      "runId": "actmode_fc008eaf-1d25-4091-a3f2-3551e64c255d",
+      "resumed": false,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "46d6c7d7-243e-460d-81f3-f935e73976bf"
+    },
+    {
+      "type": "claude-code",
+      "mode": "omitted",
+      "runId": "actmode_bfdeb41c-366e-408b-82b1-f88daf948a18",
+      "resumed": true,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "46d6c7d7-243e-460d-81f3-f935e73976bf"
+    },
+    {
+      "type": "opencode",
+      "mode": "plan",
+      "runId": "actmode_8ee50a38-a3ae-4cc0-b086-c9eccaf17113",
+      "resumed": false,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "ses_e3ad9f115ffeQaQva1VH6L35FR"
+    },
+    {
+      "type": "opencode",
+      "mode": "default",
+      "runId": "actmode_e54a048c-7a65-454d-9bf6-c510253eea95",
+      "resumed": true,
+      "terminal": "run.failed",
+      "passed": false,
+      "failure": {
+        "code": "PROVIDER_ERROR",
+        "message": "ACP_MODE_UNSUPPORTED: Provider did not advertise the requested mode ID"
+      },
+      "providerSessionId": "ses_e3ad9f115ffeQaQva1VH6L35FR"
+    },
+    {
+      "type": "grok-build",
+      "mode": "plan",
+      "runId": "actmode_3e6e5eb8-3cce-497c-b7fc-606833b3e5ae",
+      "resumed": false,
+      "terminal": "run.failed",
+      "passed": false,
+      "failure": {
+        "code": "ADAPTER_FIRST_FRAME_TIMEOUT",
+        "message": "adapter watchdog exceeded first_frame budget"
+      },
+      "providerSessionId": "01a1c526-1ff8-7720-98a9-4cff75a2dc14"
+    },
+    {
+      "type": "opencode",
+      "mode": "plan",
+      "runId": "actmode_68f416c4-90c6-45c8-8cb9-a5cdc13a71f4",
+      "resumed": false,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "ses_e3ad87345ffeS09n7cWMbQx05f"
+    },
+    {
+      "type": "opencode",
+      "mode": "omitted",
+      "runId": "actmode_17a7ca6c-2d66-494e-b797-8da104f68c54",
+      "resumed": true,
+      "terminal": "run.completed",
+      "passed": true,
+      "providerSessionId": "ses_e3ad87345ffeS09n7cWMbQx05f"
+    }
+  ],
+  "grokDiagnostic": [
+    {
+      "ms": 5,
+      "phase": "initialize",
+      "state": "start"
+    },
+    {
+      "ms": 5,
+      "phase": "initialize",
+      "state": "start"
+    },
+    {
+      "ms": 7738,
+      "phase": "initialize",
+      "state": "accepted"
+    },
+    {
+      "ms": 7738,
+      "phase": "initialize",
+      "state": "accepted"
+    },
+    {
+      "ms": 7738,
+      "phase": "authenticate",
+      "state": "start"
+    },
+    {
+      "ms": 7741,
+      "phase": "authenticate",
+      "state": "accepted"
+    },
+    {
+      "ms": 7741,
+      "phase": "session/new",
+      "state": "start"
+    },
+    {
+      "ms": 7895,
+      "phase": "session/new",
+      "state": "accepted"
+    },
+    {
+      "ms": 7895,
+      "phase": "session/set_mode",
+      "state": "start"
+    },
+    {
+      "ms": 7914,
+      "phase": "session/set_mode",
+      "state": "accepted"
+    },
+    {
+      "ms": 7919,
+      "phase": "session/prompt",
+      "state": "start"
+    },
+    {
+      "ms": 45009,
+      "phase": "session/prompt",
+      "state": "accepted"
+    },
+    {
+      "ms": 45254,
+      "phase": "close",
+      "state": "start"
+    },
+    {
+      "ms": 45679,
+      "phase": "close",
+      "state": "accepted"
+    },
+    {
+      "ms": 45680,
+      "terminal": "run.cancelled"
+    },
+    {
+      "ms": 45680,
+      "cleanup": "complete",
+      "state": "closed"
+    }
+  ],
+  "limitations": [
+    "Initial script incorrectly expected OpenCode native ID default to succeed; ACP correctly rejected it. Revised script plan/omitted cases passed.",
+    "User confirmed Grok requires VPN/proxy connectivity. Authentication, session creation and set_mode were accepted; model completion was not verified. Diagnostic run ended cancelled after 45 seconds with cleanup complete.",
+    "A completed turn does not constitute a cross-provider mode confirmation. Native request mapping is verified by separate fixtures."
+  ]
+}

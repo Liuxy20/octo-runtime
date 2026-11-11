@@ -4,8 +4,9 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { createKernelService, componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { runOwnedInvocation } from "../examples/service.mts";
 import { invokeOnce } from "../examples/invoke.mts";
 import { invokeInteractive } from "../examples/interactions.mts";
@@ -17,7 +18,10 @@ const input = (text = "documentation example") =>
     inputs: [{ type: "text", text }],
     agentEnv: {
       schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "test" } }]
+      items: [
+        { namespace: "octo.execution", name: "adapter", payload: { type: "test" } },
+        { namespace: "octo.execution", name: "workspace", payload: { path: root } }
+      ]
     }
   });
 

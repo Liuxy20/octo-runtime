@@ -1,9 +1,9 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import { AcpTurnNormalizer } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import { createCodeBuddyAdapter } from "@mininglamp-oss/octo-runtime-adapter-codebuddy";
-
 for (const provider of ["ACP", "CodeBuddy"]) {
   test(`${provider}: text and thoughts retain segments across tool rounds`, async () => {
     let nextId = 0;
@@ -36,7 +36,11 @@ for (const provider of ["ACP", "CodeBuddy"]) {
             { type: "fixture", provider: "fixture", command: "fixture" },
             { acpClientFactory: () => client }
           )
-        : createCodeBuddyAdapter({ acpClientFactory: () => client });
+        : createCodeBuddyAdapter({
+            command: process.execPath,
+            env: process.env,
+            acpClientFactory: () => client
+          });
     const request = {
       protocolVersion: 2,
       invocationId: "i",
@@ -44,12 +48,11 @@ for (const provider of ["ACP", "CodeBuddy"]) {
       runId: "r",
       prompt: "p",
       modelInput: "p",
-      workdir: process.cwd(),
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
-      approvalMode: "full_access",
-      agentSource: "provisioned",
-      agentConfig: {}
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ])
     };
     const events = [];
     for await (const e of adapter.invoke(request)) events.push(e);
@@ -74,7 +77,6 @@ for (const provider of ["ACP", "CodeBuddy"]) {
     assert.equal(events.at(-1).type, "run.completed");
   });
 }
-
 test("ACP terminal-only tool creates a real boundary without manufacturing a start", () => {
   const turn = new AcpTurnNormalizer("acp");
   const thought = (text) => ({

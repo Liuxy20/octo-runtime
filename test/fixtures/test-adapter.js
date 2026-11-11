@@ -1,8 +1,7 @@
 export const testAdapter = {
   metadata: {
     protocolSupport: { protocol: "test.canonical", modes: ["canonical"], nativeMethods: [] },
-    type: "test",
-    agentSources: ["provisioned"]
+    type: "test"
   },
   async *invoke(request) {
     if (request.prompt === "wait-for-cancel") {

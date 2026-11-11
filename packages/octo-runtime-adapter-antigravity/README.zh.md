@@ -15,32 +15,39 @@
 以下节选负责注册与输入准备。实际执行使用 `executor.invoke(input)`；完整的消费、终态判断和 `shutdown()` 示例见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { antigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createAntigravityAdapter } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 
 const executor = new AgentExecutor();
-executor.register(antigravityAdapter);
+executor.register(createAntigravityAdapter({ command: "/absolute/path/agy", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "antigravity" } }
+    ]
   }
 });
 ```
 
-调用前 `approvalMode` 必须已经是 `full_access`——没有 `ask` 这条路。
+调用前 `octo.security/approval_policy.payload.mode` 必须是 `full_access`，不支持 `ask`。
 
 ## 绑定了什么
 
 | 项           | 值                                                            |
 | ------------ | ------------------------------------------------------------- |
 | Adapter 类型 | `antigravity`                                                 |
-| 导出         | `antigravityAdapter`、`createAntigravityAdapter`              |
+| 导出         | `createAntigravityAdapter`              |
 | 命令         | `agy` 加 `--dangerously-skip-permissions --mode accept-edits` |
 | 输出         | 仅 canonical 事件                                             |
 | 会话         | 显式 Provider 会话决定用哪段对话，且可续接                    |
@@ -50,7 +57,7 @@ const input = InvokeInput.check({
 
 - `ask` 和 `assisted` 直接失败，不会悄悄升级成 full access。
 - 探测要求能读出至少 1.3.3 的版本；读不到版本就算探测失败。
-- 可信控制指令是用户输入里的标记文本，不是独立的 system role。
+- 应用提示词属于调用方准备的普通输入；Adapter 不添加提示词标记，不提供独立的 system/受信指令角色。
 - 成功需要原生 `SUCCESS` 结果**且**回答非空。退出码为 0 本身不算成功。
 - 每次调用拥有自己的进程；取消和清理都由本次调用负责。
 

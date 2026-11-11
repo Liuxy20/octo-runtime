@@ -10,7 +10,8 @@ const run = client.invoke(
   "project-chat",
   undefined,
   { schema: "octo.context-envelope/v3", items: [
-    { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } }
+    { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
+    { namespace: "octo.execution", name: "workspace", payload: { path: "/absolute/prepared/project" } }
   ] }
 );
 let terminal: string | undefined;

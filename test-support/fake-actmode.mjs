@@ -8,15 +8,20 @@ if (args.includes("--print")) {
   appendFileSync(log, `${JSON.stringify({ args })}\n`);
   const lines = createInterface({ input: process.stdin });
   lines.once("line", () => {
-    send({
-      type: "system",
-      subtype: "init",
-      session_id: "claude-actmode",
-      permissionMode: args[args.indexOf("--permission-mode") + 1]
-    });
+    if (!args.includes("--missing-init"))
+      send({
+        type: "system",
+        subtype: "init",
+        session_id: "claude-actmode",
+        permissionMode: args.includes("--mismatch-mode")
+          ? "default"
+          : args[args.indexOf("--permission-mode") + 1]
+      });
     send({ type: "result", subtype: "success", is_error: false, result: "MODE_OK" });
   });
 } else {
+  let threadId = "codex-actmode";
+  let turns = 0;
   createInterface({ input: process.stdin }).on("line", (line) => {
     const message = JSON.parse(line);
     appendFileSync(log, `${line}\n`);
@@ -29,22 +34,32 @@ if (args.includes("--print")) {
         }
       });
     } else if (["thread/start", "thread/resume"].includes(message.method)) {
+      threadId = message.method === "thread/resume" ? "codex-resumed" : "codex-actmode";
       send({
         id: message.id,
         result: {
-          thread: { id: "codex-actmode" },
-          model: "provider-chosen-model",
+          thread: { id: threadId },
+          ...(args.includes("--no-model")
+            ? {}
+            : {
+                model:
+                  args.includes("--fresh-fallback") && message.method === "thread/resume"
+                    ? "old-thread-model"
+                    : "provider-chosen-model"
+              }),
           reasoningEffort: "medium"
         }
       });
     } else if (message.method === "turn/start") {
+      if (args.includes("--fresh-fallback") && turns++ === 0)
+        return send({ id: message.id, error: { code: -32000, message: "thread not found" } });
       if (args.includes("--fail-turn"))
         return send({ id: message.id, error: { code: -32000, message: "provider unavailable" } });
       send({ id: message.id, result: { turn: { id: "turn-actmode" } } });
       send({
         method: "turn/completed",
         params: {
-          threadId: "codex-actmode",
+          threadId,
           turnId: "turn-actmode",
           turn: { id: "turn-actmode", status: "completed" }
         }

@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  invocationRuntimeLimits
+} from "../../packages/octo-runtime-adapter-sdk/dist/index.js";
 // 仅由配置快照手动专项加载，观察原生 Adapter 收到的配置与启动次数。
 import { appendFile, access } from "node:fs/promises";
 import { setTimeout } from "node:timers/promises";
@@ -5,7 +9,7 @@ import { setTimeout } from "node:timers/promises";
 export const adapter = {
   metadata: {
     type: "snapshot",
-    agentSources: ["provisioned"],
+
     protocolSupport: { protocol: "snapshot.canonical", modes: ["canonical"], nativeMethods: [] }
   },
   async probe(options) {
@@ -16,6 +20,7 @@ export const adapter = {
     };
   },
   async *invoke(request, context) {
+    context.configureRuntimeLimits?.(invocationRuntimeLimits(request));
     if (request.runMetadata?.startsFile)
       await appendFile(request.runMetadata.startsFile, "start\n");
     const report = () => ({
@@ -23,7 +28,14 @@ export const adapter = {
       type: "message.delta",
       payload: {
         text: JSON.stringify({
-          options: request.agentConfig?.providerOptions ?? {},
+          options: {
+            ...agentEnvItem(
+              request.agentEnv,
+              `adapter.${agentEnvItem(request.agentEnv, "octo.execution", "adapter")?.type}`,
+              "options"
+            ),
+            ...context.providerOptions
+          },
           limit: context.streamLimits.hostFrameMaxBytes
         })
       }

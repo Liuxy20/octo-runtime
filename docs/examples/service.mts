@@ -1,5 +1,8 @@
-import { createKernelService, type KernelServiceOptions } from "@mininglamp-oss/octo-runtime/host";
-import type { CanonicalEvent, InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import {
+  createKernelService,
+  type KernelServiceOptions
+} from "@mininglamp-oss/octo-runtime-executor-kernel";
+import type { CanonicalEvent, InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeOnce } from "./invoke.mts";
 
 /** 装配入口拥有服务；完整消费本轮后关闭。清理失败与原执行错误共同保留。 */

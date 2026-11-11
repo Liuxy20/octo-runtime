@@ -1,0 +1,80 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/346
+phase: implemented_reviewed
+date: '2026-11-09'
+baseline: c7ae0256222fe0956ed6789e552e36aa6a61edf6
+baseline_source: successful git fetch origin main
+branch: plan/issue-346-host-execution
+worktree: /Users/lvsijia/.codex/worktrees/issue-346-host-execution-spec/octo-runtime
+authorization:
+  - Create a new worktree from latest main and start OctoSpec planning.
+  - Identify adapter changes and evaluate existing metadata reuse.
+  - Reach planning executability strictly above 95 with explicit gaps.
+  - Finish spec, implement, and perform code review.
+  - Rebase latest main, remove compatibility layers, and keep executable discovery in CLI.
+  - On 2026-11-10, commit and push the changes and create an English PR targeting main; do not merge.
+  - Fix PR 347 CI and review findings; OpenCode upgrades must not require Runtime version admission changes.
+boundaries:
+  - Runtime implementation, local validation and review are authorized.
+  - Commit, push and PR creation are authorized; merge, publication and CI expansion are not.
+  - Preserve the original checkout and its untracked files.
+  - Future GitHub issues, PRs and commit messages use English per user instructions.
+skills_applied:
+  - .claude/skills/octospec-workflow/SKILL.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+context_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/339-engine-lifecycle/context.yaml
+  - .octospec/tasks/339-engine-lifecycle/assessment.md
+  - .octospec/scripts/lint.py
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+source_sections_read:
+  - packages/octo-runtime-adapter-sdk/src/index.ts
+  - packages/octo-runtime-adapter-sdk/src/environment.ts
+  - packages/octo-runtime-adapter-sdk/src/process-launch.ts
+  - packages/octo-runtime-protocol/src/adapter-metadata.ts
+  - packages/octo-runtime-adapter-codex/src/engine.ts
+  - packages/octo-runtime-adapter-opencode/src/index.ts
+  - packages/octo-runtime-adapter-acp/src/index.ts
+  - packages/octo-runtime-adapter-dsh/src/launch.ts
+  - packages/octo-runtime-adapter-grok-build/src/client.ts
+  - apps/cli/src/adapters.ts
+  - apps/cli/src/codex.ts
+  - apps/cli/src/adapter-configurations.ts
+  - apps/cli/src/manifest.json
+  - public/adapter-sdk.ts
+search_audits:
+  - All built-in adapter index.ts command defaults, probeCommand, process.env and exports.
+  - ACP/Grok client final spawn and launch resolution.
+  - Core metadata providerPath/providerVersion projection and probe call sites.
+  - CLI main/playboard composition and configuration call sites.
+  - Existing adapter/process/DSH test entry points.
+global_rules: .octospec/_global/ is absent; no synchronization performed
+assessment:
+  score: 96
+  remaining_gap: 4
+  meaning: planning self-assessment only
+verification:
+  status: implementation_checks_passed
+  knowledge_lint: isolated uv PyYAML runtime; final results in validation.md
+  diff_check: passed
+  ci_scope_diff: empty
+  implementation_tests: 'Latest repair: 1516 tests, 1455 passed, 61 skipped; 88 targeted/manual tests, 85 passed, 3 native Windows skipped'
+  review: 'Standards 0 remaining; Spec 0 remaining'
+  details: validation.md
+pull_request: https://github.com/Mininglamp-OSS/octo-runtime/pull/347
+latest_decision: OpenCode has no version admission gate or pre-invocation version probe; versions are diagnostic only.

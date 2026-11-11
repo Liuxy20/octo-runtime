@@ -1,10 +1,17 @@
+import {
+  invocationOption,
+  invocationProviderOptions,
+  invocationModel,
+  invocationApprovalMode,
+  invocationRuntimeLimits,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { randomUUID } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import {
   defineAdapter,
   invocationEnvironment,
   providerInputParts,
-  initialControlInstructions,
   DriverQueue,
   noopRuntimeLog,
   type RuntimeLog,
@@ -13,7 +20,6 @@ import {
   type AdapterInvocationContext
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
-  contextActmode,
   DEFAULT_STREAM_LIMIT_POLICY,
   DEFAULT_RUN_TIMEOUT_MS
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -60,7 +66,7 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
   const log = options.log ?? noopRuntimeLog;
   return defineAdapter(
     {
-      metadata: { type: "dsh", agentSources: ["provisioned"] },
+      metadata: { type: "dsh" },
       async probe(probeOptions?: { providerOptions?: Record<string, string> }) {
         try {
           const launch = await resolveDshLaunch(probeOptions?.providerOptions ?? {}, {
@@ -80,7 +86,7 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
         context?: AdapterInvocationContext
       ): AsyncGenerator<CanonicalEvent> {
         const invocationLog = context?.log ?? log;
-        if (request.approvalMode !== "full_access")
+        if (invocationApprovalMode(request) !== "full_access")
           throw new Error(
             "APPROVAL_MODE_UNSUPPORTED: DSH SDK 0.2.1-rc.3 has no interactive approval transport; explicitly select full_access"
           );
@@ -88,15 +94,12 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
         let sessionId: string;
         let requestedId: string | undefined;
         try {
-          const actmode = contextActmode(request.context);
-          if (actmode !== undefined && actmode !== "default")
-            throw new DshError("DSH_ACTMODE_UNSUPPORTED");
           if (
-            request.agentConfig.sandbox !== undefined &&
-            request.agentConfig.sandbox !== "danger-full-access"
+            invocationOption(request, "sandbox", "dsh") !== undefined &&
+            invocationOption(request, "sandbox", "dsh") !== "danger-full-access"
           )
             throw new DshError("DSH_CONFIG_INVALID");
-          const configured = request.agentConfig.providerOptions ?? {};
+          const configured = invocationProviderOptions(request, "dsh") ?? {};
           if (!record(configured)) throw new DshError("DSH_CONFIG_INVALID");
           config = configured;
           requestedId = request.providerSession?.sessionId;
@@ -179,7 +182,8 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
             const initializeTimeoutMs = timeoutOption(config, "initializeTimeoutMs", 15_000);
             const requestTimeoutMs = timeoutOption(config, "requestTimeoutMs", 30_000);
             // SDK 的 session/wait 同样消费整轮预算；初始化和关闭仍用各自的有限期限。
-            const runTimeoutMs = request.runtimeLimits?.runTimeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
+            const runTimeoutMs =
+              invocationRuntimeLimits(request)?.runTimeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
             const shutdownTimeoutMs = timeoutOption(config, "shutdownTimeoutMs", 1000);
             const env = invocationEnvironment(request, {
               DSH_PERMISSION_MODE: "danger-full-access"
@@ -191,7 +195,7 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
             client = new HarnessClient({
               dshBin: launch.dshBin,
               profile: stringOption(config, "profile", "sdk"),
-              processCwd: request.workdir,
+              processCwd: invocationWorkdir(request),
               env: launch.env,
               initializeTimeoutMs,
               requestTimeoutMs,
@@ -229,9 +233,9 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
               try {
                 phase = "initialize";
                 const initialization = await owned.initialize({
-                  cwd: request.workdir,
+                  cwd: invocationWorkdir(request),
                   provider: stringOption(config, "provider", "deepseek-account"),
-                  model: request.agentConfig.model ?? "deepseek-flash",
+                  model: invocationModel(request) ?? "deepseek-flash",
                   ...(config.maxTokens === undefined
                     ? {}
                     : { maxTokens: timeoutOption(config, "maxTokens", 4096) })
@@ -250,8 +254,13 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
                   try {
                     await owned.resumeSession(sessionId);
                     // 先证明原会话恢复，再应用本轮执行目录；不能让 set 隐式创建替代会话。
-                    const directory = await owned.setWorkingDirectory(sessionId, request.workdir);
-                    if ((await realpath(directory)) !== (await realpath(request.workdir)))
+                    const directory = await owned.setWorkingDirectory(
+                      sessionId,
+                      invocationWorkdir(request)
+                    );
+                    if (
+                      (await realpath(directory)) !== (await realpath(invocationWorkdir(request)))
+                    )
                       throw new DshError("DSH_SESSION_RESUME_FAILED");
                   } catch (error) {
                     throw new DshError(
@@ -278,8 +287,6 @@ export function createDshAdapter(options: DshAdapterOptions = {}) {
                       ? { type: "image", mimeType: part.mimeType, data: part.data }
                       : { type: "text", text: part.text }
                 );
-                const instructions = initialControlInstructions(request);
-                if (instructions) contentBlocks.unshift({ type: "text", text: instructions });
                 phase = "prompt";
                 const receipt = await owned.prompt(sessionId, contentBlocks);
                 if (!receipt || receipt.length > 191) throw new DshError("DSH_PROTOCOL_ERROR");

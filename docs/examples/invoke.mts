@@ -1,5 +1,5 @@
-import type { KernelClient } from "@mininglamp-oss/octo-runtime/executor-kernel";
-import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
+import type { KernelClient } from "@mininglamp-oss/octo-runtime-client";
+import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime-client/protocol";
 
 /** 消费同一调用到终态；业务方处理交互和投递，服务所有者负责最终关闭。 */
 export async function invokeOnce(

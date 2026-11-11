@@ -23,11 +23,13 @@ supersedes: []
 
 ## 合同与版本
 
-- 主输入是 InvokeInput；Core 唯一解析执行配置、准备输入并映射到 Provider。
+- 主输入是 InvokeInput；Core 准备身份与输入，AgentEnv 保序透传至 Adapter；Adapter 直接读取、校验并映射到 Provider。
 - Run schema_version=7；Context 为 octo.context-envelope/v3；Kernel IPC 为 ipc_version=2，分别版本化。
 - /executor-core 保留显式低层执行能力，不能代替普通宿主的 Kernel RPC；/executor-kernel 提供统一原生服务与客户端，#294 不再要求 worker authoring；/host 提供 Kernel 服务与宿主辅助。旧 owned launch 已删除，不得恢复。
 - 源帧和 canonical 事件保持原协议，native/canonical 模式在接纳时冻结，续流不得切换。
 - 业务 Context、Agent 定义、会话绑定、历史和可靠投递由业务方拥有；内核不补齐、摘要或重放业务请求。
+- 应用提示词由调用方准备为普通输入 parts，并与业务文字/图片保序；Runtime 不赋予 system/developer/受信角色，不按新建、续接或 fallback 注入。旧 octo.control/instructions、controlInstructions 及其类型/helper 已删除，即使为空也拒绝。MCP、envs 和执行策略保留在 agentEnv。
+- 本地工作目录由调用方先准备为现有绝对路径；CLI/SDK 均显式传入，不默认取 cwd。workspace 仅含 path，不包含 mode；Runtime 不分配或恢复目录，续接/fallback 路径失效返回具体 WORKDIR_* 及 OH-ADP-3004 分类。声明 metadata.workspace:false 的 Adapter 的无本地覆盖场景不制造目录。运维 Home/log/IPC 与应用路径各自管理。
 
 普通消费者调用 KernelClient.invoke(inputs, sessionId, providerSession, agentEnv)，独立 Gateway 使用公开 Client。submit/get/subscribe 是刻意选择的高级原语；身份控制与 owner 排空使用同一 client 的登记，不实现第二套 invoke。具体取消与未知语义见[本地执行](local-execution.md)。
 

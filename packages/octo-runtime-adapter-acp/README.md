@@ -13,8 +13,8 @@ Turns any ACP-speaking CLI into a Runtime Adapter: one prompt turn per invocatio
 ## Make one call
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 const executor = new AgentExecutor();
@@ -26,7 +26,14 @@ const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "hermes" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "hermes" } }
+    ]
   }
 });
 
@@ -68,10 +75,22 @@ The optional second argument overrides the transport: `{ acpClientFactory, comma
 
 ## Import and distribution
 
-Private workspace package. The published distribution exposes `/adapters/dsh` only, so there is no public ACP subpath today.
+Private workspace package, neither independently published nor re-exported through the full package. Native hosts declare a workspace dependency on its source and import it as needed; independent applications connect to an already composed Kernel through the client.
 
 ## Further reading
 
 - [Implementation](src/index.ts), [ACP transport](../octo-runtime-acp-client/README.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).
 - A wrapper to copy: [Hermes](../octo-runtime-adapter-hermes/README.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package uses `adapter.<metadata.type>/options` with optional `modeId: string`, an exact Provider-native ID. This is a package-local contract, not registered in public protocol; adapter.xxx is not a public namespace standard.
+
+Omission performs no mode discovery or setter and does not reset a resumed session. Explicit values must be nonblank strings and match the current Provider advertisement exactly, without trimming or mapping default to build. A mode config option (including grouped options) and its actual configId take precedence; otherwise modes.availableModes is used. Missing advertisements, unsupported IDs, missing configId and RPC rejection fail without selecting another mode. No setter is sent when the current value already matches; otherwise session/set_config_option or session/set_mode is called. Setter success is acceptance, not fabricated confirmation. modeId does not change approval authorization.
+
+Add the following item alongside the caller-prepared workspace and shared adapter/model items. Choose modeId from the native advertisement; the example does not promise Provider support. Keep existing options in the same payload. Old actmode is not converted.
+
+```json
+{ "namespace": "adapter.<metadata.type>", "name": "options", "payload": { "modeId": "plan" } }
+```

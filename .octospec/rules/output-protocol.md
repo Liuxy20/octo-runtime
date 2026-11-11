@@ -30,7 +30,7 @@ Codex canonical 的 `commandExecution` 仅在 `status=failed`、`exitCode=1`、�
 
 Codex 的合格非空 final_answer 在无活动工作、同步交互、取消或已知错误时，15 秒 finalization fallback 可确认 completed。AdapterInvocationContext 的本地 `reportExecutionResult` 回调传递固定 basis；Core 不解析 Codex 私有事件，也不增加公共 HostControl/AdapterOutput 联合。成功确认与清理分离：晚到中断不能改写成功，首次 iterator/turn 清理失败仍导致 waitForInvocationCleanup 和 owner shutdown incomplete。普通完成与其他 Adapter 保持原规则。证据范围见 [313 验证](../tasks/313-codex-service-lifecycle/validation.md)。
 
-显式 actmode 的执行事实通过 canonical `execution.update` 或 native control `{type:"evidence",name:"execution",payload}` 返回。`payload.actmode` 包含 requested、effective、status 和可选 nativeMode/reason：applied 必须与请求一致；fallback 仅用于已确认的不支持且 effective 为 default；unknown 的 effective 为 null、reason 为 provider_unconfirmed。认证、超时和执行错误不能伪装成不支持。省略 actmode 不制造执行事实或模式设置，也不建立产品模式记忆。首批接线及验证范围见[交付记录](../journal/shared/2026-10-16-actmode-first-three-delivery.md)。
+公共 actmode 及其唯一消费者 ExecutionEvidence、execution.update、native evidence/name=execution 已删除。原生模式归对应 Adapter 的私有合同，诊断使用既有 Provider 输出或 provider_diagnostic，不再发布统一 requested/effective/status。session evidence、session.update、plan.updated 与原生交互仍有独立用途，继续保留。
 
 | 合同                        | 内容与运行时入口                                                                                                               |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -89,6 +89,14 @@ PLAYBOARD_INTERACTION_REQUIRED；不依赖全局 full_access 猜测，也不自�
 `canonicalEvents(frames)` 是新帧流的类型化消费函数。它校验事件、源身份和连续序号，
 拒绝 native 帧，并将 Host 错误与 gap 抛给调用者。它不启动执行、不调用 Normalizer，
 也不建立续流缓冲。读取已有窗口时，首帧可以从窗口内任意序号开始，后续帧必须连续。
+
+## canonical 模型输出静默
+
+Runtime 在源端用单调时钟观察公开 assistant 文本，连续 60 秒无新增文本，发送一次 `run.notice/code=model_output_idle`，severity=info，params 只含实际 `silenceMs`（安全整数且至少 60000）与 `${floor(silenceMs/1000)}s no LLM output` 格式的 message。复用既有 JSON-RPC `agent_run.event`、HostFrame 身份/序号及重放，不新增 RPC 或 native 类型。
+
+新文本 delta 或增长快照立即重新计满 60 秒，每个新区间可再通知；空内容、状态更新、重复/回退快照、私有 reasoning、usage/心跳不刷新。排队、工具、同步交互暂停，所有等待解除后重新计时，async question 不暂停。终态、取消、异常及资源回收清除待发通知。每轮只保留一个待发槽；新输出或等待只重置/暂停未来区间，不删除已经生成的事实。槽未消费时不覆盖，消费后按最新输出时间继续计时。Core先交付已生成通知，再消费同时就绪的普通源结果；通知不丢弃在途 Provider next、不并发 next、不累积通知监听。
+
+该事实不控制预算或自动取消；全局 limits.enforcement 已删除；model_idle_policy及首帧/整轮/工具预算保持，先到的截止优先。native 不实例化该观察器。Gateway 仅消费上游事实，仓外迁移见 issue #34；不在渠道重新维护静默计时。示例见[输出与控制](../../docs/zh-CN/reference/output-and-control.md#模型输出静默通知)，验收见[任务](../tasks/runtime-model-output-idle/brief.md)。
 
 ## 2. 执行入口与消费者
 

@@ -15,8 +15,8 @@ Calls an existing Agent in OpenClaw Gateway over its authenticated WebSocket RPC
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { openclawAdapter } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
 
 const executor = new AgentExecutor();
@@ -31,7 +31,12 @@ const input = InvokeInput.check({
       {
         namespace: "octo.execution",
         name: "adapter",
-        payload: { type: "openclaw", provider_agent_id: "main" }
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: { agentId: "main" }
       }
     ]
   }
@@ -40,12 +45,14 @@ const input = InvokeInput.check({
 
 ## What it binds
 
+`adapter.openclaw/options` is a private agreement between the host and this Adapter. Its fields, validation and defaults are not part of the public protocol or generated types. Other Adapters ignore it. `defaultAgentEnv` returns an independent envelope for the caller to compose; invocation does not append default items to the submitted envelope. Connection credentials travel separately in the trusted local invocation context.
+
 | Item         | Value                                                                              |
 | ------------ | ---------------------------------------------------------------------------------- |
 | Adapter type | `openclaw`                                                                         |
 | Exports      | `openclawAdapter`, `createOpenClawAdapter`                                         |
 | Transport    | Gateway WebSocket RPC, advertised v4 methods and events                            |
-| Target       | an existing Agent via `provider_agent_id`; input preparation defaults it to `main` |
+| Target       | an existing Agent via `adapter.openclaw/options.payload.agentId`; the OpenClaw Adapter defaults it to `main` |
 | Output       | canonical events only                                                              |
 | Workspace    | disabled — the remote Agent owns it                                                |
 
@@ -66,3 +73,9 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 - [Implementation](src/index.ts), [OpenClaw contract](../../.octospec/rules/openclaw.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).
 - [Runtime Protocol](../octo-runtime-protocol/README.md).
+
+## Private AgentEnv.Item validation
+
+The `adapter.openclaw/options` item in the composition example above belongs exclusively to this package. `agentId` accepts a string; omission or null retains this package's existing default of `main`. String values must match `^[a-z0-9_][a-z0-9_-]{0,63}$`; empty strings and invalid IDs are rejected. The target must exist; it is never created or substituted. A resumed session key prefix and native agentId receipt must match the selected target.
+
+The Provider owns the workspace; `metadata.workspace:false` permits omission of local cwd independently of the removed AgentSource. This item's name, fields, defaults and validation never enter protocol. Other private options and connection settings retain their package-local implementation; credentials stay outside the envelope.

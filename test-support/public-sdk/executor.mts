@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "@mininglamp-oss/octo-runtime/adapter-sdk";
 import assert from "node:assert/strict";
 import {
   AgentExecutor,
@@ -8,13 +9,12 @@ import {
   type ExecutorShutdownResult
 } from "@mininglamp-oss/octo-runtime/executor-core";
 import type { CanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
-
 export async function verifyExecutorCore(): Promise<void> {
   const replies = new Map<string, () => void>();
   const adapter: HostedAdapter = {
     metadata: {
       type: "release-fixture",
-      agentSources: ["provisioned"],
+
       protocolSupport: {
         protocol: "release.fixture",
         modes: ["native", "canonical"],
@@ -66,13 +66,16 @@ export async function verifyExecutorCore(): Promise<void> {
   assert.equal((await executor.describe())[0].available, true);
   const input = {
     inputs: [{ type: "text", text: "public" }],
-    agentEnv: {
-      schema: "octo.context-envelope/v3",
-      items: [
-        { namespace: "octo.execution", name: "adapter", payload: { type: "release-fixture" } },
-        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
-      ]
-    },
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [
+          { namespace: "octo.execution", name: "adapter", payload: { type: "release-fixture" } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ]
+      },
+      [{ namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } }]
+    ),
     invocationId: "public-native",
     runId: "public-native-run"
   } satisfies InvokeInput;
@@ -122,7 +125,6 @@ export async function verifyExecutorCore(): Promise<void> {
     /EXECUTOR_CLOSED/
   );
 }
-
 export async function checkResponses(executor: AgentExecutor, response: InteractionResponse) {
   await executor.respondInteraction("id", response);
   // @ts-expect-error Responses require an interaction ID.

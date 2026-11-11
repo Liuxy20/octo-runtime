@@ -170,6 +170,15 @@ export function assertExperiencePayload(type: string, payload: Payload): void {
           string(params.toModel);
           if (params.reasonCode !== undefined) string(params.reasonCode);
           break;
+        case "model_output_idle":
+          fields(params, ["silenceMs", "message"], ["silenceMs", "message"]);
+          integer(params.silenceMs, 60_000);
+          if (
+            payload.severity !== "info" ||
+            params.message !== `${Math.floor(Number(params.silenceMs) / 1000)}s no LLM output`
+          )
+            throw new TypeError("invalid model output idle notice");
+          break;
         case "config_warning":
           fields(params, ["warningCode"], ["warningCode"]);
           string(params.warningCode);

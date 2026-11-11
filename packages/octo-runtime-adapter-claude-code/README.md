@@ -15,19 +15,26 @@ Runs one invocation through Claude Code's bidirectional stream-json CLI. Each ca
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { claudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 
 const executor = new AgentExecutor();
-executor.register(claudeCodeAdapter);
+executor.register(createClaudeCodeAdapter({ command: "/absolute/path/claude", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "claude-code" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "claude-code" } }
+    ]
   }
 });
 ```
@@ -37,7 +44,7 @@ const input = InvokeInput.check({
 | Item         | Value                                                                            |
 | ------------ | -------------------------------------------------------------------------------- |
 | Adapter type | `claude-code`                                                                    |
-| Exports      | `claudeCodeAdapter`, `createClaudeCodeAdapter`                                   |
+| Exports      | `createClaudeCodeAdapter`                                   |
 | Protocol     | `claude.stream-json`, modes `native` and `canonical`                             |
 | Transport    | one `claude` NDJSON stdio subprocess per invocation                              |
 | Session      | explicit Provider session; a new session is generated only when none is supplied |
@@ -45,7 +52,7 @@ const input = InvokeInput.check({
 
 ## Configuration and session ownership
 
-The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. Public `InvokeInput.agentEnv.approvalMode` is also supported, but must agree with an explicit Context policy. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
+The example uses approval mode `ask` and leaves reasoning effort to the Provider. Set approvals through Context `octo.security/approval_policy` and effort through `octo.execution/model.payload.reasoning.effort`. The Adapter receives the prepared internal `InvokeRequest`; see the [input reference](../../docs/en/reference/invoke-input.md) for current fields and rejected legacy configuration.
 
 The caller saves and explicitly returns the complete `providerSession` from session updates, including Provider extension fields. Reusing the business `sessionId` alone starts fresh; Core keeps no persistent business-session-to-Provider binding table. See [Context and Sessions](../../docs/en/guides/context-and-sessions.md) for continuation and recovery input.
 
@@ -73,3 +80,15 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 - [Implementation](src/index.ts), [Adapter SDK](../octo-runtime-adapter-sdk/README.md), [Runtime Protocol](../octo-runtime-protocol/README.md).
 - [Input reference](../../docs/en/reference/invoke-input.md).
+
+## Private AgentEnv.Item
+
+This package owns the following item; neither its name nor its payload is registered in public Schema, catalog or generated types. Existing options may share the same payload. Invalid explicit values fail in this Adapter.
+
+Optional `permissionMode` accepts only `"plan"`. Omission preserves the approval mapping: ask → default, assisted → auto, full_access → bypassPermissions. Plan overrides that CLI permission mode and never adds `--dangerously-skip-permissions`, including with full_access; interaction authorization remains unchanged. Other values, including null and default, are rejected. An absent or different native init permissionMode produces a canonical provider diagnostic; native output retains the Provider messages. No shared mode evidence is generated.
+
+```json
+{ "namespace": "adapter.claude-code", "name": "options", "payload": { "permissionMode": "plan" } }
+```
+
+Add this item to the same `agentEnv.items` array as the Adapter route and prepared workspace in the example above. Keep any existing options in this single item; duplicate namespace/name pairs are invalid. Model/effort remain in the shared model item. The removed public actmode item is not converted.

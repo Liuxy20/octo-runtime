@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
@@ -8,7 +9,6 @@ import { createKernelService } from "../packages/octo-runtime-executor-kernel/di
 import { componentEndpoint } from "../packages/octo-runtime-host-sdk/dist/index.js";
 import { invocationInput } from "../packages/octo-runtime-protocol/dist/index.js";
 import { invokeRequest } from "../test/runtime-fixture.js";
-
 // 显式运行的真实 Provider 验收；只写临时工作目录，不输出认证或原始模型轨迹。
 const dshBin = process.env.OCTO_DSH_NATIVE_BIN;
 assert.ok(dshBin, "Host must supply OCTO_DSH_NATIVE_BIN: the npm-installed JavaScript entry");
@@ -36,14 +36,16 @@ const terminal = (events) =>
 function input(prompt, providerSession, providerOptions = {}) {
   return invocationInput(
     invokeRequest({
-      workdir: directory,
       runId: randomUUID(),
       invocationId: randomUUID(),
-      approvalMode: "full_access",
       modelInput: prompt,
       ...(providerSession ? { providerSession } : {}),
-      agentConfig: { providerOptions },
-      runtimeLimits: { runTimeoutMs: 90000 }
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "adapter.dsh", name: "options", payload: { ...providerOptions } },
+        { namespace: "octo.execution", name: "limits", payload: { run_timeout_ms: 90000 } }
+      ])
     }),
     "canonical",
     "dsh"

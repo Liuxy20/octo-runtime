@@ -23,13 +23,20 @@ Kernel does not restart its host process; the SDK application or CLI service man
 | Symptom / code                                 | Action                                                                                                                                                                                           |
 | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Invalid Context structure, duplicates, or size | Validate parameters with `InvokeInput.check`. Check schema, the 32-item / 64-KiB limit, and duplicate namespace/name pairs. See [Context reference](../reference/contexts.md) for field formats. |
-| `CONTEXT_PLAN_MISMATCH`                        | Compare top-level workdir, model, and approval settings with Context and correct conflicting values.                                                                                             |
+| `CONTEXT_PLAN_MISMATCH` | The explicit Adapter route supplied to a low-level request wrapper conflicts with the envelope route; use the matching adapter item. |
+| `WORKDIR_REQUIRED` | Supply an explicit, existing absolute local directory through the path-only workspace item; CLI and SDK have no cwd default. |
+| `WORKDIR_INVALID` | Use a valid absolute path, without workspace mode. |
+| `WORKDIR_NOT_FOUND` | The caller must prepare the chosen directory before invocation. Resume/recovery does not recreate it or allocate a replacement. |
+| `WORKDIR_NOT_DIRECTORY` | Supply a directory rather than a file. |
+| `WORKDIR_UNAVAILABLE` | Check filesystem access and the observed system error; unavailable does not necessarily mean nonexistent. |
 | `INVOKE_REQUEST_TOO_LARGE`                     | Send less text or fewer images, or use resource references readable through tools. The 32 MiB limit also counts base64, recovery images, and protocol wrapping.                                  |
 | Unsupported output mode                        | Choose a mode from the [Provider support table](../reference/providers.md). Canonical-only Adapters require explicit `protocol_mode: "canonical"`.                                               |
 | `CONTEXT_ENVS_UNSUPPORTED`                     | OpenClaw rejects nonempty per-invocation environment variables. Remove these settings and configure the Gateway deployment instead.                                                              |
 | MCP configuration or connection failure        | Follow the [MCP troubleshooting table](mcp.md) to check connection types, field support, environment variables, duplicate service names, and authentication.                                     |
 
 ## Output or Session Recovery Failed
+
+The `WORKDIR_*` reasons above retain public classification `OH-ADP-3004`; branch on the specific error `.code`, canonical `payload.code`/`failure.reasonCode`, or native error control. Runtime validates before Provider execution but cannot prevent later filesystem races. OpenClaw and other workspace-owning external Agents may omit a local override. See [working directory contract](../reference/invoke-input.md).
 
 | Symptom / code                                             | Action                                                                                                                                                                                               |
 | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

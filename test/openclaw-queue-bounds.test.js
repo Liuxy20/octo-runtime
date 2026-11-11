@@ -1,8 +1,8 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { DriverQueue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { createOpenClawAdapter } from "../packages/octo-runtime-adapter-openclaw/dist/index.js";
-
 function fixture({ onWait } = {}) {
   let listener,
     finish,
@@ -71,21 +71,30 @@ function fixture({ onWait } = {}) {
     runId: "r",
     prompt: "p",
     modelInput: "p",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    controlInstructions: "",
-    approvalMode: "full_access",
-    agentSource: "preset",
-    workdir: "",
-    agentConfig: {
-      providerAgentId: "main",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://localhost:1",
-        OPENCLAW_GATEWAY_TOKEN: "fixture",
-        OPENCLAW_GATEWAY_DEVICE_ID: "d",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "main",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://localhost:1",
+            OPENCLAW_GATEWAY_TOKEN: "fixture",
+            OPENCLAW_GATEWAY_DEVICE_ID: "d",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "p",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "k"
+          }
+        }
       }
-    }
+    ])
   });
   return {
     source,
@@ -97,7 +106,6 @@ function fixture({ onWait } = {}) {
     stats: () => ({ closed, unsubscribed, factories })
   };
 }
-
 test("100000 unrelated broadcasts are filtered before queue.push while consumption is paused", async (t) => {
   const f = fixture();
   const original = DriverQueue.prototype.push;
@@ -131,7 +139,6 @@ test("100000 unrelated broadcasts are filtered before queue.push while consumpti
   assert.ok(events.some((e) => e.payload.text === "first accepted output"));
   assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
 });
-
 test("overflow cleans up a paused invocation immediately without reconnecting or reporting success", async () => {
   const f = fixture();
   await f.source.next();
@@ -149,7 +156,6 @@ test("overflow cleans up a paused invocation immediately without reconnecting or
     false
   );
 });
-
 test("broadcasts after native completion cannot overflow or abort the completed run", async () => {
   const f = fixture();
   await f.source.next();
@@ -164,7 +170,6 @@ test("broadcasts after native completion cannot overflow or abort the completed 
   assert.equal(events.at(-1).type, "run.completed");
   assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
 });
-
 test("overflow during lifecycle reconciliation wins over its successful wait result", async () => {
   const f = fixture({
     onWait: () => {
@@ -197,7 +202,6 @@ test("overflow during lifecycle reconciliation wins over its successful wait res
   assert.equal(f.calls.filter((method) => method === "sessions.abort").length, 1);
   assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
 });
-
 test("DriverQueue exact item, count and byte boundaries discard backlog on failure", async () => {
   for (const [count, size, expected] of [
     [16, 1, "STREAM_QUEUE_ITEMS_EXCEEDED"],
@@ -234,7 +238,6 @@ test("DriverQueue exact item, count and byte boundaries discard backlog on failu
   queue.push("x".repeat(256 * 1024 - 1));
   await assert.rejects(queue[Symbol.asyncIterator]().next(), /STREAM_QUEUE_ITEM_TOO_LARGE/);
 });
-
 test("early consumer return cancels the accepted provider run and detaches once", async () => {
   const f = fixture();
   await f.source.next();
@@ -243,7 +246,6 @@ test("early consumer return cancels the accepted provider run and detaches once"
   assert.deepEqual(f.stats(), { closed: 1, unsubscribed: 1, factories: 1 });
   assert.ok(f.calls.includes("sessions.abort"));
 });
-
 test(
   "filtered broadcast batches do not retain their payloads after GC",
   { skip: !global.gc },

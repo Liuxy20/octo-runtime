@@ -9,7 +9,7 @@ rules:
     - config/**
     touches:
     - adapter
-    - agent-source
+    - agent-env
 - id: runtime-architecture
   priority: 100
   load_bearing: true

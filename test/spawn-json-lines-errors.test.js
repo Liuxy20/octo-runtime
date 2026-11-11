@@ -4,6 +4,7 @@ import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import { join } from "node:path";
 import { spawnJsonLines } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 
 for (const pipe of ["stdout", "stderr"]) {
@@ -32,7 +33,9 @@ for (const pipe of ["stdout", "stderr"]) {
       syncBuiltinESMExports();
     });
     const fault = Object.assign(new Error(`read ${pipe} ENOTCONN`), { code: "ENOTCONN" });
-    const result = Array.fromAsync(spawnJsonLines({ command: "fixture", parseLine: JSON.parse }));
+    const result = Array.fromAsync(
+      spawnJsonLines({ command: process.execPath, parseLine: JSON.parse })
+    );
     child[pipe].emit("error", fault);
     await assert.rejects(result, (error) => error === fault);
     assert.doesNotThrow(() => child.stdout.emit("error", fault));
@@ -44,7 +47,7 @@ test("native nonexistent command preserves spawn errno after output pipe errors"
   await assert.rejects(
     Array.fromAsync(
       spawnJsonLines({
-        command: `octo-missing-${process.pid}-${Date.now()}`,
+        command: join(process.cwd(), `octo-missing-${process.pid}-${Date.now()}`),
         input: "request\n",
         parseLine: JSON.parse
       })

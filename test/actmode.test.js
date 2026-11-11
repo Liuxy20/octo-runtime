@@ -1,3 +1,7 @@
+import {
+  withAgentEnvItems,
+  assertAdapterAgentEnv
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
@@ -6,9 +10,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assertContextEnvelope,
-  assertExecutionEvidence,
   resolveContextConfiguration,
-  contextActmode
+  contextItem
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import { assertJsonValue } from "../packages/octo-runtime-protocol/dist/context.js";
 import { prepareInvokeInput } from "../packages/octo-runtime-executor-core/dist/invoke-input.js";
@@ -16,78 +19,53 @@ import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/
 import { createClaudeCodeAdapter } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { createAcpAdapter } from "../packages/octo-runtime-adapter-acp/dist/index.js";
 import { invokeRequest, contextEnvelope } from "./runtime-fixture.js";
-
 const fixture = fileURLToPath(new URL("../test-support/fake-actmode.mjs", import.meta.url));
-const contexts = (mode) =>
+const contexts = (mode, provider = "fixture") =>
   contextEnvelope(
-    mode === undefined ? [] : [{ namespace: "octo.execution", name: "actmode", payload: { mode } }]
+    mode === undefined
+      ? []
+      : [
+          {
+            namespace: `adapter.${provider}`,
+            name: "options",
+            payload:
+              provider === "codex"
+                ? { collaborationMode: mode }
+                : provider === "claude-code"
+                  ? { permissionMode: mode }
+                  : { modeId: mode }
+          }
+        ]
   );
 const collect = async (source) => {
   const events = [];
   for await (const event of source) events.push(event);
   return events;
 };
-
-test("actmode validates explicit values, applies configuration ownership and never renders as model text", () => {
-  for (const mode of ["plan", "default"]) {
-    assertContextEnvelope(contexts(mode));
-    const { request } = prepareInvokeInput({
-      inputs: [{ type: "text", text: "test" }],
-      agentEnv: contexts(mode)
-    });
-    assert.equal(contextActmode(request.context), mode);
-    assert.equal(request.modelInput, "test");
-  }
-  assert.equal(
-    contextActmode(
-      prepareInvokeInput({ inputs: [{ type: "text", text: "test" }], agentEnv: contexts() }).request
-        .context
-    ),
-    undefined
-  );
-  for (const mode of [null, "", "PLAN", "execute", false, {}])
-    assert.throws(() => assertContextEnvelope(contexts(mode)));
+test("private options remain opaque, explicitly composed and never rendered as model text", () => {
+  const env = contexts("provider-mode");
+  assertContextEnvelope(env);
+  const { request } = prepareInvokeInput({
+    inputs: [{ type: "text", text: "test" }],
+    agentEnv: env
+  });
+  assert.deepEqual(request.agentEnv, env);
+  assert.equal(request.modelInput, "test");
+  assert.doesNotThrow(() => assertAdapterAgentEnv(invokeRequest({ agentEnv: env })));
   assert.throws(
-    () =>
-      assertContextEnvelope(
-        contextEnvelope([...contexts("plan").items, ...contexts("default").items])
-      ),
+    () => assertContextEnvelope(contextEnvelope([...env.items, ...env.items])),
     /DUPLICATED/
   );
-  assert.equal(
-    contextActmode(
-      resolveContextConfiguration(
-        { defaults: contexts("plan"), mandatory: contexts() },
-        contexts("default")
-      )
-    ),
-    "default"
+  const result = resolveContextConfiguration(
+    { defaults: env, mandatory: contexts() },
+    contexts("other")
   );
-  assert.equal(
-    contextActmode(
-      resolveContextConfiguration(
-        { defaults: contexts(), mandatory: contexts("plan") },
-        contexts("default")
-      )
-    ),
-    "plan"
-  );
-  assert.throws(() =>
-    assertExecutionEvidence({
-      actmode: {
-        requested: "plan",
-        effective: "plan",
-        status: "fallback",
-        reason: "provider_unsupported"
-      }
-    })
-  );
+  assert.deepEqual(contextItem(result, "adapter.fixture", "options").payload, { modeId: "other" });
 });
-
 for (const provider of ["codex", "claude-code"])
-  for (const mode of [undefined, "default", "plan"]) {
+  for (const mode of provider === "codex" ? [undefined, "default", "plan"] : [undefined, "plan"]) {
     test(
-      `${provider} maps only explicit actmode=${mode} in canonical and native`,
+      `${provider} maps only explicit private mode=${mode} in canonical and native`,
       { timeout: 10000 },
       async () => {
         const directory = await mkdtemp(join(tmpdir(), "octo-actmode-"));
@@ -99,26 +77,20 @@ for (const provider of ["codex", "claude-code"])
               provider === "codex"
                 ? createCodexAdapter({ command: process.execPath, appServerArgs: options })
                 : createClaudeCodeAdapter({
+                    env: process.env,
                     command: process.execPath,
                     commandArgsPrefix: options
                   });
             const req = invokeRequest({
-              context: contexts(mode),
-              signal: AbortSignal.timeout(8000)
+              signal: AbortSignal.timeout(8000),
+              agentEnv: withAgentEnvItems(contexts(mode, provider), [])
             });
-            const snapshot = structuredClone(req.context);
+            const snapshot = structuredClone(req.agentEnv);
             const events = await collect(adapter.invoke(req, { protocolMode }));
             const evidence = events.find(
               (event) => event.type === "execution.update" || event.control?.name === "execution"
             );
-            assert.equal(Boolean(evidence), mode !== undefined);
-            if (evidence)
-              assert.deepEqual((evidence.payload ?? evidence.control.payload).actmode, {
-                requested: mode,
-                effective: mode,
-                status: "applied",
-                nativeMode: mode
-              });
+            assert.equal(evidence, undefined);
             const lines = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
             if (provider === "codex") {
               const turn = lines.find((line) => line.method === "turn/start");
@@ -137,7 +109,7 @@ for (const provider of ["codex", "claude-code"])
               );
               assert.equal(args.includes("--dangerously-skip-permissions"), false);
             }
-            assert.deepEqual(req.context, snapshot);
+            assert.deepEqual(req.agentEnv, snapshot);
           }
         } finally {
           await rm(directory, { recursive: true, force: true });
@@ -145,9 +117,8 @@ for (const provider of ["codex", "claude-code"])
       }
     );
   }
-
 test(
-  "Codex falls back only for advertised unsupported plan; provider failure does not restart turn",
+  "Codex rejects unsupported private modes; provider failure does not restart turn",
   { timeout: 10000 },
   async () => {
     const directory = await mkdtemp(join(tmpdir(), "octo-actmode-fallback-"));
@@ -156,34 +127,27 @@ test(
         const log = join(directory, String(fail));
         const adapter = createCodexAdapter({
           command: process.execPath,
-          appServerArgs: [fixture, "--log", log, "--unsupported", ...(fail ? ["--fail-turn"] : [])]
+          appServerArgs: [fixture, "--log", log, ...(fail ? ["--fail-turn"] : ["--unsupported"])]
         });
         const events = await collect(
           adapter.invoke(
-            invokeRequest({ context: contexts("plan"), signal: AbortSignal.timeout(8000) })
+            invokeRequest({
+              signal: AbortSignal.timeout(8000),
+              agentEnv: withAgentEnvItems(contexts("plan", "codex"), [])
+            })
           )
         );
         const evidence = events.find((e) => e.type === "execution.update");
-        if (fail) {
-          assert.equal(evidence, undefined);
-          assert.equal(events.at(-1).type, "run.failed");
-        } else
-          assert.deepEqual(evidence.payload.actmode, {
-            requested: "plan",
-            effective: "default",
-            status: "fallback",
-            nativeMode: "default",
-            reason: "provider_unsupported"
-          });
+        assert.equal(evidence, undefined);
+        assert.equal(events.at(-1).type, "run.failed");
         const lines = (await readFile(log, "utf8")).trim().split("\n").map(JSON.parse);
-        assert.equal(lines.filter((line) => line.method === "turn/start").length, 1);
+        assert.equal(lines.filter((line) => line.method === "turn/start").length, fail ? 1 : 0);
       }
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
   }
 );
-
 for (const modern of [true, false])
   test(`ACP ${modern ? "configOptions" : "modes"} maps explicit input, omission performs no setting`, async () => {
     for (const mode of [undefined, "default", "plan"]) {
@@ -228,7 +192,9 @@ for (const modern of [true, false])
         { type: "fixture", provider: "fixture", command: "fixture" },
         { acpClientFactory: () => client }
       );
-      const events = await collect(adapter.invoke(invokeRequest({ context: contexts(mode) })));
+      const events = await collect(
+        adapter.invoke(invokeRequest({ agentEnv: withAgentEnvItems(contexts(mode), []) }))
+      );
       const settings = calls.filter((call) => call.method.startsWith("session/set_"));
       assert.equal(settings.length, mode === "plan" ? 1 : 0);
       if (mode === "plan")
@@ -243,14 +209,13 @@ for (const modern of [true, false])
         );
       assert.equal(
         events.some((event) => event.type === "execution.update"),
-        mode !== undefined
+        false
       );
       assert.equal(events.at(-1).type, "run.completed");
       for (const event of events) assertJsonValue(event);
     }
   });
-
-test("ACP only falls back for advertised unsupported modes; setter errors do not prompt", async () => {
+test("ACP rejects unsupported native IDs; setter errors do not prompt", async () => {
   for (const fail of [false, true]) {
     let prompted = false;
     const client = {
@@ -260,7 +225,7 @@ test("ACP only falls back for advertised unsupported modes; setter errors do not
         if (method === "session/new")
           return {
             sessionId: "fallback-session",
-            modes: { currentModeId: "other", availableModes: [{ id: "default" }] }
+            modes: { currentModeId: "other", availableModes: [{ id: fail ? "plan" : "default" }] }
           };
         if (fail) throw new Error("SET_MODE_FAILED");
         return {};
@@ -278,23 +243,16 @@ test("ACP only falls back for advertised unsupported modes; setter errors do not
     );
     const events = [];
     const execution = async () => {
-      for await (const event of adapter.invoke(invokeRequest({ context: contexts("plan") })))
+      for await (const event of adapter.invoke(
+        invokeRequest({ agentEnv: withAgentEnvItems(contexts("plan"), []) })
+      ))
         events.push(event);
     };
-    if (fail) await assert.rejects(execution, /SET_MODE_FAILED/);
-    else await execution();
-    const evidence = events.find((event) => event.type === "execution.update");
-    assert.equal(prompted, !fail);
-    if (fail) {
-      assert.equal(evidence, undefined);
-    } else {
-      assert.deepEqual(evidence.payload.actmode, {
-        requested: "plan",
-        effective: "default",
-        nativeMode: "default",
-        status: "fallback",
-        reason: "provider_unsupported"
-      });
-    }
+    await assert.rejects(execution, fail ? /SET_MODE_FAILED/ : /ACP_MODE_UNSUPPORTED/);
+    assert.equal(prompted, false);
+    assert.equal(
+      events.some((event) => event.type === "execution.update"),
+      false
+    );
   }
 });

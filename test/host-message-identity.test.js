@@ -1,9 +1,9 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
-
 test("Host scopes anonymous segments to tool boundaries and closes every channel at a step end", async () => {
   const host = new AgentExecutor();
   host.register({
@@ -13,8 +13,7 @@ test("Host scopes anonymous segments to tool boundaries and closes every channel
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "identity",
-      agentSources: ["provisioned"]
+      type: "identity"
     },
     async *invoke() {
       const event = (type, payload) => ({ protocolVersion: 2, type, payload });
@@ -39,12 +38,11 @@ test("Host scopes anonymous segments to tool boundaries and closes every channel
       runId: "r",
       prompt: "p",
       modelInput: "p",
-      workdir: process.cwd(),
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      controlInstructions: "",
-      approvalMode: "full_access",
-      agentSource: "provisioned",
-      agentConfig: {}
+      agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+        { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+      ])
     },
     { protocolMode: "canonical" }
   ))

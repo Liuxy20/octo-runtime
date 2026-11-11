@@ -10,7 +10,8 @@
 import { app } from "electron";
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
-import { createKernelService, componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
+import { createKernelService } from "@mininglamp-oss/octo-runtime-executor-kernel";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 
 await app.whenReady();
 const home = join(app.getPath("userData"), "runtime"); // 产品选择

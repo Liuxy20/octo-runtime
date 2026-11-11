@@ -1,3 +1,7 @@
+import {
+  agentEnvItem,
+  withAgentEnvItems
+} from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -15,7 +19,6 @@ import {
   assertCanonicalEvent,
   isTerminal
 } from "@mininglamp-oss/octo-runtime-protocol";
-
 const root = fileURLToPath(new URL("..", import.meta.url));
 const cli = join(root, "apps/cli/dist/index.js");
 const context = (items) => ({ schema: "octo.context-envelope/v3", items });
@@ -30,7 +33,6 @@ const echoInput = (text = "hello", extra = []) =>
     protocol_mode: "canonical",
     agentEnv: context([item("octo.execution", "adapter", { type: "playboard-test" }), ...extra])
   });
-
 async function fixture(t, { legacyOpenClaw = false } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "octo-playboard-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
@@ -61,8 +63,8 @@ async function fixture(t, { legacyOpenClaw = false } = {}) {
         },
         {
           type: "codex",
-          module: join(root, "packages/octo-runtime-adapter-codex/dist/index.js"),
-          export: "createCodexAdapter",
+          module: join(root, "apps/cli/dist/codex.js"),
+          export: "createCliCodexAdapter",
           factory: true,
           options: {
             command: process.execPath,
@@ -74,7 +76,6 @@ async function fixture(t, { legacyOpenClaw = false } = {}) {
   );
   return { directory, manifest };
 }
-
 async function execute(
   { directory, manifest },
   value,
@@ -87,6 +88,21 @@ async function execute(
     cleanupFailure
   } = {}
 ) {
+  // 测试调用方已创建目录，显式提交它；CLI/Kernel 不再补 cwd。
+  if (
+    typeof value === "object" &&
+    value?.agentEnv &&
+    !value.agentEnv.items?.some(
+      (item) =>
+        item.name === "workspace" || (item.name === "adapter" && item.payload.type === "openclaw")
+    )
+  )
+    value = {
+      ...value,
+      agentEnv: withAgentEnvItems({ ...value.agentEnv }, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: directory } }
+      ])
+    };
   const consoleControl =
     signalOnFrame || signalOnImport || signalOnFailure ? await createWindowsConsole() : undefined;
   return new Promise((resolve, reject) => {
@@ -140,7 +156,7 @@ async function execute(
         }
       } else child.kill("SIGKILL");
       reject(new Error("playboard did not exit"));
-    }, 15_000);
+    }, 15000);
     child.on("error", reject);
     const interruptWhenReady = () => {
       if (
@@ -197,7 +213,6 @@ async function execute(
     child.stdin.end(typeof value === "string" ? value : JSON.stringify(value));
   });
 }
-
 function terminal(result, state) {
   result.frames.forEach((frame) =>
     "kind" in frame ? assertHostFrame(frame) : assertCanonicalEvent(frame)
@@ -217,7 +232,6 @@ function terminal(result, state) {
 function observed(result) {
   return JSON.parse(result.frames.find((frame) => frame.type === "message.delta").payload.text);
 }
-
 test("playboard maps one snapshot and never invents provider continuity", () => {
   const request = input("first", { sessionId: "same-session" });
   const first = preparePlayboard(request);
@@ -240,49 +254,20 @@ test("playboard maps one snapshot and never invents provider continuity", () => 
     custom: { keep: true }
   });
 });
-
-test("OpenClaw shorthand selects an existing agent without injecting a caller workspace", () => {
-  const adapter = (payload) => context([item("octo.execution", "adapter", payload)]);
-  const submitted = input("hello", {
-    protocol_mode: "canonical",
-    agentEnv: adapter({ type: "openclaw" })
-  });
+test("OpenClaw private configuration passes through without a Core default", () => {
+  const agentEnv = context([
+    item("octo.execution", "adapter", { type: "openclaw" }),
+    item("adapter.openclaw", "options", { agentId: "researcher", custom: { enabled: true } })
+  ]);
+  const submitted = input("hello", { protocol_mode: "canonical", agentEnv });
   const snapshot = structuredClone(submitted);
   const prepared = preparePlayboard(submitted);
-  assert.deepEqual(submitted, snapshot);
   assert.equal(prepared.adapterType, "openclaw");
-  assert.equal(prepared.protocolMode, "canonical");
-  assert.equal(prepared.request.agentSource, "preset");
-  assert.equal(prepared.request.agentConfig.providerAgentId, "main");
-  assert.equal(prepared.request.workdir, "");
-  assert.ok(!prepared.request.context.items.some((entry) => entry.name === "workspace"));
-  assert.deepEqual(
-    prepared.request.context.items.find((entry) => entry.name === "adapter").payload,
-    { type: "openclaw", provider_agent_id: "main" }
-  );
-  const explicit = preparePlayboard({
-    ...submitted,
-
-    agentEnv: {
-      ...adapter({ type: "openclaw", provider_agent_id: "researcher" }),
-      agentSource: "provisioned"
-    }
-  });
-  assert.equal(explicit.request.agentSource, "provisioned");
-  assert.equal(explicit.request.agentConfig.providerAgentId, "researcher");
-  assert.equal(explicit.request.workdir, process.cwd());
-  for (const provider_agent_id of [null, undefined, "", " ", "../main", 42]) {
-    assert.throws(
-      () =>
-        preparePlayboard({
-          ...submitted,
-          agentEnv: adapter({ type: "openclaw", provider_agent_id })
-        }),
-      /CONTEXT_SCHEMA_INVALID/
-    );
-  }
+  assert.deepEqual(prepared.request.agentEnv, agentEnv);
+  assert.deepEqual(submitted, snapshot);
+  assert.ok(!prepared.request.agentEnv.items.some((entry) => entry.name === "workspace"));
+  assert.deepEqual(prepared.request.agentEnv.items[0].payload, { type: "openclaw" });
 });
-
 test("invalid input, old context, and invalid continuity fail before execution", () => {
   for (const value of [
     null,
@@ -300,17 +285,11 @@ test("invalid input, old context, and invalid continuity fail before execution",
   ]) {
     assert.throws(() => preparePlayboard(value));
   }
-  assert.equal(preparePlayboard(input("hello", { extra: true })).request.modelInput, "hello");
+  assert.throws(() => preparePlayboard(input("hello", { extra: true })), /unknown field/);
 });
-
 test("temporary Kernel preserves caller-prepared business input and leaves no identity or process state", async (t) => {
   const settings = await fixture(t);
-  const contexts = [
-    item("octo.control", "instructions", {
-      entries: [{ text: "control-only" }]
-    }),
-    item("octo.execution", "model", { selection: { id: "test-model" } })
-  ];
+  const contexts = [item("octo.execution", "model", { selection: { id: "test-model" } })];
   const request = {
     ...echoInput("business-b\nbusiness-a\nhello", contexts),
     sessionId: "same-session"
@@ -320,9 +299,9 @@ test("temporary Kernel preserves caller-prepared business input and leaves no id
   terminal(result, "completed");
   const wire = observed(result);
   assert.equal(wire.agentSessionId, "same-session");
-  assert.equal(wire.workdir, await realpath(settings.directory));
-  assert.equal(wire.agentConfig.model, "test-model");
-  assert.equal(wire.controlInstructions, "control-only");
+  assert.equal(agentEnvItem(wire.agentEnv, "octo.execution", "workspace").path, settings.directory);
+  assert.equal(agentEnvItem(wire.agentEnv, "octo.execution", "model")?.selection?.id, "test-model");
+  assert.equal(Object.hasOwn(wire, "controlInstructions"), false);
   assert.ok(wire.modelInput.indexOf("business-b") < wire.modelInput.indexOf("business-a"));
   assert.doesNotMatch(wire.modelInput, /control-only|test-model/);
   assert.match(result.stderr, /playboard fixture diagnostic/);
@@ -336,7 +315,6 @@ test("temporary Kernel preserves caller-prepared business input and leaves no id
   assert.equal(observed(empty).modelInput, "hello");
   assert.deepEqual(await readdir(settings.directory), ["adapters.json"]);
 });
-
 for (const protocolMode of ["native", "canonical"]) {
   test(`Playboard temporary IPC ignores long Unicode temp roots in ${protocolMode} mode`, async (t) => {
     const settings = await fixture(t);
@@ -356,7 +334,6 @@ for (const protocolMode of ["native", "canonical"]) {
     }
     assert.deepEqual(await readdir(temporary), []);
   });
-
   test(`real Codex adapter emits ${protocolMode} frames through temporary daemon IPC`, async (t) => {
     const settings = await fixture(t);
     const result = await execute(settings, input("normal", { protocol_mode: protocolMode }));
@@ -385,7 +362,9 @@ for (const protocolMode of ["native", "canonical"]) {
       settings,
       input("approval", {
         protocol_mode: protocolMode,
-        agentEnv: { ...context([]), approvalMode: "ask" }
+        agentEnv: withAgentEnvItems({ ...context([]) }, [
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+        ])
       })
     );
     assert.equal(result.code, 1);
@@ -400,13 +379,12 @@ for (const protocolMode of ["native", "canonical"]) {
     );
   });
 }
-
 test("provider failure and deadline exit nonzero with terminal frames", async (t) => {
   const settings = await fixture(t);
   for (const request of [
     echoInput("fail"),
     echoInput("hang", [
-      item("octo.execution", "limits", { run_timeout_ms: 150, cancel_grace_ms: 100 })
+      item("octo.execution", "limits", { run_timeout_ms: 1000, cancel_grace_ms: 100 })
     ])
   ]) {
     const result = await execute(settings, request);
@@ -414,7 +392,6 @@ test("provider failure and deadline exit nonzero with terminal frames", async (t
     terminal(result, "failed");
   }
 });
-
 for (const cleanupFailure of ["incomplete", "reject"]) {
   test(`Playboard retains primary outcomes when cleanup is ${cleanupFailure}`, async (t) => {
     const settings = await fixture(t);
@@ -433,7 +410,9 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
       [
         input("approval", {
           protocol_mode: "canonical",
-          agentEnv: { ...context([]), approvalMode: "ask" }
+          agentEnv: withAgentEnvItems({ ...context([]) }, [
+            { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } }
+          ])
         }),
         "pending"
       ]
@@ -458,7 +437,6 @@ for (const cleanupFailure of ["incomplete", "reject"]) {
     assert.equal(cancelled.frames.some(isTerminal), false);
   });
 }
-
 test("Ctrl+C force-stops Playboard without waiting for a terminal or Kernel close", async (t) => {
   const settings = await fixture(t);
   const temporary = join(settings.directory, "cancellation-".repeat(5));
@@ -468,7 +446,7 @@ test("Ctrl+C force-stops Playboard without waiting for a terminal or Kernel clos
   if (process.platform === "win32") assert.notEqual(result.code, 0, result.stderr);
   else assert.equal(result.code, 130, result.stderr);
   assert.equal(result.signal, null);
-  assert.ok(result.shutdownMs < 7_000, `close took ${result.shutdownMs}ms`);
+  assert.ok(result.shutdownMs < 7000, `close took ${result.shutdownMs}ms`);
   const frame = result.frames.find((frame) => frame.type === "message.delta");
   assert.ok(frame, "cancellation must start after execution reports its owned PIDs");
   assert.throws(() => process.kill(JSON.parse(frame.payload.text).hostPid, 0), {
@@ -485,7 +463,6 @@ test("Ctrl+C force-stops Playboard without waiting for a terminal or Kernel clos
   );
   assert.equal(result.frames.some(isTerminal), false);
 });
-
 test(
   "Ctrl+C during pending Adapter import kills only the Playboard descendant tree",
   { timeout: 15000 },
@@ -535,7 +512,6 @@ test(
     assert.equal(process.kill(sibling.pid, 0), true);
   }
 );
-
 test("Ctrl+C still force-stops owned children after the command reports incomplete cleanup", async (t) => {
   const settings = await fixture(t);
   const result = await execute(settings, echoInput(), {
@@ -559,7 +535,6 @@ test("Ctrl+C still force-stops owned children after the command reports incomple
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
 });
-
 test("malformed stdin, unknown arguments and unsupported native mode fail clearly", async (t) => {
   const settings = await fixture(t);
   for (const value of ["", "{", "{}\n{}", "[]", "{}SECRET-do-not-echo"]) {
@@ -576,7 +551,6 @@ test("malformed stdin, unknown arguments and unsupported native mode fail clearl
   assert.equal(unsupported.stdout, "");
   assert.match(unsupported.stderr, /PROTOCOL_MODE_UNSUPPORTED/);
 });
-
 test("closing the NDJSON consumer cleans up Host and provider execution", async (t) => {
   const settings = await fixture(t);
   const child = spawn(process.execPath, [cli, "playboard", "--manifest", settings.manifest], {
@@ -601,19 +575,22 @@ test("closing the NDJSON consumer cleans up Host and provider execution", async 
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       reject(new Error("broken pipe did not clean up"));
-    }, 10_000);
+    }, 10000);
     child.on("error", reject);
     child.on("close", (code) => {
       clearTimeout(timer);
       resolve(code);
     });
-    child.stdin.end(JSON.stringify(echoInput("broken-pipe")));
+    const request = echoInput("broken-pipe");
+    request.agentEnv = withAgentEnvItems(request.agentEnv, [
+      item("octo.execution", "workspace", { path: settings.directory })
+    ]);
+    child.stdin.end(JSON.stringify(request));
   });
   assert.equal(code, 1);
   assert.equal(typeof hostPid, "number");
   assert.throws(() => process.kill(hostPid, 0), { code: "ESRCH" });
 });
-
 for (const legacyOpenClaw of [false, true]) {
   test(`Playboard initializes ${legacyOpenClaw ? "untyped legacy" : "typed"} OpenClaw, refreshes source and retains device identity`, async (t) => {
     const settings = await fixture(t, { legacyOpenClaw });
@@ -690,7 +667,8 @@ for (const legacyOpenClaw of [false, true]) {
     const request = input("hello", {
       protocol_mode: "canonical",
       agentEnv: context([
-        item("octo.execution", "adapter", { type: "openclaw", provider_agent_id: "main" }),
+        item("octo.execution", "adapter", { type: "openclaw" }),
+        item("adapter.openclaw", "options", { agentId: "main" }),
         item("octo.security", "approval_policy", { mode: "full_access" })
       ])
     });
@@ -720,7 +698,6 @@ for (const legacyOpenClaw of [false, true]) {
     assert.equal(await readFile(deviceFile, "utf8"), device);
   });
 }
-
 test("manifest read failure removes temporary state and keeps stdout empty", async (t) => {
   const settings = await fixture(t);
   const isolated = await mkdtemp(

@@ -1,51 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { localRuntimeLimits, resolveLocalContext } from "./context.js";
 import {
-  CONTEXT_SCHEMA,
-  DEFAULT_RUN_TIMEOUT_MS,
-  assertAgentSource,
-  assertContextEnvelope,
   assertInvokeRequest,
-  contextControlInstructions,
   contextItem,
   InvokeInput,
-  type ContextEnvelope,
   type InvokeRequest,
   type ProviderSession
 } from "@mininglamp-oss/octo-runtime-protocol";
 
-/** CLI shorthand resolves execution defaults before entering the strict Context contract. */
-function inputContext(value: unknown): ContextEnvelope {
-  if (isRecord(value) && Array.isArray(value.items)) {
-    value = {
-      ...value,
-      items: value.items.map((item: unknown) => {
-        if (
-          isRecord(item) &&
-          item.namespace === "octo.execution" &&
-          item.name === "adapter" &&
-          isRecord(item.payload) &&
-          item.payload.type === "openclaw" &&
-          !Object.hasOwn(item.payload, "provider_agent_id")
-        ) {
-          return { ...item, payload: { ...item.payload, provider_agent_id: "main" } };
-        }
-        return item;
-      })
-    };
-  }
-  const envelope = {
-    schema: (value as ContextEnvelope).schema,
-    items: (value as ContextEnvelope).items
-  };
-  assertContextEnvelope(envelope);
-  return envelope;
-}
-
 /**
- * 将调用方本轮 JSON 快照解析为执行计划与内部请求，不读取持久会话或创建 Provider。
+ * 将调用方本轮 JSON 快照包装为内部请求，不读取持久会话或创建 Provider。
  * sessionId 只标识业务会话；续接必须显式携带 providerSession，不能由同名会话推断。
- * 仅解析执行设置；inputs 由业务方准备，原样进入 Adapter。
+ * 仅读取 Adapter 路由；agentEnv 与业务方准备的 inputs 保序交给 Adapter。
  */
 export function prepareInvokeInput(value: unknown): {
   adapterType: string;
@@ -53,19 +18,14 @@ export function prepareInvokeInput(value: unknown): {
   request: InvokeRequest;
 } {
   if (!isRecord(value)) throw new TypeError("invoke input must be a JSON object");
-  const input = InvokeInput.check({
-    ...value,
-    agentEnv: { ...(value.agentEnv as object), ...inputContext(value.agentEnv) }
-  });
-  const contexts = inputContext(value.agentEnv);
-  const env = input.agentEnv;
+  const input = InvokeInput.check(value);
   const protocolMode = value.protocol_mode ?? "native";
   if (protocolMode !== "native" && protocolMode !== "canonical") {
     throw new TypeError("protocol_mode must be native or canonical");
   }
-  const adapterType = contextItem(contexts, "octo.execution", "adapter")?.payload.type;
-  const agentSource = env.agentSource ?? (adapterType === "openclaw" ? "preset" : "provisioned");
-  assertAgentSource(agentSource);
+  const adapterType =
+    contextItem(input.agentEnv, "octo.execution", "adapter")?.payload.type ?? "codex";
+  if (typeof adapterType !== "string" || !adapterType) throw new TypeError("ADAPTER_TYPE_INVALID");
   if (
     value.sessionId !== undefined &&
     (typeof value.sessionId !== "string" || !value.sessionId.trim())
@@ -105,45 +65,6 @@ export function prepareInvokeInput(value: unknown): {
       "continue requires providerSession; sessionId alone cannot resume a provider"
     );
 
-  const defaults: ContextEnvelope = {
-    schema: CONTEXT_SCHEMA,
-    items: [
-      { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
-      ...(agentSource === "provisioned"
-        ? [
-            {
-              namespace: "octo.execution",
-              name: "workspace",
-              payload: { mode: "fixed", path: env.workdir ?? process.cwd() }
-            }
-          ]
-        : []),
-      {
-        namespace: "octo.security",
-        name: "approval_policy",
-        payload: { mode: env.approvalMode ?? "ask" }
-      },
-      {
-        namespace: "octo.execution",
-        name: "limits",
-        payload: { run_timeout_ms: DEFAULT_RUN_TIMEOUT_MS }
-      }
-    ]
-  };
-  // 解析固定执行配置；没有业务 Context 渲染阶段。
-  const { resolvedExecutionPlan: plan } = resolveLocalContext(
-    defaults,
-    {
-      schema: CONTEXT_SCHEMA,
-      items: contexts.items.filter(
-        (item) =>
-          item.namespace === "octo.execution" ||
-          (item.namespace === "octo.security" && item.name === "approval_policy")
-      )
-    },
-    agentSource
-  );
-  const context = structuredClone(contexts);
   const prompt = input.inputs
     .map((part) => (part.type === "text" ? part.text : "[Image]"))
     .join("\n\n");
@@ -155,7 +76,6 @@ export function prepareInvokeInput(value: unknown): {
     agentSessionId: value.sessionId ?? `session_${randomUUID()}`,
     // 名称默认值只在此归一化；Host SDK/Adapter 不猜业务策略或据此决定恢复。
     sessionName: input.sessionName ?? randomUUID(),
-    agentSource,
     continuityMode,
     ...(providerSession ? { providerSession } : {}),
     ...(input.sessionGeneration !== undefined
@@ -174,22 +94,15 @@ export function prepareInvokeInput(value: unknown): {
       : {}),
     prompt: input.prompt ?? prompt,
     modelInput: input.modelInput ?? prompt,
-    modelInputParts: structuredClone(input.inputs),
-    context,
-    controlInstructions: env.controlInstructions ?? contextControlInstructions(context),
-    workdir: env.workdir ?? plan.workdir,
-    approvalMode: env.approvalMode ?? plan.approval_mode,
-    runtimeLimits: env.runtimeLimits ?? localRuntimeLimits(plan),
-    agentConfig: {
-      workdir: plan.workdir,
-      ...(plan.model ? { model: plan.model } : {}),
-      ...(plan.effort ? { effort: plan.effort } : {}),
-      ...(plan.provider_agent_id ? { providerAgentId: plan.provider_agent_id } : {}),
-      ...env.agentConfig
-    }
+    // 高级调用显式选择的纯文本作为普通内容提交；有图片时始终保留完整有序 parts。
+    modelInputParts:
+      input.modelInput !== undefined && input.inputs.every((part) => part.type === "text")
+        ? [{ type: "text", text: input.modelInput }]
+        : structuredClone(input.inputs),
+    agentEnv: structuredClone(input.agentEnv)
   };
   assertInvokeRequest(request);
-  return { adapterType: plan.adapter_type, protocolMode, request };
+  return { adapterType, protocolMode, request };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

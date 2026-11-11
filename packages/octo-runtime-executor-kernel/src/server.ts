@@ -12,6 +12,7 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   assertHostRunReceipt,
+  assertServiceProcessSnapshot,
   createInputInvoke,
   contextItem,
   INVOKE_REQUEST_MAX_BYTES,
@@ -19,7 +20,8 @@ import {
   KERNEL_IPC_VERSION,
   resolveStreamLimitPolicy,
   type InvokeInput,
-  type InvokeEnvironment
+  type InvokeEnvironment,
+  type ServiceProcessSnapshot
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { HostRunService } from "./host-run-service.js";
 import { AgentExecutor, type HostedAdapter } from "@mininglamp-oss/octo-runtime-executor-core";
@@ -40,6 +42,10 @@ export interface KernelServerOptions {
   endpoint: string;
   /** 宿主已 import/构造的实例；保留对象身份，不跨进程序列化。 */
   adapters: readonly HostedAdapter[];
+  /** 宿主拥有的服务只读快照；Kernel 不因此获得关闭或恢复权。 */
+  serviceProcesses?: () => readonly ServiceProcessSnapshot[];
+  /** 宿主显式收尾回调：Core 排空后、所有权证据释放前调用；失败须抛出。deadline 为 performance.now() 绝对毫秒。 */
+  finalizeHostResources?: (deadline: number) => Promise<void>;
   adapterConfigurations?: Record<string, AdapterProbeOptions>;
   stateDirectory?: string;
   /** 记录 Kernel/Core 的生命周期；调用方选择日志目录。 */
@@ -158,12 +164,19 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
   let closing: Promise<void> | undefined;
   let listening = false;
   let releaseEndpoint: (() => Promise<void>) | undefined;
+  // 宿主快照只参与诊断；校验并复制，绝不把可变对象或控制句柄交给 IPC。
+  const serviceProcesses = () => {
+    const snapshots = [...executor.processes(), ...(options.serviceProcesses?.() ?? [])];
+    if (snapshots.length > 256) throw new Error("SERVICE_PROCESS_SNAPSHOT_LIMIT");
+    for (const snapshot of snapshots) assertServiceProcessSnapshot(snapshot);
+    return snapshots.map((snapshot) => ({ ...snapshot }));
+  };
   const status = (): KernelStatus => ({
     ipc_version: KERNEL_IPC_VERSION,
     kernel_instance_id: instance,
     pid: process.pid,
     execution_ready: !closing && ready,
-    service_processes: [...executor.processes()]
+    service_processes: serviceProcesses()
   });
   const snapshot = (key: LookupKey, expected?: string): RunSnapshot => {
     if (expected !== undefined && expected !== instance)
@@ -238,23 +251,9 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
             throw new KernelError("KERNEL_UNAVAILABLE", { invocation_not_submitted: true });
           const input = params.input as InvokeInput;
           const config = configure(input);
-          // 选项先合并再进入 HostRunService 的整请求预算检查；策略沿同一调用传给 Core 和重放窗口。
-          const configuredInput = config
-            ? {
-                ...input,
-                agentEnv: {
-                  ...input.agentEnv,
-                  agentConfig: {
-                    ...input.agentEnv.agentConfig,
-                    providerOptions: {
-                      ...input.agentEnv.agentConfig?.providerOptions,
-                      ...config.providerOptions
-                    }
-                  }
-                }
-              }
-            : input;
-          const receipt = await runs.submit(configuredInput, {
+          // 连接选项走本地调用环境；调用方的 AgentEnv 保序透传。
+          const receipt = await runs.submit(input, {
+            providerOptions: config?.providerOptions,
             streamLimits: config?.streamLimits,
             executionEnvOverrides:
               params.executionEnvOverrides as InvokeEnvironment["executionEnvOverrides"]
@@ -442,6 +441,11 @@ export async function startKernelServer(options: KernelServerOptions, signal?: A
       if (result.cleanup !== "complete") throw new Error("EXECUTOR_CLEANUP_INCOMPLETE");
     });
     await attempt(() => beforeDeadline(runs.close(), until - 1000));
+    await attempt(
+      () =>
+        options.finalizeHostResources?.(performance.now() + Math.max(0, until - Date.now())) ??
+        Promise.resolve()
+    );
     // 原生日志由同一 owner 持有：Core/finally 排空后才关闭，且仍只用原截止时间。
     logging.kernel(
       errors.length ? "error" : "info",

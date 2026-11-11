@@ -1,7 +1,7 @@
-import { componentEndpoint } from "@mininglamp-oss/octo-runtime/host";
-import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime/protocol";
+import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
+import { InvokeInput, type CanonicalEvent } from "@mininglamp-oss/octo-runtime-protocol";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -16,9 +16,15 @@ export async function runDshExample(
 ): Promise<void> {
   if (!isAbsolute(dshBin)) throw new Error("DSH_BIN must be an absolute JavaScript entry path");
   const directory = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ord-"));
-  const kernel = createDshKernel(directory, componentEndpoint(directory), dshBin);
+  const home = join(directory, "runtime-home");
+  const workdir = join(directory, "project");
+  let service: ReturnType<typeof createDshKernel> | undefined;
   const errors: unknown[] = [];
   try {
+    await mkdir(home);
+    await mkdir(workdir);
+    const kernel = createDshKernel(home, componentEndpoint(home), dshBin);
+    service = kernel;
     await kernel.initialize({ signal });
     const input = InvokeInput.check({
       invocationId: randomUUID(),
@@ -26,6 +32,7 @@ export async function runDshExample(
       agentEnv: {
         schema: "octo.context-envelope/v3",
         items: [
+          { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
           { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } },
           { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
         ]
@@ -49,7 +56,7 @@ export async function runDshExample(
     errors.push(error);
   } finally {
     try {
-      const cleanup = await kernel.close();
+      const cleanup = service ? await service.close() : { complete: true };
       if (!cleanup.complete)
         errors.push(new Error("KERNEL_CLEANUP_INCOMPLETE", { cause: cleanup }));
       else await rm(directory, { recursive: true, force: true });

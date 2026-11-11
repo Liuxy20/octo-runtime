@@ -13,9 +13,9 @@
 ## Make one call
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throws
@@ -23,9 +23,16 @@ executor.register(dshAdapter); // metadata.type is "dsh"; a duplicate type throw
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Summarize the last commit." }],
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 
@@ -49,7 +56,9 @@ Two details that trip people up: the Adapter is chosen by the `octo.execution` /
 
 ## What the executor does with your input
 
-It validates and freezes the request, renders this turn's model input, resolves the local environment, and admits the run. Admission happens before any Provider starts: identity, capacity, and closed-state checks all run there. Business Context comes from this invocation only — Core never fills a gap from session history.
+The application prepares `/absolute/prepared/project` before calling. Local execution requires an explicit existing absolute directory through a path-only workspace item. Core does not inherit cwd, create application directories, allocate random workspaces or restore a missing directory during resume/fresh recovery. Adapters declaring `metadata.workspace: false` may omit the override. Missing/invalid paths produce stable `WORKDIR_*` reasons classified as `OH-ADP-3004`; see [input validation](../../docs/en/reference/invoke-input.md). `prepareRunContext` and `WorkspaceAssignments` are removed; Runtime operational state is separate.
+
+Core validates and snapshots this invocation's input and AgentEnv, reads only the Adapter route, and forwards the caller's prepared text/images and configuration items in order. The Adapter owns configuration semantics, defaults, environment merging and native Provider mapping. Core creates no agentConfig or other configuration projection, renders no business Context and fills no gaps from session history. Identity, capacity and closed-state checks run during admission, before the Provider starts.
 
 `invokeFrames` validates synchronously, so a malformed request throws at the call. `invoke` is an async generator, so everything runs at the first `next()`. Wrap the whole consumption loop, not just one call: an unconsumed iterator reserves no capacity and starts no Provider.
 
@@ -57,6 +66,7 @@ It validates and freezes the request, renders this turn's model input, resolves 
 
 - `signal` — cancellation for this run.
 - `executionEnvOverrides` — trusted values the host injects.
+- `providerOptions` — trusted host connection settings bound locally for Adapter consumption, without writing them back into AgentEnv.
 - `streamLimits` — local budgets; Kernel rejects this one (`KERNEL_STREAM_LIMITS_UNSUPPORTED`).
 
 ## API
@@ -73,7 +83,7 @@ It validates and freezes the request, renders this turn's model input, resolves 
 
 ## What ends a run
 
-The overall deadline defaults to 24 hours and accepts up to seven days. For 72 hours, pass `runtimeLimits: { runTimeoutMs: 259200000 }` or Context `octo.execution/limits` with `run_timeout_ms: 259200000`. First-frame, model-idle and tool-idle detection remain independent. See [input precedence and ranges](../../docs/en/reference/invoke-input.md).
+The overall deadline defaults to 24 hours and accepts up to seven days. For 72 hours, pass Context `octo.execution/limits` with `run_timeout_ms: 259200000`. First-frame, model-idle and tool-idle detection remain independent. See [input precedence and ranges](../../docs/en/reference/invoke-input.md).
 
 In canonical mode only `run.completed` is success. A final message, an accepted cancellation, and an iterator that simply runs out are not.
 
@@ -83,7 +93,7 @@ Closing a direct iterator early _requests cancellation_ — unlike Kernel, where
 
 `shutdown()` returns an immutable snapshot. `state: "closed"` only means no new runs are accepted; only `cleanup: "complete"` means every owned resource was actually released. When it is `incomplete`, `unresolvedInvocationIds` and `failedCleanupInvocationIds` name what is still holding on.
 
-Each registered Adapter may create an independent execution scope. Core binds invocation and interaction methods to that scope, synchronously stops its recovery/admission during shutdown, then awaits service cleanup. `unresolvedServiceIds` and `failedCleanupServiceIds` report service ownership separately, including when no invocation remains. `processes()` returns validated resident-service snapshots without starting a Provider or probe. Codex keeps healthy services alive between turns; only the owner closes them.
+Each registered Adapter may create an independent execution scope. Core binds invocation and interaction methods to that scope, stops scope admission during shutdown, then awaits local invocation/lease cleanup. Explicit host owners manage persistent Engine recovery and shutdown; Core does not close injected shared Engines. `unresolvedServiceIds` and `failedCleanupServiceIds` report service ownership separately, including when no invocation remains. `processes()` returns validated resident-service snapshots without starting a Provider or probe. Codex keeps healthy services alive between turns; only the owner closes them.
 
 Admission never reopens and a failed finalizer is never retried — a later `shutdown()` waits again but cannot resurrect the attempt. A rejected `next()`, a `return()` that reports `done: false`, or a generator without a usable finalizer is not proof of disposal.
 
@@ -108,7 +118,7 @@ Electron, Node SDK hosts, and CLI hosts use KernelClient over local RPC. Direct 
 
 ## Import and distribution
 
-Private workspace package: source and submodule hosts import `@mininglamp-oss/octo-runtime-executor-core`. Published consumers use `@mininglamp-oss/octo-runtime/executor-core`.
+Private workspace package: native hosts integrate `@mininglamp-oss/octo-runtime-executor-core` from source and depend only on selected Adapters, without installing the CLI package and all bundled Adapters. Independent applications use `octo-runtime-client` to connect to an existing Kernel.
 
 ## Further reading
 

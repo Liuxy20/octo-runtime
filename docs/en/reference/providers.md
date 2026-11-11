@@ -4,7 +4,7 @@
 
 A Provider is the program that executes Agent tasks, such as Codex or Claude Code. Its Adapter translates Runtime input into Provider calls. Select an Adapter through `octo.execution/adapter` and install/authenticate the corresponding Provider on the execution machine. Runtime does not download these dependencies automatically.
 
-For installation, account configuration, Codex Computer Use, and CodeBuddy/WorkBuddy credits, see [Harness Installation and Configuration](../guides/harnesses.md). For Runtime service commands and `octo-cli` dependencies, see [CLI Installation and Invocation](../getting-started/cli.md).
+For installation, account configuration, Codex Computer Use, and CodeBuddy/WorkBuddy credits, see [Harness Installation and Configuration](../guides/harnesses.md). For Runtime's own service commands, see [CLI Installation and Invocation](../getting-started/cli.md).
 
 The table describes the checked-in Adapters. Confirm that your actual Provider version and account configuration work; registering an Adapter alone does not make it ready to execute.
 
@@ -36,13 +36,13 @@ Claude Code currently supports `can_use_tool` interactions. Check implementation
 
 Model IDs and reasoning effort depend on the Provider and its version. Runtime offers four effort choices, `low`, `medium`, `high`, and `xhigh`, which the Adapter converts to Provider settings. A Provider may not natively support four distinct levels.
 
-Omitting actmode leaves mode behavior to the Provider without actively resetting it. Explicitly selecting an unsupported setting fails the invocation.
+There is no shared work-mode field. Native mode options, omission and failure behavior are private to each [Adapter package](../../../packages/README.md).
 
 ## OpenClaw Configuration Differences
 
-OpenClaw uses an existing Gateway Agent and requires an explicit `provider_agent_id`, such as `main`. That Gateway manages the working directory. Nonempty environment variables passed through individual invocations are rejected.
+OpenClaw calls an existing Gateway Agent and uses its workspace. Its private target options and defaults are defined in the [package README](../../../packages/octo-runtime-adapter-openclaw/README.md). Nonempty per-invocation environment variables are rejected.
 
-Other Providers whose execution settings are prepared by Runtime normally use the local workdir resolved for the current invocation. A working directory does not restrict filesystem or network permissions.
+Local execution requires the caller's existing absolute workdir on each invocation; Runtime neither defaults to cwd nor creates or recovers a directory. Adapters with `metadata.workspace: false` can omit a local override. A working directory does not restrict filesystem or network permissions. See [workdir validation](invoke-input.md).
 
 Image input, sandbox, and session resume support also depend on the Adapter and Provider version; see the [Adapter READMEs](../../../packages/README.md). Documentation tests use a test Adapter. See [Maintenance and Validation](../maintenance.md) for real Provider integration coverage.
 

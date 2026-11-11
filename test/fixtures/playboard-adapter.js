@@ -5,12 +5,11 @@ export const playboardAdapter = {
       protocol: "playboard-test.canonical",
       modes: ["canonical"],
       nativeMethods: []
-    },
-
-    agentSources: ["provisioned", "preset"]
+    }
   },
   async respondInteraction() {},
-  async *invoke(request) {
+  async *invoke(request, context) {
+    context?.configureRuntimeLimits?.(invocationRuntimeLimits(request));
     process.stderr.write("playboard fixture diagnostic\n");
     const { signal, ...wire } = request;
     yield {
@@ -46,3 +45,4 @@ export const playboardAdapter = {
     };
   }
 };
+import { invocationRuntimeLimits } from "../../packages/octo-runtime-adapter-sdk/dist/index.js";

@@ -45,7 +45,8 @@ export async function assertPrivateFile(file) {
     {
       env: { ...process.env, OCTO_FILE_PROTECTION_FIXTURE: file },
       windowsHide: true,
-      timeout: 10000,
+      // 托管 Windows 上启动 PowerShell 和加载系统模块也计入预算，仍保持有限等待。
+      timeout: 30000,
       maxBuffer: 64 * 1024,
       encoding: "utf8"
     }

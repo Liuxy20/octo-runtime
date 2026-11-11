@@ -3,22 +3,19 @@ export interface ContextTypeDefinition {
   readonly name: string;
   readonly schemaRef: string;
   readonly persistent: boolean;
-  readonly trustedOnly: boolean;
 }
 
 function entry(
   namespace: string,
   name: string,
   schema: string,
-  persistent: boolean,
-  trustedOnly = false
+  persistent: boolean
 ): ContextTypeDefinition {
   return Object.freeze({
     namespace,
     name,
     schemaRef: `#/definitions/${schema}`,
-    persistent,
-    trustedOnly
+    persistent
   });
 }
 
@@ -26,16 +23,11 @@ function entry(
 export const CONTEXT_TYPE_CATALOG: readonly ContextTypeDefinition[] = Object.freeze([
   entry("octo.execution", "adapter", "ContextAdapterPayload", true),
   entry("octo.execution", "model", "ContextModelPayload", true),
-  entry("octo.execution", "actmode", "ContextActmodePayload", true),
   entry("octo.execution", "workspace", "ContextWorkspacePayload", true),
   entry("octo.execution", "envs", "ContextEnvsPayload", true),
   entry("octo.execution", "mcp", "ContextMcpPayload", true),
   entry("octo.execution", "limits", "ContextLimitsPayload", true),
-  entry("octo.runtime", "selection", "ContextRuntimeSelectionPayload", true),
-  entry("octo.security", "approval_policy", "ContextApprovalPolicyPayload", true),
-  entry("octo.content", "inline", "ContextInlinePayload", false),
-  entry("octo.content", "references", "ContextReferencesPayload", false),
-  entry("octo.control", "instructions", "ContextInstructionsPayload", true, true)
+  entry("octo.security", "approval_policy", "ContextApprovalPolicyPayload", true)
 ]);
 
 export function contextTypeDefinition(namespace: string, name: string): ContextTypeDefinition {

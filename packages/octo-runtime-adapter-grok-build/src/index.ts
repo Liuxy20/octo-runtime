@@ -1,10 +1,20 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  assertAdapterAgentEnv,
+  assertAdapterWorkdir,
+  runAdapterPreparation,
+  isAdapterPreparationFailure,
+  invocationEffort,
+  invocationOption,
+  invocationApprovalMode
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { GrokBuildRpcError, spawnGrokBuildAcpClient } from "./client.js";
 import { createGrokBuildAcpAdapter } from "./adapter.js";
 import {
-  initialControlInstructions,
   invocationEnvironment,
   invocationMcpServers,
   probeCommand,
+  snapshotProviderLaunch,
   type CanonicalEvent,
   type InvokeRequest
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
@@ -12,6 +22,10 @@ import type { InteractionResponse } from "@mininglamp-oss/octo-runtime-protocol"
 
 type JsonRecord = Record<string, unknown>;
 export const GROK_BUILD_TESTED_VERSION = "1.0.67";
+export const grokBuildMetadata: AdapterMetadata = {
+  type: "grok-build",
+  mcp: true
+};
 const levels = { low: "low", medium: "medium", high: "high", xhigh: "xhigh" } as const;
 
 function supportedVersion(version: unknown): boolean {
@@ -22,24 +36,33 @@ function supportedVersion(version: unknown): boolean {
 
 /** 宿主可指定已安装命令；每次调用拥有独立 ACP 子进程，不连接用户常驻 leader。 */
 export function createGrokBuildAdapter({
-  command = "grok",
-  acpClientFactory = spawnGrokBuildAcpClient
-}: { command?: string; acpClientFactory?: typeof spawnGrokBuildAcpClient } = {}) {
+  command,
+  acpClientFactory = spawnGrokBuildAcpClient,
+  commandArgsPrefix = [],
+  env = {}
+}: {
+  command: string;
+  acpClientFactory?: typeof spawnGrokBuildAcpClient;
+  commandArgsPrefix?: readonly string[];
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch =
+    acpClientFactory === spawnGrokBuildAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const adapter = createGrokBuildAcpAdapter(
     {
       type: "grok-build",
+      metadata: grokBuildMetadata,
       provider: "grok-build",
       command,
       args: ["--no-auto-update", "agent", "--no-leader", "stdio"],
-      controlInstructions: "session",
       reasoningLevels: levels,
       async probe() {
-        const result = await probeCommand(command);
-        if (!result.available)
-          return {
-            ...result,
-            reason: "command_not_found: install Grok Build and put grok on PATH"
-          };
+        if (acpClientFactory !== spawnGrokBuildAcpClient)
+          return { available: false, command, reason: "probe_missing" };
+        const result = await probeCommand(launch.command, { args: launch.args, env: launch.env });
+        if (!result.available) return result;
         return supportedVersion(result.version)
           ? result
           : {
@@ -48,9 +71,12 @@ export function createGrokBuildAdapter({
               reason: `grok_version_unsupported: install Grok Build ${GROK_BUILD_TESTED_VERSION} or a compatible 1.x release`
             };
       },
-      async initialize(client, init, _request, env) {
+      async initialize(client, init) {
         const version =
-          record(init._meta).agentVersion ?? (await probeCommand(command, { env })).version;
+          record(init._meta).agentVersion ??
+          (acpClientFactory === spawnGrokBuildAcpClient
+            ? (await probeCommand(launch.command, { args: launch.args, env: launch.env })).version
+            : undefined);
         if (init.protocolVersion !== 1 || !supportedVersion(version))
           throw new Error(
             `GROK_VERSION_UNSUPPORTED: expected ACP v1 and Grok Build >= ${GROK_BUILD_TESTED_VERSION}, < 2.0.0`
@@ -77,14 +103,13 @@ export function createGrokBuildAdapter({
         }
       },
       sessionParams(params, request, fresh) {
-        // 原生 rules 仅用于新会话；恢复不改系统指令，也不恢复工作区文件快照。
-        const rules = initialControlInstructions(request, fresh);
+        // 应用提示词只来自普通输入；会话元数据仅保留执行策略和恢复行为。
         return {
           ...params,
           _meta: {
-            yoloMode: request.approvalMode === "full_access",
+            yoloMode: invocationApprovalMode(request) === "full_access",
             autoMode: false,
-            ...(fresh ? (rules ? { rules } : {}) : { "x.ai/restore_code": false })
+            ...(!fresh ? { "x.ai/restore_code": false } : {})
           }
         };
       },
@@ -92,18 +117,8 @@ export function createGrokBuildAdapter({
         error instanceof GrokBuildRpcError &&
         error.code === -32603 &&
         record(error.data).code === "FS_NOT_FOUND",
-      selectActmode(_session, sessionId, requested) {
-        // 1.0.67 不发布 modes，但实现标准 set_mode(default/plan)；成功响应后才发布 applied。
-        return {
-          method: "session/set_mode",
-          params: { sessionId, modeId: requested },
-          effective: requested,
-          nativeMode: requested,
-          unchanged: false
-        };
-      },
       async *configureSession(client, session, sessionId, request) {
-        const requested = request.agentConfig.effort;
+        const requested = invocationEffort(request);
         if (requested === undefined) return;
         const option = (Array.isArray(session.configOptions) ? session.configOptions : [])
           .map(record)
@@ -205,23 +220,39 @@ export function createGrokBuildAdapter({
           : [];
       }
     },
-    { command, acpClientFactory }
+    { command: launch.command, acpClientFactory, commandArgsPrefix: launch.args, env: launch.env }
   );
 
   return Object.freeze({
     ...adapter,
+    get defaultAgentEnv() {
+      return adapter.defaultAgentEnv;
+    },
     async *invoke(request: InvokeRequest, context?: Parameters<typeof adapter.invoke>[1]) {
-      if (request.agentConfig.sandbox !== undefined)
-        throw new Error("SANDBOX_UNSUPPORTED: grok-build ACP has no per-session sandbox override");
-      // Grok 的 MCP 配置会展开模板；拒绝不能可靠保留的最终字面量，不改写用户配置。
-      const env = invocationEnvironment(request);
-      const mcp = invocationMcpServers(request, env);
-      if (JSON.stringify(mcp).includes("${"))
-        throw new Error("MCP_LITERAL_UNSUPPORTED: grok-build");
+      let env: NodeJS.ProcessEnv = {};
+      await runAdapterPreparation(context, async () => {
+        assertAdapterAgentEnv(request);
+        await assertAdapterWorkdir(request);
+        if (invocationOption(request, "sandbox", "grok-build") !== undefined)
+          throw new Error(
+            "SANDBOX_UNSUPPORTED: grok-build ACP has no per-session sandbox override"
+          );
+        // 纯模板校验在 Provider 操作前完成；预算和 notice 仍只由内层 SDK 应用一次。
+        env = invocationEnvironment(request, {}, launch.env);
+        const mcp = invocationMcpServers(request, env);
+        if (JSON.stringify(mcp).includes("${"))
+          throw new Error("MCP_LITERAL_UNSUPPORTED: grok-build");
+      });
       try {
         yield* adapter.invoke(request, context);
       } catch (error) {
-        throw publicFailure(error, env);
+        const failure = publicFailure(error, env);
+        // 脱敏会创建新 Error；仅转移原错误已经确认的本轮准备证据。
+        if (context && isAdapterPreparationFailure(error, context))
+          await runAdapterPreparation(context, () => {
+            throw failure;
+          });
+        throw failure;
       }
     }
   });
@@ -320,6 +351,3 @@ function record(value: unknown): JsonRecord {
     ? (value as JsonRecord)
     : {};
 }
-
-export const grokBuildAdapter = createGrokBuildAdapter();
-export default grokBuildAdapter;

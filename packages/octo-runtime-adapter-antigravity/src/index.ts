@@ -1,11 +1,25 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+
+export const antigravityMetadata: AdapterMetadata = {
+  type: "antigravity",
+  processModel: "subprocess-per-invocation",
+  transport: "ndjson/stdio"
+};
+
 import {
-  initialControlInstructions,
+  invocationEffort,
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   defineAdapter,
   hasImageInput,
   invocationEnvironment,
   mapReasoningEffort,
   parseJsonLine,
   probeCommand,
+  snapshotProviderLaunch,
   providerInputText,
   spawnJsonLines,
   type CanonicalEvent,
@@ -356,7 +370,7 @@ export function buildAntigravityCommand(
   commandArgsPrefix: string[] = [],
   logPath?: string
 ): CommandSpec {
-  if (request.approvalMode !== "full_access")
+  if (invocationApprovalMode(request) !== "full_access")
     throw new Error("APPROVAL_MODE_UNSUPPORTED: antigravity only supports full_access");
   if (request.signal?.aborted) throw new Error("ANTIGRAVITY_CANCELLED_BEFORE_START");
   if (hasImageInput(request)) throw new Error("ANTIGRAVITY_IMAGE_INPUT_UNSUPPORTED");
@@ -364,7 +378,7 @@ export function buildAntigravityCommand(
     if (managedFlags.has(arg.split("=")[0]) || /^-[pic].+/.test(arg))
       throw new Error(`ANTIGRAVITY_MANAGED_ARGUMENT: ${arg.split("=")[0]}`);
   }
-  const effort = mapReasoningEffort("antigravity", request.agentConfig.effort);
+  const effort = mapReasoningEffort("antigravity", invocationEffort(request));
   const args = [
     ...commandArgsPrefix,
     "--input-format",
@@ -380,20 +394,12 @@ export function buildAntigravityCommand(
   if (logPath) args.push("--log-file", logPath);
   if (request.providerSession?.sessionId)
     args.push("--conversation", request.providerSession.sessionId);
-  if (request.agentConfig.model) args.push("--model", request.agentConfig.model);
+  const model = invocationModel(request);
+  if (model) args.push("--model", model);
   if (effort) args.push("--effort", effort);
-  // agy has no system-prompt flag. Keep the documented user-channel degradation explicit and never rewrite AGENTS.md.
-  const content = initialControlInstructions(request)
-    ? [
-        {
-          type: "text",
-          text: `Runtime control instructions (apply throughout this session):\n${initialControlInstructions(request)}`
-        },
-        { type: "text", text: `User input:\n${providerInputText(request)}` }
-      ]
-    : providerInputText(request);
+  const content = providerInputText(request);
   const input = `${JSON.stringify({ event: "user", message: { content } })}\n`;
-  return { command, args, input, cwd: request.workdir };
+  return { command, args, input, cwd: invocationWorkdir(request) };
 }
 
 export function antigravityLogError(log: string): string | undefined {
@@ -406,18 +412,19 @@ export function antigravityLogError(log: string): string | undefined {
 }
 
 export function createAntigravityAdapter({
-  command = "agy",
-  commandArgsPrefix = []
-}: { command?: string; commandArgsPrefix?: string[] } = {}) {
+  command,
+  commandArgsPrefix = [],
+  env = {}
+}: {
+  command: string;
+  commandArgsPrefix?: string[];
+  env?: NodeJS.ProcessEnv;
+}) {
+  const launch = snapshotProviderLaunch({ command, args: commandArgsPrefix, env });
   return defineAdapter({
-    metadata: {
-      type: "antigravity",
-      agentSources: ["provisioned"],
-      processModel: "subprocess-per-invocation",
-      transport: "ndjson/stdio"
-    },
+    metadata: antigravityMetadata,
     probe: async () => {
-      const result = await probeCommand(command);
+      const result = await probeCommand(launch.command, { args: launch.args, env: launch.env });
       if (result.available && (!result.version || compareVersion(result.version, "1.3.3") < 0))
         return { ...result, available: false, reason: "provider_version_unsupported" };
       return result;
@@ -426,7 +433,7 @@ export function createAntigravityAdapter({
       request: InvokeRequest,
       context?: AdapterInvocationContext
     ): AsyncGenerator<CanonicalEvent> {
-      buildAntigravityCommand(request, command, commandArgsPrefix);
+      buildAntigravityCommand(request, launch.command, [...launch.args]);
       const directory = await mkdtemp(join(tmpdir(), "octo-runtime-antigravity-"));
       const logPath = join(directory, "cli.log");
       const controller = new AbortController();
@@ -463,11 +470,11 @@ export function createAntigravityAdapter({
         void checkLog();
       }, 250);
       timer.unref();
-      const spec = buildAntigravityCommand(request, command, commandArgsPrefix, logPath);
+      const spec = buildAntigravityCommand(request, launch.command, [...launch.args], logPath);
       try {
         for await (const native of spawnJsonLines({
           ...spec,
-          env: invocationEnvironment(request, spec.env),
+          env: invocationEnvironment(request, spec.env, launch.env),
           signal: controller.signal,
           rawMessageMaxBytes: context?.streamLimits?.rawMessageMaxBytes,
           parseLine: (line): AntigravityNativeEvent | null => {
@@ -508,6 +515,3 @@ function compareVersion(version: string, minimum: string): number {
   }
   return 0;
 }
-
-export const antigravityAdapter = createAntigravityAdapter();
-export default antigravityAdapter;

@@ -1,6 +1,20 @@
 # 工程知识变更记录
 
+## 2026-11-10
+
+- [Issue 348–351 联合清理规划](journal/shared/2026-11-10-348-351-context-envelope-plan.md)：从最新 main@7892ebdf 创建独立 worktree，补齐包内合同和消费者审计，规划自评 97/100；后续已授权实施。[实现及验证记录](journal/shared/2026-11-10-348-351-context-envelope-implementation.md)记录协议删除、私有边界、全量及双包验证、真实 Provider 结果与 Grok 网络限制。不扩大 CI，未提交。
+
 ## 2026-11-09
+
+- [Issue 346 宿主执行依赖](journal/shared/2026-11-09-346-host-execution-plan.md)：按后续授权完成 spec、实施及双轴 review，rebase main@c7ae0256。无兼容层，CLI 发现 executable，Adapter 固定路径/运行器；复用静态 metadata。全量 1455 通过/61 跳过、65 项专项、真实 Codex 与 OpenCode JSON/ACP、发行包验证通过；双轴无未关闭问题，原生 Windows/Electron 未验。方案自评 96/100，不扩 CI；2026-11-10 用户授权英文提交与 main PR，禁止自动合并。
+
+- [Issue 341 AgentEnv 直传](journal/shared/2026-11-09-341-agentenv-direct.md)：95 分规划后移除配置投影，Adapter 直接消费私有 bean；整合最新 Engine 所有权后审查和离线回归通过，仅创建 main PR，禁止自动合并，不扩大 CI。
+
+- [Issue 343 同类型 Harness 单实例](journal/shared/2026-11-09-343-single-harness.md)：CLI 按类型唯一装配，Codex 单进程承载逐线程配置，删除自设配额与结束历史；rebase main@bf665881 并适配 AgentEnv 直传。删除 Adapter 聚合导出，纯原生统一源码 workspace 按需接入；双语 docs 明确 CLI + client 场景，双轴及 verified-review 问题闭环。当前全量 1455 通过/61 跳过、手动 120 通过，发行及真实原生范围见[验收](tasks/343-single-harness/validation.md)，不扩大 CI；用户授权提交 PR 到 main、暂不自动合并。
+
+- [Issue 334/335 调用方责任清理](journal/shared/2026-11-09-334-335-caller-ownership.md)：删除应用提示词注入、工作区 mode 与随机分配；预建目录缺失返回 WORKDIR 原因码。两个方案 96 分后审查实施，全量/专项/双包与 Codex/Claude 本机结果见联合验收；Gateway #23 已取消，不扩 CI。
+
+- [Issue 339 常驻 Engine 生命周期实现](journal/shared/2026-11-09-339-engine-lifecycle-implementation.md)：95分规划后完成所有权拆分、双轴及同类审查/autofix；默认1548通过、专项136通过，真实服务与包外验证见[记录](tasks/339-engine-lifecycle/validation.md)。保留[规划历史](journal/shared/2026-11-09-339-engine-lifecycle-plan.md)，不扩大CI。
 
 - [Issue 332 Schema 职责清理](journal/shared/2026-11-09-332-schema-ownership.md)：最新 main 独立 worktree、96 分规划后实施，分离协议/默认值/测试资产并清理 13 个旧定义；全量和双包本地验收通过，独立审查无剩余问题。不扩大 CI，正式 PR/main 状态另按远端确认。
 

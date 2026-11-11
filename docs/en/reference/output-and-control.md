@@ -29,6 +29,75 @@ HostFrame includes execution and session identifiers: `run_id`, `invocation_id`,
 
 There are three frame kinds: `native` preserves Provider data and extension fields, `canonical` holds a common event in `event`, and `control` reports state, errors, interaction status, and missing output. All three share the same `seq` numbering. If implementing an IPC client, save frame sequence numbers rather than counting canonical events to determine your position.
 
+## Model Output Silence Notices
+
+The first interval starts when Core begins this invocation of the Adapter. For canonical execution, Runtime emits one `run.notice` with code `model_output_idle` after 60 continuous seconds without new public model text. A new text delta or growing text snapshot restarts the full 60 seconds. A later idle interval can emit another notice even if an earlier interval already did. Empty content, duplicate or shorter snapshots, heartbeats, usage, and private reasoning do not reset the clock. Queueing, tool execution, and synchronous approval/input waits pause observation; the last wait ending starts a fresh interval. Asynchronous questions do not pause it.
+
+Once the threshold has been reached and a notice generated, new output resets the next interval without revoking that queued fact. The notice is delivered before an ordinary model output that becomes ready at the same time. Terminal events, cancellation, and errors still take priority and clear undelivered notices.
+
+`silenceMs` is the elapsed time measured by Runtime's monotonic clock and may exceed 60000 if the timer runs late. The message uses its whole seconds, for example `60s no LLM output`. This informational notice is neither a terminal, a cancellation request, nor a periodic heartbeat. Existing budgets still apply: the default 60-second first-frame timeout may fail first. `model_idle_policy: observe` only disables model-idle termination, leaving first-frame, total-run, and tool budgets active.
+
+Consumers must use a client/protocol validator that supports `model_output_idle`. Older strict validators reject unknown notice codes, so upgrade consumers together with Runtime; this feature does not provide automatic compatibility with older clients.
+
+The canonical view from `client.invoke` receives:
+
+```json
+{
+  "protocolVersion": 2,
+  "type": "run.notice",
+  "payload": {
+    "noticeId": "idle-1",
+    "code": "model_output_idle",
+    "severity": "info",
+    "params": {
+      "silenceMs": 60000,
+      "message": "60s no LLM output"
+    }
+  }
+}
+```
+
+IPC reuses the existing JSON-RPC 2.0 `agent_run.event` notification without an `id`. `params.event` is the original HostFrame; its nested `event` contains the same notice:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "agent_run.event",
+  "params": {
+    "kernel_instance_id": "kernel-1",
+    "run_id": "run-1",
+    "stream_id": "stream-1",
+    "seq": 8,
+    "event": {
+      "run_id": "run-1",
+      "invocation_id": "invocation-1",
+      "stream_id": "stream-1",
+      "agent_session_id": "session-1",
+      "session_generation": 1,
+      "seq": 8,
+      "protocol_mode": "canonical",
+      "protocol": "codex.app-server",
+      "kind": "canonical",
+      "event": {
+        "protocolVersion": 2,
+        "type": "run.notice",
+        "payload": {
+          "noticeId": "idle-1",
+          "code": "model_output_idle",
+          "severity": "info",
+          "params": {
+            "silenceMs": 60000,
+            "message": "60s no LLM output"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Replay preserves the original identity, sequence, and measurement; it does not restart timing. The channel gateway should consume Runtime's silence facts without its own silence clock, 30/60-second state machine, or 300-second silence cancellation. That migration is tracked in [issue #34](https://github.com/Mininglamp-OSS/octo-channel-gateway/issues/34) and is not implemented in this repository. Native mode gains no type or notice. This notification cannot guarantee that intermediate network devices keep a connection open; reconnection follows the existing subscription contract.
+
 ## Cancellation
 
 Use `client.interrupt(run.invocationId, reason?)` on the client that created the handle. There is no public invoke signal parameter. Identity is available immediately; before submission interruption prevents sending, while after submission it controls the original execution and preserves observation of the tail.

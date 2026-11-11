@@ -15,19 +15,26 @@ Runs one invocation over Grok Build's ACP stdio protocol: starts `grok --no-auto
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { grokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createGrokBuildAdapter } from "@mininglamp-oss/octo-runtime-adapter-grok-build";
 
 const executor = new AgentExecutor();
-executor.register(grokBuildAdapter);
+executor.register(createGrokBuildAdapter({ command: "/absolute/path/grok", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "grok-build" } }
+    ]
   }
 });
 ```
@@ -37,7 +44,7 @@ const input = InvokeInput.check({
 | Item             | Value                                                                      |
 | ---------------- | -------------------------------------------------------------------------- |
 | Adapter type     | `grok-build`                                                               |
-| Exports          | `grokBuildAdapter`, `createGrokBuildAdapter`                               |
+| Exports          | `createGrokBuildAdapter`                               |
 | Command          | `grok --no-auto-update agent --no-leader stdio`                            |
 | Output           | canonical events only                                                      |
 | Auth             | advertised `xai.api_key` or `cached_token`, in advertised order            |
@@ -65,3 +72,15 @@ Private workspace package, included in the CLI distribution. It has no individua
 
 - [Implementation](src/index.ts), [native Kernel example](examples/worker.mts), [fixtures](../../test/grok-build-adapter.test.js).
 - [Recorded verification](../../.octospec/tasks/95-grok-build-acp/reference.md), [Adapter SDK](../octo-runtime-adapter-sdk/README.md).
+
+## Private AgentEnv.Item
+
+This package owns the following item; neither its name nor its payload is registered in public Schema, catalog or generated types. Existing options may share the same payload. Invalid explicit values fail in this Adapter.
+
+Optional `modeId` accepts only `"default"` or `"plan"`. Only an explicit value sends native `session/set_mode`; this package does not require an ACP modes advertisement. Invalid values and setter failures fail without fallback. Omission sends no setter and does not reset a resumed session. This option does not change approval_policy/yoloMode or native exit_plan_mode interactions.
+
+```json
+{ "namespace": "adapter.grok-build", "name": "options", "payload": { "modeId": "plan" } }
+```
+
+Add this item to the same `agentEnv.items` array as the Adapter route and prepared workspace in the example above. Keep any existing options in this single item; duplicate namespace/name pairs are invalid. Model/effort remain in the shared model item. The removed public actmode item is not converted.

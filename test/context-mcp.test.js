@@ -1,24 +1,23 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { assertPrivateFile } from "../test-support/file-protection.mjs";
 import {
   assertContextEnvelope,
-  assertFrozenContextPlan,
   resolveContextConfiguration
 } from "../packages/octo-runtime-protocol/dist/index.js";
 import {
   invocationMcpServers,
+  assertAdapterAgentEnv,
   expandMcpValue,
   defineAdapter
 } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-import { resolveLocalContext } from "../packages/octo-runtime-executor-core/dist/context.js";
 import { buildCodexCommand } from "../packages/octo-runtime-adapter-codex/dist/index.js";
 import { buildClaudeCommand } from "../packages/octo-runtime-adapter-claude-code/dist/index.js";
 import { buildOpenCodeCommand } from "../packages/octo-runtime-adapter-opencode/dist/index.js";
 import { createAcpAdapter } from "../packages/octo-runtime-adapter-acp/dist/index.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 const envelope = (mcpServers) => ({
   schema: "octo.context-envelope/v3",
   items: [{ namespace: "octo.execution", name: "mcp", payload: { mcpServers } }]
@@ -31,52 +30,31 @@ const remote = (headers = {}) => ({
 const request = (mcpServers, env = {}, extra = {}) =>
   invokeRequest({
     ...extra,
-    context: {
-      ...envelope(mcpServers),
-      items: [
-        ...envelope(mcpServers).items,
-        {
-          namespace: "octo.execution",
-          name: "envs",
-          payload: { env_variables: Object.entries(env).map(([key, value]) => ({ key, value })) }
-        }
-      ]
-    }
-  });
-
-test("MCP dynamic keys freeze without entering model input; altered plan is rejected", () => {
-  const defaults = {
-    schema: "octo.context-envelope/v3",
-    items: [
-      { namespace: "octo.execution", name: "adapter", payload: { type: "codex" } },
+    agentEnv: withAgentEnvItems(
       {
-        namespace: "octo.execution",
-        name: "workspace",
-        payload: { mode: "fixed", path: process.cwd() }
-      }
-    ]
-  };
+        ...envelope(mcpServers),
+        items: [
+          ...envelope(mcpServers).items,
+          {
+            namespace: "octo.execution",
+            name: "envs",
+            payload: { env_variables: Object.entries(env).map(([key, value]) => ({ key, value })) }
+          }
+        ]
+      },
+      [{ namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }]
+    )
+  });
+test("Adapter expands MCP dynamic keys without changing the submitted template", () => {
   const servers = JSON.parse(
     '{"business.eu-v2":{"type":"streamable_http","url":"${URL}"},"constructor":{"type":"stdio","command":"node"}}'
   );
-  const { effectiveContext, resolvedExecutionPlan } = resolveLocalContext(
-    defaults,
-    envelope(servers),
-    "provisioned"
-  );
-  assertFrozenContextPlan(effectiveContext, resolvedExecutionPlan);
-  // 执行设置只解析为环境；模型材料的渲染回归已迁移到 Gateway。
-  assert.deepEqual(resolvedExecutionPlan.mcp.mcpServers, servers);
-  assert.throws(
-    () =>
-      assertFrozenContextPlan(effectiveContext, {
-        ...resolvedExecutionPlan,
-        mcp: { mcpServers: {} }
-      }),
-    /CONTEXT_PLAN_MISMATCH/
-  );
+  const run = request(servers, { URL: "https://example.invalid/mcp" });
+  const before = structuredClone(run);
+  assert.equal(invocationMcpServers(run)["business.eu-v2"].url, "https://example.invalid/mcp");
+  assert.deepEqual(run, before);
+  assert.equal(run.modelInput.includes("business.eu-v2"), false);
 });
-
 test("MCP defaults replace whole servers and mandatory checks original request by server name", () => {
   const defaults = envelope({ x: remote({ Old: "secret" }), retained: remote() });
   const mandatory = envelope({ locked: remote() });
@@ -93,7 +71,6 @@ test("MCP defaults replace whole servers and mandatory checks original request b
   );
   assert.deepEqual(forced.items[0].payload.mcpServers.locked, remote());
 });
-
 test("MCP variable resolution is single-pass, isolated, preserves literals and fails before spawn", async () => {
   const template = remote({
     Authorization: "Bearer ${TOKEN}",
@@ -133,17 +110,14 @@ test("MCP variable resolution is single-pass, isolated, preserves literals and f
     "parent"
   );
 });
-
-test("Codex carries private header references; Claude writes a private temporary config; OpenCode overlays", async () => {
+test("Codex carries thread headers without argv secrets; Claude writes private config; OpenCode overlays", async () => {
   const req = request(
     { business: remote({ Authorization: "Bearer ${TOKEN}" }) },
-    { TOKEN: "private-value" },
-    { approvalMode: "full_access" }
+    { TOKEN: "private-value" }
   );
-  const codex = buildCodexCommand(req, "codex", [], {});
+  const codex = buildCodexCommand(req, "codex", [], { CODEX_HOME: process.cwd() });
   assert.equal(JSON.stringify(codex.args).includes("private-value"), false);
-  const ref = codex.mcpServers.business.env_http_headers.Authorization;
-  assert.equal(codex.env[ref], "Bearer private-value");
+  assert.equal(codex.mcpServers.business.http_headers.Authorization, "Bearer private-value");
   const claude = await buildClaudeCommand(req);
   const file = claude.args[claude.args.indexOf("--mcp-config") + 1];
   try {
@@ -169,7 +143,6 @@ test("Codex carries private header references; Claude writes a private temporary
     await open.cleanup();
   }
 });
-
 test("ACP injects HTTP configuration on new, resume and missing-session fallback; checks advertised transport", async () => {
   for (const resume of [false, true]) {
     const calls = [];
@@ -196,7 +169,7 @@ test("ACP injects HTTP configuration on new, resume and missing-session fallback
     const req = request(
       { business: remote({ Auth: "${TOKEN}" }) },
       { TOKEN: "run" },
-      { approvalMode: "ask", ...(resume ? { providerSession: { sessionId: "old" } } : {}) }
+      { ...(resume ? { providerSession: { sessionId: "old" } } : {}) }
     );
     for await (const _ of adapter.invoke(req)) {
     }
@@ -222,13 +195,10 @@ test("ACP injects HTTP configuration on new, resume and missing-session fallback
     assert.equal(calls.length, 0);
   }
 });
-
 test("unsupported adapters and native options fail explicitly", async () => {
   const adapter = defineAdapter({
     metadata: {
-      type: "unsupported",
-
-      agentSources: ["provisioned"]
+      type: "unsupported"
     },
     async *invoke() {
       throw new Error("must not execute");
@@ -247,7 +217,7 @@ test("unsupported adapters and native options fail explicitly", async () => {
     /MCP_OPTION_UNSUPPORTED/
   );
   assert.throws(
-    () => assertContextEnvelope(envelope({ x: { ...remote(), unexpected: true } })),
+    () => assertAdapterAgentEnv(request({ x: { ...remote(), unexpected: true } })),
     /CONTEXT_SCHEMA_INVALID/
   );
 });

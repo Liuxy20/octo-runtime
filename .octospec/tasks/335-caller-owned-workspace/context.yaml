@@ -1,0 +1,30 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/335
+baseline: 7a76a454
+main_baseline: 3f83ecf4607c658fba7664caa6ccb2787ab92baa
+branch: refactor/334-caller-owned-prompts
+phase: implementation-verified
+review_fix_commit: df754e94
+implementation_commit: b645a474
+validation: validation.md
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/session-reset.md
+  - .octospec/rules/engineering.md
+workflow_read:
+  - AGENTS.md
+  - CONTRIBUTING.md
+  - .github/PULL_REQUEST_TEMPLATE.md
+skills_read:
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - /Users/lvsijia/.agents/skills/super-dev/SKILL.md
+authorization: 同步处理335并写octospec；目录由业务方提前创建；直接删除不兼容；不存在报稳定errorcode。
+scope: 延续334工作分支与PR；Gateway23已取消；外部Gateway只读审计；WorkApp不涉及；不扩大CI。

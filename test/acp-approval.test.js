@@ -1,9 +1,10 @@
+import { defineAdapter } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { AcpApprovalBridge } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
-
 const request = {
   protocolVersion: 2,
   invocationId: "instance-1",
@@ -11,12 +12,11 @@ const request = {
   runId: "run-1",
   prompt: "hello",
   modelInput: "hello",
-  controlInstructions: "",
-  approvalMode: "ask",
-  context: { schema: "octo.context-envelope/v3", items: [] },
-  agentSource: "provisioned",
-  agentConfig: {},
-  workdir: "/tmp"
+  agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+    { namespace: "octo.execution", name: "workspace", payload: { path: "/tmp" } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "ask" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 };
 const permission = {
   toolCall: { toolCallId: "tool-1", title: "Read a file" },
@@ -33,7 +33,6 @@ function deferred() {
   });
   return { promise, resolve };
 }
-
 test(
   "ACP human approval answers the original request and resolves only after transport write",
   { timeout: 2000 },
@@ -79,7 +78,6 @@ test(
     await assert.rejects(bridge.requestPermission(permission), /APPROVAL_WAIT_UNAVAILABLE/);
   }
 );
-
 test(
   "ACP expiry cancels transport before waiting for a blocked source cleanup",
   { timeout: 2000 },
@@ -117,7 +115,6 @@ test(
     }
   }
 );
-
 test(
   "ACP response delivery failure invalidates without reporting approval success",
   { timeout: 2000 },
@@ -137,9 +134,13 @@ test(
     await assert.rejects(response, /broken pipe/);
   }
 );
-
 test("full access never grants an allow-always option when allow-once is unavailable", async () => {
-  const bridge = new AcpApprovalBridge({ ...request, approvalMode: "full_access" });
+  const bridge = new AcpApprovalBridge({
+    ...request,
+    agentEnv: withAgentEnvItems(request.agentEnv, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+    ])
+  });
   assert.deepEqual(await bridge.requestPermission(permission), {
     outcome: { outcome: "selected", optionId: "allow" }
   });
@@ -149,33 +150,31 @@ test("full access never grants an allow-always option when allow-once is unavail
   );
   bridge.close("run_terminal");
 });
-
 test("Host rejects interactive approval with no response implementation", async () => {
   const { AgentExecutor } = await import("@mininglamp-oss/octo-runtime-executor-core");
   const host = new AgentExecutor();
   let started = false;
-  host.register({
-    metadata: {
-      protocolSupport: {
-        protocol: "broken" + ".canonical",
-        modes: ["canonical"],
-        nativeMethods: []
+  host.register(
+    defineAdapter({
+      metadata: {
+        protocolSupport: {
+          protocol: "broken" + ".canonical",
+          modes: ["canonical"],
+          nativeMethods: []
+        },
+        type: "broken"
       },
-      type: "broken",
-      agentSources: ["provisioned"]
-    },
-    async *invoke() {
-      started = true;
-      yield { protocolVersion: 2, type: "run.completed", payload: {} };
-    }
-  });
-  await assert.rejects(async () => {
-    for await (const event of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
-      "broken",
-      request,
-      { protocolMode: "canonical" }
-    ))
-      assert.fail(event.type);
-  }, /APPROVAL_MODE_UNSUPPORTED/);
+      async *invoke() {
+        started = true;
+        yield { protocolVersion: 2, type: "run.completed", payload: {} };
+      }
+    })
+  );
+  const events = await Array.fromAsync(
+    preparedTestInvoke((...args) => preparedFrames(host, ...args))("broken", request, {
+      protocolMode: "canonical"
+    })
+  );
+  assert.match(events.at(-1).payload.message, /APPROVAL_MODE_UNSUPPORTED/);
   assert.equal(started, false);
 });

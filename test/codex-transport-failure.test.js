@@ -1,8 +1,8 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { codexAppServerFixture, invokeRequest } from "./runtime-fixture.js";
-
 for (const source of ["stdin", "stdout", "stderr"]) {
   test(
     `Codex ${source} error produces one failed turn and preserves first cause`,
@@ -11,7 +11,7 @@ for (const source of ["stdin", "stdout", "stderr"]) {
       const fixture = codexAppServerFixture();
       const child = fixture.spawnFn();
       const adapter = createCodexAdapter({
-        command: "fixture",
+        command: process.execPath,
         spawnFn: () => {
           setImmediate(() => {
             child[source].emit("error", new Error("first transport failure"));
@@ -21,7 +21,17 @@ for (const source of ["stdin", "stdout", "stderr"]) {
         }
       });
       const events = [];
-      for await (const event of adapter.invoke(invokeRequest({ approvalMode: "full_access" })))
+      for await (const event of adapter.invoke(
+        invokeRequest({
+          agentEnv: withAgentEnvItems(undefined, [
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
+        })
+      ))
         events.push(event);
       const failures = events.filter((event) => event.type === "run.failed");
       assert.equal(failures.length, 1);

@@ -20,7 +20,7 @@ supersedes: []
 
 Runtime 接收已准备的请求、校验执行配置、调用 Provider、传递事件、处理交互和取消。业务 Agent 定义、Session/Run 历史、Provider binding 和重启后的业务恢复由调用方保存与决定。
 
-当前 ExecutorCore 导出 AgentExecutor、本轮配置解析、InvokeInput 和显式工作区准备工具，不导出领域 store、SQLite 或业务调度引擎。Core 最多保留 1024 个 invocation 的身份元数据，非活动记录按 120 秒惰性淘汰；未消费 iterator 不占容量，暂停的活动调用及清理未完成资源不得被淘汰。源帧回放仍归传输层窗口，不移入 Core。不得以无限增长的 Map 或 Run JSON 归档替代已删除的数据库。
+当前 ExecutorCore 导出 AgentExecutor 和本轮请求包装入口，不导出工作区分配/准备工具、领域 store、SQLite 或业务调度引擎。Issue 335 删除 prepareRunContext 与 WorkspaceAssignments；调用方先创建目录，Adapter 仅在 Provider 执行前校验本次明确路径，不补建或迁移旧目录。Core 最多保留 1024 个 invocation 的身份元数据，非活动记录按 120 秒惰性淘汰；未消费 iterator 不占容量，暂停的活动调用及清理未完成资源不得被淘汰。源帧回放仍归传输层窗口，不移入 Core。不得以无限增长的 Map 或 Run JSON 归档替代已删除的数据库。
 
 ## 源流窗口
 

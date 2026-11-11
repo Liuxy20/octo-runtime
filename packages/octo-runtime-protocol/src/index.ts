@@ -14,7 +14,7 @@ export type {
   QuestionRequest,
   QuestionResponse
 } from "./generated/protocol-types.js";
-import { assertSessionName } from "./invoke-input.js";
+import { assertAgentEnv, assertSessionName } from "./invoke-input.js";
 export { assertJsonByteLimit } from "./json-size.js";
 export { INVOKE_REQUEST_MAX_BYTES, assertInvokeRequestSize } from "./invoke-size.js";
 export * from "./stream-limits.js";
@@ -28,8 +28,6 @@ export type {
   ServiceProcessSnapshot
 } from "./generated/protocol-types.js";
 export * from "./invoke-input.js";
-export * from "./model-context.js";
-export * from "./execution-plan.js";
 export { contextHash } from "./context-hash.js";
 export { assertJsonValue } from "./context.js";
 export type { ToolAuthorization, IssuedToolAuthorization } from "./generated/protocol-types.js";
@@ -45,13 +43,10 @@ export {
   modelPartsFromInput
 } from "./multimodal.js";
 import {
-  assertAgentSource,
   assertApprovalMode,
-  assertContextEnvelope,
   assertContextEnvs,
   assertJsonValue,
-  MAX_RUN_TIMEOUT_MS,
-  contextItem
+  MAX_RUN_TIMEOUT_MS
 } from "./context.js";
 export {
   APPROVAL_MODES,
@@ -61,18 +56,15 @@ export {
   DEFAULT_RUN_TIMEOUT_MS,
   MAX_RUN_TIMEOUT_MS,
   RUNTIME_RUN_CONTRACT,
-  assertAgentSource,
   assertApprovalMode,
   assertContextEnvelope,
   assertContextEnvs,
   assertMcpServers,
   assertContextMcp,
-  assertResolvedExecutionPlan,
   canonicalContext,
   contextItem,
   mergeContext
 } from "./context.js";
-export { RUNTIME_SELECTION_SCHEMA, assertResolvedRuntimeSelection } from "./runtime-selection.js";
 export {
   CONTEXT_TYPE_CATALOG,
   contextTypeDefinition,
@@ -111,7 +103,6 @@ import type {
 // of `@mininglamp-oss/octo-runtime-protocol` stays stable regardless of how the
 // generator lays out its output.
 export type {
-  AgentSource,
   NotificationMessage,
   ModelInputPart,
   ApprovalMode,
@@ -119,33 +110,19 @@ export type {
   ApprovalOperation,
   ApprovalDisplayDetails,
   ContextItem,
-  ContextInlinePayload,
-  ContextReferencesPayload,
-  ContextInlineEntry,
-  ContextReferenceEntry,
   ContextEnvelope,
   ContextConfiguration,
-  ContextPreparationReceipt,
-  RunContextProjection,
   ContextAdapterPayload,
   ContextModelPayload,
-  ContextActmodePayload,
-  ExecutionEvidence,
   ContextReasoningPayload,
   ContextWorkspacePayload,
   ContextLimitsPayload,
   ContextEnvsPayload,
-  ContextRuntimeSelectionPayload,
   ContextApprovalPolicyPayload,
-  ContextInstructionEntry,
-  ContextInstructionsPayload,
-  ResolvedExecutionPlan,
-  ResolvedRuntimeSelection,
   MessageChannel,
   MessageExposure,
   MessageProvenance,
   ProviderSession,
-  AgentConfig,
   RuntimeLimits,
   ActivityInfo,
   ActivitySubject,
@@ -226,12 +203,9 @@ export type TerminalEventType = (typeof TERMINAL_EVENT_TYPES)[number];
  * updates -> a Run terminal. Provider-native event names must be translated
  * inside the adapter and must never leak through to this level.
  */
-export { contextActmode, assertExecutionEvidence } from "./actmode.js";
-import { assertExecutionEvidence } from "./actmode.js";
 
 export const CANONICAL_EVENT_TYPES = [
   "session.update",
-  "execution.update",
   "usage.update",
   "model_step.started",
   "model_step.finished",
@@ -318,17 +292,9 @@ export interface InteractionResponse {
   value?: unknown;
 }
 
-/** Provider adapters must use this accessor so hidden context is sent exactly once when present. */
+/** Exact caller-provided text for the provider turn. */
 export function providerInputText(request: InvokeRequest): string {
   return request.modelInput;
-}
-
-/** Inject trusted instructions only when starting a provider session, including a fresh restart. */
-export function initialControlInstructions(
-  request: InvokeRequest,
-  freshSession = !request.providerSession?.sessionId
-): string {
-  return freshSession ? request.controlInstructions : "";
 }
 
 /** Exact alternate input for a provider that could not resume its session. */
@@ -419,7 +385,6 @@ export function assertCanonicalEvent(event: unknown): asserts event is Canonical
       assertAsyncQuestions(payload.questions);
     }
   }
-  if (event.type === "execution.update") assertExecutionEvidence(payload);
   assertExperiencePayload(event.type, payload);
   if (event.type === "run.failed" && payload.failure !== undefined) {
     assertFailureEnvelope(payload.failure);
@@ -738,72 +703,47 @@ export function assertFailureEnvelope(value: unknown): asserts value is FailureE
   }
 }
 
-/** Assert the execution identifiers and path fields that must be present before the Host calls an adapter. */
+/** 校验内部调用的身份、内容与信封结构；不改写输入，配置和目录语义由消费它的 Adapter 校验。 */
 export function assertInvokeRequest(request: unknown): asserts request is InvokeRequest {
   if (!isRecord(request)) throw new TypeError("InvokeRequest must be an object");
+  if ("controlInstructions" in request)
+    throw new TypeError(
+      "CONTROL_INSTRUCTIONS_REMOVED: controlInstructions was removed; provide application prompts in inputs.parts"
+    );
   if (request.sessionName !== undefined) assertSessionName(request.sessionName);
   if (request.protocolVersion !== PROTOCOL_VERSION)
     throw new TypeError("InvokeRequest.protocolVersion must be 2");
   if ("appendInstructions" in request) throw new TypeError("LEGACY_RUN_CONTRACT_REJECTED");
-  assertAgentSource(request.agentSource);
-  assertContextEnvelope(request.context);
-  if (request.executionEnvOverrides !== undefined) {
-    assertContextEnvs(request.executionEnvOverrides);
-    if (Buffer.byteLength(JSON.stringify(request.executionEnvOverrides)) > 65_536)
-      throw new TypeError("EXECUTION_ENV_TOO_LARGE");
-  }
-  assertApprovalMode(request.approvalMode);
-  const modelChoices = contextItem(request.context, "octo.execution", "model")?.payload;
-  const approvalPolicy = contextItem(request.context, "octo.security", "approval_policy")?.payload;
-  if (approvalPolicy && approvalPolicy.mode !== request.approvalMode)
-    throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  const agentConfig = request.agentConfig;
-  if (
-    isRecord(agentConfig) &&
-    ["autoApprove", "dangerouslyBypassPermissions", "permissionMode"].some(
-      (key) => key in agentConfig
-    )
-  ) {
-    throw new TypeError("LEGACY_PERMISSION_CONFIG_REJECTED");
-  }
-  if (isRecord(agentConfig) && "thinking" in agentConfig)
-    throw new TypeError("LEGACY_REASONING_CONFIG_REJECTED");
-  for (const selection of [
-    { name: "selection", property: "id", config: "model" },
-    { name: "reasoning", property: "effort", config: "effort" }
-  ]) {
-    const selected = modelChoices?.[selection.name] as Record<string, unknown> | undefined;
-    if (
-      selected &&
-      selected[selection.property] !==
-        (isRecord(agentConfig) ? agentConfig[selection.config] : undefined)
-    )
-      throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  }
-  const workspace = contextItem(request.context, "octo.execution", "workspace")?.payload;
-  if (workspace?.mode === "fixed" && workspace.path !== request.workdir)
-    throw new TypeError("CONTEXT_PLAN_MISMATCH");
-  if (
-    ["skills", "skillRoots", "providerStateDir", "mcpServers"].some((key) =>
-      Object.hasOwn(request, key)
-    )
-  )
-    throw new TypeError("LOCAL_PLUGIN_CONFIGURATION_REQUIRED");
-  if (typeof request.controlInstructions !== "string")
-    throw new TypeError("InvokeRequest.controlInstructions must be a string");
-  if (request.runtimeLimits !== undefined) assertRuntimeLimits(request.runtimeLimits);
+  const allowed = new Set([
+    "protocolVersion",
+    "invocationId",
+    "agentSessionId",
+    "runId",
+    "sessionName",
+    "sessionGeneration",
+    "providerEpoch",
+    "continuityMode",
+    "prompt",
+    "modelInput",
+    "modelInputParts",
+    "freshFallbackModelInput",
+    "freshFallbackModelInputParts",
+    "freshFallbackImagesUnavailable",
+    "runMetadata",
+    "agentEnv",
+    "providerSession",
+    "signal",
+    "executionEnvOverrides"
+  ]);
+  if (Object.keys(request).some((key) => !allowed.has(key)))
+    throw new TypeError("InvokeRequest contains an unknown field");
+  assertAgentEnv(request.agentEnv);
+  if (request.executionEnvOverrides !== undefined) assertContextEnvs(request.executionEnvOverrides);
   for (const key of ["invocationId", "agentSessionId", "runId", "prompt"] as const) {
     if (typeof request[key] !== "string" || request[key].length === 0) {
       throw new TypeError(`InvokeRequest.${key} must be a non-empty string`);
     }
   }
-  const providerWorkspace =
-    contextItem(request.context, "octo.execution", "adapter")?.payload.type === "openclaw";
-  if (
-    typeof request.workdir !== "string" ||
-    (!request.workdir && request.agentSource !== "preset" && !providerWorkspace)
-  )
-    throw new TypeError("InvokeRequest.workdir is required for provisioned execution");
   if (typeof request.modelInput !== "string" || request.modelInput.length === 0) {
     throw new TypeError("InvokeRequest.modelInput must be a non-empty string");
   }
@@ -854,7 +794,7 @@ export function assertRuntimeLimits(value: unknown): asserts value is RuntimeLim
     cancelGraceMs: 60_000
   };
   for (const [key, setting] of Object.entries(value)) {
-    if (key === "enforcement" || key === "modelIdlePolicy") {
+    if (key === "modelIdlePolicy") {
       if (setting !== "enforce" && setting !== "observe")
         throw new TypeError(`invalid runtimeLimits.${key}`);
     } else if (
@@ -866,16 +806,6 @@ export function assertRuntimeLimits(value: unknown): asserts value is RuntimeLim
     ) {
       throw new TypeError(`invalid runtimeLimits.${key}`);
     }
-  }
-  if (
-    value.enforcement === "observe" &&
-    ["modelIdlePolicy", "modelIdleWarningMs", "toolWallTimeoutMs"].some(
-      (key) => value[key] !== undefined
-    )
-  ) {
-    throw new TypeError(
-      "legacy enforcement=observe cannot be combined with watchdog v2 settings; use modelIdlePolicy=observe with enforcement=enforce"
-    );
   }
 }
 

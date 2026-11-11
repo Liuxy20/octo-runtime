@@ -1,3 +1,4 @@
+import { resolveHostProviderLaunch } from "@mininglamp-oss/octo-runtime-adapter-sdk/process-launch";
 import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnAcpClient } from "@mininglamp-oss/octo-runtime-acp-client";
@@ -9,7 +10,11 @@ const model = (value) =>
   value?.model;
 
 // 真实 ACP 透传；只记录模型、会话和调用顺序，不记录 prompt、环境或原始错误元数据。
+const launch = resolveHostProviderLaunch("codebuddy", { env: process.env, cwd: process.cwd() });
 export default createCodeBuddyAdapter({
+  command: launch.command,
+  commandArgsPrefix: launch.args,
+  env: launch.env,
   acpClientFactory(options) {
     const client = spawnAcpClient(options);
     const record = (value) =>

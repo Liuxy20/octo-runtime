@@ -35,8 +35,8 @@ tags: [invoke, context, protocol, channel, adapter]
 
 - [Octo dispatcher](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/dispatcher.ts)、[Octo task](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-gateway/src/execution/task.ts)。
 - [WeCom dispatcher](https://github.com/Mininglamp-OSS/octo-runtime/blob/bf9ff6b599b0e325362698acd3cebd9ac1363467/packages/octo-runtime-extra-channel-wecom/src/execution/dispatcher.ts)。
-- [公开输入准备](../../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[执行 Context 解析](../../../packages/octo-runtime-executor-core/src/context.ts)、[AdapterHost](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/index.ts)。
-- [指令校验](../../../packages/octo-runtime-protocol/src/context.ts)、[指令拼接](../../../packages/octo-runtime-protocol/src/model-context.ts)、[配置分层](../../../packages/octo-runtime-protocol/src/context-configuration.ts)。
+- [公开输入准备](../../../packages/octo-runtime-executor-core/src/invoke-input.ts)、[执行 Context 解析](https://github.com/Mininglamp-OSS/octo-runtime/blob/d5aeae707fcda0b138b360136f164c085c9a5e87/packages/octo-runtime-executor-core/src/context.ts)、[AdapterHost](https://github.com/Mininglamp-OSS/octo-runtime/blob/6fb8ca5364cd885f5617878e5ea4901f903de3ff/packages/octo-runtime-adapter-host/src/index.ts)。
+- [指令校验](../../../packages/octo-runtime-protocol/src/context.ts)、[历史指令拼接](https://github.com/Mininglamp-OSS/octo-runtime/blob/3f83ecf4607c658fba7664caa6ccb2787ab92baa/packages/octo-runtime-protocol/src/model-context.ts)、[配置分层](../../../packages/octo-runtime-protocol/src/context-configuration.ts)。
 
 ## 关键合同
 

@@ -14,8 +14,7 @@ export const DEFAULT_RUNTIME_LIMITS = {
   modelIdlePolicy: "enforce" as const,
   toolTimeoutMs: 600_000,
   runTimeoutMs: DEFAULT_RUN_TIMEOUT_MS,
-  cancelGraceMs: 1_000,
-  enforcement: "enforce" as const
+  cancelGraceMs: 1_000
 };
 export type EffectiveLimits = Required<Omit<RuntimeLimits, "toolWallTimeoutMs">> &
   Pick<RuntimeLimits, "toolWallTimeoutMs">;
@@ -55,7 +54,7 @@ const clock: WatchdogClock = {
  * Provider 进度与传输响应分开记录，避免心跳/RPC 响应掩盖模型停滞；超时通过 controller 请求取消。
  */
 export class InvocationWatchdog {
-  readonly limits: EffectiveLimits;
+  limits: EffectiveLimits;
   readonly #startedAt: number;
   readonly #tools = new Map<string, { startedAt: number; progressAt: number }>();
   readonly #interactions = new Set<string | symbol>();
@@ -109,6 +108,12 @@ export class InvocationWatchdog {
       effectiveLimits: this.limits,
       limitsSource: limits ? "request_with_defaults" : "host_defaults"
     });
+    this.#arm();
+  }
+
+  /** Adapter 开始执行前解释本轮预算，计时起点保持本次执行，不重置已有进度。 */
+  configure(limits: RuntimeLimits | undefined): void {
+    this.limits = normalizeRuntimeLimits(limits);
     this.#arm();
   }
 
@@ -364,7 +369,7 @@ export class InvocationWatchdog {
 
   #arm(): void {
     this.#cancelTimer?.();
-    if (!this.#active() || this.limits.enforcement === "observe") return; // legacy opt-out
+    if (!this.#active()) return;
     const now = this.time.now();
     const deadlines: { at: number; reason: WatchdogReason; budget: number }[] = [
       {

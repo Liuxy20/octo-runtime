@@ -2,7 +2,7 @@
 
 [简体中文](README.zh.md) | [Packages](../README.md)
 
-Runs one invocation through DeepSeek Harness's official Client SDK over its stdio service: start or resume an explicit native session, send this turn, map the trajectory into `CanonicalEvent`. This is the only Adapter with a public entry, `@mininglamp-oss/octo-runtime/adapters/dsh`. It wraps the unmodified upstream SDK, so treat the integration as experimental rather than a stability guarantee.
+Runs one invocation through DeepSeek Harness's official Client SDK over its stdio service: start or resume an explicit native session, send this turn, map the trajectory into `CanonicalEvent`. Native hosts depend on the private `@mininglamp-oss/octo-runtime-adapter-dsh` workspace package from source; CLI composes its bundled copy. It wraps the unmodified upstream SDK, so treat the integration as experimental rather than a stability guarantee.
 
 ## When to use it
 
@@ -15,21 +15,28 @@ Runs one invocation through DeepSeek Harness's official Client SDK over its stdi
 This excerpt registers the Adapter and prepares its input. Execute with `executor.invoke(input)`; see [Executor Core](../octo-runtime-executor-core/README.md) for consumption, terminal checks, and `shutdown()`.
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter);
 
 const input = InvokeInput.check({
-  agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "adapter.dsh", name: "options", payload: { dshBin: hostSelectedDshEntry } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 ```
@@ -40,7 +47,7 @@ const input = InvokeInput.check({
 | ------------ | ------------------------------------------------------------------------------------------- |
 | Adapter type | `dsh`                                                                                       |
 | Exports      | `dshAdapter`, `createDshAdapter`                                                            |
-| Public entry | `@mininglamp-oss/octo-runtime/adapters/dsh`                                                 |
+| Source workspace entry | `@mininglamp-oss/octo-runtime-adapter-dsh`                                       |
 | Executable   | Required host-selected absolute `dshBin` JavaScript entry, launched with `process.execPath` |
 | Output       | canonical events only                                                                       |
 | Approval     | `full_access` only                                                                          |
@@ -67,7 +74,7 @@ DSH also has native runtime compatibility requirements. A previous local macOS a
 ## Sessions and limits
 
 - An explicit session is resumed **before** the working directory is updated and the turn is sent. A failed resume does not silently start a new session.
-- New-session control instructions are separate user text blocks, not a native system prompt. No application history is reconstructed.
+- Application prompts arrive as caller-prepared ordinary input parts. No prompt is injected for new, resumed or reconstructed sessions, and no application history is reconstructed.
 - Upstream pre-parse input, stderr, and session maps have no Runtime-added memory bounds, and upstream close confirms the direct child only — not every tool descendant. Kernel RPC does not remove these limits.
 - Using a host-owned API key means selecting `deepseek-official` explicitly. Missing environment variables never decide native login state.
 

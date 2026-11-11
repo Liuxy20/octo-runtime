@@ -1,3 +1,4 @@
+import { invocationApprovalMode } from "./agent-env.js";
 import { randomUUID } from "node:crypto";
 import { sanitizePublicValue } from "./public-display.js";
 import {
@@ -53,7 +54,8 @@ export class AcpApprovalBridge {
     if (this.#closed || this.request.signal?.aborted)
       return Promise.reject(new Error("APPROVAL_WAIT_UNAVAILABLE"));
     const automatic =
-      (this.options.effectiveApprovalMode ?? this.request.approvalMode) === "full_access";
+      (this.options.effectiveApprovalMode ?? invocationApprovalMode(this.request)) ===
+      "full_access";
     const options = Array.isArray(params.options) ? params.options.filter(isObject) : [];
     const option = (kind: string): string | undefined => {
       const candidate = options.find((value) => value.kind === kind);
@@ -147,7 +149,10 @@ export class AcpApprovalBridge {
         expiresAt: new Date(expiresAt).toISOString(),
         request: {
           schema: "octo.approval-request/v1",
-          policy: { mode: this.request.approvalMode, hash: contextHash(this.request.context) },
+          policy: {
+            mode: invocationApprovalMode(this.request),
+            hash: contextHash(this.request.agentEnv)
+          },
           operation: {
             kind: "tool_execution",
             summary:

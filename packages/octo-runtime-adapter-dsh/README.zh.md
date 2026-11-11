@@ -2,7 +2,7 @@
 
 [English](README.md) | [包导航](../README.zh.md)
 
-通过 DeepSeek Harness 官方 Client SDK 和 stdio 服务跑一轮调用：启动或续接一个显式原生会话，送入本轮输入，把轨迹映射成 `CanonicalEvent`。这是唯一带公开入口的 Adapter：`@mininglamp-oss/octo-runtime/adapters/dsh`。它封装的是未经修改的上游 SDK，所以这项集成按实验性对待，不构成稳定性承诺。
+通过 DeepSeek Harness 官方 Client SDK 和 stdio 服务跑一轮调用：启动或续接一个显式原生会话，送入本轮输入，把轨迹映射成 `CanonicalEvent`。原生宿主从源码依赖私有 workspace 包 `@mininglamp-oss/octo-runtime-adapter-dsh`；CLI 装配其内置副本。它封装的是未经修改的上游 SDK，所以这项集成按实验性对待，不构成稳定性承诺。
 
 ## 什么时候用它
 
@@ -15,21 +15,28 @@
 以下节选负责注册与输入准备。实际执行使用 `executor.invoke(input)`；完整的消费、终态判断和 `shutdown()` 示例见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { dshAdapter } from "@mininglamp-oss/octo-runtime/adapters/dsh";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { dshAdapter } from "@mininglamp-oss/octo-runtime-adapter-dsh";
 
 const executor = new AgentExecutor();
 executor.register(dshAdapter);
 
 const input = InvokeInput.check({
-  agentConfig: { providerOptions: { dshBin: hostSelectedDshEntry } },
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
-    approvalMode: "full_access",
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "adapter.dsh", name: "options", payload: { dshBin: hostSelectedDshEntry } },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "dsh" } }
+    ]
   }
 });
 ```
@@ -40,7 +47,7 @@ const input = InvokeInput.check({
 | ------------ | ----------------------------------------------------------------------- |
 | Adapter 类型 | `dsh`                                                                   |
 | 导出         | `dshAdapter`、`createDshAdapter`                                        |
-| 公开入口     | `@mininglamp-oss/octo-runtime/adapters/dsh`                             |
+| 源码 workspace 入口 | `@mininglamp-oss/octo-runtime-adapter-dsh`                      |
 | 可执行文件   | 必填：宿主选择的 JS 入口绝对路径 `dshBin`，通过 `process.execPath` 启动 |
 | 输出         | 仅 canonical 事件                                                       |
 | 审批         | 只支持 `full_access`                                                    |
@@ -63,7 +70,7 @@ DSH 本身还有原生 runtime 兼容要求。此前本地 macOS arm64 实测中
 ## 会话与限制
 
 - 显式会话**先续接**，再更新工作目录、发送本轮输入。续接失败不会悄悄新开一个会话。
-- 新会话的控制指令是独立的用户文本块，不是原生 system prompt。不重建任何应用历史。
+- 应用提示词作为调用方准备的普通输入 parts 到达；新建、续接和重建会话均不注入提示词，不重建任何应用历史。
 - 上游在预解析输入、stderr、session map 上没有 Runtime 追加的内存边界；上游的 close 只确认直接子进程，不覆盖所有工具后代。Kernel RPC 不消除这些限制。
 - 用宿主自己的 API key 时要显式选 `deepseek-official`。环境变量缺失从来不作为原生登录状态的判断依据。
 

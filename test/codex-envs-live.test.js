@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -8,10 +9,9 @@ import test from "node:test";
 import { invocationEnvironment } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { codexEnvironmentConfig } from "../packages/octo-runtime-adapter-codex/dist/environment.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 // Native app-server and a real stdio MCP child; no model turn or credentials required.
 test(
-  "native Codex passes Run envs through its MCP whitelist",
+  "native Codex passes Run envs through thread-local MCP configuration",
   { skip: process.env.OCTO_RUN_CODEX_ENVS_LIVE !== "1", timeout: 30000 },
   async () => {
     const root = await mkdtemp(join(tmpdir(), "octo-envs-native-"));
@@ -20,7 +20,8 @@ test(
     await writeFile(
       script,
       `const fs=require('node:fs');const rl=require('node:readline').createInterface({input:process.stdin});
-fs.writeFileSync(${JSON.stringify(receipt)},JSON.stringify({value:process.env.OCTO_ENVS_NATIVE_TEST,empty:process.env.OCTO_ENVS_EMPTY,tool:process.env.OCTO_TOOL_OVERRIDE_TEST}));
+fs.writeFileSync(${JSON.stringify(receipt + ".tmp")},JSON.stringify({value:process.env.OCTO_ENVS_NATIVE_TEST,empty:process.env.OCTO_ENVS_EMPTY,tool:process.env.OCTO_TOOL_OVERRIDE_TEST}));
+fs.renameSync(${JSON.stringify(receipt + ".tmp")},${JSON.stringify(receipt)});
 rl.on('line',line=>{const m=JSON.parse(line);if(m.id===undefined)return;let result={};
 if(m.method==='initialize')result={protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'env-test',version:'1'}};
 if(m.method==='tools/list')result={tools:[]};console.log(JSON.stringify({jsonrpc:'2.0',id:m.id,result}));});`
@@ -30,28 +31,30 @@ if(m.method==='tools/list')result={tools:[]};console.log(JSON.stringify({jsonrpc
       `[mcp_servers.env_test]\ncommand = ${JSON.stringify(process.execPath)}\nargs = [${JSON.stringify(script)}]\nrequired = true\n`
     );
     const request = invokeRequest({
-      workdir: root,
-      context: {
-        schema: "octo.context-envelope/v3",
-        items: [
-          {
-            namespace: "octo.execution",
-            name: "envs",
-            payload: {
-              env_variables: [
-                { key: "OCTO_ENVS_NATIVE_TEST", value: "native-literal" },
-                { key: "OCTO_ENVS_EMPTY", value: "" }
-              ]
-            }
-          }
-        ]
-      },
       executionEnvOverrides: {
         env_variables: [
           { key: "OCTO_TOOL_OVERRIDE_TEST", value: "internal-only" },
           { key: "OCTO_ENVS_NATIVE_TEST", value: "trusted-override" }
         ]
-      }
+      },
+      agentEnv: withAgentEnvItems(
+        {
+          schema: "octo.context-envelope/v3",
+          items: [
+            {
+              namespace: "octo.execution",
+              name: "envs",
+              payload: {
+                env_variables: [
+                  { key: "OCTO_ENVS_NATIVE_TEST", value: "native-literal" },
+                  { key: "OCTO_ENVS_EMPTY", value: "" }
+                ]
+              }
+            }
+          ]
+        },
+        [{ namespace: "octo.execution", name: "workspace", payload: { path: root } }]
+      )
     });
     const child = spawn("codex", ["app-server"], {
       cwd: root,

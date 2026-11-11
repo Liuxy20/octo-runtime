@@ -1,3 +1,5 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { resolveHostProviderLaunch } from "../packages/octo-runtime-adapter-sdk/dist/process-launch.js";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { basename, dirname, join } from "node:path";
@@ -25,18 +27,19 @@ import {
 import { WindowsUserTaskBackend } from "../packages/octo-runtime-cross-service/dist/index.js";
 import { runCli } from "../apps/cli/dist/main.js";
 import { invokeRequest } from "./runtime-fixture.js";
-
 const payload = (values) => ({
   env_variables: Object.entries(values).map(([key, value]) => ({ key, value }))
 });
 const request = (values, items = []) =>
   invokeRequest({
-    context: {
-      schema: "octo.context-envelope/v3",
-      items: [{ namespace: "octo.execution", name: "envs", payload: payload(values) }, ...items]
-    }
+    agentEnv: withAgentEnvItems(
+      {
+        schema: "octo.context-envelope/v3",
+        items: [{ namespace: "octo.execution", name: "envs", payload: payload(values) }, ...items]
+      },
+      []
+    )
   });
-
 test("environment consumers share platform key identity without reading inherited properties", (t) => {
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
   t.after(() => Object.defineProperty(process, "platform", platform));
@@ -51,7 +54,6 @@ test("environment consumers share platform key identity without reading inherite
   assert.equal(processEnvironmentValue(env, "PATH"), undefined);
   assert.equal(processEnvironmentValue(env, "Path"), "native");
 });
-
 for (const platform of ["win32", "linux"]) {
   test(`${platform} Codex preserves the selected home without adding Windows aliases`, () => {
     const original = Object.getOwnPropertyDescriptor(process, "platform");
@@ -61,7 +63,9 @@ for (const platform of ["win32", "linux"]) {
       const override = join(tmpdir(), "override codex");
       const req = request({ CODEX_HOME: context });
       req.executionEnvOverrides = payload({ codex_home: override });
-      const command = buildCodexCommand(req, process.execPath, [], {});
+      const command = buildCodexCommand(req, process.execPath, [], {
+        CODEX_HOME: platform === "win32" ? override : context
+      });
       assert.equal(command.env.CODEX_HOME, platform === "win32" ? override : context);
       assert.equal(
         Object.keys(command.env).filter((key) => key.toUpperCase() === "CODEX_HOME").length,
@@ -71,7 +75,6 @@ for (const platform of ["win32", "linux"]) {
       Object.defineProperty(process, "platform", original);
     }
   });
-
   test(`${platform} OpenCode preserves inline configuration across environment aliases`, async (t) => {
     const original = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { ...original, value: platform });
@@ -82,8 +85,9 @@ for (const platform of ["win32", "linux"]) {
       mcp: { servers: { sample: { type: "remote", url: `https://example.invalid/${label}` } } }
     });
     const req = request({ OPENCODE_CONFIG_CONTENT: JSON.stringify(config("context")) });
-    req.approvalMode = "full_access";
-    req.controlInstructions = "Runtime instructions";
+    req.agentEnv = withAgentEnvItems(req.agentEnv, [
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+    ]);
     req.executionEnvOverrides = payload({
       opencode_config_content: JSON.stringify(config("override"))
     });
@@ -94,11 +98,8 @@ for (const platform of ["win32", "linux"]) {
     const expected = config(platform === "win32" ? "override" : "context");
     assert.deepEqual(actual.provider, expected.provider);
     assert.deepEqual(actual.mcp, expected.mcp);
-    assert.equal(actual.instructions[0], expected.instructions[0]);
-    assert.equal(actual.instructions.length, 2);
-    assert.equal(await readFile(actual.instructions[1], "utf8"), "Runtime instructions");
+    assert.deepEqual(actual.instructions, expected.instructions);
     assert.deepEqual(req, before);
-
     req.executionEnvOverrides = payload({ opencode_config_content: "invalid-json" });
     if (platform === "win32")
       await assert.rejects(buildOpenCodeCommand(req), /OPENCODE_CONFIG_INVALID/);
@@ -108,7 +109,6 @@ for (const platform of ["win32", "linux"]) {
     }
   });
 }
-
 test(
   "native Windows MCP, Claude, shared probe and DSH consume mixed-case overrides",
   { skip: process.platform !== "win32" },
@@ -129,7 +129,15 @@ test(
       {},
       { PATH: "missing", PATHEXT: ".WRONG" }
     );
-    assert.equal((await probeCommand(basename(process.execPath, ".exe"), { env })).available, true);
+    const selected = resolveHostProviderLaunch(basename(process.execPath, ".exe"), {
+      env,
+      cwd: process.cwd()
+    });
+    assert.equal(selected.command.toLowerCase(), process.execPath.toLowerCase());
+    assert.equal(
+      (await probeCommand(selected.command, { args: selected.args, env: selected.env })).available,
+      true
+    );
     const launch = await resolveDshLaunch(
       {
         dshBin: fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url))
@@ -140,7 +148,6 @@ test(
     assert.equal(processEnvironmentValue(launch.env, "PATH"), dirname(process.execPath));
   }
 );
-
 for (const [name, spawn] of [
   ["ACP", spawnAcpClient],
   ["Grok", spawnGrokBuildAcpClient]
@@ -171,7 +178,6 @@ for (const [name, spawn] of [
     }
   );
 }
-
 async function incompleteFixture(t) {
   const home = await mkdtemp(join(tmpdir(), "octo-review-recovery-"));
   t.after(() => rm(home, { recursive: true, force: true }));
@@ -188,7 +194,6 @@ async function incompleteFixture(t) {
   await writeFile(path, JSON.stringify(manifest));
   return { home, path, manifest };
 }
-
 test("explicit orphan recovery keeps evidence, rejects a live owner and permits the next startup", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   manifest.kernelPid = process.pid;
@@ -210,7 +215,6 @@ test("explicit orphan recovery keeps evidence, rejects a live owner and permits 
   await assert.rejects(readFile(`${path}.acknowledgement`), { code: "ENOENT" });
   assert.equal(await readFile(recovery.archivePath, "utf8"), source);
 });
-
 test("missing ownership record removes stale confirmation but preserves its evidence archive", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   const source = await readFile(path, "utf8");
@@ -221,7 +225,6 @@ test("missing ownership record removes stale confirmation but preserves its evid
   await assert.rejects(readFile(`${path}.acknowledgement`), { code: "ENOENT" });
   assert.equal(await readFile(archivePath, "utf8"), source);
 });
-
 test("unremovable stale confirmation does not block a new manifest or clean close", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   await rm(path);
@@ -231,7 +234,6 @@ test("unremovable stale confirmation does not block a new manifest or clean clos
   await opened.close();
   assert.equal((await inspectOrphanCleanup(path)).state, "missing");
 });
-
 test("acknowledgement requires the same manifest and an intact evidence archive", async (t) => {
   const { path, manifest } = await incompleteFixture(t);
   const { archivePath } = await acknowledgeOrphanCleanup(path);
@@ -247,7 +249,6 @@ test("acknowledgement requires the same manifest and an intact evidence archive"
   );
   await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
 });
-
 test("native incomplete evidence blocks replacement on POSIX as well as Windows", async (t) => {
   const { path } = await incompleteFixture(t);
   const platform = Object.getOwnPropertyDescriptor(process, "platform");
@@ -256,7 +257,6 @@ test("native incomplete evidence blocks replacement on POSIX as well as Windows"
   assert.equal((await reapOrphanedInvocationManifest(path)).reason, "cleanup_incomplete");
   await assert.rejects(InvocationManifest.open(path), { code: "ORPHAN_CLEANUP_INCOMPLETE" });
 });
-
 test("CLI recover requires acknowledgement and doctor exposes the manifest path", async (t) => {
   const { home, path } = await incompleteFixture(t);
   const modules = join(home, "module-selection.json");
@@ -308,7 +308,6 @@ test("CLI recover requires acknowledgement and doctor exposes the manifest path"
   assert.deepEqual(await readFile(modules), moduleSource);
   await assert.rejects(readFile(`${modules}.acknowledgement`), { code: "ENOENT" });
 });
-
 for (const [matches, actual, expectedState] of [
   [null, "alice", "unknown"],
   [null, "DOMAIN\\alice", "stopped"],

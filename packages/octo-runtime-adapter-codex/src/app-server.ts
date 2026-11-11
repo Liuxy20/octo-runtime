@@ -1,15 +1,19 @@
+import { codexCollaborationMode } from "./agent-env.js";
 import {
-  actmodeEvidence,
-  invocationEnvs,
-  mapReasoningEffort
+  invocationModel,
+  invocationEffort,
+  invocationProviderOptions,
+  invocationOption,
+  invocationApprovalMode,
+  invocationWorkdir
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { invocationEnvs, mapReasoningEffort } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
   classifyFailure,
   isCodexLocalFailureReason,
   isStreamCapacityReason,
   contextHash,
-  contextActmode,
   assertJsonByteLimit,
   providerInputParts,
   PROVIDER_DIAGNOSTIC_MAX_BYTES,
@@ -18,7 +22,7 @@ import {
   type StreamLimitPolicy
 } from "@mininglamp-oss/octo-runtime-protocol";
 import { codexTransportError } from "./stdin-writer.js";
-import type { CodexTurnChannel } from "./service.js";
+import type { CodexChannel, CodexTurnConfiguration } from "./engine.js";
 import { codexEnvironmentConfig } from "./environment.js";
 import { CodexAsyncQuestions, asyncQuestionMetadata } from "./async-questions.js";
 /**
@@ -101,7 +105,8 @@ export interface CodexAppServerCommand {
   /** Executable and app-server args; tests can substitute a fake server. */
   command: string;
   args: string[];
-  cwd: string;
+  /** 独占命令可显式指定；managed server 省略，业务目录由 thread/turn RPC 提供。 */
+  cwd?: string;
   env: NodeJS.ProcessEnv;
   mcpServers?: Record<string, Record<string, unknown>>;
   cleanup?: () => void | Promise<void>;
@@ -110,7 +115,7 @@ export interface CodexAppServerCommand {
 export type CodexAppServerSpawn = (
   command: string,
   args: readonly string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv }
+  options: { cwd?: string; env: NodeJS.ProcessEnv }
 ) => ChildProcessWithoutNullStreams;
 
 /** A JSON-RPC error the app-server explicitly returned, preserving method, code and raw data. */
@@ -161,8 +166,8 @@ export async function* runCodexAppServerTurn({
   onNativeResponder
 }: {
   request: InvokeRequest;
-  spec: CodexAppServerCommand;
-  channel?: CodexTurnChannel;
+  spec: CodexTurnConfiguration;
+  channel?: CodexChannel;
   context?: AdapterInvocationContext;
   onInteractionResponder?: (responder: CodexInteractionResponder | undefined) => void;
   onNativeResponder?: (
@@ -170,7 +175,7 @@ export async function* runCodexAppServerTurn({
   ) => void;
 }): AsyncGenerator<AdapterOutput> {
   const requestTimeoutMs = appServerRequestTimeout(request);
-  const interactive = request.approvalMode !== "full_access";
+  const interactive = invocationApprovalMode(request) !== "full_access";
   if (!channel) throw codexTransportError("CODEX_SERVICE_SCOPE_REQUIRED");
   const client = new CodexAppServerClient(channel, requestTimeoutMs, interactive, request, context);
   onInteractionResponder?.((response) => client.respondInteraction(response));
@@ -182,10 +187,13 @@ export async function* runCodexAppServerTurn({
     throwIfAborted(request.signal);
 
     // 作用域已完成服务初始化；这里仅装配本轮 thread/turn，不重复握手。
-    let environmentConfig: JsonRecord | undefined;
+    let environmentConfig: JsonRecord | undefined = spec.config;
     if (Object.keys(invocationEnvs(request)).length || spec.mcpServers) {
       const result = recordValue(
-        await client.request("config/read", { includeLayers: false, cwd: request.workdir })
+        await client.request("config/read", {
+          includeLayers: false,
+          cwd: invocationWorkdir(request)
+        })
       );
       const config = recordValue(result?.config);
       if (!config)
@@ -197,10 +205,13 @@ export async function* runCodexAppServerTurn({
             code: "MCP_SERVER_NAME_CONFLICT"
           });
       }
-      environmentConfig = codexEnvironmentConfig(request, {
-        ...config,
-        mcp_servers: { ...nativeServers, ...spec.mcpServers }
-      });
+      environmentConfig = {
+        ...spec.config,
+        ...codexEnvironmentConfig(request, {
+          ...config,
+          mcp_servers: { ...nativeServers, ...spec.mcpServers }
+        })
+      };
       if (spec.mcpServers) {
         const forwarding = recordValue(environmentConfig.mcp_servers) ?? {};
         // config/read is a read model: optional nulls cannot be round-tripped as overrides.
@@ -259,39 +270,39 @@ export async function* runCodexAppServerTurn({
     // 名称属于调用方；只命名本轮新建 thread，恢复时保留原生标题与句柄。
     if (!resumed && request.sessionName)
       await client.request("thread/name/set", { threadId, name: request.sessionName });
-    const requestedMode = contextActmode(request.context);
-    let collaborationMode: JsonRecord | undefined;
-    let effectiveMode: "default" | "plan" | undefined;
+    const requestedMode = codexCollaborationMode(request);
     if (requestedMode !== undefined) {
       const modes = recordValue(await client.request("collaborationMode/list", {}));
       const available = Array.isArray(modes?.data) ? modes.data.map(recordValue) : [];
-      effectiveMode = available.some((mode) => mode?.mode === requestedMode)
-        ? requestedMode
-        : "default";
-      if (!available.some((mode) => mode?.mode === effectiveMode))
-        throw new Error(
-          "ACTMODE_UNSUPPORTED: Codex did not advertise a default collaboration mode"
-        );
+      if (!available.some((mode) => mode?.mode === requestedMode))
+        throw new Error("CODEX_COLLABORATION_MODE_UNSUPPORTED");
+    }
+    // 恢复线程转为 fresh fallback 时必须重新读取新线程的模型，不能沿用旧线程默认值。
+    const collaborationSettings = (): JsonRecord | undefined => {
+      if (requestedMode === undefined) return undefined;
       const thread = recordValue(threadResult);
-      const model = request.agentConfig.model ?? stringValue(thread?.model);
-      if (!model) throw new Error("ACTMODE_UNCONFIRMED: Codex omitted its effective model");
-      collaborationMode = {
-        mode: effectiveMode,
-        settings: {
-          model,
-          reasoning_effort:
-            mapReasoningEffort("codex", request.agentConfig.effort) ??
-            thread?.reasoningEffort ??
-            null,
-          developer_instructions: null
+      const model = invocationModel(request) ?? stringValue(thread?.model);
+      if (!model)
+        throw new Error("CODEX_COLLABORATION_MODE_UNCONFIRMED: Codex omitted its effective model");
+      return {
+        collaborationMode: {
+          mode: requestedMode,
+          settings: {
+            model,
+            reasoning_effort:
+              mapReasoningEffort("codex", invocationEffort(request)) ??
+              thread?.reasoningEffort ??
+              null,
+            developer_instructions: null
+          }
         }
       };
-    }
+    };
     let turnResult: unknown;
     try {
       turnResult = await client.request("turn/start", {
         ...turnParams(request, threadId, resumeFallback !== undefined),
-        ...(collaborationMode ? { collaborationMode } : {})
+        ...collaborationSettings()
       });
     } catch (error) {
       // Some corrupt sessions pass thread/resume but only reveal the missing rollout at turn/start.
@@ -312,24 +323,13 @@ export async function* runCodexAppServerTurn({
         await client.request("thread/name/set", { threadId, name: request.sessionName });
       turnResult = await client.request("turn/start", {
         ...turnParams(request, threadId, true),
-        ...(collaborationMode ? { collaborationMode } : {})
+        ...collaborationSettings()
       });
     }
 
     const turnId = extractTurnId(turnResult);
     if (turnId) client.setActiveTurn(turnId);
     context?.reportActivity?.({ kind: "turn_started", method: "turn_start" });
-    if (requestedMode !== undefined && effectiveMode !== undefined)
-      yield actmodeEvidence(
-        {
-          requested: requestedMode,
-          effective: effectiveMode,
-          status: effectiveMode === requestedMode ? "applied" : "fallback",
-          nativeMode: effectiveMode,
-          ...(effectiveMode !== requestedMode ? { reason: "provider_unsupported" as const } : {})
-        },
-        context?.protocolMode
-      );
 
     // turn/start 成功后才发布权威会话更新，供调用方保存完整 binding；Core 不持久化业务会话绑定。
     const session: CanonicalEvent = {
@@ -1227,7 +1227,7 @@ class CodexAppServerClient {
       return;
     this.#clearFinalizationTimer();
     const configured = recordValue(
-      this.invocation.agentConfig.providerOptions
+      invocationProviderOptions(this.invocation, "codex")
     )?.finalizationTimeoutMs;
     const timeoutMs =
       typeof configured === "number" && Number.isFinite(configured) && configured > 0
@@ -1276,7 +1276,7 @@ class CodexAppServerClient {
   };
 
   constructor(
-    readonly channel: CodexTurnChannel,
+    readonly channel: CodexChannel,
     requestTimeoutMs: number,
     interactive: boolean,
     readonly invocation: InvokeRequest,
@@ -1918,8 +1918,8 @@ class CodexAppServerClient {
               ? {
                   schema: "octo.approval-request/v1",
                   policy: {
-                    mode: this.invocation.approvalMode,
-                    hash: contextHash(this.invocation.context)
+                    mode: invocationApprovalMode(this.invocation),
+                    hash: contextHash(this.invocation.agentEnv)
                   },
                   operation: {
                     kind:
@@ -2118,14 +2118,13 @@ function threadParams(
 ): JsonRecord {
   return {
     ...extra,
-    cwd: request.workdir,
-    ...(request.agentConfig.model ? { model: request.agentConfig.model } : {}),
+    cwd: invocationWorkdir(request),
+    ...(invocationModel(request) ? { model: invocationModel(request) } : {}),
     sandbox: codexSandbox(request),
     // Dynamic MCP tools are untrusted until Codex asks the client to approve them. `never`
     // rejects those calls before the existing reverse-request handler can answer them.
-    approvalPolicy: request.approvalMode === "assisted" ? "on-request" : "untrusted",
-    ...(environmentConfig ? { config: environmentConfig } : {}),
-    ...(extra.threadId ? {} : { developerInstructions: request.controlInstructions })
+    approvalPolicy: invocationApprovalMode(request) === "assisted" ? "on-request" : "untrusted",
+    ...(environmentConfig ? { config: environmentConfig } : {})
   };
 }
 
@@ -2136,7 +2135,7 @@ function threadParams(
  * publishing summaryTextDelta, so a UI might see only an empty analysis lifecycle.
  */
 function turnParams(request: InvokeRequest, threadId: string, freshFallback = false): JsonRecord {
-  const effort = mapReasoningEffort("codex", request.agentConfig.effort);
+  const effort = mapReasoningEffort("codex", invocationEffort(request));
   return {
     threadId,
     input: [
@@ -2146,8 +2145,8 @@ function turnParams(request: InvokeRequest, threadId: string, freshFallback = fa
           : { type: "text", text: part.text, text_elements: [] }
       )
     ],
-    cwd: request.workdir,
-    ...(request.agentConfig.model ? { model: request.agentConfig.model } : {}),
+    cwd: invocationWorkdir(request),
+    ...(invocationModel(request) ? { model: invocationModel(request) } : {}),
     ...(effort ? { effort } : {}),
     summary: codexReasoningSummary(request)
   };
@@ -2159,7 +2158,7 @@ function turnParams(request: InvokeRequest, threadId: string, freshFallback = fa
  * disable it via providerOptions.reasoningSummary.
  */
 function codexReasoningSummary(request: InvokeRequest): string {
-  const configured = recordValue(request.agentConfig.providerOptions)?.reasoningSummary;
+  const configured = recordValue(invocationProviderOptions(request, "codex"))?.reasoningSummary;
   const value = typeof configured === "string" ? configured : "auto";
   if (!["auto", "concise", "detailed", "none"].includes(value)) {
     throw new Error(`unsupported Codex reasoning summary: ${value}`);
@@ -2169,19 +2168,21 @@ function codexReasoningSummary(request: InvokeRequest): string {
 
 function codexSandbox(request: InvokeRequest): string {
   const value =
-    request.approvalMode === "full_access"
+    invocationApprovalMode(request) === "full_access"
       ? "danger-full-access"
-      : (request.agentConfig.sandbox ?? "workspace-write");
+      : (invocationOption(request, "sandbox", "codex") ?? "workspace-write");
   if (!["read-only", "workspace-write", "danger-full-access"].includes(value)) {
     throw new Error(`unsupported Codex sandbox mode: ${value}`);
   }
-  if (request.approvalMode !== "full_access" && value === "danger-full-access")
+  if (invocationApprovalMode(request) !== "full_access" && value === "danger-full-access")
     throw new Error("APPROVAL_SANDBOX_CONFLICT");
   return value;
 }
 
 function appServerRequestTimeout(request: InvokeRequest): number {
-  const configured = recordValue(request.agentConfig.providerOptions)?.appServerRequestTimeoutMs;
+  const configured = recordValue(
+    invocationProviderOptions(request, "codex")
+  )?.appServerRequestTimeoutMs;
   return typeof configured === "number" && Number.isFinite(configured) && configured > 0
     ? configured
     : APP_SERVER_REQUEST_TIMEOUT_MS;

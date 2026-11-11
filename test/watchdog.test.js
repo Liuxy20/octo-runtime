@@ -1,3 +1,5 @@
+import { invocationRuntimeLimits } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
@@ -5,7 +7,6 @@ import assert from "node:assert/strict";
 import { InvocationWatchdog } from "../packages/octo-runtime-executor-core/dist/watchdog.js";
 import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
 import { assertRuntimeLimits } from "@mininglamp-oss/octo-runtime-protocol";
-
 function fixture(limits = {}) {
   let now = 0;
   const timers = new Map();
@@ -42,7 +43,6 @@ function fixture(limits = {}) {
 const started = { kind: "turn_started", method: "turn_start" };
 const progress = { kind: "turn_progress", method: "text_delta" };
 const event = (type, payload = {}) => ({ protocolVersion: 2, type, payload });
-
 test("canonical work rearms idle until valid native progress is observed", () => {
   const f = fixture({ firstFrameTimeoutMs: 500, modelIdleTimeoutMs: 100 });
   f.watchdog.canonical(event("message.delta", { text: "a" }));
@@ -59,7 +59,6 @@ test("canonical work rearms idle until valid native progress is observed", () =>
   assert.equal(f.controller.signal.reason.timeoutReason, "model_silence");
   assert.equal(f.controller.signal.reason.evidence.elapsedMs, 260);
 });
-
 test("late native start switches progress source without extending the existing idle budget", () => {
   const f = fixture({ firstFrameTimeoutMs: 500, modelIdleTimeoutMs: 100 });
   f.watchdog.canonical(event("message.delta", { text: "a" }));
@@ -75,7 +74,6 @@ test("late native start switches progress source without extending the existing 
   f.tick(1);
   assert.equal(f.controller.signal.reason.evidence.elapsedMs, 180);
 });
-
 test("native priority ignores canonical text while real native progress renews idle", () => {
   for (const nativeProgress of [false, true]) {
     const f = fixture({ modelIdleTimeoutMs: 100 });
@@ -89,7 +87,6 @@ test("native priority ignores canonical text while real native progress renews i
     assert.equal(f.controller.signal.reason.evidence.elapsedMs, nativeProgress ? 190 : 100);
   }
 });
-
 test("invalid activity cannot switch sources, create tools, or close an active tool", () => {
   const f = fixture({ firstFrameTimeoutMs: 100 });
   for (const value of [
@@ -117,7 +114,6 @@ test("invalid activity cannot switch sources, create tools, or close an active t
   g.tick(10);
   assert.equal(g.controller.signal.reason.timeoutReason, "tool_idle");
 });
-
 test("startup after a long interaction receives a fresh first-frame window", () => {
   const f = fixture({ firstFrameTimeoutMs: 100, runTimeoutMs: 10000 });
   f.tick(80);
@@ -130,7 +126,6 @@ test("startup after a long interaction receives a fresh first-frame window", () 
   f.tick(1);
   assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
 });
-
 test("activity completion does not close a separately pending formal interaction", () => {
   const f = fixture({ firstFrameTimeoutMs: 100, runTimeoutMs: 10000 });
   f.watchdog.canonical(
@@ -151,7 +146,6 @@ test("activity completion does not close a separately pending formal interaction
   f.tick(1);
   assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
 });
-
 for (const type of ["tool", "interaction"]) {
   test(`formal ${type} completion clears its matching activity but not parallel activity`, () => {
     const f = fixture({ firstFrameTimeoutMs: 100, modelIdleTimeoutMs: 100, runTimeoutMs: 10000 });
@@ -179,7 +173,6 @@ for (const type of ["tool", "interaction"]) {
     assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
   });
 }
-
 test("activity completion retains formal tool budgets and heartbeat cannot extend them", () => {
   const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, runTimeoutMs: 10000 });
   const activity = event("activity.started", {
@@ -197,7 +190,6 @@ test("activity completion retains formal tool budgets and heartbeat cannot exten
   f.tick(10);
   assert.equal(f.controller.signal.reason.timeoutReason, "tool_idle");
 });
-
 test("activity-only tool idle budget ignores duplicate starts and heartbeats", () => {
   const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, runTimeoutMs: 10000 });
   const start = event("activity.started", {
@@ -212,7 +204,6 @@ test("activity-only tool idle budget ignores duplicate starts and heartbeats", (
   f.tick(10);
   assert.equal(f.controller.signal.reason?.timeoutReason, "tool_idle");
 });
-
 test("activity-only tool progress renews idle but preserves wall budget", () => {
   for (const native of [false, true]) {
     const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, toolWallTimeoutMs: 250 });
@@ -234,7 +225,6 @@ test("activity-only tool progress renews idle but preserves wall budget", () => 
     assert.equal(f.controller.signal.reason?.timeoutReason, "tool_deadline");
   }
 });
-
 test("human wait suspends activity-only tool budgets only for the overlapping time", () => {
   const f = fixture({ firstFrameTimeoutMs: 10, toolTimeoutMs: 100, toolWallTimeoutMs: 150 });
   f.watchdog.interaction("approval", true);
@@ -253,7 +243,6 @@ test("human wait suspends activity-only tool budgets only for the overlapping ti
   f.tick(1);
   assert.equal(f.controller.signal.reason?.timeoutReason, "tool_idle");
 });
-
 test("activity-only waits never suppress the overall resource deadline", () => {
   for (const kind of ["executing_tool", "waiting_approval", "waiting_input"]) {
     const f = fixture({ firstFrameTimeoutMs: 10, runTimeoutMs: 100 });
@@ -268,14 +257,12 @@ test("activity-only waits never suppress the overall resource deadline", () => {
     assert.equal(f.controller.signal.reason.timeoutReason, "run_deadline");
   }
 });
-
 test("canonical bookkeeping and empty placeholders cannot escape startup deadline", () => {
   const f = fixture({ firstFrameTimeoutMs: 100 });
   const records = [
     event("session.update"),
     event("usage.update"),
     event("run.notice"),
-    event("execution.update"),
     event("message.create"),
     event("message.delta", { text: "" }),
     event("tool_call.delta", { id: "missing", outputDelta: "" }),
@@ -286,11 +273,10 @@ test("canonical bookkeeping and empty placeholders cannot escape startup deadlin
     f.watchdog.canonical(record);
   }
   assert.equal(f.watchdog.snapshot().phase, "starting");
-  f.tick(20);
+  f.tick(100 - records.length * 10);
   assert.equal(f.controller.signal.reason.evidence.elapsedMs, 100);
   assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
 });
-
 test("canonical model steps and tool progress are real fallback work", () => {
   const f = fixture({ modelIdleTimeoutMs: 100 });
   f.watchdog.canonical(event("model_step.started", { stepId: "s" }));
@@ -309,7 +295,6 @@ test("canonical model steps and tool progress are real fallback work", () => {
   g.tick(1);
   assert.equal(g.controller.signal.reason.evidence.elapsedMs, 190);
 });
-
 for (const native of [false, true]) {
   test(`approval priority survives new tools and multiple pending requests: native=${native}`, () => {
     const f = fixture({ toolTimeoutMs: 100, toolWallTimeoutMs: 200, runTimeoutMs: 1000 });
@@ -340,7 +325,6 @@ for (const native of [false, true]) {
     assert.equal(f.controller.signal.reason.timeoutReason, "tool_idle");
   });
 }
-
 test("tools created during approval receive only their overlapping wall-clock pause", () => {
   const f = fixture({ toolTimeoutMs: 1000, toolWallTimeoutMs: 200, runTimeoutMs: 1000 });
   f.watchdog.interaction("a", true);
@@ -359,7 +343,6 @@ test("tools created during approval receive only their overlapping wall-clock pa
   assert.equal(f.controller.signal.reason.evidence.elapsedMs, 600);
   assert.equal(f.controller.signal.reason.timeoutReason, "tool_deadline");
 });
-
 test("model approval pause preserves its remaining idle budget and run deadline stays fixed", () => {
   const f = fixture({ modelIdleTimeoutMs: 100, runTimeoutMs: 1000 });
   f.watchdog.activity(started);
@@ -384,7 +367,6 @@ test("model approval pause preserves its remaining idle budget and run deadline 
   assert.equal(g.controller.signal.reason.timeoutReason, "run_deadline");
   assert.equal(g.controller.signal.reason.evidence.elapsedMs, 500);
 });
-
 test(
   "late user cancellation cannot replace a terminal during cleanup",
   { timeout: 2000 },
@@ -404,10 +386,10 @@ test(
           modes: ["canonical"],
           nativeMethods: []
         },
-        type: "terminal-race",
-        agentSources: ["provisioned"]
+        type: "terminal-race"
       },
-      async *invoke() {
+      async *invoke(_fixtureRequest, _fixtureContext) {
+        _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
         markCleaning();
         await cleanup;
@@ -434,7 +416,6 @@ test(
     await stream.next();
   }
 );
-
 test("session and usage records cannot escape startup deadline", () => {
   const f = fixture({ firstFrameTimeoutMs: 100 });
   f.tick(50);
@@ -444,7 +425,6 @@ test("session and usage records cannot escape startup deadline", () => {
   f.tick(10);
   assert.equal(f.controller.signal.reason.timeoutReason, "first_frame");
 });
-
 test("terminal freezes timers but completion metrics wait for cleanup outcome", () => {
   const f = fixture();
   f.watchdog.activity(started);
@@ -460,12 +440,11 @@ test("terminal freezes timers but completion metrics wait for cleanup outcome", 
   assert.equal(records[0].data.outcome, "failed");
   assert.equal(records[0].data.elapsedMs, 10);
 });
-
 test("run defaults to 24 hours and explicit limits may shorten or extend it", () => {
   for (const [limits, deadline] of [
-    [{}, 86_400_000],
-    [{ runTimeoutMs: 7_200_000 }, 7_200_000],
-    [{ runTimeoutMs: 21_600_000 }, 21_600_000]
+    [{}, 86400000],
+    [{ runTimeoutMs: 7200000 }, 7200000],
+    [{ runTimeoutMs: 21600000 }, 21600000]
   ]) {
     const f = fixture({ ...limits, modelIdlePolicy: "observe" });
     f.watchdog.activity(started);
@@ -477,21 +456,19 @@ test("run defaults to 24 hours and explicit limits may shorten or extend it", ()
     assert.equal(f.controller.signal.reason.timeoutReason, "run_deadline");
   }
 });
-
 test("default model budget tolerates 120 seconds and expires exactly at 300 seconds", () => {
   const f = fixture();
   f.watchdog.activity(started);
-  f.tick(120_000);
+  f.tick(120000);
   assert.equal(f.controller.signal.aborted, false);
   assert.equal(f.records.filter((x) => x.event === "model_silence").length, 1);
-  f.tick(179_999);
+  f.tick(179999);
   assert.equal(f.controller.signal.aborted, false);
   f.tick(1);
   assert.equal(f.controller.signal.reason.timeoutReason, "model_silence");
-  assert.equal(f.controller.signal.reason.timeoutMs, 300_000);
+  assert.equal(f.controller.signal.reason.timeoutMs, 300000);
   assert.equal(f.timers.size, 0);
 });
-
 test("native progress rearms one timer, while transport and retries cannot hide model silence", () => {
   const f = fixture({ modelIdleTimeoutMs: 1000, modelIdleWarningMs: 500 });
   f.watchdog.activity(started);
@@ -508,7 +485,6 @@ test("native progress rearms one timer, while transport and retries cannot hide 
   assert.equal(f.controller.signal.reason.timeoutReason, "model_silence");
   assert.equal(f.controller.signal.reason.evidence.retryCount, 9);
 });
-
 test("model observe retains hard run deadline despite progress and warnings", () => {
   const f = fixture({
     modelIdlePolicy: "observe",
@@ -525,7 +501,6 @@ test("model observe retains hard run deadline despite progress and warnings", ()
   assert.equal(f.controller.signal.reason.timeoutStage, "run_deadline");
   assert.equal(f.controller.signal.reason.timeoutMs, 1000);
 });
-
 test("tool idle is isolated per tool and output cannot extend wall deadline", () => {
   const f = fixture({ toolTimeoutMs: 500, toolWallTimeoutMs: 1000 });
   f.watchdog.canonical({
@@ -555,7 +530,6 @@ test("tool idle is isolated per tool and output cannot extend wall deadline", ()
   g.tick(200);
   assert.equal(g.controller.signal.reason.timeoutReason, "tool_deadline");
 });
-
 test("last tool closing starts a fresh model budget and terminal cancels timers", () => {
   const f = fixture({ modelIdleTimeoutMs: 100, toolTimeoutMs: 1000 });
   f.watchdog.canonical({
@@ -583,39 +557,32 @@ test("last tool closing starts a fresh model budget and terminal cancels timers"
   f.tick(99);
   assert.equal(f.controller.signal.aborted, false);
   f.watchdog.canonical({ protocolVersion: 2, type: "run.completed", payload: {} });
-  f.tick(10_000);
+  f.tick(10000);
   f.watchdog.activity(progress);
   assert.equal(f.timers.size, 0);
   assert.equal(f.controller.signal.aborted, false);
 });
-
-test("native-aware canonical usage does not count as progress; legacy observe remains explicit opt-out", () => {
+test("native-aware canonical usage does not count as progress", () => {
   const f = fixture({ modelIdleTimeoutMs: 100 });
   f.watchdog.activity(started);
   f.tick(90);
   f.watchdog.canonical({ protocolVersion: 2, type: "usage.update", payload: {} });
   f.tick(10);
   assert.equal(f.controller.signal.aborted, true);
-  const g = fixture({ enforcement: "observe" });
-  g.tick(2_000_000);
-  assert.equal(g.controller.signal.aborted, false);
-  g.watchdog.dispose();
 });
-
-test("invalid budgets and ambiguous legacy/v2 policies fail closed", () => {
+test("invalid budgets and removed fields fail closed", () => {
   for (const limits of [
     { modelIdleTimeoutMs: NaN },
     { runTimeoutMs: 0 },
     { modelIdleTimeoutMs: 1.5 },
     { unknown: 1 },
     { modelIdlePolicy: "invalid" },
-    { enforcement: "observe", modelIdlePolicy: "observe" }
+    { enforcement: "observe" }
   ]) {
     assert.throws(() => assertRuntimeLimits(limits));
   }
   assert.doesNotThrow(() => assertRuntimeLimits({ modelIdlePolicy: "observe", runTimeoutMs: 100 }));
 });
-
 test("approval waiting suspends idle budgets but retains the overall deadline", () => {
   const waiting = fixture({
     modelIdleTimeoutMs: 100,
@@ -666,7 +633,6 @@ test("approval waiting suspends idle budgets but retains the overall deadline", 
   deadline.tick(1000);
   assert.equal(deadline.controller.signal.reason.timeoutReason, "run_deadline");
 });
-
 const request = {
   protocolVersion: 2,
   invocationId: "watchdog-v2",
@@ -674,12 +640,11 @@ const request = {
   runId: "r",
   prompt: "p",
   modelInput: "p",
-  controlInstructions: "",
-  approvalMode: "full_access",
-  context: { schema: "octo.context-envelope/v3", items: [] },
-  agentSource: "provisioned",
-  agentConfig: {},
-  workdir: process.cwd()
+  agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+    { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } }
+  ])
 };
 test("host preserves a single pending next during activity and ignores failing diagnostic sinks", async () => {
   let calls = 0;
@@ -693,10 +658,10 @@ test("host preserves a single pending next during activity and ignores failing d
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "native",
-      agentSources: ["provisioned"]
+      type: "native"
     },
     invoke(req, ctx) {
+      ctx?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
       ctx.reportActivity(started);
       return {
         [Symbol.asyncIterator]() {
@@ -728,7 +693,13 @@ test("host preserves a single pending next during activity and ignores failing d
     "native",
     {
       ...request,
-      runtimeLimits: { modelIdleTimeoutMs: 100, modelIdleWarningMs: 100, runTimeoutMs: 1000 }
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        {
+          namespace: "octo.execution",
+          name: "limits",
+          payload: { model_idle_timeout_ms: 100, model_idle_warning_ms: 100, run_timeout_ms: 1000 }
+        }
+      ])
     },
     { protocolMode: "canonical" }
   ))
@@ -737,16 +708,15 @@ test("host preserves a single pending next during activity and ignores failing d
   assert.equal(calls, 2);
   assert.equal(events.at(-1).type, "run.completed");
 });
-
 test("host uses canonical progress until this invocation actually reports native work", async () => {
   const host = new AgentExecutor();
   host.register({
     metadata: {
       protocolSupport: { protocol: "fallback.canonical", modes: ["canonical"], nativeMethods: [] },
-      type: "fallback",
-      agentSources: ["provisioned"]
+      type: "fallback"
     },
-    async *invoke() {
+    async *invoke(_fixtureRequest, _fixtureContext) {
+      _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
       for (let index = 0; index < 4; index++) {
         yield event("message.delta", { text: "working" });
         await new Promise((resolve) => setTimeout(resolve, 40));
@@ -760,14 +730,19 @@ test("host uses canonical progress until this invocation actually reports native
     {
       ...request,
       invocationId: "canonical-fallback",
-      runtimeLimits: { modelIdleTimeoutMs: 100, runTimeoutMs: 1000 }
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        {
+          namespace: "octo.execution",
+          name: "limits",
+          payload: { model_idle_timeout_ms: 100, run_timeout_ms: 1000 }
+        }
+      ])
     },
     { protocolMode: "canonical" }
   ))
     events.push(value);
   assert.equal(events.at(-1).type, "run.completed");
 });
-
 test("host hard deadline aborts provider even when its consumer is paused", async () => {
   let signal;
   const host = new AgentExecutor();
@@ -778,10 +753,10 @@ test("host hard deadline aborts provider even when its consumer is paused", asyn
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "paused",
-      agentSources: ["provisioned"]
+      type: "paused"
     },
-    async *invoke(req) {
+    async *invoke(req, _fixtureContext) {
+      _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(req));
       signal = req.signal;
       yield { protocolVersion: 2, type: "message.create", payload: {} };
       await new Promise(() => {});
@@ -791,7 +766,13 @@ test("host hard deadline aborts provider even when its consumer is paused", asyn
     "paused",
     {
       ...request,
-      runtimeLimits: { runTimeoutMs: 100, cancelGraceMs: 100, modelIdlePolicy: "observe" }
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        {
+          namespace: "octo.execution",
+          name: "limits",
+          payload: { run_timeout_ms: 100, cancel_grace_ms: 100, model_idle_policy: "observe" }
+        }
+      ])
     },
     { protocolMode: "canonical" }
   );
@@ -803,7 +784,6 @@ test("host hard deadline aborts provider even when its consumer is paused", asyn
   for await (const e of iterator) events.push(e);
   assert.equal(events.at(-1).payload.failure.params.timeoutReason, "run_deadline");
 });
-
 test("host bounds cleanup after terminal and timeout wins over provider stopped projection", async () => {
   const host = new AgentExecutor();
   host.register({
@@ -813,10 +793,10 @@ test("host bounds cleanup after terminal and timeout wins over provider stopped 
         modes: ["canonical"],
         nativeMethods: []
       },
-      type: "cleanup",
-      agentSources: ["provisioned"]
+      type: "cleanup"
     },
-    async *invoke() {
+    async *invoke(_fixtureRequest, _fixtureContext) {
+      _fixtureContext?.configureRuntimeLimits?.(invocationRuntimeLimits(_fixtureRequest));
       yield { protocolVersion: 2, type: "run.completed", payload: {} };
       await new Promise(() => {});
     }
@@ -824,7 +804,12 @@ test("host bounds cleanup after terminal and timeout wins over provider stopped 
   const events = [];
   for await (const e of preparedTestInvoke((...args) => preparedFrames(host, ...args))(
     "cleanup",
-    { ...request, runtimeLimits: { cancelGraceMs: 100 } },
+    {
+      ...request,
+      agentEnv: withAgentEnvItems(request.agentEnv, [
+        { namespace: "octo.execution", name: "limits", payload: { cancel_grace_ms: 100 } }
+      ])
+    },
     { protocolMode: "canonical" }
   ))
     if (!e.type.startsWith("activity.")) events.push(e);

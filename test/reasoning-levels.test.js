@@ -1,3 +1,5 @@
+import { agentEnvItem } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,22 +13,20 @@ import { buildOpenCodeCommand } from "@mininglamp-oss/octo-runtime-adapter-openc
 import { buildOpenClawGatewayInvocation } from "@mininglamp-oss/octo-runtime-adapter-openclaw";
 import { buildAntigravityCommand } from "@mininglamp-oss/octo-runtime-adapter-antigravity";
 import { assertCanonicalEvent } from "@mininglamp-oss/octo-runtime-protocol";
-
 const request = {
   protocolVersion: 2,
   invocationId: "reasoning-test",
   runId: "reasoning-run",
   agentSessionId: "reasoning-session",
-  agentSource: "provisioned",
-  context: { schema: "octo.context-envelope/v3", items: [] },
-  workdir: process.cwd(),
-  controlInstructions: "",
   modelInput: "hello",
   prompt: "hello",
-  approvalMode: "full_access",
-  agentConfig: { effort: "xhigh" }
+  agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+    { namespace: "octo.execution", name: "workspace", payload: { path: process.cwd() } },
+    { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+    { namespace: "octo.execution", name: "agent", payload: { source: "provisioned" } },
+    { namespace: "octo.execution", name: "model", payload: { reasoning: { effort: "xhigh" } } }
+  ])
 };
-
 test("four public levels map through immutable adapter defaults; invalid levels never become defaults", () => {
   assert.deepEqual(OMNI_REASONING_LEVELS, ["low", "medium", "high", "xhigh"]);
   for (const type of Object.keys(DEFAULT_REASONING_LEVEL_MAPS)) {
@@ -52,7 +52,6 @@ test("four public levels map through immutable adapter defaults; invalid levels 
     "large"
   );
 });
-
 test("native carriers receive mapped effort while the input request keeps xhigh", async () => {
   const claude = await buildClaudeCommand(request);
   try {
@@ -62,7 +61,13 @@ test("native carriers receive mapped effort while the input request keeps xhigh"
   }
   const opencode = await buildOpenCodeCommand({
     ...request,
-    agentConfig: { ...request.agentConfig, model: "provider/model" }
+    agentEnv: withAgentEnvItems(request.agentEnv, [
+      {
+        namespace: "octo.execution",
+        name: "model",
+        payload: { selection: { id: "provider/model" }, reasoning: { effort: "xhigh" } }
+      }
+    ])
   });
   try {
     assert.equal(opencode.args[opencode.args.indexOf("--model") + 1], "provider/model#high");
@@ -73,23 +78,35 @@ test("native carriers receive mapped effort while the input request keeps xhigh"
   assert.equal(antigravity.args[antigravity.args.indexOf("--effort") + 1], "xhigh");
   const openclaw = buildOpenClawGatewayInvocation({
     ...request,
-    agentConfig: {
-      ...request.agentConfig,
-      providerAgentId: "main",
-      providerOptions: {
-        OPENCLAW_GATEWAY_URL: "ws://127.0.0.1:18789",
-        OPENCLAW_GATEWAY_TOKEN: "fixture",
-        OPENCLAW_GATEWAY_DEVICE_ID: "fixture",
-        OPENCLAW_GATEWAY_PUBLIC_KEY: "fixture",
-        OPENCLAW_GATEWAY_PRIVATE_KEY: "fixture"
+    agentEnv: withAgentEnvItems(request.agentEnv, [
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "main",
+          ...{
+            OPENCLAW_GATEWAY_URL: "ws://127.0.0.1:18789",
+            OPENCLAW_GATEWAY_TOKEN: "fixture",
+            OPENCLAW_GATEWAY_DEVICE_ID: "fixture",
+            OPENCLAW_GATEWAY_PUBLIC_KEY: "fixture",
+            OPENCLAW_GATEWAY_PRIVATE_KEY: "fixture"
+          }
+        }
       }
-    }
+    ])
   });
   assert.equal(openclaw.createParams.thinkingLevel, undefined);
   assert.equal(openclaw.agentParams.thinking, "high");
-  assert.equal(request.agentConfig.effort, "xhigh");
+  assert.equal(
+    agentEnvItem(request.agentEnv, "octo.execution", "model")?.reasoning?.effort,
+    "xhigh"
+  );
 });
-
 test("mapping and non-application use existing evidence and valid run notices, never claim application", async () => {
   for (const [type, expected] of [
     ["openclaw", "REASONING_EFFORT_DOWNGRADED"],
@@ -97,7 +114,7 @@ test("mapping and non-application use existing evidence and valid run notices, n
   ]) {
     let received;
     const adapter = defineAdapter({
-      metadata: { type, agentSources: ["provisioned"] },
+      metadata: { type },
       async *invoke(input) {
         received = input;
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
@@ -113,11 +130,10 @@ test("mapping and non-application use existing evidence and valid run notices, n
     assert.equal(events.at(-1).type, "run.completed");
   }
 });
-
 test("ACP override records no native setter even when another transport of the adapter supports effort", async () => {
   const adapter = defineAdapter(
     {
-      metadata: { type: "opencode", agentSources: ["provisioned"] },
+      metadata: { type: "opencode" },
       async *invoke() {
         yield { protocolVersion: 2, type: "run.completed", payload: {} };
       }
@@ -128,14 +144,11 @@ test("ACP override records no native setter even when another transport of the a
   for await (const event of adapter.invoke(request)) events.push(event);
   assert.equal(events[0].payload.params.warningCode, "REASONING_EFFORT_NOT_APPLIED");
 });
-
 test("adapter wrapper preserves the original invoke receiver and context", async () => {
   const context = { reportActivity() {} };
   const original = {
     metadata: {
-      type: "receiver-fixture",
-
-      agentSources: ["provisioned"]
+      type: "receiver-fixture"
     },
     marker: "original receiver",
     async *invoke(input, invocationContext) {

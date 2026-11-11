@@ -1,5 +1,14 @@
 import {
-  initialControlInstructions,
+  invocationProviderOptions,
+  invocationTimeoutSeconds,
+  invocationModel,
+  invocationEffort,
+  invocationApprovalMode,
+  bindInvocationConnection,
+  defaultAgentEnv,
+  withAgentEnvItems
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
   hasImageInput,
   AcpApprovalBridge,
   DriverQueue,
@@ -70,7 +79,7 @@ function finiteNumber(value: unknown): number | undefined {
 }
 
 function option(req: InvokeRequest, key: string): string | undefined {
-  return nonEmptyString(req.agentConfig.providerOptions?.[key]);
+  return nonEmptyString(invocationProviderOptions(req, "openclaw")?.[key]);
 }
 
 function requiredOption(req: InvokeRequest, key: string): string {
@@ -79,7 +88,7 @@ function requiredOption(req: InvokeRequest, key: string): string {
   return value;
 }
 
-/** The Gateway has a real system-prompt channel, so user content and Runtime instructions remain separate. */
+/** 应用在调用前组装正文；Adapter 不添加原生 system prompt 或业务前缀。 */
 export function composeOpenClawPrompt(req: InvokeRequest): string {
   return providerInputText(req);
 }
@@ -99,9 +108,9 @@ export function buildOpenClawGatewayInvocation(req: InvokeRequest): OpenClawGate
     publicKey: requiredOption(req, OPENCLAW_PROVIDER_OPTIONS.publicKey),
     privateKey: requiredOption(req, OPENCLAW_PROVIDER_OPTIONS.privateKey)
   };
-  const agentId = req.agentConfig.providerAgentId;
-  if (!agentId || !/^[a-z0-9_][a-z0-9_-]{0,63}$/.test(agentId))
-    throw new Error("OpenClaw provider_agent_id is required");
+  const agentId = invocationProviderOptions(req, "openclaw").agentId ?? "main";
+  if (typeof agentId !== "string" || !/^[a-z0-9_][a-z0-9_-]{0,63}$/.test(agentId))
+    throw new TypeError("OPENCLAW_AGENT_ID_INVALID");
   const resumedKey = req.providerSession?.sessionId;
   if (
     resumedKey &&
@@ -115,9 +124,9 @@ export function buildOpenClawGatewayInvocation(req: InvokeRequest): OpenClawGate
     `agent:${agentId}:${req.sessionName ? `${encodeURIComponent(req.sessionName)}-` : ""}${randomUUID()}`;
   const requestId = `octo-runtime-${req.runId}-${randomUUID()}`;
   const message = composeOpenClawPrompt(req);
-  const timeout = finiteNumber(req.agentConfig.timeoutSeconds);
-  const model = nonEmptyString(req.agentConfig.model);
-  const thinking = mapReasoningEffort("openclaw", req.agentConfig.effort);
+  const timeout = finiteNumber(invocationTimeoutSeconds(req, "openclaw"));
+  const model = nonEmptyString(invocationModel(req));
+  const thinking = mapReasoningEffort("openclaw", invocationEffort(req));
   const timeoutMilliseconds = timeout && timeout > 0 ? timeout * 1_000 : 30 * 60_000;
   const reconciliationGraceMilliseconds = Math.min(30_000, timeoutMilliseconds * 0.1);
   const createParams: JsonRecord = {
@@ -132,9 +141,6 @@ export function buildOpenClawGatewayInvocation(req: InvokeRequest): OpenClawGate
     deliver: false,
 
     idempotencyKey: requestId,
-    ...(initialControlInstructions(req)
-      ? { extraSystemPrompt: initialControlInstructions(req) }
-      : {}),
     ...(model ? { model } : {}),
     ...(thinking ? { thinking } : {}),
     ...(timeout === undefined ? {} : { timeout: Math.max(0, Math.floor(timeout)) })
@@ -1048,7 +1054,7 @@ async function* invokeOpenClawGateway(
   try {
     const hello = await client.connect();
     const contract = resolveGatewayContract(hello);
-    const policy = resolveGatewayPermission(contract, req.approvalMode);
+    const policy = resolveGatewayPermission(contract, invocationApprovalMode(req));
     permissions.options.effectiveApprovalMode = policy.effective;
     // 参数在真实握手之后生成；probe 的版本快照不作为本次执行依据。
     const createParams = gatewayCreateParams(
@@ -1403,12 +1409,14 @@ export function createOpenClawAdapter({
     }
   };
   return defineAdapter({
+    defaultAgentEnv: withAgentEnvItems(defaultAgentEnv("openclaw"), [
+      { namespace: "adapter.openclaw", name: "options", payload: { agentId: "main" } }
+    ]),
     metadata: {
       type: "openclaw",
       workspace: false,
       processModel: "websocket-per-invocation",
-      transport: "openclaw-gateway-rpc",
-      agentSources: ["preset", "provisioned"]
+      transport: "openclaw-gateway-rpc"
     },
     probe: probeGateway,
     async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
@@ -1422,24 +1430,25 @@ export function createOpenClawAdapter({
     ): AsyncGenerator<CanonicalEvent> {
       if (hasImageInput(req))
         throw new Error("UNSUPPORTED_INPUT_MODALITY: openclaw does not encode image input");
-      if (req.approvalMode === "assisted")
+      if (invocationApprovalMode(req) === "assisted")
         throw new Error("APPROVAL_MODE_UNSUPPORTED: OpenClaw has no qualified assisted policy");
       if (responders.has(req.invocationId)) throw new Error("INVOCATION_ALREADY_ACTIVE");
-      const gateway = await resolveOpenClawGateway(req.agentConfig.providerOptions);
-      req = {
-        ...req,
-        agentConfig: {
-          ...req.agentConfig,
-          providerOptions: {
-            ...req.agentConfig.providerOptions,
-            [OPENCLAW_PROVIDER_OPTIONS.url]: gateway.url,
-            [OPENCLAW_PROVIDER_OPTIONS.token]: gateway.token,
-            [OPENCLAW_PROVIDER_OPTIONS.deviceId]: gateway.device.deviceId,
-            [OPENCLAW_PROVIDER_OPTIONS.publicKey]: gateway.device.publicKey,
-            [OPENCLAW_PROVIDER_OPTIONS.privateKey]: gateway.device.privateKey
-          }
-        }
-      };
+      const connectionOptions = invocationProviderOptions(req, "openclaw");
+      // 本次连接解析独占请求包装；复用调用方请求时不共享私有连接绑定。
+      req = { ...req };
+      const gateway = await resolveOpenClawGateway(connectionOptions);
+      bindInvocationConnection(req, {
+        ...Object.fromEntries(
+          Object.entries(connectionOptions).filter(
+            (entry): entry is [string, string] => typeof entry[1] === "string"
+          )
+        ),
+        [OPENCLAW_PROVIDER_OPTIONS.url]: gateway.url,
+        [OPENCLAW_PROVIDER_OPTIONS.token]: gateway.token,
+        [OPENCLAW_PROVIDER_OPTIONS.deviceId]: gateway.device.deviceId,
+        [OPENCLAW_PROVIDER_OPTIONS.publicKey]: gateway.device.publicKey,
+        [OPENCLAW_PROVIDER_OPTIONS.privateKey]: gateway.device.privateKey
+      });
       const invocation = buildOpenClawGatewayInvocation(req);
       // 本轮及其对账/取消恢复连接共用本轮 sink；probe 则只使用工厂 sink。
       invocation.gateway.log = context?.log ?? log;

@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import {
   ClaudeEventNormalizer,
   createClaudeCodeAdapter
@@ -12,7 +13,6 @@ import test from "node:test";
 import { sanitizePublicValue } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { createScopedCodexAdapter as createCodexAdapter } from "../test-support/scoped-codex-adapter.mjs";
 import { invokeRequest, preparedFrames } from "./runtime-fixture.js";
-
 test("Codex structured upstream failures survive canonical normalization and catalog classification", () => {
   for (const [codexErrorInfo, expected] of [
     ["rateLimitExceeded", "OH-PRV-4005"],
@@ -38,7 +38,6 @@ test("Codex structured upstream failures survive canonical normalization and cat
     assert.equal(failure.code, expected);
   }
 });
-
 async function failed(adapter, workdir = process.cwd()) {
   const host = new AgentExecutor();
   host.register(adapter);
@@ -46,7 +45,12 @@ async function failed(adapter, workdir = process.cwd()) {
   for await (const frame of preparedFrames(
     host,
     adapter.metadata.type,
-    invokeRequest({ workdir, approvalMode: "full_access" }),
+    invokeRequest({
+      agentEnv: withAgentEnvItems(undefined, [
+        { namespace: "octo.execution", name: "workspace", payload: { path: workdir } },
+        { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+      ])
+    }),
     { protocolMode: "canonical" }
   ))
     if (frame.kind === "canonical") events.push(frame.event);
@@ -54,7 +58,6 @@ async function failed(adapter, workdir = process.cwd()) {
   assert.equal(events.filter((event) => event.type === "run.failed").length, 1);
   return events.find((event) => event.type === "run.failed");
 }
-
 for (const [name, create] of [
   ["codex", createCodexAdapter],
   ["claude-code", createClaudeCodeAdapter]
@@ -62,12 +65,11 @@ for (const [name, create] of [
   test(`${name}: missing cwd reports the directory problem instead of requesting CLI installation`, async () => {
     const cwd = join("/tmp", `octo-missing-${randomUUID()}`);
     const event = await failed(create({ command: process.execPath }), cwd);
-    assert.match(event.payload.message, /工作目录不存在/);
-    assert.ok(event.payload.message.includes(cwd));
-    assert.match(event.payload.message, /ENOENT/);
+    assert.match(event.payload.message, /Working directory does not exist/);
+    assert.equal(event.payload.code, "WORKDIR_NOT_FOUND");
+    assert.equal(event.payload.failure.reasonCode, "WORKDIR_NOT_FOUND");
     assert.equal(event.payload.failure.action.type, "contact_admin");
     assert.notEqual(event.payload.failure.code, "OH-ADP-3002");
-    assert.equal(event.payload.error.code, "ENOENT");
   });
   test(`${name}: missing command in an existing cwd keeps the actual spawn error`, async () => {
     const command = join("/tmp", `octo-no-command-${randomUUID()}`);
@@ -77,7 +79,6 @@ for (const [name, create] of [
     assert.equal(event.payload.failure.code, "OH-ADP-3002");
   });
 }
-
 test("all Adapters preserve the same canonical failure detail and structured error through Host and card projection", async () => {
   const detail = "Selected model cannot be used with this account. Select another model.";
   for (const type of ["codex", "claude-code", "custom-provider"]) {
@@ -86,7 +87,6 @@ test("all Adapters preserve the same canonical failure detail and structured err
       metadata: {
         type,
 
-        agentSources: ["provisioned"],
         protocolSupport: { protocol: `${type}.canonical`, modes: ["canonical"], nativeMethods: [] }
       },
       async *invoke() {
@@ -97,7 +97,6 @@ test("all Adapters preserve the same canonical failure detail and structured err
     assert.deepEqual(event.payload.error, error);
   }
 });
-
 test("Codex turn error objects and Claude result errors are retained", () => {
   const error = {
     message: "Model is not available for this account",
@@ -119,7 +118,6 @@ test("Codex turn error objects and Claude result errors are retained", () => {
   assert.equal(payload.message, "Invalid API key\nPlease run /login");
   assert.deepEqual(payload.error.errors, ["Invalid API key", "Please run /login"]);
 });
-
 test("ACP raw message preservation does not bypass sanitization of outer failure fields", async () => {
   const value = randomUUID();
   const metadata = {
@@ -132,7 +130,7 @@ test("ACP raw message preservation does not bypass sanitization of outer failure
     const event = await failed({
       metadata: {
         type,
-        agentSources: ["provisioned"],
+
         protocolSupport: { protocol: `${type}.canonical`, modes: ["canonical"], nativeMethods: [] }
       },
       async *invoke() {
@@ -166,7 +164,6 @@ test("ACP raw message preservation does not bypass sanitization of outer failure
     assert.ok(!JSON.stringify(outer).includes(value));
   }
 });
-
 test("failure display retains useful reasons while redacting credentials", () => {
   const detail =
     'Invalid API key: api_key="private-key"; Authorization: Bearer secret-token; bf_private';

@@ -6,21 +6,21 @@ Kernel IPC is the protocol between an application and a local Kernel service. Ty
 
 Start with the [SDK quickstart](../getting-started/sdk.md) for a first integration. This reference covers public imports, client methods, and the underlying protocol separately.
 
-## Public Package Surface
+## Client Entries for Independent Apps
 
 | Import subpath                       | Purpose                                                                                  |
 | ------------------------------------ | ---------------------------------------------------------------------------------------- |
-| `/host`                              | Create Kernel services, manage initialization and shutdown, generate component endpoints |
-| `/executor-kernel`                   | `attachKernel`, KernelClient types, KernelError, Kernel service factory                  |
-| `/executor-core`                     | Use AgentExecutor directly in the calling process                                        |
+| Package root                         | `attachKernel`, KernelClient, KernelError; no service or Adapter construction             |
 | `/protocol`                          | InvokeInput, output/context types and public validators                                  |
 | `/protocol/schema.json`              | Shared protocol schema                                                                   |
-| `/executor-kernel/ipc-schema.json`   | IPC v2 schema                                                                            |
-| `/executor-kernel/ipc-fixtures.json` | Published conformance samples, separate from protocol definitions                        |
+| `/protocol/ipc-schema.json`          | IPC v2 schema                                                                            |
+| `/protocol/ipc-fixtures.json`        | Published conformance samples, separate from protocol definitions                        |
 
-All paths are under `@mininglamp-oss/octo-runtime`. For example, import the client from `@mininglamp-oss/octo-runtime/executor-kernel`. Internal workspace packages are private; applications use the public paths above.
+All paths are under `@mininglamp-oss/octo-runtime-client`. Independent Apps call a running Kernel through RPC without importing Adapters or depending on the full CLI package.
 
 Applications consuming an existing Kernel can install only `@mininglamp-oss/octo-runtime-client` and import `attachKernel` from its root. They do not need the full Runtime package or a Runtime checkout.
+
+Native hosts instead integrate service factories from `octo-runtime-executor-kernel`, endpoint helpers from `octo-runtime-host-sdk`, and selected Adapters from source workspace. Direct Core requires an explicit `octo-runtime-executor-core` dependency. These private source packages are not independently published; see [SDK integration](../getting-started/sdk.md) for dependencies and selective loading. Retained shared entries in the full CLI package do not change these scenarios or expose Adapter aggregates.
 
 The standalone client publishes the same two schemas at `/protocol/schema.json` and `/protocol/ipc-schema.json`, and preserves `/protocol/ipc-fixtures.json` for conformance samples. Repository fixtures live in `packages/octo-runtime-protocol/test/fixtures/`; only the IPC samples are shipped. Client defaults are maintained by the client implementation; `/protocol/behavior.json` has been removed.
 
@@ -129,8 +129,24 @@ After checking readiness, submit once on a new connection (optionally include th
       "sessionId": "example-session",
       "sessionGeneration": 0,
       "protocol_mode": "canonical",
-      "inputs": [{ "type": "text", "text": "Say hello." }],
-      "agentEnv": { "schema": "octo.context-envelope/v3", "items": [] }
+      "inputs": [
+        {
+          "type": "text",
+          "text": "Say hello."
+        }
+      ],
+      "agentEnv": {
+        "schema": "octo.context-envelope/v3",
+        "items": [
+          {
+            "namespace": "octo.execution",
+            "name": "workspace",
+            "payload": {
+              "path": "/absolute/prepared/project"
+            }
+          }
+        ]
+      }
     }
   }
 }

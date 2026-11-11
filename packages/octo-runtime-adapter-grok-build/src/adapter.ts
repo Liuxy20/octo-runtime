@@ -1,3 +1,10 @@
+import { grokModeId } from "./agent-env.js";
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import {
+  invocationModel,
+  invocationApprovalMode,
+  invocationWorkdir
+} from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   spawnGrokBuildAcpClient as spawnAcpClient,
   type SpawnGrokBuildClientOptions as SpawnAcpClientOptions
@@ -5,7 +12,6 @@ import {
 import { GrokBuildInteractionBridge as AcpApprovalBridge } from "./interactions.js";
 import {
   acpModelSelectionRequest,
-  acpActmodeSelectionRequest,
   normalizeAcpUpdate
 } from "@mininglamp-oss/octo-runtime-adapter-acp";
 import {
@@ -16,14 +22,13 @@ import {
   type AcpUpdate
 } from "@mininglamp-oss/octo-runtime-acp-client";
 import {
-  initialControlInstructions,
-  actmodeEvidence,
   AcpTurnNormalizer,
   defineAdapter,
   invocationEnvironment,
   invocationMcpServers,
   assertMcpOptions,
   probeCommand,
+  snapshotProviderLaunch,
   type ProbeResult,
   type ReasoningLevelMap,
   type AdapterInvocationContext,
@@ -32,7 +37,6 @@ import {
 } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import {
   canonicalTerminalStatus,
-  contextActmode,
   providerInputParts,
   type InteractionResponse
 } from "@mininglamp-oss/octo-runtime-protocol";
@@ -40,6 +44,7 @@ import {
 type JsonRecord = Record<string, unknown>;
 
 export interface AcpAdapterDefinition {
+  metadata?: AdapterMetadata;
   type: string;
   provider: string;
   command: string;
@@ -63,8 +68,6 @@ export interface AcpAdapterDefinition {
     sessionId: string,
     request: InvokeRequest
   ) => AsyncIterable<CanonicalEvent>;
-  selectActmode?: typeof acpActmodeSelectionRequest;
-  controlInstructions?: "session";
   reasoningLevels?: ReasoningLevelMap;
   clientOptions?: (
     request: InvokeRequest,
@@ -108,21 +111,32 @@ export function createGrokBuildAcpAdapter(
   definition: AcpAdapterDefinition,
   {
     acpClientFactory = spawnAcpClient,
-    command = definition.command
+    command = definition.command,
+    commandArgsPrefix = [],
+    env = {}
   }: {
     acpClientFactory?: typeof spawnAcpClient;
     command?: string;
+    commandArgsPrefix?: readonly string[];
+    env?: NodeJS.ProcessEnv;
   } = {}
 ) {
+  const launch =
+    acpClientFactory === spawnAcpClient
+      ? snapshotProviderLaunch({ command, args: commandArgsPrefix, env })
+      : { command, args: [...commandArgsPrefix], env: { ...env } };
   const responders = new Map<string, AcpApprovalBridge>();
   return defineAdapter(
     {
-      metadata: {
+      metadata: definition.metadata ?? {
         mcp: true,
-        type: definition.type,
-        agentSources: ["provisioned"]
+        type: definition.type
       },
-      probe: definition.probe ?? (() => probeCommand(command)),
+      probe:
+        definition.probe ??
+        (acpClientFactory === spawnAcpClient
+          ? () => probeCommand(launch.command, { args: launch.args, env: launch.env })
+          : () => Promise.resolve({ available: false, command, reason: "probe_missing" })),
       async respondInteraction(invocationId: string, response: InteractionResponse): Promise<void> {
         const bridge = responders.get(invocationId);
         if (!bridge) throw new Error("INTERACTION_NOT_ACTIVE");
@@ -132,7 +146,10 @@ export function createGrokBuildAcpAdapter(
         request: InvokeRequest,
         context?: AdapterInvocationContext
       ): AsyncGenerator<CanonicalEvent> {
-        if (request.approvalMode !== "ask" && request.approvalMode !== "full_access")
+        if (
+          invocationApprovalMode(request) !== "ask" &&
+          invocationApprovalMode(request) !== "full_access"
+        )
           throw new Error("APPROVAL_MODE_UNSUPPORTED: this ACP adapter has no assisted policy");
         if (responders.has(request.invocationId)) throw new Error("INVOCATION_ALREADY_ACTIVE");
         const bridge = new AcpApprovalBridge(request);
@@ -157,7 +174,7 @@ export function createGrokBuildAcpAdapter(
       typeof definition.args === "function"
         ? definition.args(request)
         : (definition.args ?? ["acp"]);
-    const runEnv = invocationEnvironment(request, definition.env?.(request));
+    const runEnv = invocationEnvironment(request, definition.env?.(request), launch.env);
     const mcp = invocationMcpServers(request, runEnv);
     assertMcpOptions(mcp, definition.type, []);
     const servers = Object.entries(mcp).map(([name, server]) =>
@@ -176,10 +193,10 @@ export function createGrokBuildAcpAdapter(
           }
     );
     const client = acpClientFactory({
-      command,
-      args: [...args],
+      command: launch.command,
+      args: [...launch.args, ...args],
       env: runEnv,
-      cwd: request.workdir,
+      cwd: invocationWorkdir(request),
       ...definition.clientOptions?.(request, bridge),
       permissionHandler: (params) => bridge.requestPermission(params),
       onPermissionResponseWritten: (params) => bridge.responseWritten(params),
@@ -232,8 +249,8 @@ export function createGrokBuildAcpAdapter(
       let resumeFallback: string | undefined;
       let sessionMethod = requestedSessionId ? "session/load" : "session/new";
       let sessionParams = requestedSessionId
-        ? acpLoadSessionParams(requestedSessionId, { cwd: request.workdir })
-        : acpNewSessionParams({ cwd: request.workdir });
+        ? acpLoadSessionParams(requestedSessionId, { cwd: invocationWorkdir(request) })
+        : acpNewSessionParams({ cwd: invocationWorkdir(request) });
       sessionParams.mcpServers = servers;
       sessionParams =
         definition.sessionParams?.(sessionParams, request, !requestedSessionId) ?? sessionParams;
@@ -261,7 +278,7 @@ export function createGrokBuildAcpAdapter(
       if (missingLoadedSession) {
         resumeFallback = "session_load_not_found";
         sessionMethod = "session/new";
-        sessionParams = acpNewSessionParams({ cwd: request.workdir });
+        sessionParams = acpNewSessionParams({ cwd: invocationWorkdir(request) });
         sessionParams.mcpServers = servers;
         sessionParams = definition.sessionParams?.(sessionParams, request, true) ?? sessionParams;
         sessionRequestId = client.reserveRequestId();
@@ -276,25 +293,12 @@ export function createGrokBuildAcpAdapter(
         ? stringField(sessionResult, "sessionId")
         : (requestedSessionId ?? stringField(sessionResult, "sessionId"));
       if (!sessionId) throw new Error("ACP session/new returned no sessionId");
-      const requestedMode = contextActmode(request.context);
+      const requestedMode = grokModeId(request);
       if (requestedMode !== undefined) {
-        const selection = (definition.selectActmode ?? acpActmodeSelectionRequest)(
-          sessionResult,
-          sessionId,
-          requestedMode
-        );
-        if (!selection.unchanged) await client.request(selection.method, selection.params);
-        yield actmodeEvidence({
-          requested: requestedMode,
-          effective: selection.effective,
-          nativeMode: selection.nativeMode,
-          status: selection.effective === requestedMode ? "applied" : "fallback",
-          ...(selection.effective !== requestedMode
-            ? { reason: "provider_unsupported" as const }
-            : {})
-        });
+        // Grok 原生实现 set_mode 但不广告 modes；此约定仅在本包生效。
+        await client.request("session/set_mode", { sessionId, modeId: requestedMode });
       }
-      const requestedModel = nonEmptyString(request.agentConfig?.model);
+      const requestedModel = nonEmptyString(invocationModel(request));
       if (requestedModel) {
         const selection = acpModelSelectionRequest(sessionResult, sessionId, requestedModel);
         if (selection) {
@@ -338,28 +342,8 @@ export function createGrokBuildAcpAdapter(
       };
 
       const input = providerInputParts(request, resumeFallback !== undefined);
-      const instructions =
-        definition.controlInstructions === "session"
-          ? ""
-          : initialControlInstructions(
-              request,
-              !requestedSessionId || resumeFallback !== undefined
-            );
       // Preserve the legacy text call while mixed prompts retain every block's position.
-      const prompt =
-        input.length === 1 && input[0]?.type === "text"
-          ? `${input[0].text}${instructions ? `\n\n${instructions}` : ""}`
-          : [
-              ...input,
-              ...(instructions
-                ? [
-                    {
-                      type: "text" as const,
-                      text: instructions
-                    }
-                  ]
-                : [])
-            ];
+      const prompt = input.length === 1 && input[0]?.type === "text" ? input[0].text : input;
       const promptParams = acpPromptParams(sessionId, prompt);
       const promptRequestId = client.reserveRequestId();
       let stopReason: string | undefined;

@@ -15,19 +15,26 @@
 以下节选负责注册与输入准备。实际执行使用 `executor.invoke(input)`；完整的消费、终态判断和 `shutdown()` 示例见 [Executor Core](../octo-runtime-executor-core/README.zh.md)。
 
 ```ts
-import { AgentExecutor } from "@mininglamp-oss/octo-runtime/executor-core";
-import { InvokeInput } from "@mininglamp-oss/octo-runtime/protocol";
-import { claudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
+import { AgentExecutor } from "@mininglamp-oss/octo-runtime-executor-core";
+import { InvokeInput } from "@mininglamp-oss/octo-runtime-protocol";
+import { createClaudeCodeAdapter } from "@mininglamp-oss/octo-runtime-adapter-claude-code";
 
 const executor = new AgentExecutor();
-executor.register(claudeCodeAdapter);
+executor.register(createClaudeCodeAdapter({ command: "/absolute/path/claude", env: process.env }));
 
 const input = InvokeInput.check({
   inputs: [{ type: "text", text: "Say hello." }],
   protocol_mode: "canonical",
   agentEnv: {
     schema: "octo.context-envelope/v3",
-    items: [{ namespace: "octo.execution", name: "adapter", payload: { type: "claude-code" } }]
+    items: [
+      {
+        namespace: "octo.execution",
+        name: "workspace",
+        payload: { path: "/absolute/prepared/project" }
+      },
+      { namespace: "octo.execution", name: "adapter", payload: { type: "claude-code" } }
+    ]
   }
 });
 ```
@@ -37,7 +44,7 @@ const input = InvokeInput.check({
 | 项           | 值                                                 |
 | ------------ | -------------------------------------------------- |
 | Adapter 类型 | `claude-code`                                      |
-| 导出         | `claudeCodeAdapter`、`createClaudeCodeAdapter`     |
+| 导出         | `createClaudeCodeAdapter`     |
 | 协议         | `claude.stream-json`，模式 `native` 与 `canonical` |
 | 传输         | 每次调用一个 `claude` NDJSON stdio 子进程          |
 | 会话         | 显式 Provider 会话；没给才新开                     |
@@ -45,7 +52,7 @@ const input = InvokeInput.check({
 
 ## 配置与会话归属
 
-上例采用 `ask` 审批模式，推理强度沿用 Provider 默认。审批通过 Context `octo.security/approval_policy` 设置，强度通过 `octo.execution/model.payload.reasoning.effort` 设置。公共 `InvokeInput.agentEnv.approvalMode` 也可显式指定，但必须与显式 Context 策略一致。Adapter 接收准备后的内部 `InvokeRequest`；当前字段与被拒绝的旧配置见[输入参考](../../docs/zh-CN/reference/invoke-input.md)。
+上例采用 `ask` 审批模式，推理强度沿用 Provider 默认。审批通过 Context `octo.security/approval_policy` 设置，强度通过 `octo.execution/model.payload.reasoning.effort` 设置。Adapter 接收准备后的内部 `InvokeRequest`；当前字段与被拒绝的旧配置见[输入参考](../../docs/zh-CN/reference/invoke-input.md)。
 
 调用方保存会话更新中的完整 `providerSession`（含 Provider 扩展字段），并在下一轮显式回传。只复用业务 `sessionId` 会新开 Provider 会话；Core 不持久维护业务会话到 Provider 的绑定表。续接与恢复输入步骤见[背景资料与会话](../../docs/zh-CN/guides/context-and-sessions.md)。
 
@@ -73,3 +80,15 @@ private workspace 包，包含在 CLI 发行物里。没有单独的 npm 包，�
 
 - [实现](src/index.ts)、[Adapter SDK](../octo-runtime-adapter-sdk/README.zh.md)、[Runtime 公共协议](../octo-runtime-protocol/README.zh.md)。
 - [输入参考](../../docs/zh-CN/reference/invoke-input.md)。
+
+## 私有 AgentEnv.Item
+
+以下条目由本包私有定义，名称与 payload 均不登记公共 Schema、catalog 或生成类型。已有 options 可放在同一 payload 中；非法显式值由本 Adapter 拒绝。
+
+可选 `permissionMode` 仅接受 `"plan"`。省略时沿用审批映射：ask → default、assisted → auto、full_access → bypassPermissions。显式 plan 优先于此 CLI 参数映射，即使同时 full_access 也不追加 `--dangerously-skip-permissions`；交互授权不变。null、default 等其他值均拒绝。原生 init 未确认或返回不同 permissionMode 时，canonical 使用 provider diagnostic；native 保留原生消息，不生成公共模式证据。
+
+```json
+{ "namespace": "adapter.claude-code", "name": "options", "payload": { "permissionMode": "plan" } }
+```
+
+将该条目加入上方示例的 `agentEnv.items`，与 Adapter 路由和已准备的 workspace 一起传入。已有 options 放入同一条目；重复 namespace/name 非法。model/effort 仍使用公共 model item。已删除的公共 actmode 不会自动转换。

@@ -28,18 +28,15 @@ test("unknown items survive merge and hash but do not enter model or execution c
   assert.notEqual(contextHash(context), contextHash(external()));
 });
 
-test("unknown items cannot be persisted as defaults or made mandatory without support", () => {
+test("private items can be caller-owned defaults or mandatory values", () => {
   for (const layer of ["defaults", "mandatory"]) {
     const configuration = { defaults: empty(), mandatory: empty(), [layer]: external() };
-    assert.throws(
-      () => resolveContextConfiguration(configuration, empty()),
-      /CONTEXT_CONFIGURATION_TYPE_FORBIDDEN/
-    );
+    assert.deepEqual(resolveContextConfiguration(configuration, empty()), external());
   }
 });
 
-test("known invalid payloads and unknown public shape errors are not ignored", () => {
-  assert.throws(() =>
+test("envelopes carry opaque payloads while rejecting malformed item shapes", () => {
+  assert.doesNotThrow(() =>
     assertContextEnvelope({
       ...empty(),
       items: [

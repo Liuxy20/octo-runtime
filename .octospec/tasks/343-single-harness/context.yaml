@@ -1,0 +1,25 @@
+baseline: bf665881095690fdfe3d2aca5796ca9f18e53bd0
+initial_baseline: 4d7e272d1bb30957c815410f68758a9d2445d708
+rules_read:
+  - .octospec/rules/_index.yaml
+  - .octospec/rules/architecture.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/collaboration.md
+workflow: .claude/skills/octospec-workflow/SKILL.md
+review_workflows:
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - /Users/lvsijia/.agents/skills/verified-review/SKILL.md
+references:
+  - .octospec/tasks/339-engine-lifecycle/design.md
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/343
+  - https://developers.openai.com/codex/config-reference/
+  - https://developers.openai.com/codex/app-server/

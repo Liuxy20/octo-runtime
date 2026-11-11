@@ -1,0 +1,106 @@
+issue: https://github.com/Mininglamp-OSS/octo-runtime/issues/339
+phase: reviewed_pr_delivery
+date: '2026-11-09'
+baseline: d5aeae707fcda0b138b360136f164c085c9a5e87
+initial_baseline: 157fabb7d680df1ee72d9d9e5ed40cfc6c22b336
+baseline_source: successful git fetch origin main
+branch: plan/issue-339-engine-lifecycle
+worktree: /Users/lvsijia/.codex/worktrees/issue-339-engine-lifecycle/octo-runtime
+authorization:
+  - Implement the architecture refinement without a compatibility layer (current user authorization).
+  - Create an independent worktree from latest main and start OctoSpec planning.
+  - Reach a planning executability assessment of 95 points with explicit gaps.
+  - Treat this as architecture boundary refinement and update architecture documentation.
+  - Document each module, objects it holds, and lifecycle responsibility.
+  - Treat CODEX_HOME as host-injected configuration with host-owned directory permissions and data lifecycle.
+  - Explicitly document unrestricted adapter construction, including arbitrary arguments and dependencies beyond clients.
+  - Keep Codex-specific provider interfaces and CLI factory conventions out of generic SDK construction requirements.
+boundaries:
+  - Implement Codex ownership separation, CLI host composition, diagnostics and affected callers.
+  - User authorized code review, same-class subreview, autofix, commit/push and PR to main; no merge or release.
+  - Preserve the original checkout and its untracked user files.
+  - No GitHub CI expansion, including default selectors and indirect gate dependencies.
+  - GitHub issue, PR, and commit text must be English when authorized.
+  - Preserve configured Git author and required Codex trailer when commits are authorized.
+skills_applied:
+  - .claude/skills/octospec-workflow/SKILL.md
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+context_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/log.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .claude/commands/octospec-plan.md
+  - .octospec/tasks/313-codex-service-lifecycle/brief.md
+  - .octospec/tasks/313-codex-service-lifecycle/assessment.md
+  - .octospec/tasks/313-codex-service-lifecycle/context.yaml
+  - .octospec/scripts/lint.py
+  - package.json
+  - scripts/check-developer-docs.mjs
+  - scripts/lib/developer-doc-links.mjs
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/runtime-lifecycle.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/local-execution.md
+  - .octospec/rules/stateless-execution.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+source_sections_read:
+  - packages/octo-runtime-adapter-codex/src/index.ts
+  - packages/octo-runtime-adapter-codex/src/service.ts
+  - packages/octo-runtime-adapter-codex/src/app-server.ts
+  - packages/octo-runtime-adapter-sdk/src/execution-scope.ts
+  - packages/octo-runtime-executor-core/src/index.ts
+  - packages/octo-runtime-executor-kernel/src/service.ts
+  - packages/octo-runtime-executor-kernel/src/server.ts
+  - packages/octo-runtime-executor-kernel/src/types.ts
+  - packages/octo-runtime-executor-kernel/src/index.ts
+  - packages/octo-runtime-host-sdk/src/index.ts
+  - packages/octo-runtime-cross-service/src/index.ts
+  - packages/octo-runtime-acp-client/src/index.ts
+  - apps/cli/src/adapters.ts
+  - apps/cli/src/main.ts
+  - apps/cli/src/playboard.ts
+  - public/codex.ts
+  - packages/octo-runtime-adapter-codex/package.json
+  - test/manual/codex-service-package-313.mjs
+docs_read:
+  - docs/zh-CN/README.md
+  - docs/en/README.md
+  - docs/zh-CN/concepts/architecture.md
+  - docs/en/concepts/architecture.md
+  - docs/zh-CN/concepts/module-loading.md
+  - packages/octo-runtime-cross-service/README.zh.md
+  - packages/octo-runtime-acp-client/README.zh.md
+  - packages/octo-runtime-adapter-dsh/README.zh.md
+  - packages/octo-runtime-adapter-openclaw/README.zh.md
+global_rules: .octospec/_global/ is absent; no framework synchronization performed
+assessment:
+  score: 95
+  remaining_gap: 5
+  meaning: planning executability self-assessment, not implementation verification
+verification:
+  planning_baseline_knowledge_lint: 'pass: 703 OKF units, 20 rules, 3298 local links'
+  python_dependency: system python lacks PyYAML; use isolated uv run --with pyyaml
+  typecheck: pass, includes workspace build
+  lint: pass
+  lint_names: pass
+  formatting: pass
+  final_knowledge_lint: 'pass: 725 OKF units, 20 rules, 3386 local links'
+  default_tests: '1609 total: 1548 passed, 61 skipped, 0 failed'
+  manual_tests: '136 passed, 0 failed; 7 files listed in validation.md'
+  docs: pass, bilingual audit and public examples plus 4 tests
+  live_codex: direct 5 turns, IPC 5 turns, shared 3 turns; owner cleanup passed
+  public_package: strict types, direct 3 turns, IPC 3 turns and owner cleanup passed
+  review: Standards 2 fixed, Spec 2 fixed (one overlapping); same-class findings fixed and re-reviewed
+  node_dependency: pnpm install --frozen-lockfile --ignore-scripts; package and lockfile unchanged
+  diff_check: pass
+  ci_scope: unchanged workflows, package scripts, lockfile, default selectors and Gate dependencies
+  unverified: native Linux/Windows engine lifecycle, real Electron, real IM and human approvals
+  details: validation.md

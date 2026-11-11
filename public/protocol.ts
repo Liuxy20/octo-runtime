@@ -2,11 +2,9 @@
 export type * from "@mininglamp-oss/octo-runtime-protocol";
 export type {
   CanonicalEventWire,
-  ContextMcpLocator,
   ContextMcpPayload,
   ContextModelSelectionPayload,
-  PersistentContextEnvelope,
-  PublicObjectMaterial
+  PersistentContextEnvelope
 } from "@mininglamp-oss/octo-runtime-protocol/browser";
 export {
   InvokeInput,

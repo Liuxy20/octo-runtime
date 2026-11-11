@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { preparedFrames } from "./runtime-fixture.js";
 import { preparedTestInvoke } from "./runtime-fixture.js";
 import test from "node:test";
@@ -20,13 +21,11 @@ import { configureCliOpenClaw } from "../apps/cli/dist/openclaw.js";
 import { nativeHost } from "./native-host-fixture.js";
 import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
-
 async function fixture(t) {
   const root = await mkdtemp(join(process.platform === "darwin" ? "/tmp" : tmpdir(), "ohc-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }
-
 test("connection sources are persisted per Runtime, with precedence and fail-closed behavior", async (t) => {
   const root = await fixture(t);
   const one = join(root, "one"),
@@ -86,7 +85,6 @@ test("connection sources are persisted per Runtime, with precedence and fail-clo
     /remote_gateway_requires_wss/
   );
 });
-
 test("CLI refreshes discovered WS/token on every startup and SDK reads only the saved snapshot", async (t) => {
   const root = await fixture(t);
   const source = join(root, "native");
@@ -116,7 +114,6 @@ test("CLI refreshes discovered WS/token on every startup and SDK reads only the 
     "ignored"
   );
 });
-
 test("unconfigured SDK probe does not discover or create files; missing device is not repaired", async (t) => {
   const root = await fixture(t);
   const runtime = join(root, "runtime");
@@ -132,7 +129,6 @@ test("unconfigured SDK probe does not discover or create files; missing device i
   await assert.rejects(loadLocalOpenClawGateway(runtime), /device_identity_invalid/);
   await assert.rejects(stat(device), { code: "ENOENT" });
 });
-
 for (const legacy of [false, true]) {
   test(`CLI startup and restart initialize and refresh ${legacy ? "untyped legacy" : "typed"} OpenClaw selection`, async (t) => {
     const root = await fixture(t);
@@ -272,7 +268,6 @@ export function selectedAdapter() {
     }
   });
 }
-
 test("native Kernel hosts probe each Runtime connection and use only the Context Agent target", async (t) => {
   const root = await fixture(t);
   const roots = [join(root, "a"), join(root, "b")];
@@ -341,21 +336,30 @@ test("native Kernel hosts probe each Runtime connection and use only the Context
     invocationId: "invoke-b",
     runId: "run-b",
     agentSessionId: "s",
-    workdir: "",
     prompt: "work",
     modelInput: "work",
-    controlInstructions: "",
-    approvalMode: "full_access",
-    agentSource: "preset",
-    context: { schema: "octo.context-envelope/v3", items: [] },
-    agentConfig: {
-      providerAgentId: "researcher",
-      providerOptions: {
-        ...configurations[1].providerOptions,
-        OPENCLAW_GATEWAY_URL: "ws://127.0.0.1:19999",
-        OPENCLAW_GATEWAY_TOKEN: "must-not-win"
+    agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+      { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
+      { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } },
+      { namespace: "octo.execution", name: "agent", payload: { source: "preset" } },
+      {
+        namespace: "octo.execution",
+        name: "adapter",
+        payload: { type: "openclaw" }
+      },
+      {
+        namespace: "adapter.openclaw",
+        name: "options",
+        payload: {
+          agentId: "researcher",
+          ...{
+            ...configurations[1].providerOptions,
+            OPENCLAW_GATEWAY_URL: "ws://127.0.0.1:19999",
+            OPENCLAW_GATEWAY_TOKEN: "must-not-win"
+          }
+        }
       }
-    }
+    ])
   };
   const events = [];
   for await (const event of preparedTestInvoke((...args) => preparedFrames(client, ...args))(
@@ -390,7 +394,13 @@ test("native Kernel hosts probe each Runtime connection and use only the Context
   assert.equal((await sdkHost.client.list())[0].available, true);
   request.runId = "run-sdk";
   request.invocationId = "invoke-sdk";
-  request.agentConfig.providerOptions = direct;
+  request.agentEnv = withAgentEnvItems(request.agentEnv, [
+    {
+      namespace: "adapter.openclaw",
+      name: "options",
+      payload: { ...direct, agentId: "researcher" }
+    }
+  ]);
   const sdkEvents = [];
   for await (const event of preparedTestInvoke((...args) =>
     preparedFrames(sdkHost.client, ...args)

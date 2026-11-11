@@ -1,0 +1,109 @@
+issues:
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/348
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/349
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/350
+  - https://github.com/Mininglamp-OSS/octo-runtime/issues/351
+requirement_comment: https://github.com/Mininglamp-OSS/octo-runtime/issues/351#issuecomment-6765106016
+phase: implemented_locally
+date: '2026-11-10'
+baseline: 7892ebdf2ed9b1fa859bd51f15da6d7f03c247e2
+baseline_source: successful git fetch origin main; worktree HEAD verified equal
+worktree: /Users/lvsijia/.codex/worktrees/context-envelope-cleanup/octo-runtime
+authorization:
+  - Create a new worktree from latest main for issues 348 through 351 together.
+  - Start with OctoSpec planning; implementation subsequently authorized by the user.
+  - Keep adapter.xxx package-local; do not formalize it in public protocol.
+boundaries:
+  - Preserve the original checkout and its existing untracked files.
+  - No commit, push, PR, merge, publication or CI scope expansion.
+  - Adapter-specific AgentEnv items are defined and documented by their owning package.
+  - limits.enforcement was outside this cleanup stage; its subsequent authorized removal is tracked in ../remove-limits-enforcement/brief.md. Runtime selection removal was authorized by the caller-owned addressing boundary.
+skills_applied:
+  - /Users/lvsijia/.codex/skills/technical-writing-zh/SKILL.md
+  - /Users/lvsijia/.agents/skills/code-review/SKILL.md
+  - .claude/skills/octospec-workflow/SKILL.md
+context_read:
+  - AGENTS.md
+  - .octospec/index.md
+  - .octospec/rules/_index.yaml
+  - .octospec/tasks/_brief.template.md
+  - .octospec/tasks/346-host-execution/context.yaml
+  - .claude/commands/octospec-plan.md
+  - .octospec/scripts/lint.py
+rules_read:
+  - .octospec/rules/architecture.md
+  - .octospec/rules/adapter-metadata.md
+  - .octospec/rules/context-input.md
+  - .octospec/rules/context-extensions.md
+  - .octospec/rules/protocol-schema.md
+  - .octospec/rules/protocol-design.md
+  - .octospec/rules/output-protocol.md
+  - .octospec/rules/invoke-input.md
+  - .octospec/rules/environment.md
+  - .octospec/rules/mcp.md
+  - .octospec/rules/openclaw.md
+  - .octospec/rules/reasoning.md
+  - .octospec/rules/engineering.md
+  - .octospec/rules/collaboration.md
+  - .octospec/guides/provider-live-acceptance.md
+global_rules: .octospec/_global/ is absent; no synchronization performed
+source_audits:
+  - Source and metadata/default/workdir branches in adapter-sdk and CLI.
+  - Context catalog/schema/helper/export/configuration consumers and model sentinel references.
+  - Public actmode/evidence references and Codex/Claude/ACP/Grok/DSH native mode paths.
+  - OpenClaw private options and package README contract.
+  - Relevant fixtures, examples, existing test commands and public export paths.
+external_audit:
+  repository: /Users/lvsijia/github.com/Mininglamp-OSS/octo-channel-gateway
+  local_head: 9ce35cc
+  audited_ref: origin/main
+  audited_sha: beb804933ff34e75225645a34b1a7fd038c52ad8
+  freshness: GitHub commits/main API SHA equals local origin/main; read git objects rather than checkout
+  fetch_status: SSH fetch stalled and was terminated; freshness verified through GitHub API instead
+  findings: business data still uses Runtime context types/validation/merge; production defaults already use omission; no actmode consumer found
+  mutations: none
+assessment:
+  score: 97
+  remaining_gap: 3
+  details: assessment.md
+planning_additions:
+  - adapter-items.md defines package-local fields, omission, failures and approval precedence.
+  - consumer-audit.md records latest Gateway migration and actmode evidence deletion closure.
+verification:
+  implementation: local build, typecheck, lint, docs, regression, manual and package consumption passed
+  live: Codex, Claude Code and OpenCode execution passed; Grok model execution network-limited
+  details: validation.md
+
+review:
+  baseline: 7892ebdf2ed9b1fa859bd51f15da6d7f03c247e2
+  comparison: working tree diff including untracked files; no new commits
+  axes: [Standards, Spec]
+  findings: {standards_p3: 1, spec_p2: 2}
+  open_findings: 0
+  authorization: explicit code-review and autofix
+  remaining_candidates: followups.md
+
+delete_closure_audit:
+  script: /tmp/octo-envelope-lint.bBwNmu/check.mjs
+  report: /tmp/octo-envelope-lint.bBwNmu/report.json
+  initial_source_locations: 6
+  remaining_findings: 0
+  counts: {source: 252, built: 306, packed: 421, doc_blocks: 91, schema: 4}
+  fixes: four live-script legacy agent items and two protocol-owned private Codex configuration hints
+  ci_integration: none
+
+additional_deletion:
+  authorization: user explicitly requested removal of both definitions, exports and dedicated tests
+  types: [ContextPreparationReceipt, RunContextProjection]
+  validation: existing manual deletion checks and temporary lint extended; no CI expansion
+
+runtime_selection_deletion:
+  authorization: user confirmed caller-owned addressing and requested a temporary deletion lint
+  surfaces: [schema, types, exports, validator, catalog, routing_schema, merge, fixtures, examples, packages]
+  ci_integration: none
+
+runtime_selection_validation:
+  remaining_lint_findings: 0
+  counts: {source: 251, built: 304, packed: 417, doc_blocks: 91, schema: 4}
+  tests: {passed: 1404, skipped: 61, failed: 0, manual_passed: 18, client_package_passed: 11}
+  scanner_selfcheck: four seeded residue categories detected in memory

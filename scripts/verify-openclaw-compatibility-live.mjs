@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
@@ -9,7 +10,6 @@ import {
   OpenClawGatewayClient
 } from "../packages/octo-runtime-adapter-openclaw/dist/gateway.js";
 import { assertCanonicalEvent } from "../packages/octo-runtime-protocol/dist/index.js";
-
 // 显式 QA 脚本：凭据不输出；创建本次会话，不改全局策略，不发送 IM。
 const config = process.env.OCTO_OPENCLAW_QA_TOKEN
   ? {}
@@ -99,36 +99,50 @@ for (const scenario of probeOnly ? [] : scenarios) {
     }
   });
   const events = [];
-  const timer = setTimeout(() => controller.abort("compatibility QA deadline"), 60_000);
+  const timer = setTimeout(() => controller.abort("compatibility QA deadline"), 60000);
   try {
     const prompt = toolScenario
       ? "Use the exec tool exactly once with command `printf OPENCLAW_COMPAT_TOOL_OK`. Do not use any other tool, write files, or send messages. After it succeeds, reply exactly OPENCLAW_COMPAT_OK."
       : "Reply exactly OPENCLAW_COMPAT_OK. Do not call tools.";
-    for await (const event of adapter.invoke({
-      protocolVersion: 2,
-      invocationId: randomUUID(),
-      agentSessionId: randomUUID(),
-      runId: randomUUID(),
-      prompt,
-      modelInput: prompt,
-      controlInstructions: "",
-      context: { schema: "octo.context-envelope/v3", items: [] },
-      approvalMode: requestedPermission,
-      agentSource: "preset",
-      workdir: "",
-      signal: controller.signal,
-      agentConfig: {
-        providerAgentId: process.env.OCTO_OPENCLAW_QA_AGENT ?? "main",
-        timeoutSeconds: 45,
+    for await (const event of adapter.invoke(
+      {
+        protocolVersion: 2,
+        invocationId: randomUUID(),
+        agentSessionId: randomUUID(),
+        runId: randomUUID(),
+        prompt,
+        modelInput: prompt,
+        signal: controller.signal,
+        agentEnv: withAgentEnvItems({ schema: "octo.context-envelope/v3", items: [] }, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: "" } },
+          {
+            namespace: "octo.security",
+            name: "approval_policy",
+            payload: { mode: requestedPermission }
+          },
+          {
+            namespace: "octo.execution",
+            name: "adapter",
+            payload: { type: "openclaw" }
+          },
+          {
+            namespace: "adapter.openclaw",
+            name: "options",
+            payload: { agentId: process.env.OCTO_OPENCLAW_QA_AGENT ?? "main", timeoutSeconds: 45 }
+          }
+        ])
+      },
+      {
+        // 宿主连接身份不混入公共请求或业务私有条目。
         providerOptions: {
           OPENCLAW_GATEWAY_URL: gatewayUrl,
-          OPENCLAW_GATEWAY_TOKEN: gatewayToken,
+          ...(gatewayToken ? { OPENCLAW_GATEWAY_TOKEN: gatewayToken } : {}),
           OPENCLAW_GATEWAY_DEVICE_ID: device.deviceId,
           OPENCLAW_GATEWAY_PUBLIC_KEY: device.publicKey,
           OPENCLAW_GATEWAY_PRIVATE_KEY: device.privateKey
         }
       }
-    })) {
+    )) {
       assertCanonicalEvent(event);
       events.push(event);
     }

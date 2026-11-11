@@ -1,3 +1,5 @@
+import type { AdapterMetadata } from "@mininglamp-oss/octo-runtime-adapter-sdk";
+import { invocationApprovalMode } from "@mininglamp-oss/octo-runtime-adapter-sdk";
 import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
 
 /**
@@ -12,11 +14,24 @@ import { createAcpAdapter } from "@mininglamp-oss/octo-runtime-adapter-acp";
  * binary and is registered as its own adapter type so a runtime can pick the CN
  * build explicitly.
  */
-export const qoderCliCnAdapter = createAcpAdapter({
+export const qoderCliCnMetadata: AdapterMetadata = {
   type: "qoderclicn",
-  provider: "qoderclicn",
-  command: "qoderclicn",
-  args: (request) => (request.approvalMode === "full_access" ? ["--yolo", "--acp"] : ["--acp"])
-});
+  mcp: true
+};
 
-export default qoderCliCnAdapter;
+/** 宿主交付所选命令或 client factory；本模块仅维护 ACP 协议要求。 */
+export function createQoderCliCnAdapter(
+  options: NonNullable<Parameters<typeof createAcpAdapter>[1]> & { command: string }
+) {
+  return createAcpAdapter(
+    {
+      metadata: qoderCliCnMetadata,
+      type: "qoderclicn",
+      provider: "qoderclicn",
+      command: options.command,
+      args: (request) =>
+        invocationApprovalMode(request) === "full_access" ? ["--yolo", "--acp"] : ["--acp"]
+    },
+    options
+  );
+}

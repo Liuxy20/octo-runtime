@@ -1,3 +1,4 @@
+import { withAgentEnvItems } from "../packages/octo-runtime-adapter-sdk/dist/index.js";
 import { invokeClient } from "../test-support/invoke-client.js";
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,7 +14,6 @@ import { attachKernel } from "@mininglamp-oss/octo-runtime-executor-kernel";
 import { componentEndpoint } from "@mininglamp-oss/octo-runtime-host-sdk";
 import { invocationInput } from "@mininglamp-oss/octo-runtime-protocol";
 import { invokeRequest, waitFor } from "./runtime-fixture.js";
-
 const runtime = fileURLToPath(new URL("./fixtures/dsh-runtime.mjs", import.meta.url));
 const module = fileURLToPath(
   new URL("../packages/octo-runtime-adapter-dsh/dist/index.js", import.meta.url)
@@ -23,20 +23,17 @@ const manifest = {
   adapters: [{ type: "dsh", module, export: "dshAdapter" }],
   extras: []
 };
-
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "cli-dsh 空格 "));
   t.after(() => rm(directory, { recursive: true, force: true }));
   return directory;
 }
-
 function environment(path, values = {}) {
   const env = { ...process.env, ...values };
   for (const key of Object.keys(env)) if (key.toLowerCase() === "path") delete env[key];
   env[process.platform === "win32" ? "Path" : "PATH"] = path;
   return env;
 }
-
 async function installation(root, layout = "global") {
   const local = layout === "local";
   const modules = join(root, local || process.platform === "win32" ? "" : "lib", "node_modules");
@@ -60,7 +57,6 @@ async function installation(root, layout = "global") {
   await chmod(command, 0o755);
   return { bin, dshBin, command, packageRoot };
 }
-
 for (const layout of ["global", "local"])
   test(`CLI resolves ${layout} npm metadata without executing the shim`, async (t) => {
     const directory = await fixture(t);
@@ -71,7 +67,6 @@ for (const layout of ["global", "local"])
     assert.equal(config.dsh.providerOptions.dshBin, selected.dshBin);
     assert.deepEqual(env, before);
   });
-
 test(
   "CLI resolves npm symlinks through the selected package's bin metadata",
   { skip: process.platform === "win32" },
@@ -95,7 +90,6 @@ test(
     assert.ok(config.dsh.providerOptions.dshBin.endsWith(join("dsh", "lib", "bin.mjs")));
   }
 );
-
 test("CLI preserves explicit DSH configuration and other host options", async (t) => {
   const directory = await fixture(t);
   const selected = await installation(directory);
@@ -123,7 +117,6 @@ test("CLI preserves explicit DSH configuration and other host options", async (t
   assert.deepEqual(automatic.dsh.providerOptions, { dshBin: selected.dshBin, dshHome: directory });
   assert.equal(automatic.dsh.streamLimits.rawMessageMaxBytes, 8192);
 });
-
 test("CLI fixes the first PATH installation and does not select another package", async (t) => {
   const directory = await fixture(t);
   const first = await installation(join(directory, "first"));
@@ -147,7 +140,6 @@ test("CLI fixes the first PATH installation and does not select another package"
     );
   }
 });
-
 for (const kind of ["dangling-link", "not-executable", "directory"])
   test(
     `CLI does not skip an existing first PATH candidate: ${kind}`,
@@ -176,7 +168,6 @@ for (const kind of ["dangling-link", "not-executable", "directory"])
       assert.equal(config.dsh, undefined);
     }
   );
-
 test("CLI skips a genuinely absent PATH command and selects the next installation", async (t) => {
   const directory = await fixture(t);
   const first = await installation(join(directory, "first"));
@@ -190,7 +181,6 @@ test("CLI skips a genuinely absent PATH command and selects the next installatio
   );
   assert.equal(config.dsh.providerOptions.dshBin, second.dshBin);
 });
-
 test("CLI accepts string npm bin metadata and rejects entries outside the package", async (t) => {
   const directory = await fixture(t);
   const selected = await installation(directory);
@@ -209,7 +199,6 @@ test("CLI accepts string npm bin metadata and rejects entries outside the packag
     assert.equal((await read()).dsh, undefined);
   }
 });
-
 test("CLI leaves SDK-style configuration empty when DSH is absent or unselected", async (t) => {
   const directory = await fixture(t);
   assert.equal(
@@ -236,10 +225,9 @@ test("CLI leaves SDK-style configuration empty when DSH is absent or unselected"
     selected.dshBin
   );
 });
-
 test(
   "CLI foreground Kernel discovers DSH and invokes without manual dshBin",
-  { timeout: 20_000 },
+  { timeout: 20000 },
   async (t) => {
     const directory = await fixture(t);
     const selected = await installation(directory);
@@ -261,14 +249,24 @@ test(
       assert.equal(await running, 0);
       await rm(home, { recursive: true, force: true });
     });
-    await waitFor(() => ready, 10_000);
+    await waitFor(() => ready, 10000);
     client = attachKernel({ endpoint: componentEndpoint(home) });
     assert.equal((await client.list()).find((entry) => entry.type === "dsh").available, true);
     const events = await Array.fromAsync(
       invokeClient(
         client,
         invocationInput(
-          invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
+          invokeRequest({
+            modelInput: "hello",
+            agentEnv: withAgentEnvItems(undefined, [
+              { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+              {
+                namespace: "octo.security",
+                name: "approval_policy",
+                payload: { mode: "full_access" }
+              }
+            ])
+          }),
           "canonical",
           "dsh"
         )
@@ -277,10 +275,9 @@ test(
     assert.equal(events.at(-1).type, "run.completed");
   }
 );
-
 test(
   "CLI playboard route uses injected PATH instead of process PATH",
-  { timeout: 15_000 },
+  { timeout: 15000 },
   async (t) => {
     const directory = await fixture(t);
     const selected = await installation(join(directory, "selected"));
@@ -292,7 +289,13 @@ test(
     const file = join(directory, "manifest.json");
     await writeFile(file, JSON.stringify(manifest));
     const input = invocationInput(
-      invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
+      invokeRequest({
+        modelInput: "hello",
+        agentEnv: withAgentEnvItems(undefined, [
+          { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+          { namespace: "octo.security", name: "approval_policy", payload: { mode: "full_access" } }
+        ])
+      }),
       "canonical",
       "dsh"
     );
@@ -317,7 +320,6 @@ test(
     }
   }
 );
-
 for (const [mode, reason] of [
   ["success", undefined],
   ["version", "DSH_VERSION_UNSUPPORTED"],
@@ -326,7 +328,7 @@ for (const [mode, reason] of [
 ])
   test(
     `CLI playboard shares host discovery and preserves selected failures: ${mode}`,
-    { timeout: 15_000 },
+    { timeout: 15000 },
     async (t) => {
       const directory = await fixture(t);
       const first = await installation(join(directory, "first"));
@@ -352,7 +354,17 @@ for (const [mode, reason] of [
       const file = join(directory, "manifest.json");
       await writeFile(file, JSON.stringify(manifest));
       const input = invocationInput(
-        invokeRequest({ workdir: directory, approvalMode: "full_access", modelInput: "hello" }),
+        invokeRequest({
+          modelInput: "hello",
+          agentEnv: withAgentEnvItems(undefined, [
+            { namespace: "octo.execution", name: "workspace", payload: { path: directory } },
+            {
+              namespace: "octo.security",
+              name: "approval_policy",
+              payload: { mode: "full_access" }
+            }
+          ])
+        }),
         "canonical",
         "dsh"
       );
